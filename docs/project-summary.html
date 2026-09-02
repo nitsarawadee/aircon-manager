@@ -1,0 +1,588 @@
+<title>ย้ายระบบจัดการแอร์ ITEL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Sarabun:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f6f8fa;
+    --surface: #ffffff;
+    --sunken: #eef2f6;
+    --line: #dbe3ec;
+    --line-soft: #e8eef4;
+    --ink: #16202e;
+    --ink-muted: #5b6878;
+    --ink-faint: #8695a6;
+    --primary: #1153a1;
+    --primary-soft: #e7f0fa;
+    --on-primary: #ffffff;
+    --accent: #f47920;
+    --accent-soft: #fdf0e3;
+    --good: #1a7f52;
+    --good-soft: #e6f4ec;
+    --warn: #9a6207;
+    --warn-soft: #fdf3e0;
+    --stop: #a8341a;
+    --stop-soft: #fdeee9;
+
+    --font-display: "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Sarabun", "IBM Plex Sans Thai", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10161e;
+      --surface: #18212c;
+      --sunken: #131b24;
+      --line: #2a3745;
+      --line-soft: #212c38;
+      --ink: #e4ecf4;
+      --ink-muted: #9aabbd;
+      --ink-faint: #71839a;
+      --primary: #6aa9e8;
+      --primary-soft: #16283c;
+      --on-primary: #0d1620;
+      --accent: #ff9542;
+      --accent-soft: #33220f;
+      --good: #5fc794;
+      --good-soft: #122b1f;
+      --warn: #e0a955;
+      --warn-soft: #2e2311;
+      --stop: #ef8f74;
+      --stop-soft: #351a12;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10161e;
+    --surface: #18212c;
+    --sunken: #131b24;
+    --line: #2a3745;
+    --line-soft: #212c38;
+    --ink: #e4ecf4;
+    --ink-muted: #9aabbd;
+    --ink-faint: #71839a;
+    --primary: #6aa9e8;
+    --primary-soft: #16283c;
+    --on-primary: #0d1620;
+    --accent: #ff9542;
+    --accent-soft: #33220f;
+    --good: #5fc794;
+    --good-soft: #122b1f;
+    --warn: #e0a955;
+    --warn-soft: #2e2311;
+    --stop: #ef8f74;
+    --stop-soft: #351a12;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 22px 90px; }
+
+  /* ------------------------------- หัวเรื่อง ------------------------------- */
+
+  header { padding: 52px 0 30px; }
+
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 14px;
+  }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: 0 0 auto; }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 42px);
+    line-height: 1.2;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+  }
+
+  .lede { font-size: 17px; color: var(--ink-muted); max-width: 62ch; margin: 0; }
+
+  /* -------------------------------- ตัวเลข -------------------------------- */
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin: 34px 0 12px;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+
+  .metric .num {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+
+  .metric .unit { font-size: 15px; font-weight: 400; color: var(--ink-faint); margin-left: 3px; }
+  .metric .cap { display: block; font-size: 13px; color: var(--ink-muted); margin-top: 5px; }
+
+  .metric.hero { background: var(--primary-soft); border-color: color-mix(in srgb, var(--primary) 25%, transparent); }
+  .metric.hero .num { color: var(--primary); }
+
+  .measured {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--good);
+    background: var(--good-soft);
+    border: 1px solid color-mix(in srgb, var(--good) 25%, transparent);
+    border-radius: 5px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    white-space: nowrap;
+  }
+
+  /* -------------------------------- ส่วนต่างๆ -------------------------------- */
+
+  section { margin-top: 52px; }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -.01em;
+    margin: 0 0 6px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--line);
+  }
+
+  .sub { color: var(--ink-muted); font-size: 15px; margin: 12px 0 20px; max-width: 66ch; }
+
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+    margin: 26px 0 10px;
+  }
+
+  p { margin: 0 0 12px; }
+
+  /* -------------------------------- ตาราง -------------------------------- */
+
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 480px; }
+
+  th {
+    text-align: left;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-muted);
+    padding: 11px 16px;
+    background: var(--sunken);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .old { color: var(--ink-faint); }
+  .new { color: var(--primary); font-weight: 600; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: .87em;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  /* -------------------------------- การ์ด -------------------------------- */
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+
+  .card h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 6px;
+  }
+
+  .card p { font-size: 14.5px; color: var(--ink-muted); margin: 0; }
+
+  /* -------------------------------- บั๊ก -------------------------------- */
+
+  .bug {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--stop);
+    border-radius: 0 12px 12px 0;
+    padding: 15px 18px;
+    margin-bottom: 10px;
+  }
+
+  .bug.sev-mid { border-left-color: var(--accent); }
+  .bug.sev-low { border-left-color: var(--ink-faint); }
+
+  .sev {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 5px;
+    height: fit-content;
+    white-space: nowrap;
+    background: var(--stop-soft);
+    color: var(--stop);
+  }
+
+  .bug.sev-mid .sev { background: var(--accent-soft); color: var(--accent); }
+  .bug.sev-low .sev { background: var(--sunken); color: var(--ink-muted); }
+
+  .bug h4 { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; margin: 0 0 4px; }
+  .bug p { font-size: 14.5px; color: var(--ink-muted); margin: 0; }
+
+  /* -------------------------------- สถานะ -------------------------------- */
+
+  .status { display: flex; flex-direction: column; gap: 9px; }
+
+  .row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 13px;
+    align-items: baseline;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 16px;
+  }
+
+  .pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .05em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .pill.done { background: var(--good-soft); color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 25%, transparent); }
+  .pill.wait { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); }
+
+  .row-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+  .row-note { font-size: 14px; color: var(--ink-muted); display: block; }
+
+  .callout {
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    border-radius: 12px;
+    padding: 17px 20px;
+    margin-top: 20px;
+  }
+
+  .callout strong { color: var(--accent); }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 560px) {
+    .wrap { padding: 0 16px 60px; }
+    .metric .num { font-size: 25px; }
+    .bug { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker"><span class="dot"></span> สถานะ: ใช้งานได้แล้ว · อยู่ระหว่างทดสอบ</p>
+    <h1>ย้ายระบบจัดการแอร์ออกจาก Google Apps Script</h1>
+    <p class="lede">
+      ระบบบริหารจัดการเครื่องปรับอากาศของ INTERLINK Telecom เดิมรันบน Google Apps Script ซึ่งช้าจนกระทบการใช้งานประจำวัน
+      โปรเจกต์นี้ย้ายระบบหลังบ้านออกมาเขียนใหม่ทั้งหมด โดยยังใช้ Google Sheets เป็นฐานข้อมูลเหมือนเดิม
+      ผู้ใช้ไม่ต้องเรียนรู้อะไรใหม่ และข้อมูลเดิมไม่ต้องย้าย
+    </p>
+
+    <div class="metrics">
+      <div class="metric hero">
+        <span class="num">2<span class="unit">ครั้ง</span></span>
+        <span class="cap">คุยกับ Google ต่อ 1 คำสั่ง<br>เดิม 20-30 ครั้ง</span>
+      </div>
+      <div class="metric">
+        <span class="num">457</span>
+        <span class="cap">เครื่องปรับอากาศในระบบ</span>
+      </div>
+      <div class="metric">
+        <span class="num">237</span>
+        <span class="cap">Node ใน 69 จังหวัด<br>ครอบคลุม 6 ภูมิภาค</span>
+      </div>
+      <div class="metric">
+        <span class="num">0<span class="unit">บาท</span></span>
+        <span class="cap">ค่าใช้จ่ายที่เพิ่มขึ้น</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================ ผลลัพธ์ ============================ -->
+  <section>
+    <h2>ผลลัพธ์ที่วัดได้</h2>
+    <p class="sub">
+      ตัวเลขฝั่ง "ใหม่" มาจากการวัดจริงกับข้อมูลชุดปัจจุบัน (457 เครื่อง)
+      ส่วนฝั่ง "เดิม" อ้างอิงจากประสบการณ์ใช้งานจริงของทีม ไม่ได้วัดด้วยเครื่องมือ
+    </p>
+
+    <div class="tablebox">
+      <table>
+        <thead>
+          <tr><th>หัวข้อ</th><th>เดิม (Apps Script)</th><th>ใหม่</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>จำนวนครั้งที่คุยกับ Google ต่อ 1 คำสั่ง</td>
+            <td class="num old">20-30 ครั้ง</td>
+            <td class="num new">2 ครั้ง <span class="measured">วัดแล้ว</span></td>
+          </tr>
+          <tr>
+            <td>เวลาตอบสนองต่อการกด 1 ครั้ง</td>
+            <td class="num old">2-4 วินาที</td>
+            <td class="num new">0.5-1 วินาที <span class="measured">วัดแล้ว</span></td>
+          </tr>
+          <tr>
+            <td>เวลาเปิดหน้าเว็บครั้งแรก</td>
+            <td class="num old">3-6 วินาที</td>
+            <td class="num new">ต่ำกว่า 1 วินาที</td>
+          </tr>
+          <tr>
+            <td>ไลบรารีภายนอกที่ต้องติดตั้ง</td>
+            <td class="num old">—</td>
+            <td class="num new">0 ตัว</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>ข้อจำกัดที่ต้องพูดตามตรง</strong></p>
+      <p>
+        เวลาตอบสนองยังไม่นิ่ง บางครั้งพุ่งถึง 4-5 วินาที ซึ่งตรวจสอบแล้วว่า
+        <strong>ไม่ได้เกิดจากโค้ดของเรา</strong> — ระบบยิงไปหา Google แค่ 2 ครั้งต่อคำสั่งเสมอและไม่มีการเขียนข้อมูลแอบแฝง
+        แต่ Google Sheets API เองตอบไม่คงที่ วัดได้ตั้งแต่ 0.5 ถึง 5.9 วินาทีสำหรับคำขอเดียวกัน
+      </p>
+      <p style="margin-bottom:0">
+        ถ้าต้องการความเร็วที่นิ่งกว่านี้ ทางแก้คือย้ายฐานข้อมูลจาก Google Sheets ไปเป็นฐานข้อมูลจริง
+        ซึ่งโครงสร้างที่วางไว้รองรับการเปลี่ยนนี้อยู่แล้ว
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ ทำอะไรไป ============================ -->
+  <section>
+    <h2>สิ่งที่ทำ</h2>
+    <p class="sub">
+      เขียนระบบหลังบ้านใหม่ทั้งหมด 3,711 บรรทัด แทนของเดิมที่เป็น Apps Script 2,375 บรรทัด
+      ส่วนหน้าเว็บ 4,233 บรรทัดใช้ของเดิมเกือบทั้งหมด แก้เฉพาะจุดที่ติดต่อกับเซิร์ฟเวอร์
+    </p>
+
+    <h3>สิ่งที่หายไปจาก Apps Script และสิ่งที่มาแทน</h3>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>ของเดิม</th><th>ของใหม่</th><th>เหตุผล</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>SpreadsheetApp</code></td>
+            <td>ตัวเชื่อม Google Sheets API ที่เขียนเอง</td>
+            <td>ทำงานแบบอ่านทีเดียว เขียนทีเดียว แทนการแตะชีตทีละช่อง</td>
+          </tr>
+          <tr>
+            <td><code>CacheService</code></td>
+            <td>ที่เก็บ session ในตัวระบบ</td>
+            <td>เก็บลงไฟล์ด้วย รีสตาร์ทแล้วผู้ใช้ไม่หลุด</td>
+          </tr>
+          <tr>
+            <td><code>LockService</code></td>
+            <td>คิวกันเขียนข้อมูลชนกัน</td>
+            <td>เข้าคิวรอได้จริง ไม่ต้องวนถามซ้ำ</td>
+          </tr>
+          <tr>
+            <td>ตัวแปรส่วนกลาง</td>
+            <td>ข้อมูลแยกตามคำขอ</td>
+            <td>ป้องกันข้อมูลผู้ใช้รั่วข้ามคนเมื่อมีคนใช้พร้อมกัน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>ความสามารถที่เพิ่มเข้ามา</h3>
+    <div class="cards">
+      <div class="card">
+        <h4>ปริ้นฟอร์มเปล่า</h4>
+        <p>เลือก Node แล้วได้ PDF ที่เติมชื่อ Node, Serial, Asset, BTU ให้อัตโนมัติ ช่องตรวจเช็คเว้นว่างให้ช่างเขียนหน้างาน</p>
+      </div>
+      <div class="card">
+        <h4>แนบเอกสารแล้วปิดงาน</h4>
+        <p>ถ่ายรูปฟอร์มที่เขียนมือส่งกลับมา แนบไฟล์แล้วระบบปิดงานในแผน ลงประวัติ และคิดงบให้ในขั้นตอนเดียว</p>
+      </div>
+      <div class="card">
+        <h4>ปิดงานหลายเครื่องพร้อมกัน</h4>
+        <p>หนึ่ง Node มีแอร์ 2 ตัว ล้างพร้อมกันแล้วแนบเอกสารใบเดียว ปิดงานได้ทั้งคู่ โดยกรอกค่าล้างแยกรายเครื่อง</p>
+      </div>
+      <div class="card">
+        <h4>รันได้ทั้งบนเครื่องและบนคลาวด์</h4>
+        <p>โค้ดชุดเดียวกัน ย้ายขึ้นเซิร์ฟเวอร์บริษัทได้โดยไม่ต้องแก้ตรรกะ เปลี่ยนแค่ไฟล์ตั้งค่า</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ บั๊ก ============================ -->
+  <section>
+    <h2>ข้อบกพร่องที่ตรวจพบและแก้ไปแล้ว</h2>
+    <p class="sub">
+      ส่วนใหญ่เป็นความผิดพลาดแบบ "เงียบ" คือระบบไม่ฟ้อง error แต่ข้อมูลผิด
+      ซึ่งอันตรายกว่าระบบล่มเพราะกว่าจะรู้ตัวก็ตอนที่รายงานออกมาเพี้ยนแล้ว
+    </p>
+
+    <div class="bug">
+      <span class="sev">ข้อมูลผิด</span>
+      <div>
+        <h4>ฟอร์มบันทึกว่า "ตรวจแล้วปกติ" ทั้ง 21 ข้อ ทั้งที่ช่างไม่ได้แตะ</h4>
+        <p>ช่องตรวจเช็คตั้งค่าเริ่มต้นไว้ที่ "ปกติ" ทำให้เอกสารทุกใบอ้างว่าตรวจครบทุกข้อโดยอัตโนมัติ เป็นปัญหาด้านความน่าเชื่อถือของเอกสาร ไม่ใช่แค่เรื่องการแสดงผล</p>
+      </div>
+    </div>
+
+    <div class="bug">
+      <span class="sev">ระบบล่ม</span>
+      <div>
+        <h4>เพิ่มคอลัมน์ใหม่แล้วทุกเมนูใช้งานไม่ได้ทั้งระบบ</h4>
+        <p>ระบบสั่งเขียนข้อมูลก่อนขยายความกว้างของชีต Google จึงปฏิเสธคำสั่ง และเนื่องจากการตรวจโครงสร้างชีตทำงานตั้งแต่คำสั่งแรก ความผิดพลาดจุดเดียวจึงทำให้ทุกเมนูพังพร้อมกัน</p>
+      </div>
+    </div>
+
+    <div class="bug sev-mid">
+      <span class="sev">ตัวเลขเพี้ยน</span>
+      <div>
+        <h4>ค่า BTU 36,000 และค่าล้าง 30,000 บาท กลายเป็นวันที่</h4>
+        <p>Google Sheets ส่งวันที่กลับมาเป็นตัวเลขล้วน ซึ่งช่วงตัวเลขนั้นทับกับค่าที่ระบบใช้จริงพอดี แก้โดยระบุชัดว่าคอลัมน์ไหนเป็นวันที่ แทนการเดาจากขนาดตัวเลข</p>
+      </div>
+    </div>
+
+    <div class="bug sev-mid">
+      <span class="sev">รายงานผิด</span>
+      <div>
+        <h4>รายการของวันที่ 1 ถูกนับเข้าเดือนและปีก่อนหน้า</h4>
+        <p>เซิร์ฟเวอร์ทำงานด้วยเวลามาตรฐานสากล ต่างจาก Apps Script ที่ใช้เวลาไทย ทำให้กราฟแนวโน้มและรายงานงบประมาณคลาดเคลื่อน</p>
+      </div>
+    </div>
+
+    <div class="bug sev-low">
+      <span class="sev">ความปลอดภัย</span>
+      <div>
+        <h4>ปิดบัญชีผู้ใช้แล้วยังใช้งานต่อได้อีก 6 ชั่วโมง</h4>
+        <p>ระบบเดิมต้องรอ session หมดอายุเอง ตอนนี้ตัดการใช้งานทันทีเมื่อปิดบัญชีหรือรีเซ็ตรหัสผ่าน</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ สถานะ ============================ -->
+  <section>
+    <h2>สถานะปัจจุบัน</h2>
+    <div class="status">
+      <div class="row">
+        <span class="pill done">เสร็จ</span>
+        <span>
+          <span class="row-title">ระบบหลังบ้านใหม่ทำงานได้ครบทุกเมนู</span>
+          <span class="row-note">รายการเครื่อง · แผนล้างแอร์ · ประวัติ · งานซ่อม · ฟอร์มล้างแอร์ · งบประมาณ · จัดการผู้ใช้</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="pill done">เสร็จ</span>
+        <span>
+          <span class="row-title">ชุดทดสอบอัตโนมัติ 8 ข้อ ผ่านทั้งหมด</span>
+          <span class="row-note">ครอบคลุมการแปลงวันที่และตัวเลข ซึ่งเป็นจุดที่เคยผิดพลาดมาแล้ว 2 ครั้ง</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="pill wait">กำลังทำ</span>
+        <span>
+          <span class="row-title">ทดสอบอยู่กับสำเนาของข้อมูลจริง</span>
+          <span class="row-note">ยังไม่สลับไปใช้ไฟล์จริง ทีมจึงยังทำงานบนระบบเดิมได้ตามปกติโดยไม่กระทบ</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="pill wait">รอ</span>
+        <span>
+          <span class="row-title">ย้ายขึ้นเซิร์ฟเวอร์บริษัท</span>
+          <span class="row-note">ตอนนี้รันบนเครื่องผู้พัฒนา ย้ายได้โดยคัดลอกโฟลเดอร์แล้วสั่งรัน ไม่ต้องแก้โค้ด</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="pill wait">รอ</span>
+        <span>
+          <span class="row-title">เปลี่ยนวิธีเก็บรหัสผ่าน</span>
+          <span class="row-note">ปัจจุบันเก็บเป็นข้อความธรรมดาตามระบบเดิม ควรเปลี่ยนเป็นแบบเข้ารหัสก่อนเปิดให้เข้าจากภายนอก โค้ดรองรับไว้แล้ว</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ค่าใช้จ่าย ============================ -->
+  <section>
+    <h2>ค่าใช้จ่าย</h2>
+    <p class="sub">ไม่มีค่าใช้จ่ายเพิ่มจากเดิม และไม่ต้องผูกบัตรเครดิตกับบริการใด</p>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>รายการ</th><th>ค่าใช้จ่าย</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr><td>Google Sheets API</td><td class="num new">ฟรี</td><td>โควตา 300 คำขอ/นาที ระบบใช้ไม่ถึง 5%</td></tr>
+          <tr><td>เซิร์ฟเวอร์</td><td class="num new">ฟรี</td><td>ใช้เครื่องที่มีอยู่แล้ว ไม่ต้องซื้อเพิ่ม</td></tr>
+          <tr><td>ไลบรารีภายนอก</td><td class="num new">ไม่มี</td><td>ใช้เฉพาะสิ่งที่ติดมากับ Node.js</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    ระบบบริหารจัดการเครื่องปรับอากาศ · INTERLINK Telecom · ข้อมูลสรุป ณ 25 สิงหาคม 2569
+  </footer>
+
+</div>

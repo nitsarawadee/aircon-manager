@@ -1,0 +1,818 @@
+<title>ตั้งค่า PDF ฟอร์มล้างแอร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Sarabun:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ---------- โทนสีหลัก อ้างอิงจากสีแบรนด์ INTERLINK ที่ใช้ในระบบอยู่แล้ว ---------- */
+  :root {
+    --ground: #f6f8fa;
+    --surface: #ffffff;
+    --surface-sunken: #eef2f6;
+    --line: #dbe3ec;
+    --line-strong: #c3cfdc;
+    --ink: #16202e;
+    --ink-muted: #5b6878;
+    --ink-faint: #8695a6;
+    --primary: #1153a1;
+    --primary-soft: #e7f0fa;
+    /* สีตัวหนังสือที่วางบนพื้นสี primary — ต้องสลับตามโหมด
+       เพราะโหมดมืดใช้ฟ้าอ่อน ตัวหนังสือขาวจะอ่านไม่ออก */
+    --on-primary: #ffffff;
+    --accent: #f47920;
+    --accent-soft: #fdf0e3;
+    --caution: #a8341a;
+    --caution-soft: #fdeee9;
+    --shadow: 0 1px 2px rgba(22, 32, 46, .06), 0 8px 24px -12px rgba(22, 32, 46, .18);
+
+    --font-display: "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Sarabun", "IBM Plex Sans Thai", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10161e;
+      --surface: #18212c;
+      --surface-sunken: #131b24;
+      --line: #2a3745;
+      --line-strong: #3b4a5c;
+      --ink: #e4ecf4;
+      --ink-muted: #9aabbd;
+      --ink-faint: #71839a;
+      --primary: #6aa9e8;
+      --primary-soft: #16283c;
+    --on-primary: #0d1620;
+      --accent: #ff9542;
+      --accent-soft: #33220f;
+      --caution: #ef8f74;
+      --caution-soft: #351a12;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10161e;
+    --surface: #18212c;
+    --surface-sunken: #131b24;
+    --line: #2a3745;
+    --line-strong: #3b4a5c;
+    --ink: #e4ecf4;
+    --ink-muted: #9aabbd;
+    --ink-faint: #71839a;
+    --primary: #6aa9e8;
+    --primary-soft: #16283c;
+    --on-primary: #0d1620;
+    --accent: #ff9542;
+    --accent-soft: #33220f;
+    --caution: #ef8f74;
+    --caution-soft: #351a12;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16.5px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 800px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* ---------------------------- แถบหัวเรื่อง ---------------------------- */
+
+  .masthead { padding: 56px 0 32px; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 5.2vw, 40px);
+    line-height: 1.24;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 0 0 16px;
+  }
+
+  .lede {
+    font-size: 17px;
+    color: var(--ink-muted);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink-muted);
+  }
+
+  /* ---------------------------- กล่องข้อความ ---------------------------- */
+
+  .note {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--primary);
+    background: var(--surface);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 18px;
+    margin: 22px 0;
+    font-size: 15.5px;
+  }
+
+  .note.caution {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .note.stop {
+    border-left-color: var(--caution);
+    background: var(--caution-soft);
+  }
+
+  .note-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+
+  .note.caution .note-label { color: var(--accent); }
+  .note.stop .note-label { color: var(--caution); }
+
+  .note p { margin: 0; }
+  .note p + p { margin-top: 10px; }
+
+  /* ---------------------------- ลำดับขั้นตอน ----------------------------
+     ใช้ตัวเลขกำกับเพราะขั้นตอนนี้ "ต้องทำเรียงกันจริงๆ" ข้ามไม่ได้
+     เส้นแนวตั้งด้านซ้ายช่วยให้เห็นว่ายังเหลืออีกกี่ขั้น                     */
+
+  .step {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 20px;
+    padding-top: 34px;
+  }
+
+  .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .num {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+
+
+  .thread {
+    flex: 1 1 auto;
+    width: 2px;
+    background: var(--line);
+    border-radius: 2px;
+    min-height: 16px;
+  }
+
+  .step:last-of-type .thread { display: none; }
+
+  .step-body { padding-bottom: 8px; min-width: 0; }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 21px;
+    line-height: 1.35;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    margin: 4px 0 12px;
+  }
+
+  .step-body p { margin: 0 0 12px; }
+
+  ol.actions, ul.actions {
+    margin: 0 0 14px;
+    padding-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  ol.actions li::marker { color: var(--ink-faint); font-family: var(--font-mono); font-size: 13px; }
+  ul.actions li::marker { color: var(--ink-faint); }
+
+  /* ปุ่มหรือเมนูที่ต้องกดบนหน้าจอ Google — ทำให้เด่นออกจากข้อความรอบข้าง */
+  .btn {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+    white-space: nowrap;
+  }
+
+  .en {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+
+  /* ---------------------------- กล่องโค้ด ---------------------------- */
+
+  .code {
+    position: relative;
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 0 0 14px;
+    overflow: hidden;
+  }
+
+  .code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px 8px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .code-title {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .code pre {
+    margin: 0;
+    padding: 14px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+
+  .copy {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+
+  .copy:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+  .copy:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .copy[data-done="1"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+
+  /* ---------------------------- "ควรเห็นอะไร" ---------------------------- */
+
+  .expect {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 16px;
+    margin: 4px 0 6px;
+    font-size: 15px;
+  }
+
+  .expect-mark {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--primary);
+    line-height: 1.6;
+  }
+
+  .expect-body { min-width: 0; }
+
+  .expect strong {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-bottom: 2px;
+  }
+
+  /* ---------------------------- ปัญหาที่พบบ่อย ---------------------------- */
+
+  .trouble { margin-top: 68px; }
+
+  .trouble h2 {
+    font-size: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--line);
+    margin-bottom: 8px;
+  }
+
+  details {
+    border-bottom: 1px solid var(--line);
+    padding: 4px 0;
+  }
+
+  summary {
+    cursor: pointer;
+    padding: 14px 4px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+    list-style: none;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+  }
+
+  summary::-webkit-details-marker { display: none; }
+
+  summary::before {
+    content: "+";
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 17px;
+    flex: 0 0 auto;
+  }
+
+  details[open] summary::before { content: "\2212"; }
+  summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+
+  .answer { padding: 0 4px 16px 28px; font-size: 15.5px; color: var(--ink-muted); }
+  .answer p { margin: 0 0 10px; }
+  .answer p:last-child { margin-bottom: 0; }
+
+  code.inline {
+    font-family: var(--font-mono);
+    font-size: .88em;
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .done {
+    margin-top: 56px;
+    padding: 26px 28px;
+    border-radius: 14px;
+    background: var(--primary-soft);
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+
+  .done h2 { margin-top: 0; font-size: 20px; }
+  .done p:last-child { margin-bottom: 0; }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    .wrap { padding: 0 16px 64px; }
+    .step { grid-template-columns: 34px 1fr; gap: 14px; }
+    .num { width: 32px; height: 32px; font-size: 13.5px; border-radius: 9px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">ระบบบริหารจัดการเครื่องปรับอากาศ ITEL</p>
+    <h1>ตั้งค่าให้ฟอร์มล้างแอร์ออกไฟล์ PDF ได้</h1>
+    <p class="lede">
+      ตอนนี้ระบบบันทึกข้อมูลได้ครบทุกอย่างแล้ว เหลือแค่ส่วนที่แปลงฟอร์มเป็นไฟล์ PDF
+      ซึ่งต้องไปตั้งค่าฝั่ง Google แยกอีกที่หนึ่ง ทำครั้งเดียวจบ
+    </p>
+    <div class="meta">
+      <span class="chip">ใช้เวลาราว 15 นาที</span>
+      <span class="chip">ทำครั้งเดียว</span>
+      <span class="chip">7 ขั้นตอน</span>
+    </div>
+  </header>
+
+  <div class="note">
+    <span class="note-label">ทำไมต้องมีขั้นตอนนี้</span>
+    <p>
+      ไฟล์ PDF ของฟอร์มล้างแอร์ถูกสร้างด้วยวิธีพิเศษ คือให้ Google วาดตารางลงในสเปรดชีตก่อน
+      แล้วสั่งพิมพ์ออกมาเป็น PDF วิธีนี้ทำให้หน้าตาตรงกับฟอร์มกระดาษเป๊ะและได้ 1 หน้าเสมอ
+      แต่มีแค่ Google เท่านั้นที่ทำได้ ระบบของเราจึงต้องส่งงานส่วนนี้ไปให้ Google ทำแทน
+    </p>
+    <p>
+      สิ่งที่กำลังจะทำคือ <strong>สร้างผู้ช่วยตัวเล็กๆ ไว้ฝั่ง Google</strong>
+      แล้วบอกระบบของเราว่าให้ติดต่อผู้ช่วยตัวนี้เวลาต้องการไฟล์ PDF
+    </p>
+  </div>
+
+  <div class="note stop">
+    <span class="note-label">เก็บหน้านี้ไว้กับตัว</span>
+    <p>
+      หน้านี้มีรหัสลับของระบบอยู่ในขั้นตอนที่ 3 อย่าส่งลิงก์นี้ให้คนนอกทีมนะครับ
+    </p>
+  </div>
+
+  <!-- ============================ ขั้นที่ 1 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">1</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>สร้างที่ทำงานให้ผู้ช่วยตัวใหม่</h2>
+      <ol class="actions">
+        <li>เปิดแท็บใหม่ในเบราว์เซอร์ ไปที่ <strong>script.google.com</strong></li>
+        <li>ถ้ามันให้เข้าสู่ระบบ ให้ล็อกอินด้วยบัญชี Google เดียวกับที่เป็นเจ้าของไฟล์ Google Sheet</li>
+        <li>กดปุ่ม <span class="btn">โปรเจกต์ใหม่</span> <span class="en">New project</span> — อยู่มุมซ้ายบน</li>
+      </ol>
+      <div class="expect">
+        <span class="expect-mark">→</span>
+        <span class="expect-body">
+          <strong>ควรเห็นอะไร</strong>
+          หน้าจอแก้ไขโค้ดสีขาว มีข้อความสั้นๆ อยู่กลางจอประมาณว่า
+          <code class="inline">function myFunction() { }</code> — นั่นคือโค้ดตัวอย่างที่ Google ใส่มาให้
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 2 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">2</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>วางโค้ดของผู้ช่วยลงไป</h2>
+      <ol class="actions">
+        <li>เปิดโฟลเดอร์ <code class="inline">C:\Project Aircon-manager\apps-script</code> ในเครื่อง</li>
+        <li>คลิกขวาที่ไฟล์ <code class="inline">PdfService.gs</code> เลือก <span class="btn">เปิดด้วย</span> แล้วเลือก <strong>Notepad</strong></li>
+        <li>กด <strong>Ctrl+A</strong> เพื่อเลือกทั้งหมด แล้ว <strong>Ctrl+C</strong> เพื่อคัดลอก</li>
+        <li>กลับไปที่แท็บ Apps Script กดในช่องโค้ด แล้วกด <strong>Ctrl+A</strong> ตามด้วย <strong>Ctrl+V</strong></li>
+      </ol>
+      <div class="expect">
+        <span class="expect-mark">→</span>
+        <span class="expect-body">
+          <strong>ควรเห็นอะไร</strong>
+          โค้ดตัวอย่างของ Google หายไป แทนที่ด้วยโค้ดยาวๆ ที่มีคอมเมนต์ภาษาไทยอยู่เต็มไปหมด
+          บรรทัดบนสุดจะเป็นกรอบดาวจันทร์ที่เขียนว่า "บริการสร้าง PDF ฟอร์มล้างแอร์"
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 3 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">3</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>แก้ 2 บรรทัดในโค้ด</h2>
+      <p>
+        หาบรรทัดที่ขึ้นต้นว่า <code class="inline">const SHARED_SECRET</code> (อยู่ประมาณบรรทัดที่ 33)
+        แล้วลบทั้งบรรทัดทิ้ง เอาบรรทัดนี้ไปวางแทน
+      </p>
+
+      <div class="code">
+        <div class="code-head">
+          <span class="code-title">บรรทัดที่ 1 ที่ต้องแก้ — รหัสลับ</span>
+          <button class="copy" type="button">คัดลอก</button>
+        </div>
+        <pre>const SHARED_SECRET = 'ดูค่าจาก PDF_SERVICE_SECRET ในไฟล์ .env';</pre>
+      </div>
+
+      <p>
+        จากนั้นหาบรรทัด <code class="inline">const SPREADSHEET_ID</code> (อยู่ประมาณบรรทัดที่ 50)
+        ลบทิ้งแล้ววางบรรทัดนี้แทน — นี่คือ ID ของชีตสำเนาที่คุณใช้ทดสอบอยู่
+      </p>
+
+      <div class="code">
+        <div class="code-head">
+          <span class="code-title">บรรทัดที่ 2 ที่ต้องแก้ — ชีตที่ใช้</span>
+          <button class="copy" type="button">คัดลอก</button>
+        </div>
+        <pre>const SPREADSHEET_ID = 'ดูค่าจาก SPREADSHEET_ID ในไฟล์ .env';</pre>
+      </div>
+
+      <p>เสร็จแล้วกดไอคอน <strong>รูปแผ่นดิสก์</strong> ด้านบนเพื่อบันทึก (หรือ Ctrl+S)</p>
+
+      <div class="note caution">
+        <span class="note-label">ระวังตรงนี้</span>
+        <p>
+          ต้องมีเครื่องหมาย <code class="inline">'</code> ครอบข้อความ และมี <code class="inline">;</code> ปิดท้ายบรรทัด
+          ถ้าคัดลอกจากกล่องด้านบนทั้งบรรทัดจะได้ครบอยู่แล้ว ไม่ต้องพิมพ์เอง
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 4 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">4</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>ขออนุญาตให้ผู้ช่วยเข้าถึงไฟล์ของคุณ</h2>
+      <p>
+        ผู้ช่วยตัวนี้ต้องสร้างไฟล์ PDF ลง Google Drive ของคุณ Google เลยต้องให้คุณอนุญาตก่อน
+      </p>
+      <ol class="actions">
+        <li>ที่แถบด้านบน มีช่องเลือกชื่อฟังก์ชัน กดแล้วเลือก <span class="btn">setupPermissions</span></li>
+        <li>กดปุ่ม <span class="btn">เรียกใช้</span> <span class="en">Run</span> ข้างๆ กัน</li>
+        <li>จะมีหน้าต่างเด้งขึ้นมาขอสิทธิ์ กด <span class="btn">ตรวจสอบสิทธิ์</span> <span class="en">Review permissions</span></li>
+        <li>เลือกบัญชี Google ของคุณ</li>
+      </ol>
+
+      <div class="note stop">
+        <span class="note-label">จุดที่คนติดกันเยอะที่สุด</span>
+        <p>
+          จะมีหน้าจอเตือนขึ้นมาว่า <strong>"Google ยังไม่ได้ยืนยันแอปนี้"</strong>
+          <span class="en">(Google hasn't verified this app)</span> พร้อมสัญลักษณ์เตือนสีเหลือง
+          หน้าตาน่ากลัวเหมือนโดนไวรัส
+        </p>
+        <p>
+          <strong>ไม่ต้องตกใจ ไม่ได้ผิดอะไร</strong> — Google ขึ้นแบบนี้กับสคริปต์ทุกตัวที่คนเขียนใช้เอง
+          เพราะยังไม่ได้ส่งให้ Google ตรวจสอบเพื่อขายเป็นสินค้า ซึ่งเราไม่ได้จะทำอยู่แล้ว
+        </p>
+        <p>
+          วิธีผ่าน: กด <span class="btn">ขั้นสูง</span> <span class="en">Advanced</span> ที่มุมล่างซ้าย
+          แล้วกดลิงก์ข้างล่างที่เขียนว่า <span class="btn">ไปที่ ... (ไม่ปลอดภัย)</span> <span class="en">Go to ... (unsafe)</span>
+          จากนั้นกด <span class="btn">อนุญาต</span> <span class="en">Allow</span>
+        </p>
+      </div>
+
+      <div class="expect">
+        <span class="expect-mark">→</span>
+        <span class="expect-body">
+          <strong>ควรเห็นอะไร</strong>
+          กลับมาที่หน้าโค้ด และมีแถบดำๆ โผล่ขึ้นมาด้านล่างเขียนว่า
+          "อนุญาตสิทธิ์และสร้างแม่แบบฟอร์มเรียบร้อย พร้อมใช้งานสร้าง PDF แล้ว"
+          ถ้าเห็นข้อความนี้คือผ่านแล้ว
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 5 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">5</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>เปิดให้ระบบของเราติดต่อผู้ช่วยได้</h2>
+      <p>ตอนนี้ผู้ช่วยพร้อมทำงานแล้ว แต่ยังไม่มีที่อยู่ให้ติดต่อ ต้องเผยแพร่ก่อน</p>
+      <ol class="actions">
+        <li>มุมขวาบน กดปุ่มสีน้ำเงิน <span class="btn">ทำให้ใช้งานได้</span> <span class="en">Deploy</span></li>
+        <li>เลือก <span class="btn">การทำให้ใช้งานได้ใหม่</span> <span class="en">New deployment</span></li>
+        <li>ด้านซ้ายมีไอคอนเฟือง กดแล้วเลือก <span class="btn">เว็บแอป</span> <span class="en">Web app</span></li>
+        <li>ตั้งค่า 2 ช่องนี้ให้ตรงเป๊ะ:
+          <ul class="actions" style="margin-top:9px">
+            <li><strong>ดำเนินการในฐานะ</strong> <span class="en">Execute as</span> → เลือก <span class="btn">ฉัน</span> <span class="en">Me</span></li>
+            <li><strong>ผู้ที่มีสิทธิ์เข้าถึง</strong> <span class="en">Who has access</span> → เลือก <span class="btn">ทุกคน</span> <span class="en">Anyone</span></li>
+          </ul>
+        </li>
+        <li>กด <span class="btn">ทำให้ใช้งานได้</span> <span class="en">Deploy</span></li>
+      </ol>
+
+      <div class="note caution">
+        <span class="note-label">เรื่อง "ทุกคน" ที่อาจทำให้กังวล</span>
+        <p>
+          การเลือก "ทุกคน" ไม่ได้แปลว่าใครก็เปิดดูข้อมูลแอร์ของคุณได้
+          มันแค่เปิดช่องให้ระบบของเราส่งข้อความไปหาผู้ช่วยได้เท่านั้น
+          และผู้ช่วยจะทำงานให้เฉพาะคนที่รู้รหัสลับในขั้นที่ 3 — ซึ่งมีแค่ระบบของคุณที่รู้
+        </p>
+        <p>
+          จำเป็นต้องเลือก "ทุกคน" เพราะระบบของเราไม่ได้ล็อกอินบัญชี Google
+          ถ้าเลือกอย่างอื่นผู้ช่วยจะไม่ยอมรับงาน
+        </p>
+      </div>
+
+      <div class="expect">
+        <span class="expect-mark">→</span>
+        <span class="expect-body">
+          <strong>ควรเห็นอะไร</strong>
+          หน้าต่างแจ้งว่าเผยแพร่สำเร็จ พร้อมกล่องข้อความยาวๆ ที่ขึ้นต้นด้วย
+          <code class="inline">https://script.google.com/macros/s/</code> และลงท้ายด้วย
+          <code class="inline">/exec</code> — <strong>กดปุ่มคัดลอกข้างๆ กล่องนั้นไว้</strong> เดี๋ยวต้องใช้
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 6 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">6</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>บอกที่อยู่ผู้ช่วยให้ระบบรู้</h2>
+      <ol class="actions">
+        <li>เปิดโฟลเดอร์ <code class="inline">C:\Project Aircon-manager</code></li>
+        <li>หาไฟล์ชื่อ <code class="inline">.env</code> (ชื่อขึ้นต้นด้วยจุด ไม่มีนามสกุล) คลิกขวา → <span class="btn">เปิดด้วย</span> → <strong>Notepad</strong></li>
+        <li>เลื่อนลงล่างสุด จะเจอ 2 บรรทัดที่ยังว่างอยู่ ให้แก้เป็นแบบนี้</li>
+      </ol>
+
+      <div class="code">
+        <div class="code-head">
+          <span class="code-title">2 บรรทัดล่างสุดของไฟล์ .env</span>
+          <button class="copy" type="button">คัดลอก</button>
+        </div>
+<pre>PDF_SERVICE_URL="วางลิงก์ที่คัดลอกมาจากขั้นที่ 5 ตรงนี้"
+PDF_SERVICE_SECRET="ดูค่าจาก PDF_SERVICE_SECRET ในไฟล์ .env"</pre>
+      </div>
+
+      <p>
+        บรรทัดแรก ให้ลบข้อความภาษาไทยข้างในเครื่องหมายคำพูดออก
+        แล้ววางลิงก์ที่คัดลอกมาแทน <strong>โดยยังคงเครื่องหมาย <code class="inline">"</code> ครอบไว้ทั้งสองข้าง</strong>
+      </p>
+      <p>เสร็จแล้วกด <strong>Ctrl+S</strong> เพื่อบันทึก แล้วปิด Notepad</p>
+    </div>
+  </section>
+
+  <!-- ============================ ขั้นที่ 7 ============================ -->
+  <section class="step">
+    <div class="rail"><div class="num">7</div><div class="thread"></div></div>
+    <div class="step-body">
+      <h2>เปิดระบบใหม่แล้วลองใช้</h2>
+      <p>
+        ระบบอ่านไฟล์ตั้งค่าตอนเปิดครั้งเดียว ต้องปิดแล้วเปิดใหม่ถึงจะรู้จักค่าที่เพิ่งใส่
+      </p>
+      <ol class="actions">
+        <li>กลับไปที่หน้าต่างดำๆ ที่ระบบรันอยู่</li>
+        <li>กด <strong>Ctrl+C</strong> เพื่อหยุด</li>
+        <li>พิมพ์คำสั่งข้างล่างแล้วกด Enter</li>
+      </ol>
+
+      <div class="code">
+        <div class="code-head">
+          <span class="code-title">เปิดระบบใหม่</span>
+          <button class="copy" type="button">คัดลอก</button>
+        </div>
+        <pre>npm start</pre>
+      </div>
+
+      <p>
+        จากนั้นเปิดหน้าเว็บ ไปที่เมนู <strong>ฟอร์มล้างแอร์</strong> แล้วลองกดบันทึกฟอร์มใหม่อีกครั้ง
+      </p>
+
+      <div class="expect">
+        <span class="expect-mark">→</span>
+        <span class="expect-body">
+          <strong>ควรเห็นอะไร</strong>
+          บันทึกสำเร็จโดยไม่มีข้อความสีแดง และมีลิงก์ไฟล์ PDF ให้กดเปิดดูได้
+          ลองกดดูว่าหน้าตาตรงกับฟอร์มกระดาษไหม
+        </span>
+      </div>
+
+      <div class="note">
+        <span class="note-label">รายการเก่าที่บันทึกไปแล้ว</span>
+        <p>
+          ฟอร์มที่บันทึกไปตอนที่ยังตั้งค่าไม่เสร็จ ไม่ต้องกรอกใหม่ครับ
+          ในตารางฟอร์มล้างแอร์จะมีปุ่มให้สร้าง PDF ย้อนหลังได้เลย
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ปัญหาที่พบบ่อย ============================ -->
+  <section class="trouble">
+    <h2>ถ้าไม่เป็นไปตามนั้น</h2>
+
+    <details>
+      <summary>ยังขึ้นข้อความเดิมว่า "ยังไม่ได้ตั้งค่าบริการสร้าง PDF"</summary>
+      <div class="answer">
+        <p>แปลว่าระบบยังอ่านค่าใหม่ไม่เจอ ลองไล่ดู 3 อย่างนี้</p>
+        <p><strong>1.</strong> ปิดแล้วเปิดระบบใหม่หรือยัง — แค่บันทึกไฟล์ <code class="inline">.env</code> เฉยๆ ไม่พอ ต้องกด Ctrl+C แล้วสั่ง <code class="inline">npm start</code> ใหม่</p>
+        <p><strong>2.</strong> ไฟล์ที่แก้ชื่อ <code class="inline">.env</code> จริงไหม บางทีตอนบันทึก Notepad เติม <code class="inline">.txt</code> ต่อท้ายให้โดยไม่บอก ลองเปิดโฟลเดอร์แล้วดูว่ามีไฟล์ชื่อ <code class="inline">.env.txt</code> โผล่มาหรือเปล่า ถ้ามีให้เปลี่ยนชื่อกลับเป็น <code class="inline">.env</code></p>
+        <p><strong>3.</strong> ลิงก์ยังมีเครื่องหมายคำพูดครอบอยู่ทั้งสองข้างไหม</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>ขึ้นว่า "รหัสลับไม่ถูกต้อง"</summary>
+      <div class="answer">
+        <p>รหัสในขั้นที่ 3 กับขั้นที่ 6 ไม่ตรงกัน มักเกิดจากตอนคัดลอกติดช่องว่างมาด้วย หรือคัดลอกไม่ครบตัว</p>
+        <p>วิธีที่ชัวร์ที่สุดคือกดปุ่ม "คัดลอก" จากกล่องในหน้านี้ทั้งสองที่ อย่าพิมพ์เอง</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>ขึ้นว่า "บริการสร้าง PDF ตอบกลับมาในรูปแบบที่อ่านไม่ได้"</summary>
+      <div class="answer">
+        <p>เกือบทุกครั้งเกิดจากตอนเผยแพร่ในขั้นที่ 5 เลือก "ผู้ที่มีสิทธิ์เข้าถึง" ไม่ใช่ <strong>ทุกคน / Anyone</strong></p>
+        <p>กลับไปที่ Apps Script กด <span class="btn">ทำให้ใช้งานได้</span> → <span class="btn">จัดการการทำให้ใช้งานได้</span> <span class="en">Manage deployments</span> → กดไอคอนดินสอเพื่อแก้ไข → แก้ช่องนั้นให้เป็น "ทุกคน" → บันทึก</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>แก้โค้ดใน Apps Script แล้ว แต่ระบบยังใช้โค้ดเก่า</summary>
+      <div class="answer">
+        <p>Apps Script ไม่ได้เอาโค้ดล่าสุดไปใช้อัตโนมัติ ต้องสั่งเผยแพร่ใหม่ทุกครั้งที่แก้</p>
+        <p>กด <span class="btn">ทำให้ใช้งานได้</span> → <span class="btn">จัดการการทำให้ใช้งานได้</span> → ไอคอนดินสอ → ช่อง "เวอร์ชัน" เลือก <strong>ใหม่</strong> <span class="en">New version</span> → บันทึก</p>
+        <p>ทำแบบนี้ลิงก์เดิมจะใช้ได้ต่อ ไม่ต้องไปแก้ไฟล์ <code class="inline">.env</code> ใหม่</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>PDF ออกมาแล้ว แต่ไม่มีโลโก้ หรือหน้าตาเพี้ยน</summary>
+      <div class="answer">
+        <p>แม่แบบฟอร์มอาจสร้างไม่สมบูรณ์ ให้สร้างใหม่</p>
+        <p>ใน Apps Script เลือกฟังก์ชัน <code class="inline">buildCleaningFormTemplate</code> แล้วกด <span class="btn">เรียกใช้</span> จากนั้นลองสร้าง PDF อีกครั้ง</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>จะเปลี่ยนไปใช้ชีตตัวจริงตอนไหน</summary>
+      <div class="answer">
+        <p>เมื่อทดสอบจนพอใจแล้ว ให้ทำ 3 อย่าง</p>
+        <p><strong>1.</strong> แชร์ชีตตัวจริงให้ <code class="inline">ดูค่าจาก GOOGLE_SERVICE_ACCOUNT_EMAIL ในไฟล์ .env</code> เป็นผู้แก้ไข</p>
+        <p><strong>2.</strong> แก้ <code class="inline">SPREADSHEET_ID</code> ในไฟล์ <code class="inline">.env</code> เป็น ID ของชีตตัวจริง แล้วเปิดระบบใหม่</p>
+        <p><strong>3.</strong> ส่วน <code class="inline">SPREADSHEET_ID</code> ใน Apps Script จะเปลี่ยนหรือไม่เปลี่ยนก็ได้ เพราะใช้เป็นกระดาษทดวาดฟอร์มเท่านั้น ไม่ได้อ่านข้อมูลจากชีตนั้น</p>
+      </div>
+    </details>
+  </section>
+
+  <div class="done">
+    <h2>ทำครบแล้วเป็นอันจบ</h2>
+    <p>
+      หลังจากนี้ไม่ต้องกลับมาทำอีก ผู้ช่วยฝั่ง Google จะทำงานให้ตลอด
+      ยกเว้นกรณีเดียวคือถ้ามีการแก้โค้ดใน Apps Script ต้องสั่งเผยแพร่ใหม่ทุกครั้ง
+      (ดูหัวข้อ "แก้โค้ดแล้วแต่ระบบยังใช้โค้ดเก่า" ด้านบน)
+    </p>
+  </div>
+
+</div>
+
+<script>
+  // ปุ่มคัดลอก — เผื่อกรณีที่เบราว์เซอร์ไม่อนุญาตให้เขียนคลิปบอร์ดโดยตรง
+  // จะใช้วิธีเลือกข้อความให้แทน ผู้ใช้กด Ctrl+C ต่อได้เลย
+  document.querySelectorAll('.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.closest('.code').querySelector('pre');
+      var text = pre.textContent;
+
+      function flash(label) {
+        var original = 'คัดลอก';
+        btn.textContent = label;
+        btn.dataset.done = '1';
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.dataset.done = '';
+        }, 1800);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { flash('คัดลอกแล้ว'); },
+          function () { selectText(pre); flash('กด Ctrl+C'); }
+        );
+      } else {
+        selectText(pre);
+        flash('กด Ctrl+C');
+      }
+    });
+  });
+
+  function selectText(node) {
+    var range = document.createRange();
+    range.selectNodeContents(node);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+</script>
