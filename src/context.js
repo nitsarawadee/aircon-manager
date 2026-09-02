@@ -1,5 +1,6 @@
 import { Spreadsheet } from './sheets.js';
 import { getAccessToken } from './google-auth.js';
+import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH
@@ -32,21 +33,38 @@ export class Ctx {
    * @param {Object} state  ตัวเก็บ session และคิวกันเขียนชนกัน
    *   ฝั่ง Node เป็น LocalState / ฝั่ง Cloudflare เป็น Durable Object
    *   ทั้งสองตัวมีเมธอดชื่อเดียวกัน โค้ดตรงนี้จึงไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
+   * @param {Object} [db]  ฐานข้อมูล SQLite ที่เปิดไว้แล้ว ส่งเข้ามาจาก platform/
+   *   src/ ห้ามเปิดไฟล์เอง จึงต้องรับเข้ามาแบบนี้
    */
-  constructor(env, state) {
+  constructor(env, state, db) {
     this.env = env;
     this.state = state;
-    this.ss = null;            // ตัวเชื่อมกับ Google Sheets
+    this.db = db || null;
+    this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite หรือ Google Sheets)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ
-    this._sessionUser = null;  // แถวผู้ใช้จากชีต Users (false = ไม่พบ)
+    this._sessionUser = null;  // แถวผู้ใช้จากตาราง Users (false = ไม่พบ)
     this._userInfo = null;     // ผลของ userInfo() ที่คำนวณแล้ว
     this._baseReady = false;
   }
 
-  /** เชื่อมต่อ Google Sheets (ทำครั้งเดียวต่อ request) */
+  /**
+   * เชื่อมต่อแหล่งข้อมูล (ทำครั้งเดียวต่อ request)
+   *
+   * เลือกจากค่า DATA_SOURCE ใน .env — ทั้งสองตัวมีเมธอดชุดเดียวกัน
+   * โมดูลธุรกิจจึงไม่รู้และไม่ต้องรู้ว่ากำลังอ่านจากไหน สลับได้โดยไม่ต้องแก้โค้ด
+   */
   async connect() {
     if (this.ss) return this.ss;
+
+    if (this.useSqlite) {
+      if (!this.db) {
+        throw new Error('ตั้ง DATA_SOURCE=sqlite ไว้ แต่ไม่ได้ส่งฐานข้อมูลเข้ามา (platform/ ต้องเปิดไฟล์แล้วส่งให้)');
+      }
+      this.ss = new Repository(this.db);
+      return this.ss;
+    }
+
     const token = await getAccessToken(this.env);
     this.ss = new Spreadsheet(this.env.SPREADSHEET_ID, token);
 
@@ -54,6 +72,11 @@ export class Ctx {
       this.ss._meta = metaCache.data;
     }
     return this.ss;
+  }
+
+  /** ใช้ SQLite อยู่หรือเปล่า (ค่าเริ่มต้นคือใช้ ต้องระบุ sheets ชัดเจนถึงจะกลับไปใช้ Google) */
+  get useSqlite() {
+    return String(this.env.DATA_SOURCE || 'sqlite').toLowerCase() !== 'sheets';
   }
 
   /** จำโครงสร้างชีตล่าสุดไว้ใช้ซ้ำใน request ถัดไป */

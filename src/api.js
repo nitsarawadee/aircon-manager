@@ -103,9 +103,10 @@ export function isApiPath(pathname) {
  * @param {Object}  opts.body      ข้อมูล JSON ที่ส่งมา { token, fn, args }
  * @param {Object}  opts.env       ค่าตั้งค่าและค่าลับ
  * @param {Object}  opts.state     ตัวเก็บ session และคิวกันเขียนชนกัน
+ * @param {Object}  [opts.db]      ฐานข้อมูล SQLite ที่เปิดไว้แล้ว (ฝั่ง Node เท่านั้น)
  * @returns {Promise<{status: number, payload: Object}>}
  */
-export async function handleApi({ pathname, body, env, state }) {
+export async function handleApi({ pathname, body, env, state, db }) {
   const isPublic = pathname === '/api/public';
   const fnName = String((body && body.fn) || '');
   const args = Array.isArray(body && body.args) ? body.args : [];
@@ -116,7 +117,7 @@ export async function handleApi({ pathname, body, env, state }) {
   }
   const fn = table[fnName];
 
-  const ctx = new Ctx(env, state);
+  const ctx = new Ctx(env, state, db);
 
   try {
     if (!isPublic) {

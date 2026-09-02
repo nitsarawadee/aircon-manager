@@ -19,7 +19,7 @@
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
@@ -160,12 +160,41 @@ const fileEnv = await loadEnvFile(join(ROOT, '.env'));
 // เผื่อตอนขึ้น server บริษัทที่มักตั้งค่าลับผ่าน environment ไม่ใช่ไฟล์
 const env = { ...fileEnv, ...process.env };
 
-const missing = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'SPREADSHEET_ID']
-  .filter(k => !env[k]);
-if (missing.length) {
-  console.error('\n❌ ยังตั้งค่าไม่ครบ ขาด: ' + missing.join(', '));
-  console.error('   คัดลอกไฟล์ .env.example เป็น .env แล้วใส่ค่าให้ครบก่อนครับ\n');
-  process.exit(1);
+/* ---------------------------- เปิดแหล่งข้อมูล ----------------------------
+   src/ ห้ามเปิดไฟล์เอง การเปิดฐานข้อมูลจึงต้องทำที่นี่แล้วส่งเข้าไปให้
+   ------------------------------------------------------------------------ */
+
+const useSqlite = String(env.DATA_SOURCE || 'sqlite').toLowerCase() !== 'sheets';
+let db = null;
+
+if (useSqlite) {
+  const { DatabaseSync } = await import('node:sqlite');
+  const dbPath = resolve(ROOT, env.DB_PATH || join('data', 'aircon.db'));
+
+  if (!existsSync(dbPath)) {
+    console.error('\n❌ ไม่พบไฟล์ฐานข้อมูล: ' + dbPath);
+    console.error('   สร้างด้วยคำสั่ง: node scripts/migrate-from-sheets.mjs');
+    console.error('   หรือถ้ายังอยากใช้ Google Sheets ให้ตั้ง DATA_SOURCE=sheets ในไฟล์ .env\n');
+    process.exit(1);
+  }
+
+  db = new DatabaseSync(dbPath);
+  // WAL ให้หลายคนอ่านพร้อมกันได้ขณะที่มีคนเขียนอยู่
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA foreign_keys = ON');
+  // ถ้ามีคนเขียนอยู่ ให้รอคิวสูงสุด 5 วินาทีแทนที่จะฟ้องพังทันที
+  db.exec('PRAGMA busy_timeout = 5000');
+
+  console.log('แหล่งข้อมูล: SQLite (' + dbPath + ')');
+} else {
+  const missing = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'SPREADSHEET_ID']
+    .filter(k => !env[k]);
+  if (missing.length) {
+    console.error('\n❌ ตั้ง DATA_SOURCE=sheets ไว้ แต่ยังตั้งค่าไม่ครบ ขาด: ' + missing.join(', '));
+    console.error('   คัดลอกไฟล์ .env.example เป็น .env แล้วใส่ค่าให้ครบก่อนครับ\n');
+    process.exit(1);
+  }
+  console.log('แหล่งข้อมูล: Google Sheets');
 }
 
 const state = new LocalState(join(ROOT, '.sessions.json'));
@@ -188,7 +217,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };
@@ -223,6 +252,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     console.log('\nกำลังปิดระบบ...');
     server.close();
     try { await state._save(); } catch { /* ปิดต่อไปแม้บันทึกไม่สำเร็จ */ }
+    try { if (db) db.close(); } catch { /* ปิดต่อไป */ }
     process.exit(0);
   });
 }
