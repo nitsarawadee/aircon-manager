@@ -801,6 +801,36 @@
         .replace(/'/g, '&#39;');
     }
 
+    /**
+     * แปลงวันที่จากรูปแบบที่ระบบเก็บ (2026-09-01) เป็นรูปแบบที่คนไทยอ่าน (01/09/2026)
+     *
+     * ใช้เฉพาะตอน "แสดงผล" เท่านั้น ข้อมูลที่เก็บและที่ส่งกลับ server ยังเป็น
+     * yyyy-mm-dd เหมือนเดิมทุกจุด เพราะรูปแบบนั้นเรียงลำดับได้ถูกต้องและ
+     * ไม่กำกวมว่าเลขไหนคือวันเลขไหนคือเดือน
+     *
+     * ปีที่แสดงเป็น ค.ศ. ให้ตรงกับช่องเลือกปีในหน้าแผน (ปี 2026, 2027)
+     * ค่าที่ไม่ใช่วันที่ เช่น '-' หรือค่าว่าง จะคืนกลับไปตามเดิมไม่แตะต้อง
+     */
+    function fmtDate(v) {
+      if (v === undefined || v === null || v === '') return '';
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v).trim());
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+    }
+
+    /**
+     * ข้อความที่ใช้ค้นหาในตาราง
+     *
+     * รวมข้อมูลดิบทุกช่อง แล้วเติมวันที่ในรูปแบบที่ผู้ใช้เห็นบนหน้าจอเข้าไปด้วย
+     * ผู้ใช้จึงค้นได้ทั้ง "2026-09-01" และ "01/09/2026" ให้ผลเหมือนกัน
+     *
+     * ถ้าไม่ทำแบบนี้ จะเกิดอาการที่งงมาก: เห็นวันที่ 01/09/2026 อยู่บนจอ
+     * แต่พิมพ์ค้นแล้วไม่เจอ เพราะข้อมูลจริงข้างในเก็บเป็น 2026-09-01
+     */
+    function searchText(obj) {
+      const raw = Object.values(obj).join(' ');
+      return (raw + ' ' + raw.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1')).toLowerCase();
+    }
+
     function showToast(message, type = 'success') {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
@@ -1524,7 +1554,7 @@
         pendingAirSearch = null;
         const searchInput = document.getElementById('airSearch');
         if (searchInput) searchInput.value = code;
-        renderAirTable(currentAirList.filter(a => Object.values(a).join(' ').toLowerCase().includes(code.toLowerCase())));
+        renderAirTable(currentAirList.filter(a => searchText(a).includes(code.toLowerCase())));
       } else {
         renderAirTable(currentAirList);
       }
@@ -1625,7 +1655,7 @@
               <div class="text-sm">${esc(a.Brand)}</div>
               <div class="text-xs text-gray-400">${esc(a.BTU)} BTU</div>
             </td>
-            <td class="px-4 py-3 text-gray-500">${esc(a.InstallDate)}</td>
+            <td class="px-4 py-3 text-gray-500">${esc(fmtDate(a.InstallDate))}</td>
             <td class="px-4 py-3">${statusBadge(a.Status)}</td>
             <td class="px-4 py-3 text-right space-x-1">
               <button onclick="viewAirHistory('${esc(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
@@ -1665,7 +1695,7 @@
 
     document.getElementById('airSearch').addEventListener('input', e => {
       const q = e.target.value.trim().toLowerCase();
-      renderAirTable(currentAirList.filter(a => Object.values(a).join(' ').toLowerCase().includes(q)));
+      renderAirTable(currentAirList.filter(a => searchText(a).includes(q)));
     });
 
     function openAirModal(data = {}) {
@@ -1938,7 +1968,7 @@
       if (filterNode) displayPlan = displayPlan.filter(p => p.NodeName === filterNode);
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        displayPlan = displayPlan.filter(p => Object.values(p).join(' ').toLowerCase().includes(q));
+        displayPlan = displayPlan.filter(p => searchText(p).includes(q));
       }
 
       const totalRows = displayPlan.length;
@@ -2053,8 +2083,8 @@
       return `
         <td class="${tdClass}" onclick="openRoundModal(${origIdx},${r})">
           <div class="flex flex-col items-center justify-center">
-            <span class="text-[10px] text-gray-400">แผน ${esc(plan)}</span>
-            <span class="${statusStyle}">${esc(actual)}</span>
+            <span class="text-[10px] text-gray-400">แผน ${esc(fmtDate(plan))}</span>
+            <span class="${statusStyle}">${esc(fmtDate(actual))}</span>
             <div class="flex items-center text-[10px] mt-0.5 text-gray-500">${dot}${esc(status)}</div>
             ${p['R'+r+'_FormUrl'] ? `<a href="${esc(p['R'+r+'_FormUrl'])}" target="_blank" onclick="event.stopPropagation()" title="เปิดฟอร์ม PDF" class="text-[#1153a1] hover:text-[#f47920] text-sm mt-0.5"><i class="ph ph-file-pdf"></i></a>` : ''}
           </div>
@@ -2334,7 +2364,7 @@
 
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        displayHistory = displayHistory.filter(h => Object.values(h).join(' ').toLowerCase().includes(q));
+        displayHistory = displayHistory.filter(h => searchText(h).includes(q));
       }
 
       if(displayHistory.length === 0) {
@@ -2347,7 +2377,7 @@
       historyPage = clampPage(historyPage, displayHistory.length);
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(h.Date)}</td>
+          <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
             <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>
           </td>
@@ -2467,7 +2497,7 @@
         let pendingList = currentAirList.filter(a => a.Status === 'รอซ่อม');
         if(searchQuery) {
            const q = searchQuery.toLowerCase();
-           pendingList = pendingList.filter(a => Object.values(a).join(' ').toLowerCase().includes(q));
+           pendingList = pendingList.filter(a => searchText(a).includes(q));
         }
 
         if (pendingList.length === 0) {
@@ -2482,7 +2512,7 @@
                 <div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
                 <div class="text-[11px] text-gray-400">${esc(a.SiteCode)}</div>
               </td>
-              <td class="px-4 py-3 text-gray-500 text-sm">${esc(a.UpdatedAt).slice(0,10)}</td>
+              <td class="px-4 py-3 text-gray-500 text-sm">${esc(fmtDate(a.UpdatedAt))}</td>
               <td class="px-4 py-3 text-red-600 text-sm max-w-xs truncate" title="${esc(a.Note)}">${esc(a.Note) || '-'}</td>
               <td class="px-4 py-3 text-right space-x-1">
                 <button onclick="viewAirHistory('${esc(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
@@ -2504,7 +2534,7 @@
         });
         if(searchQuery) {
            const q = searchQuery.toLowerCase();
-           repairHist = repairHist.filter(h => Object.values(h).join(' ').toLowerCase().includes(q));
+           repairHist = repairHist.filter(h => searchText(h).includes(q));
         }
 
         if (repairHist.length === 0) {
@@ -2512,7 +2542,7 @@
         } else {
           historyTb.innerHTML = repairHist.slice(0, 50).map(h => `
             <tr class="hover:bg-gray-50 transition-colors">
-              <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(h.Date)}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 font-medium text-gray-900">
                 <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>
               </td>
@@ -2743,7 +2773,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     cleaningFormPage = clampPage(cleaningFormPage, currentCleaningForms.length);
     tbody.innerHTML = currentCleaningForms.slice((cleaningFormPage - 1) * TABLE_PAGE_SIZE, cleaningFormPage * TABLE_PAGE_SIZE).map(f => `
       <tr class="hover:bg-slate-50">
-        <td class="px-4 py-3">${esc(f.Date)}</td>
+        <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
           ${esc(f.NodeName)}
           ${f.Source === 'attach'
