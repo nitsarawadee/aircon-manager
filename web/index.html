@@ -6,14 +6,88 @@
   <title>ระบบบริหารจัดการเครื่องปรับอากาศ ITEL</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231153a1'/%3E%3Cg stroke='white' stroke-width='2.5' stroke-linecap='round'%3E%3Cline x1='16' y1='6' x2='16' y2='26'/%3E%3Cline x1='6' y1='16' x2='26' y2='16'/%3E%3Cline x1='9' y1='9' x2='23' y2='23'/%3E%3Cline x1='23' y1='9' x2='9' y2='23'/%3E%3C/g%3E%3Ccircle cx='16' cy='16' r='3' fill='%23f47920'/%3E%3C/svg%3E">
   
-  <!-- Tailwind CSS & Phosphor Icons -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <!-- ไฟล์ทั้งหมดเก็บไว้ในเครื่อง ไม่ดึงจากอินเทอร์เน็ต
+       เพื่อให้ระบบใช้งานได้แม้เน็ตหลุดหรือรันอยู่ในวงปิด
+       ถ้าจะอัปเดตเวอร์ชัน ให้สั่ง node scripts/vendor-assets.mjs (ตอนนั้นต้องต่อเน็ต) -->
+  <script src="vendor/tailwind.js"></script>
+  <link href="vendor/phosphor.css" rel="stylesheet">
+  <link href="vendor/phosphor-fill.css" rel="stylesheet">
+  <link href="vendor/fonts.css" rel="stylesheet">
+  <script src="vendor/chart.umd.min.js"></script>
   
+  <script>
+    // เปิดใช้โหมดมืดแบบสั่งเองด้วยคลาส ไม่ใช่ตามค่าของเครื่อง
+    // เพราะผู้ใช้ต้องเลือกเองได้ ไม่ใช่เปลี่ยนตามเวลาหรือการตั้งค่าของ Windows
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <script>
+    // ใส่คลาสก่อนที่หน้าจะวาด เพื่อไม่ให้เห็นหน้าขาวแวบหนึ่งก่อนเปลี่ยนเป็นมืด
+    // ต้องอยู่ตรงนี้ใน head ไม่ใช่ท้ายไฟล์ ไม่งั้นจะสายเกินไป
+    try {
+      if (localStorage.getItem('acmgr_theme') === 'dark') document.documentElement.classList.add('dark');
+    } catch (e) { /* เบราว์เซอร์ที่ปิดการเก็บข้อมูลไว้ ให้ใช้โหมดสว่างตามปกติ */ }
+  </script>
+
   <style>
     body { font-family: 'Inter', 'Sarabun', sans-serif; background-color: #f8fafc; color: #334155; }
+
+    /* ============================================================
+       โหมดกลางคืน
+       ============================================================
+       หน้าเว็บนี้ใช้คลาสสีของ Tailwind กระจายอยู่หลายพันจุด
+       การไล่เติม dark: ทีละจุดคือการแก้ไฟล์เกือบทั้งไฟล์ ซึ่งเสี่ยงตกหล่น
+       และทำให้อ่านโค้ดยากขึ้นมากโดยไม่ได้อะไรเพิ่ม
+
+       จึงใช้วิธีเขียนทับเฉพาะคลาสสีกลางที่ใช้จริง ซึ่งนับจากไฟล์แล้วมีไม่ถึง 30 คลาส
+       (bg-white 102 จุด, text-gray-700 125 จุด, border-gray-300 132 จุด ฯลฯ)
+       ได้ผลครอบคลุมทั้งหน้าโดยแก้ที่เดียว และเพิ่มคลาสใหม่ทีหลังก็ยังทำงานถูก
+
+       สีแบรนด์ (น้ำเงิน #1153a1 / ส้ม #f47920) ไม่แตะ เพราะเป็นตัวระบุตัวตนของระบบ
+       และตัดกับพื้นเข้มได้ดีอยู่แล้ว */
+
+    html.dark body { background-color: #0f172a; color: #cbd5e1; }
+
+    html.dark .bg-white        { background-color: #1e293b !important; }
+    html.dark .bg-slate-50     { background-color: #0f172a !important; }
+    html.dark .bg-gray-50      { background-color: #1e293b !important; }
+    html.dark .bg-gray-100     { background-color: #334155 !important; }
+    html.dark .bg-gray-300     { background-color: #475569 !important; }
+    html.dark .bg-slate-100    { background-color: #334155 !important; }
+
+    html.dark .text-gray-900,
+    html.dark .text-gray-800   { color: #f1f5f9 !important; }
+    html.dark .text-gray-700,
+    html.dark .text-slate-700  { color: #e2e8f0 !important; }
+    html.dark .text-gray-600,
+    html.dark .text-slate-600  { color: #cbd5e1 !important; }
+    html.dark .text-gray-500,
+    html.dark .text-slate-500  { color: #94a3b8 !important; }
+    html.dark .text-gray-400,
+    html.dark .text-slate-400,
+    html.dark .text-gray-300   { color: #64748b !important; }
+
+    html.dark .border-gray-100,
+    html.dark .border-slate-100 { border-color: #1e293b !important; }
+    html.dark .border-gray-200,
+    html.dark .border-slate-200 { border-color: #334155 !important; }
+    html.dark .border-gray-300  { border-color: #475569 !important; }
+    html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
+
+    /* ช่องกรอกข้อมูลต้องแยกจากพื้นหลังให้เห็นชัด ไม่งั้นหาไม่เจอว่าพิมพ์ตรงไหนได้ */
+    html.dark input, html.dark select, html.dark textarea {
+      background-color: #0f172a; color: #e2e8f0; border-color: #475569;
+    }
+    html.dark input::placeholder, html.dark textarea::placeholder { color: #64748b; }
+
+    /* แถบสีอ่อนที่ใช้เป็นป้ายสถานะ ต้องหรี่ลงไม่งั้นสว่างจ้าบนพื้นเข้ม */
+    html.dark [class*="bg-emerald-100"], html.dark [class*="bg-rose-100"],
+    html.dark [class*="bg-amber-100"], html.dark [class*="bg-blue-100"],
+    html.dark [class*="bg-cyan-100"], html.dark [class*="bg-teal-100"],
+    html.dark [class*="bg-orange-100"], html.dark [class*="bg-indigo-100"],
+    html.dark [class*="bg-purple-100"] { filter: brightness(0.42) saturate(1.5); }
+
+    html.dark .table-container::-webkit-scrollbar-track { background: #1e293b; }
+    html.dark .table-container::-webkit-scrollbar-thumb { background: #475569; }
     .view { display: none; animation: fadeIn 0.3s ease; }
     .view.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -140,6 +214,10 @@
         <div class="text-sm font-bold text-[#1153a1] truncate" id="sidebarUserName">ผู้ใช้งาน</div>
         <div class="text-xs text-slate-500 truncate cursor-pointer hover:text-[#1153a1] hover:underline" onclick="openChangePasswordModal()">เปลี่ยนรหัสผ่าน</div>
       </div>
+      <button id="themeToggle" onclick="toggleTheme()" title="สลับโหมดกลางวัน / กลางคืน"
+              class="text-slate-400 hover:text-[#1153a1] transition-colors text-lg p-1 flex-shrink-0">
+        <i class="ph ph-moon"></i>
+      </button>
       <i class="ph ph-sign-out text-slate-400 hover:text-[#f47920] cursor-pointer transition-colors text-lg" title="ออกจากระบบ" onclick="doLogout()"></i>
     </div>
   </aside>
@@ -744,7 +822,7 @@
   <div id="toastContainer" class="fixed bottom-4 right-4 z-[70] flex flex-col gap-2"></div>
 
   <!-- SheetJS สำหรับ Export/Import -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
 
   <!-- ============================ JAVASCRIPT ============================ -->
   <script>
@@ -2010,6 +2088,62 @@
       currentYear = sel.value;
       await loadPlan();
     }
+
+    /* ============== โหมดกลางวัน / กลางคืน ============== */
+
+    /**
+     * สลับโหมดสี และจำไว้ในเครื่องของผู้ใช้คนนั้น
+     *
+     * เก็บใน localStorage ไม่ใช่ในฐานข้อมูล เพราะเป็นความชอบส่วนตัวของ "เครื่องนั้น"
+     * ไม่ใช่ของบัญชี คนที่ใช้คอมสองเครื่องอาจอยากได้คนละแบบ
+     * และไม่ต้องเรียกเซิร์ฟเวอร์ทุกครั้งที่กด
+     */
+    /**
+     * บอกสีตัวอักษรและเส้นตารางของกราฟให้เข้ากับโหมดปัจจุบัน
+     *
+     * จำเป็นเพราะ Chart.js ตั้งสีตัวอักษรเป็นเทาเข้มไว้ตายตัว
+     * ซึ่งอ่านแทบไม่ออกบนพื้นมืด และมันไม่รู้จักโหมดของหน้าเว็บเราเอง
+     */
+    function applyChartTheme() {
+      if (typeof Chart === 'undefined') return;
+      const dark = document.documentElement.classList.contains('dark');
+      Chart.defaults.color = dark ? '#94a3b8' : '#666';
+      Chart.defaults.borderColor = dark ? '#334155' : 'rgba(0,0,0,0.1)';
+    }
+
+    /** วาดหน้าที่เปิดอยู่ใหม่ ใช้ตอนสลับโหมดเพื่อให้กราฟเปลี่ยนสีตาม */
+    function reloadActiveView() {
+      const loaders = {
+        'view-dashboard': typeof loadDashboard === 'function' ? loadDashboard : null,
+        'view-budget': typeof loadBudget === 'function' ? loadBudget : null
+      };
+      for (const [id, fn] of Object.entries(loaders)) {
+        const el = document.getElementById(id);
+        if (fn && el && el.classList.contains('active')) { fn(); return; }
+      }
+    }
+
+    function toggleTheme() {
+      const dark = document.documentElement.classList.toggle('dark');
+      try { localStorage.setItem('acmgr_theme', dark ? 'dark' : 'light'); } catch (e) {}
+      syncThemeIcon();
+
+      // กราฟเก็บสีไว้ตอนสร้าง จึงต้องตั้งค่าใหม่แล้ววาดซ้ำ ไม่งั้นสีเดิมค้างอยู่
+      applyChartTheme();
+      reloadActiveView();
+    }
+
+    /** ไอคอนต้องบอกว่า "กดแล้วจะไปโหมดไหน" ไม่ใช่บอกว่าตอนนี้อยู่โหมดไหน */
+    function syncThemeIcon() {
+      const btn = document.getElementById('themeToggle');
+      if (!btn) return;
+      const dark = document.documentElement.classList.contains('dark');
+      btn.innerHTML = `<i class="ph ph-${dark ? 'sun' : 'moon'}"></i>`;
+      btn.title = dark ? 'สลับเป็นโหมดกลางวัน' : 'สลับเป็นโหมดกลางคืน';
+    }
+
+    window.toggleTheme = toggleTheme;
+    document.addEventListener('DOMContentLoaded', () => { syncThemeIcon(); applyChartTheme(); });
 
     /* ============== ปฏิทินนัดหมายล้างแอร์ ============== */
 

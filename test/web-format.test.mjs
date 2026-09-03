@@ -16,7 +16,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
-const js = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// รวมโค้ดจาก <script> ทุกก้อนในหน้า ไม่ใช่เอาแค่ก้อนแรก
+// เพราะหน้าเว็บมีสคริปต์เล็กๆ ใน head ด้วย (ตั้งค่าธีมก่อนหน้าจะวาด)
+// ถ้าเอาแค่ก้อนแรกจะได้ก้อนนั้นแทนโค้ดหลัก แล้วหาฟังก์ชันไม่เจอ
+const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
 
 /** ดึงฟังก์ชันชื่อที่ระบุออกมาจากโค้ดหน้าเว็บ แล้วทำให้เรียกใช้ได้ */
 function extract(name) {
