@@ -196,3 +196,43 @@ test('เครื่องที่เพิ่มใหม่ ต้องเ�
 
   assert.deepEqual(appends[0], ['ATG-ATG-AIR-9', '1', '', 'test']);
 });
+
+/* ==================== ช่องว่าง = ไม่ยุ่ง ไม่ใช่ล้างทิ้ง ==================== */
+
+test('ช่องที่เว้นว่างในไฟล์ ต้องไม่ล้างข้อมูลเดิมทิ้ง', () => {
+  // นี่คือวิธีใช้งานจริง: ทยอยเติมข้อมูลทีละรอบ
+  // รอบนี้หาวันติดตั้งมาได้ ก็กรอกแค่ช่องนั้น ช่องอื่นเว้นว่าง
+  // ถ้าช่องว่างล้างค่าเดิม ข้อมูลที่สะสมมาจะหายทั้งแถวโดยคนกรอกไม่รู้ตัว
+  const plan = planImport(existing(), [fileRow({
+    Brand: '', BTU: '', IndoorSN: '', CleaningPricePerRound: '', Status: '', Note: '',
+    InstallDate: '2020-03-15'
+  })]);
+
+  const changes = plan.updates[0].changes;
+  assert.equal(changes.length, 1, 'ควรเปลี่ยนแค่ช่องที่กรอกมาจริง');
+  assert.equal(changes[0].column, 'InstallDate');
+  assert.equal(changes[0].to, '2020-03-15');
+});
+
+test('ไฟล์ที่กรอกแต่ช่องบังคับ ต้องไม่ทำให้ข้อมูลเดิมหายสักช่อง', () => {
+  const plan = planImport(existing(), [{
+    __line: 2, Region: '1', Province: 'อ่างทอง', NodeName: 'อ่างทอง',
+    SiteCode: 'ATG-ATG', LocationType: 'Shop House', AirNo: '1',
+    Brand: '', BTU: '', ModelIndoor: '', ModelOutdoor: '',
+    IndoorAsset: '', IndoorSN: '', OutdoorAsset: '', OutdoorSN: '',
+    InstallDate: '', WarrantyExpire: '', CleaningPricePerRound: '', Status: '', Note: ''
+  }]);
+
+  assert.equal(plan.updates.length, 0, 'ไม่มีอะไรเปลี่ยน');
+  assert.equal(plan.unchanged.length, 1);
+});
+
+test('เครื่องใหม่ที่กรอกไม่ครบ ยังเพิ่มได้ ช่องที่เว้นก็เว้นไป', () => {
+  const plan = planImport(existing(), [fileRow({
+    AirNo: '7', __line: 3, Brand: '', BTU: '', IndoorSN: '', Note: ''
+  })]);
+
+  assert.equal(plan.adds.length, 1);
+  assert.equal(plan.adds[0].values.Brand, undefined, 'ช่องที่เว้นต้องไม่ถูกใส่ค่าว่างเข้าไป');
+  assert.equal(plan.adds[0].values.Province, 'อ่างทอง');
+});
