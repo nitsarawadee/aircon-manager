@@ -618,6 +618,44 @@
             </div>
             <i class="ph-fill ph-wallet absolute right-6 -bottom-10 text-[120px] text-white opacity-5"></i>
         </div>
+
+        <!-- ค่าใช้จ่ายรายเดือน
+             ตัวเลขรวมทั้งปีบอกได้แค่ว่าใช้ไปเท่าไหร่ แต่ไม่บอกว่าใช้ตอนไหน
+             ซึ่งเป็นข้อมูลที่ต้องใช้ตอนวางแผนงบปีถัดไปและตอนดูว่าเดือนไหนผิดปกติ -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+            <div>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <i class="ph-fill ph-chart-bar text-[#1153a1]"></i> ค่าใช้จ่ายรายเดือน
+              </h3>
+              <p class="text-xs text-gray-500 mt-0.5">ปี <span id="bdg_monthly_year">-</span> · รวมทั้งปี <span id="bdg_monthly_total" class="font-semibold text-gray-700">฿0</span></p>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-gray-600">
+              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#1153a1"></span> ล้างแอร์</span>
+              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#f47920"></span> ซ่อมบำรุง</span>
+            </div>
+          </div>
+
+          <div style="position:relative;height:260px"><canvas id="budgetMonthlyCanvas"></canvas></div>
+
+          <div id="bdg_monthly_empty" class="hidden text-center py-8 text-gray-400 text-sm"></div>
+
+          <!-- ตารางกำกับใต้กราฟ เพราะกราฟอ่านค่าที่แน่นอนไม่ได้
+               และคนที่ต้องเอาตัวเลขไปทำเอกสารต่อจำเป็นต้องได้เลขจริง -->
+          <div class="mt-5 overflow-x-auto">
+            <table class="w-full text-sm text-left whitespace-nowrap">
+              <thead>
+                <tr class="text-slate-600 border-b border-gray-200">
+                  <th class="py-2 pr-4 font-semibold">เดือน</th>
+                  <th class="py-2 px-4 font-semibold text-right">ล้างแอร์</th>
+                  <th class="py-2 px-4 font-semibold text-right">ซ่อมบำรุง</th>
+                  <th class="py-2 pl-4 font-semibold text-right">รวม</th>
+                </tr>
+              </thead>
+              <tbody id="bdg_monthly_tbody" class="divide-y divide-gray-100 text-gray-700"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- ============================ USER MANAGEMENT (Admin only) ============================ -->
@@ -2708,7 +2746,87 @@
       } else {
         document.getElementById('bdg_note_text').classList.add('hidden');
       }
+
+      renderBudgetMonthly(currentBudget);
       lockViewOnlySection('budget');
+    }
+
+    let budgetMonthlyChart = null;
+
+    /**
+     * วาดกราฟและตารางค่าใช้จ่ายรายเดือน
+     *
+     * ใช้กราฟแท่งซ้อนกัน (ไม่ใช่เส้น) เพราะค่าใช้จ่ายเป็นยอดที่เกิดขึ้นแยกกันในแต่ละเดือน
+     * ไม่ใช่ค่าที่ไหลต่อเนื่อง กราฟเส้นจะสื่อผิดว่าเดือนที่ไม่มีรายจ่ายคือค่าที่ลดลงมา
+     * ทั้งที่จริงคือไม่มีรายการเลย
+     *
+     * มีตารางกำกับใต้กราฟด้วย เพราะกราฟอ่านค่าที่แน่นอนไม่ได้
+     * และคนที่ต้องเอาตัวเลขไปทำเอกสารต่อจำเป็นต้องได้เลขจริง
+     */
+    function renderBudgetMonthly(summary) {
+      const months = (summary && summary.monthly) || [];
+      const canvas = document.getElementById('budgetMonthlyCanvas');
+      const empty = document.getElementById('bdg_monthly_empty');
+      const tbody = document.getElementById('bdg_monthly_tbody');
+      if (!canvas || !tbody) return;
+
+      const grand = months.reduce((s, m) => s + m.total, 0);
+      document.getElementById('bdg_monthly_year').innerText = summary.year;
+      document.getElementById('bdg_monthly_total').innerText = '฿' + grand.toLocaleString();
+
+      // ปีที่ยังไม่มีรายการเลย ต้องบอกให้ตรงว่ายังไม่มีข้อมูล
+      // ไม่ใช่โชว์กราฟเปล่าที่ดูเหมือนระบบเสีย
+      const hasData = grand > 0;
+      canvas.parentElement.classList.toggle('hidden', !hasData);
+      empty.classList.toggle('hidden', hasData);
+      if (!hasData) {
+        empty.innerText = `ปี ${summary.year} ยังไม่มีรายการค่าใช้จ่ายที่บันทึกไว้`;
+      }
+
+      if (budgetMonthlyChart) { budgetMonthlyChart.destroy(); budgetMonthlyChart = null; }
+
+      if (hasData && typeof Chart !== 'undefined') {
+        budgetMonthlyChart = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: months.map(m => m.label),
+            datasets: [
+              { label: 'ล้างแอร์', data: months.map(m => m.cleaning), backgroundColor: '#1153a1', borderRadius: 4 },
+              { label: 'ซ่อมบำรุง', data: months.map(m => m.repair), backgroundColor: '#f47920', borderRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: {
+                label: c => `${c.dataset.label}: ฿${c.parsed.y.toLocaleString()}`,
+                footer: items => 'รวม: ฿' + items.reduce((s, i) => s + i.parsed.y, 0).toLocaleString()
+              }}
+            },
+            scales: {
+              x: { stacked: true, grid: { display: false } },
+              y: { stacked: true, beginAtZero: true, ticks: { callback: v => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } }
+            }
+          }
+        });
+      }
+
+      const money = v => (v ? '฿' + v.toLocaleString() : '-');
+      tbody.innerHTML = months.map(m => `
+        <tr class="${m.total ? '' : 'text-gray-300'}">
+          <td class="py-2 pr-4">${m.label}</td>
+          <td class="py-2 px-4 text-right">${money(m.cleaning)}</td>
+          <td class="py-2 px-4 text-right">${money(m.repair)}</td>
+          <td class="py-2 pl-4 text-right font-semibold ${m.total ? 'text-gray-800' : ''}">${money(m.total)}</td>
+        </tr>`).join('') + `
+        <tr class="border-t-2 border-gray-300 font-bold text-gray-800">
+          <td class="py-2 pr-4">รวมทั้งปี</td>
+          <td class="py-2 px-4 text-right">฿${months.reduce((s, m) => s + m.cleaning, 0).toLocaleString()}</td>
+          <td class="py-2 px-4 text-right">฿${months.reduce((s, m) => s + m.repair, 0).toLocaleString()}</td>
+          <td class="py-2 pl-4 text-right">฿${grand.toLocaleString()}</td>
+        </tr>`;
     }
 
     function openBudgetModal() {
