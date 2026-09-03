@@ -9,7 +9,7 @@
 
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { parseCsv, parseCsvObjects, toCsv } from '../src/csv.js';
+import { parseCsv, parseCsvObjects, toCsv, decodeCsvBytes } from '../src/csv.js';
 
 test('อ่านไฟล์ธรรมดาได้', () => {
   assert.deepEqual(parseCsv('a,b,c\n1,2,3'), [['a', 'b', 'c'], ['1', '2', '3']]);
@@ -74,4 +74,39 @@ test('เขียนแล้วอ่านกลับ ต้องได้�
   const back = parseCsvObjects(toCsv(headers, rows)).rows;
   assert.equal(back[0].Note, rows[0].Note);
   assert.equal(back[1].Note, rows[1].Note);
+});
+
+/* ==================== การเดารหัสภาษาของไฟล์ ==================== */
+
+test('ไฟล์ UTF-8 อ่านได้ถูกต้อง', () => {
+  const bytes = new TextEncoder().encode('Province\nอ่างทอง');
+  const { text, encoding } = decodeCsvBytes(bytes);
+  assert.equal(encoding, 'utf-8');
+  assert.ok(text.includes('อ่างทอง'));
+});
+
+test('ไฟล์ที่ Excel ไทยบันทึกให้ (windows-874) ต้องอ่านออกโดยผู้ใช้ไม่ต้องทำอะไร', () => {
+  // นี่คือกรณีที่คนกด "Save as CSV" เฉยๆ ไม่ได้เลือก CSV UTF-8
+  const bytes = new Uint8Array([
+    0x50, 0x72, 0x6F, 0x76, 0x69, 0x6E, 0x63, 0x65, 0x0A,  // "Province\n"
+    0xCD, 0xE8, 0xD2, 0xA7, 0xB7, 0xCD, 0xA7               // "อ่างทอง"
+  ]);
+  const { text, encoding } = decodeCsvBytes(bytes);
+  assert.equal(encoding, 'windows-874');
+  assert.ok(text.includes('อ่างทอง'), 'ภาษาไทยต้องไม่กลายเป็นตัวขยะ');
+});
+
+test('ไฟล์ UTF-8 ที่มี BOM ต้องไม่ถูกเดาผิดเป็นรหัสอื่น', () => {
+  const bytes = new Uint8Array([0xEF, 0xBB, 0xBF, ...new TextEncoder().encode('Province\nอ่างทอง')]);
+  const { encoding } = decodeCsvBytes(bytes);
+  assert.equal(encoding, 'utf-8');
+});
+
+test('อ่านไฟล์ windows-874 แล้วแปลงเป็นตารางได้ครบวงจร', () => {
+  const bytes = new Uint8Array([
+    0x50, 0x72, 0x6F, 0x76, 0x69, 0x6E, 0x63, 0x65, 0x0A,
+    0xCD, 0xE8, 0xD2, 0xA7, 0xB7, 0xCD, 0xA7
+  ]);
+  const { rows } = parseCsvObjects(decodeCsvBytes(bytes).text);
+  assert.equal(rows[0].Province, 'อ่างทอง');
 });

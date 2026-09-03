@@ -19,6 +19,36 @@
  */
 
 /**
+ * แปลงไฟล์ที่อ่านมาเป็นข้อความ โดยเดารหัสภาษาให้เอง
+ *
+ * ทำไมต้องมี: Excel บน Windows ภาษาไทย ถ้ากด "Save as CSV" เฉยๆ
+ * จะบันทึกด้วยรหัส windows-874 ไม่ใช่ UTF-8 ต้องเลือก "CSV UTF-8" เท่านั้น
+ * ซึ่งเป็นสิ่งที่คนลืมแน่นอน และผลคือภาษาไทยกลายเป็นตัวขยะทั้งไฟล์
+ *
+ * แทนที่จะเขียนคู่มือบอกให้คนจำ ให้ระบบเดาเอาเองดีกว่า
+ * วิธีเดา: ลองอ่านเป็น UTF-8 แบบเข้มงวดก่อน ถ้าไฟล์ไม่ใช่ UTF-8 จริงมันจะ error
+ * เพราะลำดับไบต์ของ windows-874 ส่วนใหญ่ผิดกฎ UTF-8 — ตกลงมาใช้ windows-874 แทน
+ *
+ * @param {Uint8Array|Buffer} bytes เนื้อไฟล์ดิบ
+ * @returns {{text: string, encoding: string}}
+ */
+export function decodeCsvBytes(bytes) {
+  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+
+  // มีเครื่องหมายกำกับไฟล์ UTF-8 อยู่ข้างหน้า = ฟันธงได้เลยว่าเป็น UTF-8
+  if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+    return { text: new TextDecoder('utf-8').decode(buf), encoding: 'utf-8' };
+  }
+
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(buf), encoding: 'utf-8' };
+  } catch {
+    // ไม่ใช่ UTF-8 — เกือบทั้งหมดคือไฟล์ที่ Excel ไทยบันทึกให้
+    return { text: new TextDecoder('windows-874').decode(buf), encoding: 'windows-874' };
+  }
+}
+
+/**
  * แปลงข้อความ CSV เป็นตาราง 2 มิติ
  *
  * @param {string} text เนื้อหาไฟล์ทั้งไฟล์

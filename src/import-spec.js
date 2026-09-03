@@ -72,6 +72,27 @@ export const COLUMNS = [
 /** ชื่อคอลัมน์ทั้งหมด เรียงตามลำดับในไฟล์ */
 export const HEADERS = COLUMNS.map(c => c.name);
 
+/**
+ * ปรับค่าให้ตรงรูปแบบมาตรฐาน ถ้าต่างกันแค่ตัวพิมพ์ใหญ่เล็กหรือช่องว่าง
+ *
+ * ทำไมต้องมี: ข้อมูลจริงในระบบมีทั้ง "Shop House" และ "Shop house" ปนกันอยู่
+ * ตกค้างมาจากตอนที่ยังพิมพ์มือลง Google Sheets
+ *
+ * คนที่พิมพ์ "shop house" ย่อมหมายถึงค่าเดียวกันแน่นอน ไม่มีทางหมายถึงอย่างอื่น
+ * การปัดตกเป็นข้อผิดพลาดจึงเป็นการกวนคนใช้โดยไม่จำเป็น
+ * รับไว้แล้วแก้ให้เป็นรูปแบบมาตรฐานดีกว่า และการแก้นี้จะแสดงในหน้าสรุปให้เห็นด้วย
+ *
+ * @returns {string} ค่ามาตรฐานถ้าเทียบได้ ไม่งั้นคืนค่าเดิมกลับไปตามที่กรอกมา
+ */
+export function canonicalize(column, value) {
+  const v = String(value ?? '').trim();
+  const allowed = ALLOWED[column];
+  if (!allowed || !v) return v;
+
+  const hit = allowed.find(a => a.toLowerCase() === v.toLowerCase());
+  return hit || v;
+}
+
 /** สร้างรหัสเครื่องจากรหัสไซต์กับเลขเครื่อง — รูปแบบเดียวกับที่ใช้อยู่จริงทั้ง 457 เครื่อง */
 export function makeAirCode(siteCode, airNo) {
   return String(siteCode).trim() + '-AIR-' + String(airNo).trim();
@@ -99,7 +120,8 @@ export function validateRow(row) {
 
     if (col.kind === 'enum') {
       const allowed = ALLOWED[col.name];
-      if (allowed && !allowed.includes(v)) {
+      // เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็ก เพราะระบบจะปรับให้ตรงมาตรฐานเองตอนนำเข้า
+      if (allowed && canonicalize(col.name, v) === v && !allowed.includes(v)) {
         add('error', col.name, `ค่า "${v}" ไม่อยู่ในรายการที่ใช้ได้ (${allowed.join(' / ')})`);
       }
     }
