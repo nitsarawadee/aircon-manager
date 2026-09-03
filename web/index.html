@@ -252,7 +252,7 @@
               <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
                 <i class="ph ph-calendar-check text-[#1153a1]"></i> นัดหมาย 30 วัน
               </h3>
-              <button onclick="document.querySelector('[data-tab=\'plan\']').click();" class="text-xs text-[#1153a1] hover:underline font-medium whitespace-nowrap">ดูทั้งหมด &rarr;</button>
+              <button onclick="openPlanCalendar()" class="text-xs text-[#1153a1] hover:underline font-medium whitespace-nowrap flex items-center gap-1"><i class="ph ph-calendar-blank"></i> ดูปฏิทินทั้งเดือน</button>
             </div>
             <div id="upcomingPlanContainer" class="dash-scroll grid grid-cols-1 gap-2 pr-1">
               <!-- จะถูก Inject ผ่าน JavaScript -->
@@ -2010,6 +2010,131 @@
       currentYear = sel.value;
       await loadPlan();
     }
+
+    /* ============== ปฏิทินนัดหมายล้างแอร์ ============== */
+
+    const TH_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                       'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    const TH_DOW = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+
+    /** เดือนที่ปฏิทินกำลังเปิดอยู่ */
+    let calYear = null, calMonth = null;
+
+    function openPlanCalendar(year, month) {
+      const now = new Date();
+      // เปิดที่เดือนปัจจุบันก่อนเสมอ เพราะเป็นเดือนที่คนต้องดูบ่อยที่สุด
+      calYear = Number(year) || now.getFullYear();
+      calMonth = Number(month) || (now.getMonth() + 1);
+      renderPlanCalendar();
+    }
+
+    /** เลื่อนเดือน โดยข้ามปีให้ถูกต้องเมื่อเลยขอบปี */
+    function shiftPlanCalendar(delta) {
+      let m = calMonth + delta, y = calYear;
+      if (m < 1) { m = 12; y--; }
+      else if (m > 12) { m = 1; y++; }
+      calYear = y; calMonth = m;
+      renderPlanCalendar();
+    }
+
+    async function renderPlanCalendar() {
+      const root = document.getElementById('modalRoot');
+
+      const shell = body => `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <i class="ph-fill ph-calendar-blank text-[#1153a1]"></i> ปฏิทินนัดหมายล้างแอร์
+              </h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 p-1"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto">${body}</div>
+          </div>
+        </div>`;
+
+      root.innerHTML = shell('<div class="py-16 text-center text-gray-400">กำลังโหลด...</div>');
+
+      let cal;
+      try {
+        cal = await call('getPlanCalendar', calYear, calMonth);
+      } catch (err) {
+        root.innerHTML = shell('<div class="py-16 text-center text-rose-500">โหลดปฏิทินไม่สำเร็จ: ' + esc(err.message || err) + '</div>');
+        return;
+      }
+      if (!cal) { root.innerHTML = shell('<div class="py-16 text-center text-gray-400">ไม่มีสิทธิ์ดูแผนล้างแอร์</div>'); return; }
+
+      const first = new Date(calYear, calMonth - 1, 1);
+      const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+      const lead = first.getDay();   // ช่องว่างก่อนวันที่ 1 เพื่อให้ตรงคอลัมน์วัน
+
+      const today = new Date();
+      const isThisMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
+
+      // สีตามสถานะ ใช้ชุดเดียวกับที่ใช้ในตารางแผน เพื่อไม่ให้ต้องจำสองชุด
+      const dot = { done: 'bg-emerald-500', pending: 'bg-[#1153a1]', cancelled: 'bg-gray-300' };
+
+      const cells = [];
+      for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[92px] rounded-lg bg-gray-50/60"></div>');
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const items = cal.days[d] || [];
+        const isToday = isThisMonth && today.getDate() === d;
+        const dow = new Date(calYear, calMonth - 1, d).getDay();
+        const weekend = dow === 0 || dow === 6;
+
+        // แสดงได้ 3 รายการต่อวัน ที่เหลือบอกจำนวน ไม่งั้นวันที่งานเยอะจะดันช่องอื่นจนตารางเสียรูป
+        const shown = items.slice(0, 3);
+        const rest = items.length - shown.length;
+
+        cells.push(`
+          <div class="min-h-[92px] rounded-lg border p-1.5 flex flex-col gap-1
+                      ${isToday ? 'border-[#1153a1] border-2 bg-blue-50/40' : weekend ? 'border-gray-100 bg-slate-50/60' : 'border-gray-100'}">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold ${isToday ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
+              ${items.length ? `<span class="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1">${items.length}</span>` : ''}
+            </div>
+            ${shown.map(it => `
+              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
+                   title="${esc(it.AirCode)} รอบ ${it.round}${it.NodeName ? ' · ' + esc(it.NodeName) : ''}${it.status ? ' · ' + esc(it.status) : ''}">
+                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
+                <span class="truncate">${esc(it.AirCode)}</span>
+              </div>`).join('')}
+            ${rest > 0 ? `<div class="text-[10px] text-gray-400">+ อีก ${rest} รายการ</div>` : ''}
+          </div>`);
+      }
+
+      const legend = [
+        ['bg-[#1153a1]', 'ยังไม่ได้ล้าง'],
+        ['bg-emerald-500', 'ล้างเสร็จแล้ว'],
+        ['bg-gray-300', 'ยกเลิก']
+      ].map(([c, t]) => `<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${t}</span>`).join('');
+
+      root.innerHTML = shell(`
+        <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <div class="flex items-center gap-2">
+            <button onclick="shiftPlanCalendar(-1)" class="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600"><i class="ph ph-caret-left"></i></button>
+            <div class="text-base font-bold text-gray-800 min-w-[170px] text-center">${TH_MONTHS[calMonth - 1]} ${calYear}</div>
+            <button onclick="shiftPlanCalendar(1)" class="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600"><i class="ph ph-caret-right"></i></button>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-gray-600">${legend}</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1 mb-1">
+          ${TH_DOW.map((d, i) => `<div class="text-center text-xs font-semibold py-1 ${i === 0 || i === 6 ? 'text-gray-400' : 'text-slate-600'}">${d}</div>`).join('')}
+        </div>
+        <div class="grid grid-cols-7 gap-1">${cells.join('')}</div>
+
+        <div class="mt-4 text-sm ${cal.total ? 'text-gray-600' : 'text-gray-400'}">
+          ${cal.total
+            ? 'เดือนนี้มีนัดหมายทั้งหมด <b class="text-gray-800">' + cal.total + '</b> รายการ'
+            : 'เดือนนี้ยังไม่มีนัดหมายล้างแอร์'}
+        </div>`);
+    }
+
+    window.openPlanCalendar = openPlanCalendar;
+    window.shiftPlanCalendar = shiftPlanCalendar;
 
     /**
      * วาดสรุปการล้างแอร์รายปี ไว้เหนือตารางแผน

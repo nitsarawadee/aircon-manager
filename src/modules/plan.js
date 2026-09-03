@@ -147,6 +147,74 @@ export function summarizeCleaning(planRows, airUnits, year) {
   };
 }
 
+/**
+ * ============================================================================
+ * ปฏิทินนัดหมายล้างแอร์
+ * ============================================================================
+ *
+ * รายการนัดหมายแบบลิสต์บอกได้แค่ว่า "อีก 30 วันมีอะไรบ้าง" ซึ่งวางแผนงานไม่ได้
+ * เพราะมองไม่เห็นว่าวันไหนงานกระจุก วันไหนว่าง และวันหยุดชนกับนัดหรือเปล่า
+ * ปฏิทินทั้งเดือนตอบเรื่องพวกนี้ได้ในตาเดียว
+ */
+
+/**
+ * จัดนัดหมายของเดือนหนึ่งลงเป็นรายวัน
+ *
+ * @param {Array<Object>} planRows แถวจากตารางแผน (กรองตามสิทธิ์มาแล้ว)
+ * @param {number} year
+ * @param {number} month 1-12
+ * @returns {{year, month, days: Object, total: number}}
+ *          days คือ map จากเลขวันที่ -> รายการนัดของวันนั้น
+ */
+export function planCalendar(planRows, year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  const prefix = y + '-' + String(m).padStart(2, '0') + '-';
+
+  const days = {};
+  let total = 0;
+
+  for (const row of planRows || []) {
+    for (const r of [1, 2, 3]) {
+      const raw = String(row['R' + r + '_PlanDate'] || '').trim();
+      if (!raw.startsWith(prefix)) continue;
+
+      // เทียบด้วยข้อความตรงๆ ไม่แปลงเป็น Date ก่อน
+      // เพราะการแปลงเป็น Date แล้วอ่านเดือนกลับออกมา ทำให้วันที่ 1 ของเดือน
+      // ตกไปอยู่เดือนก่อนหน้าเมื่อรันบนเครื่องที่ตั้งเวลาเป็น UTC
+      const day = Number(raw.slice(prefix.length, prefix.length + 2));
+      if (!day) continue;
+
+      (days[day] ||= []).push({
+        AirCode: row.AirCode,
+        NodeName: row.NodeName || '',
+        round: r,
+        status: String(row['R' + r + '_Status'] || '').trim(),
+        state: roundState(row, r),
+        actualDate: String(row['R' + r + '_ActualDate'] || '').trim()
+      });
+      total++;
+    }
+  }
+
+  // เรียงในแต่ละวันให้คงที่ เพื่อให้หน้าจอไม่สลับตำแหน่งเองทุกครั้งที่โหลด
+  for (const d of Object.keys(days)) {
+    days[d].sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th') || a.round - b.round);
+  }
+
+  return { year: y, month: m, days, total };
+}
+
+/** ปฏิทินนัดหมายของเดือนที่ระบุ */
+export async function getPlanCalendar(ctx, year, month) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('plan'))) return null;
+
+  // ใช้ getCleaningPlan เพื่อให้กรองตามสิทธิ์ชุดเดียวกับตารางแผน
+  const plan = await getCleaningPlan(ctx, year);
+  return planCalendar(plan, year, month);
+}
+
 /** สรุปการล้างแอร์ของปีที่ระบุ สำหรับแสดงหัวหน้าตารางแผน */
 export async function getCleaningSummary(ctx, year) {
   await ctx.requireAccess();
