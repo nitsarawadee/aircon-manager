@@ -71,7 +71,15 @@ console.log();
 // จึงถอดกลับออกมาแล้วคำนวณชื่อเหตุการณ์ใหม่ด้วยตรรกะเดียวกับระบบได้เลย
 const DETAIL = /เปลี่ยนสถานะจาก\s*"([^"]*)"\s*เป็น\s*"([^"]*)"/;
 
-const others = db.prepare("SELECT row_id, ID, Date, AirCode, EventType, Detail FROM history WHERE EventType='อื่นๆ'").all();
+// รวมเหตุการณ์ที่เคยแยกย่อยเกินไป กลับมาเป็นชื่อเดียวตามที่ตกลงกันใหม่
+// "ซ่อมแล้ว" กับ "กลับมาใช้งาน" ยุบกลับเป็น "ซ่อม" ทั้งคู่
+const RETIRED_NAMES = ['อื่นๆ', 'ซ่อมแล้ว', 'กลับมาใช้งาน'];
+const placeholders = RETIRED_NAMES.map(() => '?').join(',');
+
+const others = db.prepare(
+  'SELECT row_id, ID, Date, AirCode, EventType, Detail FROM history WHERE EventType IN (' + placeholders + ')'
+).all(...RETIRED_NAMES);
+
 const historyFixes = [];
 
 for (const h of others) {
@@ -79,12 +87,12 @@ for (const h of others) {
   if (!m) continue;
 
   const [, before, after] = m;
-  const event = statusChangeEvent(after, before);
-  if (event !== 'อื่นๆ') historyFixes.push({ ...h, event, before, after });
+  const event = statusChangeEvent(after);
+  if (event !== h.EventType && event !== 'อื่นๆ') historyFixes.push({ ...h, event, before, after });
 }
 
-console.log('=== 3. ประวัติที่เป็น "อื่นๆ" ===');
-console.log('  ทั้งหมด ' + others.length + ' รายการ · แก้ได้ ' + historyFixes.length + ' รายการ');
+console.log('=== 3. ประวัติที่ต้องแก้ชื่อเหตุการณ์ ===');
+console.log('  ตรวจ ' + others.length + ' รายการ · แก้ ' + historyFixes.length + ' รายการ');
 for (const h of historyFixes) {
   console.log('    ' + h.ID.padEnd(13) + h.Date + '  ' + h.AirCode.padEnd(16) +
               '"' + h.before + '" → "' + h.after + '"  ⇒  ' + h.event);
