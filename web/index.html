@@ -1730,8 +1730,12 @@
         'ซ่อม':         'bg-amber-100 text-amber-800',
         'เปลี่ยนอะไหล่': 'bg-amber-100 text-amber-800',
         'ย้าย':         'bg-teal-100 text-teal-800',
+        'ย้ายตำแหน่ง':   'bg-teal-100 text-teal-800',
         'เปลี่ยนเครื่อง': 'bg-orange-100 text-orange-800',
-        'ตรวจเช็คทั่วไป': 'bg-slate-100 text-slate-700'
+        'ตรวจเช็คทั่วไป': 'bg-slate-100 text-slate-700',
+        'แจ้งซ่อม':      'bg-rose-100 text-rose-800',
+        // ปลดระวางคือจุดจบของเครื่อง ใช้สีเข้มกว่าเหตุการณ์อื่นเพื่อให้สะดุดตาตอนไล่ดูย้อนหลัง
+        'ปลดระวาง':      'bg-slate-700 text-white'
       };
       const cls = map[t] || 'bg-gray-100 text-gray-800';
       return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${esc(t)}</span>`;
@@ -2471,7 +2475,7 @@
       historyPage = clampPage(historyPage, displayHistory.length);
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500">${esc(h.ID) || '-'}</td>
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
             <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>

@@ -11,6 +11,20 @@ import { addHistoryRaw, getHistory } from './history.js';
  * เวอร์ชันนี้เปลี่ยนมาเขียนโดยอ้างชื่อคอลัมน์แทน จึงปลอดภัยกับชีตที่เคย migrate มาแล้ว
  */
 
+/**
+ * แปลงสถานะใหม่ของเครื่อง เป็นชื่อเหตุการณ์ที่จะบันทึกลงประวัติ
+ *
+ * เดิมสถานะอะไรก็ตามที่ไม่ใช่ "รอซ่อม" จะถูกบันทึกเป็น "อื่นๆ" ทั้งหมด
+ * ทำให้การปลดระวางเครื่องซึ่งเป็นเหตุการณ์สำคัญ ไปกองรวมกับเรื่องจิปาถะ
+ * แล้วดูย้อนหลังไม่ออกว่าเครื่องไหนถูกปลดระวางเมื่อไหร่
+ */
+export function statusChangeEvent(status) {
+  const s = String(status || '');
+  if (s === 'รอซ่อม') return 'แจ้งซ่อม';
+  if (s.includes('ปลดระวาง') || s.includes('ชำรุด')) return 'ปลดระวาง';
+  return 'อื่นๆ';
+}
+
 export async function getAirList(ctx) {
   await ctx.requireAccess();
   if (!(await ctx.canView('airlist'))) return [];
@@ -96,7 +110,7 @@ export async function saveAirUnit(ctx, unit) {
         await addHistoryRaw(ctx, {
           AirCode: unit.AirCode,
           Date: ymd(new Date()),
-          EventType: unit.Status === 'รอซ่อม' ? 'แจ้งซ่อม' : 'อื่นๆ',
+          EventType: statusChangeEvent(unit.Status),
           Detail: `เปลี่ยนสถานะจาก "${oldStatus || '-'}" เป็น "${unit.Status}"` +
                   (unit.Note ? ` — หมายเหตุ: ${unit.Note}` : ''),
           Cost: '',

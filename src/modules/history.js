@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { formatDate, normalizeCode, ymdhms } from '../values.js';
+import { formatDate, normalizeCode, partsOf, safeParseDate, ymdhms } from '../values.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -32,38 +32,77 @@ export async function getHistory(ctx, airCode) {
 }
 
 /**
- * หาเลขรันถัดไปของประวัติ จากเลขที่มีอยู่แล้วทั้งหมด
+ * ============================================================================
+ * เลขที่เอกสารของรายการประวัติ
+ * ============================================================================
  *
- * รูปแบบ H-0001 H-0002 ไล่ไปเรื่อยๆ เพื่อให้อ้างอิงกันได้ด้วยปากเปล่า
- * เช่น "รายการ H-0042 คืองานซ่อมตัวนั้น" ซึ่งเลขเวลาแบบเดิม (H1785308032365)
- * ทำแบบนี้ไม่ได้เลย เพราะจำไม่ได้และอ่านไม่ออกว่ารายการที่เท่าไหร่
+ * รูปแบบ:  <PM|CM><ปี ค.ศ. 4 หลัก><เดือน 2 หลัก><ลำดับ>
  *
- * ข้ามเลขที่ถูกลบไปเสมอ ไม่วนกลับมาใช้ซ้ำ เพราะถ้าเอาเลขเดิมมาใช้ใหม่
- * เอกสารหรือข้อความที่เคยอ้างเลขนั้นไว้จะชี้ไปผิดรายการ
+ *   PM20260901    งานล้างแอร์ เดือน ก.ย. 2026 ลำดับที่ 1
+ *   CM202611123   งานซ่อม เดือน พ.ย. 2026 ลำดับที่ 123
  *
- * @param {Array<Object>} rows แถวประวัติที่มีอยู่
- * @returns {string} เลขถัดไป เช่น 'H-0062'
+ * PM = งานล้างตามแผน (Preventive)  ใช้กับเหตุการณ์ที่มีคำว่า "ล้าง"
+ * CM = งานแก้ไข (Corrective)       ใช้กับเหตุการณ์อื่นทั้งหมด
+ *                                  เช่น ซ่อม ติดตั้ง แจ้งซ่อม ปลดระวาง
+ *
+ * ⚠️ ลำดับนับใหม่ทุกเดือน (ไม่ใช่นับต่อทั้งปี)
+ * เลือกแบบนี้เพราะเลขเดือนอยู่ในรหัสอยู่แล้ว การนับต่อทั้งปีจะทำให้เลขเดือน
+ * ไม่มีความหมาย ถ้าต้องการให้นับต่อทั้งปีแทน แก้ที่ stem ให้ตัดเดือนออกจากการเทียบ
+ *
+ * เลขที่ถูกลบไปจะไม่ถูกเอากลับมาใช้ซ้ำ เพราะถ้าใช้เลขเดิมซ้ำ
+ * เอกสารที่เคยอ้างเลขนั้นไว้จะชี้ไปผิดรายการ
+ * ============================================================================
  */
-export function nextHistoryId(rows) {
+
+/** งานล้างเป็นงานตามแผน นอกนั้นถือเป็นงานแก้ไขทั้งหมด */
+export function historyPrefix(eventType) {
+  return String(eventType || '').includes('ล้าง') ? 'PM' : 'CM';
+}
+
+/**
+ * สร้างเลขที่เอกสารของรายการประวัติ
+ *
+ * @param {string} eventType ประเภทเหตุการณ์ ใช้เลือก PM หรือ CM
+ * @param {*} date วันที่ของเหตุการณ์ ใช้เป็นปีและเดือนในรหัส
+ * @param {Array<string>} existingIds เลขที่มีอยู่แล้วทั้งหมด
+ * @returns {string}
+ */
+export function makeHistoryId(eventType, date, existingIds) {
+  const d = safeParseDate(date) || new Date();
+
+  // ใช้เวลาไทย ไม่งั้นรายการวันที่ 1 ของเดือนจะได้เลขเดือนก่อนหน้า
+  // เวลารันบนเครื่องที่ตั้งเวลาเป็น UTC
+  const { y, m } = partsOf(d);
+  const stem = historyPrefix(eventType) + y + String(m).padStart(2, '0');
+
   let max = 0;
-  for (const r of rows) {
-    const m = /^H-(\d+)$/.exec(String(r && r.ID || '').trim());
-    if (m) max = Math.max(max, Number(m[1]));
+  for (const id of existingIds || []) {
+    const s = String(id == null ? '' : id).trim();
+    if (!s.startsWith(stem)) continue;
+
+    const tail = s.slice(stem.length);
+    // ต้องเป็นตัวเลขล้วนเท่านั้น กัน ID รูปแบบอื่นที่บังเอิญขึ้นต้นเหมือนกัน
+    if (!/^\d+$/.test(tail)) continue;
+
+    const n = Number(tail);
+    if (n > max) max = n;
   }
-  return 'H-' + String(max + 1).padStart(4, '0');
+
+  // เติมศูนย์ให้อย่างน้อย 2 หลัก ลำดับที่ 1 จึงเป็น 01 ส่วน 123 คงเป็น 123
+  return stem + String(max + 1).padStart(2, '0');
 }
 
 /**
  * เขียนแถวประวัติลงคิว (ยังไม่บันทึกจริง — รอ flush ตอนจบคำสั่ง)
  * เทียบเท่า addHistoryRecordRaw_() ของเดิม
  *
- * เลขรันคำนวณใหม่ทุกครั้งจากแถวที่มีอยู่ ณ ตอนนั้น ไม่ได้เก็บตัวนับไว้ในหน่วยความจำ
+ * เลขที่คำนวณใหม่ทุกครั้งจากแถวที่มีอยู่ ณ ตอนนั้น ไม่ได้เก็บตัวนับไว้ในหน่วยความจำ
  * จึงถูกต้องแม้เขียนหลายแถวรวดเดียว (เช่นเปลี่ยนเครื่อง = เขียน 2 แถวติดกัน)
  * เพราะแถวที่เพิ่งเขียนไปเข้าคิวแล้วและถูกนับรวมในรอบถัดไปทันที
  */
 export async function addHistoryRaw(ctx, record) {
   await ctx.ensureBase();
-  const id = nextHistoryId(ctx.ss.objects(SHEETS.HISTORY));
+  const id = makeHistoryId(record.EventType, record.Date, ctx.ss.objects(SHEETS.HISTORY).map(r => r.ID));
   const me = await ctx.currentUser();
 
   const byName = {
