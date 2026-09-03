@@ -12,16 +12,37 @@ import { addHistoryRaw, getHistory } from './history.js';
  */
 
 /**
- * แปลงสถานะใหม่ของเครื่อง เป็นชื่อเหตุการณ์ที่จะบันทึกลงประวัติ
+ * แปลงการเปลี่ยนสถานะของเครื่อง เป็นชื่อเหตุการณ์ที่จะบันทึกลงประวัติ
  *
- * เดิมสถานะอะไรก็ตามที่ไม่ใช่ "รอซ่อม" จะถูกบันทึกเป็น "อื่นๆ" ทั้งหมด
- * ทำให้การปลดระวางเครื่องซึ่งเป็นเหตุการณ์สำคัญ ไปกองรวมกับเรื่องจิปาถะ
- * แล้วดูย้อนหลังไม่ออกว่าเครื่องไหนถูกปลดระวางเมื่อไหร่
+ * เดิมสถานะอะไรก็ตามที่ไม่ใช่ "รอซ่อม" ถูกบันทึกเป็น "อื่นๆ" ทั้งหมด
+ * ทำให้ไล่ประวัติย้อนหลังไม่ออกว่าเกิดอะไรขึ้นกับเครื่อง
+ * ทั้งที่วงจรชีวิตของเครื่องมีแค่ไม่กี่เหตุการณ์และแยกออกจากกันได้ชัดเจน
+ *
+ *   ใช้งานปกติ ──แจ้งซ่อม──> รอซ่อม ──ปิดงาน──> ใช้งานปกติ
+ *        │                                          ▲
+ *        └──ชำรุด/ปลดระวาง──> ... ──กลับมาใช้งาน────┘
+ *
+ * ต้องรู้สถานะเดิมด้วย เพราะการกลับมา "ใช้งานปกติ" มีความหมายต่างกัน
+ * ถ้ามาจากรอซ่อมคือซ่อมเสร็จ แต่ถ้ามาจากปลดระวางคือเอาเครื่องกลับมาใช้ใหม่
+ *
+ * @param {string} status สถานะใหม่
+ * @param {string} [oldStatus] สถานะเดิมก่อนเปลี่ยน
  */
-export function statusChangeEvent(status) {
-  const s = String(status || '');
-  if (s === 'รอซ่อม') return 'แจ้งซ่อม';
-  if (s.includes('ปลดระวาง') || s.includes('ชำรุด')) return 'ปลดระวาง';
+export function statusChangeEvent(status, oldStatus) {
+  const now = String(status || '').trim();
+  const before = String(oldStatus || '').trim();
+
+  if (now === 'รอซ่อม') return 'แจ้งซ่อม';
+
+  // เช็คปลดระวางก่อนชำรุด เพื่อให้ค่าเดิม "ชำรุด/ปลดระวาง" ที่ยังค้างอยู่
+  // ถูกจัดเป็นปลดระวาง ไม่ใช่ชำรุด
+  if (now.includes('ปลดระวาง')) return 'ปลดระวาง';
+  if (now.includes('ชำรุด')) return 'ชำรุด';
+
+  if (now === 'ใช้งานปกติ') {
+    return before.includes('ปลดระวาง') ? 'กลับมาใช้งาน' : 'ซ่อมแล้ว';
+  }
+
   return 'อื่นๆ';
 }
 
@@ -110,7 +131,7 @@ export async function saveAirUnit(ctx, unit) {
         await addHistoryRaw(ctx, {
           AirCode: unit.AirCode,
           Date: ymd(new Date()),
-          EventType: statusChangeEvent(unit.Status),
+          EventType: statusChangeEvent(unit.Status, oldStatus),
           Detail: `เปลี่ยนสถานะจาก "${oldStatus || '-'}" เป็น "${unit.Status}"` +
                   (unit.Note ? ` — หมายเหตุ: ${unit.Note}` : ''),
           Cost: '',
@@ -200,7 +221,7 @@ export async function replaceAirUnit(ctx, oldRow, newUnit) {
     // ปลดระวางเครื่องเก่า
     const oldNote = oldUnit.Note ? oldUnit.Note + ' | ' : '';
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, oldRow, {
-      Status: 'ชำรุด/ปลดระวาง',
+      Status: 'ปลดระวาง',
       Note: oldNote + 'ถูกเปลี่ยนเครื่องใหม่แทนแล้ว (' + (newUnit.AirCode || '-') + ')',
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()

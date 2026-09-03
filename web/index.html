@@ -1470,11 +1470,19 @@
     let statusChartObj = null;
     let trendChartObj = null;
 
+    /**
+     * สีประจำสถานะของเครื่อง ใช้ร่วมกันทุกที่ที่แสดงสถานะ
+     *
+     * ต้องเช็คปลดระวางก่อนชำรุด เพราะค่าเดิม "ชำรุด/ปลดระวาง" มีทั้งสองคำอยู่ในสตริงเดียว
+     * ถ้าเรียงกลับกันจะได้สีของชำรุดทั้งที่เป็นการปลดระวาง
+     */
     function statusColor_(k) {
-      if (k.includes('ปกติ')) return '#10b981';   // emerald-500
-      if (k.includes('ซ่อม')) return '#f59e0b';   // amber-500
-      if (k.includes('ชำรุด')) return '#f43f5e';  // rose-500
-      return '#94a3b8'; // slate-400 สำหรับสถานะอื่นๆ/ไม่ระบุ
+      const s = String(k || '');
+      if (s.includes('ปกติ')) return '#10b981';      // emerald-500 ใช้งานได้
+      if (s.includes('ปลดระวาง')) return '#475569';  // slate-600  จบอายุการใช้งาน
+      if (s.includes('ชำรุด')) return '#f43f5e';     // rose-500   เสียแต่ยังไม่ปลดระวาง
+      if (s.includes('ซ่อม')) return '#f59e0b';      // amber-500  รอซ่อม
+      return '#94a3b8';                              // slate-400  ไม่ระบุ
     }
 
     function renderStatusDonut(byStatus) {
@@ -1575,9 +1583,11 @@
       return entries.map(([k, v]) => {
         let barColor = defaultColor;
         if(isStatus) {
+           // เรียงลำดับการเช็คให้ตรงกับ statusColor_ เพื่อให้กราฟกับแถบสีไม่ขัดกัน
            if(k.includes('ปกติ')) barColor = 'bg-emerald-500';
-           else if(k.includes('ซ่อม')) barColor = 'bg-amber-500';
+           else if(k.includes('ปลดระวาง')) barColor = 'bg-slate-600';
            else if(k.includes('ชำรุด')) barColor = 'bg-rose-500';
+           else if(k.includes('ซ่อม')) barColor = 'bg-amber-500';
         }
         return `
         <div class="flex items-center gap-3 text-sm">
@@ -1716,10 +1726,17 @@
     }
 
     function statusBadge(s) {
-      if (s === 'ใช้งานปกติ') return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">${s}</span>`;
-      if (s === 'รอซ่อม') return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">${s}</span>`;
       if (!s) return '-';
-      return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">${s}</span>`;
+      const base = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ';
+
+      // เช็คปลดระวางก่อนชำรุด เพราะค่าเดิม "ชำรุด/ปลดระวาง" มีทั้งสองคำ
+      let cls = 'bg-rose-100 text-rose-800';
+      if (s.includes('ปกติ')) cls = 'bg-emerald-100 text-emerald-800';
+      else if (s.includes('ปลดระวาง')) cls = 'bg-slate-700 text-white';
+      else if (s.includes('ชำรุด')) cls = 'bg-rose-100 text-rose-800';
+      else if (s.includes('ซ่อม')) cls = 'bg-amber-100 text-amber-800';
+
+      return `<span class="${base}${cls}">${esc(s)}</span>`;
     }
 
     // สีป้ายกำกับตามประเภทเหตุการณ์ ให้แยกแยะงานติดตั้ง/ล้าง/ซ่อม/ย้าย/เปลี่ยนเครื่อง ได้ไวขึ้นในหน้าประวัติ
@@ -1734,6 +1751,11 @@
         'เปลี่ยนเครื่อง': 'bg-orange-100 text-orange-800',
         'ตรวจเช็คทั่วไป': 'bg-slate-100 text-slate-700',
         'แจ้งซ่อม':      'bg-rose-100 text-rose-800',
+        'ชำรุด':         'bg-rose-100 text-rose-800',
+        // ซ่อมแล้ว/กลับมาใช้งาน คือเหตุการณ์ที่เครื่องกลับมาใช้ได้ ใช้สีเดียวกับสถานะปกติ
+        // เพื่อให้ไล่ดูประวัติแล้วเห็นได้ทันทีว่าจบเรื่องแล้ว
+        'ซ่อมแล้ว':      'bg-emerald-100 text-emerald-800',
+        'กลับมาใช้งาน':  'bg-emerald-100 text-emerald-800',
         // ปลดระวางคือจุดจบของเครื่อง ใช้สีเข้มกว่าเหตุการณ์อื่นเพื่อให้สะดุดตาตอนไล่ดูย้อนหลัง
         'ปลดระวาง':      'bg-slate-700 text-white'
       };
@@ -1920,7 +1942,7 @@
             <div class="p-6 space-y-4">
               <div class="bg-rose-50 border border-rose-100 rounded-lg p-3 text-sm text-rose-700 flex items-start gap-2">
                 <i class="ph-fill ph-warning-circle text-lg flex-shrink-0 mt-0.5"></i>
-                <div>เครื่องเดิม <strong>${esc(data.AirCode)}</strong> จะถูกปลดระวาง (สถานะ: ชำรุด/ปลดระวาง) และสร้างเครื่องใหม่ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) แทนที่โดยอัตโนมัติ</div>
+                <div>เครื่องเดิม <strong>${esc(data.AirCode)}</strong> จะถูกปลดระวาง (สถานะ: ปลดระวาง) และสร้างเครื่องใหม่ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) แทนที่โดยอัตโนมัติ</div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องใหม่ (AirCode) <span class="text-red-500">*</span></label>
