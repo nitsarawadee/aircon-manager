@@ -170,7 +170,7 @@ export async function completeRepairRecord(ctx, record) {
     await addHistoryRaw(ctx, {
       AirCode: record.AirCode,
       Date: record.Date,
-      EventType: 'ซ่อม',
+      EventType: 'ซ่อมแล้ว',
       Detail: record.Detail,
       Cost: record.Cost,
       Technician: record.Technician

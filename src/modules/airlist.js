@@ -37,7 +37,7 @@ export function statusChangeEvent(status) {
   if (now.includes('ปลดระวาง')) return 'ปลดระวาง';
   if (now.includes('ชำรุด')) return 'ชำรุด';
 
-  if (now === 'ใช้งานปกติ') return 'ซ่อม';
+  if (now === 'ใช้งานปกติ') return 'ซ่อมแล้ว';
 
   return 'อื่นๆ';
 }
