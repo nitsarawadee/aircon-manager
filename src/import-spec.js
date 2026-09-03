@@ -1,0 +1,134 @@
+/**
+ * นิยามคอลัมน์ของไฟล์นำเข้าข้อมูลเครื่องปรับอากาศ
+ *
+ * ไฟล์นี้เป็น "แหล่งความจริงเดียว" ของรูปแบบไฟล์นำเข้า
+ * ทั้งตัวสร้าง template และตัวตรวจไฟล์อ่านจากที่นี่ที่เดียว
+ * จึงเป็นไปไม่ได้ที่ template กับตัวตรวจจะไม่ตรงกัน
+ *
+ * ถ้าจะเพิ่ม/แก้คอลัมน์ ให้แก้ที่นี่ที่เดียวแล้วสั่งสร้าง template ใหม่
+ */
+
+/** ค่าที่ยอมรับได้ของแต่ละคอลัมน์ ตรงกับที่ระบบใช้อยู่จริง */
+export const ALLOWED = {
+  Region: ['1', '2', '3', '4', '5', '6'],
+  LocationType: ['Shop House', 'Container', 'Pole', 'Office', 'Building', 'Warehouse', 'Room'],
+  Status: ['ใช้งานปกติ', 'รอซ่อม', 'ชำรุด/ปลดระวาง']
+};
+
+/**
+ * คอลัมน์ของไฟล์นำเข้า เรียงตามลำดับที่กรอกสะดวก
+ *
+ * required  ต้องมีค่า ถ้าว่างจะถือเป็นข้อผิดพลาด
+ * kind      ชนิดข้อมูล ใช้ตรวจความถูกต้อง
+ * text      บังคับให้เป็นข้อความ (กัน Excel ตัดเลขศูนย์นำหน้าทิ้ง)
+ */
+export const COLUMNS = [
+  { name: 'Region', required: true, kind: 'enum', label: 'ภูมิภาค',
+    desc: 'ใส่เลข 1-6 ตามภูมิภาคที่ดูแล', example: '1' },
+
+  { name: 'Province', required: true, kind: 'text', label: 'จังหวัด',
+    desc: 'ชื่อจังหวัดที่ตั้ง Node', example: 'อ่างทอง' },
+
+  { name: 'NodeName', required: true, kind: 'text', label: 'ชื่อ Node',
+    desc: 'ชื่อสถานีตามที่เรียกกันจริง', example: 'อ่างทอง' },
+
+  { name: 'SiteCode', required: true, kind: 'text', text: true, label: 'รหัสไซต์',
+    desc: 'รหัสประจำ Node ใช้สร้างรหัสเครื่องด้วย', example: 'ATG-ATG' },
+
+  { name: 'LocationType', required: true, kind: 'enum', label: 'ประเภทสถานที่',
+    desc: 'เลือกจากค่าที่กำหนดไว้เท่านั้น', example: 'Shop House' },
+
+  { name: 'AirNo', required: true, kind: 'int', label: 'เครื่องตัวที่',
+    desc: 'เลขเครื่องภายใน Node นั้น เริ่มที่ 1 — ระบบจะสร้างรหัสเครื่องให้เอง เช่น ATG-ATG-AIR-1',
+    example: '1' },
+
+  { name: 'Brand', required: false, kind: 'text', label: 'ยี่ห้อ', example: 'Carrier' },
+  { name: 'BTU', required: false, kind: 'int', label: 'BTU', example: '18000' },
+
+  { name: 'ModelIndoor', required: false, kind: 'text', text: true, label: 'รุ่นคอยล์เย็น', example: '42TSAA018' },
+  { name: 'ModelOutdoor', required: false, kind: 'text', text: true, label: 'รุ่นคอยล์ร้อน', example: '38TSAA018' },
+
+  { name: 'IndoorAsset', required: false, kind: 'text', text: true, label: 'Asset คอยล์เย็น', example: 'AIR00929' },
+  { name: 'IndoorSN', required: false, kind: 'text', text: true, label: 'Serial คอยล์เย็น', example: '22505915' },
+  { name: 'OutdoorAsset', required: false, kind: 'text', text: true, label: 'Asset คอยล์ร้อน', example: 'AIR00930' },
+  { name: 'OutdoorSN', required: false, kind: 'text', text: true, label: 'Serial คอยล์ร้อน', example: '22600647' },
+
+  { name: 'InstallDate', required: false, kind: 'date', label: 'วันที่ติดตั้ง',
+    desc: 'รูปแบบ ปี-เดือน-วัน เช่น 2020-03-15 — ใส่ได้จะดีมาก เพราะระบบใช้คำนวณอายุเครื่อง',
+    example: '2020-03-15' },
+
+  { name: 'WarrantyExpire', required: false, kind: 'date', label: 'วันหมดประกัน',
+    desc: 'รูปแบบเดียวกับวันที่ติดตั้ง', example: '2023-03-15' },
+
+  { name: 'CleaningPricePerRound', required: false, kind: 'number', label: 'ค่าล้างต่อรอบ (บาท)',
+    desc: 'ใส่เฉพาะตัวเลข ไม่ต้องใส่ลูกน้ำหรือคำว่าบาท', example: '450' },
+
+  { name: 'Status', required: false, kind: 'enum', label: 'สถานะ',
+    desc: 'เว้นว่างได้ ระบบจะถือว่า "ใช้งานปกติ"', example: 'ใช้งานปกติ' },
+
+  { name: 'Note', required: false, kind: 'text', label: 'หมายเหตุ', example: '' }
+];
+
+/** ชื่อคอลัมน์ทั้งหมด เรียงตามลำดับในไฟล์ */
+export const HEADERS = COLUMNS.map(c => c.name);
+
+/** สร้างรหัสเครื่องจากรหัสไซต์กับเลขเครื่อง — รูปแบบเดียวกับที่ใช้อยู่จริงทั้ง 457 เครื่อง */
+export function makeAirCode(siteCode, airNo) {
+  return String(siteCode).trim() + '-AIR-' + String(airNo).trim();
+}
+
+/**
+ * ตรวจข้อมูลหนึ่งแถว คืนรายการปัญหาที่พบ
+ *
+ * แยก error (ต้องแก้ก่อนนำเข้า) กับ warn (น่าสงสัย ให้คนดูยืนยัน)
+ * เพราะบางอย่างระบบฟันธงแทนคนไม่ได้ เช่น Serial ที่เป็นตัวเลขล้วน
+ * อาจถูก Excel ตัดเลขศูนย์นำหน้าทิ้งไปแล้ว หรืออาจไม่มีศูนย์มาแต่แรกก็ได้
+ */
+export function validateRow(row) {
+  const problems = [];
+  const add = (level, column, message) => problems.push({ level, column, message });
+
+  for (const col of COLUMNS) {
+    const raw = row[col.name];
+    const v = raw === undefined || raw === null ? '' : String(raw).trim();
+
+    if (v === '') {
+      if (col.required) add('error', col.name, 'ต้องมีค่า ห้ามเว้นว่าง');
+      continue;
+    }
+
+    if (col.kind === 'enum') {
+      const allowed = ALLOWED[col.name];
+      if (allowed && !allowed.includes(v)) {
+        add('error', col.name, `ค่า "${v}" ไม่อยู่ในรายการที่ใช้ได้ (${allowed.join(' / ')})`);
+      }
+    }
+
+    if (col.kind === 'int' || col.kind === 'number') {
+      // เลขที่มีลูกน้ำคั่นหลัก เช่น 18,000 — Excel ใส่ให้เองตอนจัดรูปแบบ
+      if (/,/.test(v)) {
+        add('error', col.name, `"${v}" มีลูกน้ำคั่นหลัก ให้ใส่เป็นตัวเลขล้วน เช่น ${v.replace(/,/g, '')}`);
+      } else if (isNaN(Number(v))) {
+        add('error', col.name, `"${v}" ไม่ใช่ตัวเลข`);
+      } else if (col.kind === 'int' && !Number.isInteger(Number(v))) {
+        add('error', col.name, `"${v}" ต้องเป็นจำนวนเต็ม`);
+      }
+    }
+
+    if (col.kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      // อาการคลาสสิกของ Excel: บันทึกแล้ววันที่กลายเป็น 15/3/2020 หรือ 3/15/2020
+      const looksSwapped = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v);
+      add('error', col.name,
+        `"${v}" ไม่ใช่รูปแบบ ปี-เดือน-วัน` +
+        (looksSwapped ? ' — Excel มักแปลงวันที่ให้เองตอนบันทึก ให้ตั้งรูปแบบช่องนี้เป็น "ข้อความ" ก่อนกรอก' : '')
+      );
+    }
+
+    // เลขศูนย์นำหน้าหายเป็นความเสียหายที่มองไม่เห็น ต้องให้คนยืนยันเอง
+    if (col.text && /^\d+$/.test(v) && v.length <= 6) {
+      add('warn', col.name, `"${v}" เป็นตัวเลขล้วน — ถ้าค่าจริงมีศูนย์นำหน้า Excel อาจตัดทิ้งไปแล้ว ช่วยตรวจสอบ`);
+    }
+  }
+
+  return problems;
+}
