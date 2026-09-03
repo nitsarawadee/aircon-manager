@@ -1,7 +1,7 @@
 import { Ctx } from './context.js';
 
 import { getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit } from './modules/airlist.js';
-import { getPlanYears, getCleaningPlan, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
+import { getPlanYears, getCleaningPlan, getCleaningSummary, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import { getHistory, addHistoryRecord, deleteHistoryRecord, completeRepairRecord } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
 import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
@@ -59,6 +59,7 @@ const API_FUNCTIONS = {
 
   getPlanYears,
   getCleaningPlan,
+  getCleaningSummary,
   createCleaningPlan,
   updateCleaningRound,
   updatePlanBulk,

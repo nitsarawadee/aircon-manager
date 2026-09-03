@@ -56,6 +56,110 @@ export async function getCleaningPlan(ctx, year) {
   return list;
 }
 
+/**
+ * ============================================================================
+ * สรุปการล้างแอร์รายปี
+ * ============================================================================
+ *
+ * ตารางแผนมี 457 แถว x 3 รอบ ซึ่งกวาดตาดูแล้วบอกภาพรวมไม่ได้เลย
+ * ส่วนนี้ตอบคำถามที่คนถามจริงตอนสิ้นปีและตอนรายงานหัวหน้า
+ *   ปีนี้ล้างไปแล้วกี่รอบ เหลืออีกเท่าไหร่ ใช้เงินไปเท่าไหร่
+ *   และภูมิภาคไหนตามหลัง
+ *
+ * นับ "เสร็จ" จากสถานะเป็นหลัก แต่ถ้ามีวันที่ทำจริงบันทึกไว้ก็นับว่าเสร็จด้วย
+ * เพราะข้อมูลที่ย้ายมาจากชีตเดิมบางแถวมีวันที่ทำจริงแต่สถานะยังไม่ได้อัปเดต
+ * ถ้านับแต่สถานะอย่างเดียว งานที่ทำไปแล้วจริงจะหายจากรายงาน
+ */
+
+const ROUND_DONE = 'ล้างเสร็จสิ้น';
+const ROUND_CANCELLED = 'ยกเลิก';
+
+/** สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending' */
+function roundState(row, r) {
+  const status = String(row['R' + r + '_Status'] || '').trim();
+  if (status === ROUND_CANCELLED) return 'cancelled';
+  if (status === ROUND_DONE) return 'done';
+  return String(row['R' + r + '_ActualDate'] || '').trim() ? 'done' : 'pending';
+}
+
+/**
+ * สรุปแผนล้างแอร์ของปีหนึ่ง
+ *
+ * @param {Array<Object>} planRows แถวจากตารางแผน (กรองตามสิทธิ์มาแล้ว)
+ * @param {Array<Object>} airUnits รายการเครื่อง ใช้หาว่าแต่ละเครื่องอยู่ภูมิภาคไหน
+ * @param {number|string} year
+ */
+export function summarizeCleaning(planRows, airUnits, year) {
+  const regionOf = new Map();
+  for (const u of airUnits || []) {
+    if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim() || 'ไม่ระบุ');
+  }
+
+  const blank = () => ({ done: 0, pending: 0, cancelled: 0, cost: 0 });
+  const rounds = [1, 2, 3].map(r => ({ round: r, ...blank() }));
+  const byRegion = new Map();
+
+  let neverCleaned = 0;
+
+  for (const row of planRows || []) {
+    const region = regionOf.get(normalizeCode(row.AirCode)) || 'ไม่ระบุ';
+    if (!byRegion.has(region)) byRegion.set(region, { region, units: 0, ...blank() });
+    const reg = byRegion.get(region);
+    reg.units++;
+
+    let doneThisUnit = 0;
+
+    for (const r of [1, 2, 3]) {
+      const state = roundState(row, r);
+      const cost = Number(row['R' + r + '_Price']) || 0;
+
+      rounds[r - 1][state]++;
+      reg[state]++;
+
+      if (state === 'done') {
+        doneThisUnit++;
+        rounds[r - 1].cost += cost;
+        reg.cost += cost;
+      }
+    }
+
+    // เครื่องที่ยังไม่ได้ล้างเลยสักรอบ คือรายการที่ต้องตามงานจริงๆ
+    // ต่างจากตัวเลขรวมที่บอกแค่ว่าเหลืออีกเท่าไหร่
+    if (!doneThisUnit) neverCleaned++;
+  }
+
+  const sum = k => rounds.reduce((s, x) => s + x[k], 0);
+  const done = sum('done');
+  const planned = done + sum('pending');   // ไม่รวมรอบที่ยกเลิก เพราะไม่ใช่งานที่ต้องทำแล้ว
+
+  return {
+    year: Number(year),
+    units: (planRows || []).length,
+    rounds,
+    done,
+    pending: sum('pending'),
+    cancelled: sum('cancelled'),
+    planned,
+    cost: sum('cost'),
+    percent: planned ? Math.round((done / planned) * 100) : 0,
+    neverCleaned,
+    byRegion: [...byRegion.values()].sort((a, b) => String(a.region).localeCompare(String(b.region), 'th'))
+  };
+}
+
+/** สรุปการล้างแอร์ของปีที่ระบุ สำหรับแสดงหัวหน้าตารางแผน */
+export async function getCleaningSummary(ctx, year) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('plan'))) return null;
+
+  // ใช้ getCleaningPlan เพื่อให้การกรองตามสิทธิ์เป็นชุดเดียวกับที่ตารางเห็น
+  // ถ้าเขียนการกรองซ้ำอีกชุด ตัวเลขสรุปกับตารางจะไม่ตรงกันเมื่อสิทธิ์เปลี่ยน
+  const plan = await getCleaningPlan(ctx, year);
+  await ctx.ensureBase();
+
+  return summarizeCleaning(plan, ctx.ss.objects(SHEETS.AIRLIST), year);
+}
+
 export async function createCleaningPlan(ctx, year) {
   return ctx.withLock(async () => {
     await ctx.ensureBase();

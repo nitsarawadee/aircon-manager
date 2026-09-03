@@ -354,6 +354,11 @@
           </div>
         </div>
 
+        <!-- สรุปการล้างแอร์รายปี
+             ตารางข้างล่างมี 457 แถว x 3 รอบ ซึ่งกวาดตาดูแล้วบอกภาพรวมไม่ได้เลย
+             ส่วนนี้ตอบคำถามที่ถูกถามจริงตอนรายงาน คือทำไปเท่าไหร่ เหลือเท่าไหร่ ใช้เงินไปเท่าไหร่ -->
+        <div id="planSummary" class="hidden mb-6"></div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="planTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -2006,6 +2011,106 @@
       await loadPlan();
     }
 
+    /**
+     * วาดสรุปการล้างแอร์รายปี ไว้เหนือตารางแผน
+     *
+     * โหลดแยกจากตารางโดยตั้งใจ เพราะถ้าสรุปโหลดไม่ได้ ตารางต้องยังใช้งานได้ตามปกติ
+     * การสรุปเป็นข้อมูลประกอบ ไม่ใช่ของที่ขาดแล้วทำงานต่อไม่ได้
+     */
+    async function renderPlanSummary(year) {
+      const box = document.getElementById('planSummary');
+      if (!box) return;
+
+      let s;
+      try {
+        s = await call('getCleaningSummary', year);
+      } catch (err) {
+        box.classList.add('hidden');
+        return;
+      }
+      if (!s || !s.units) { box.classList.add('hidden'); return; }
+
+      const baht = v => '฿' + Number(v || 0).toLocaleString();
+
+      // การ์ดสรุป 4 ตัวที่ตอบคำถามที่ถูกถามบ่อยที่สุดตอนรายงาน
+      const cards = [
+        { label: 'ความคืบหน้า', value: s.percent + '%', sub: s.done + ' จาก ' + s.planned + ' รอบ', color: 'text-[#1153a1]', icon: 'ph-chart-line-up' },
+        { label: 'ค่าใช้จ่ายที่เกิดขึ้นแล้ว', value: baht(s.cost), sub: 'เฉพาะรอบที่ล้างเสร็จ', color: 'text-emerald-600', icon: 'ph-coins' },
+        { label: 'รอบที่ยังไม่ได้ทำ', value: Number(s.pending).toLocaleString(), sub: s.cancelled ? 'ยกเลิกไป ' + s.cancelled + ' รอบ' : 'ไม่มีรอบที่ยกเลิก', color: 'text-amber-600', icon: 'ph-clock-countdown' },
+        // ตัวเลขนี้สำคัญกว่าที่เห็น เพราะบอกว่าต้องไปตามเครื่องไหน
+        // ต่างจาก "รอบที่ยังไม่ได้ทำ" ที่บอกแค่ปริมาณงานรวม
+        { label: 'เครื่องที่ยังไม่ได้ล้างเลย', value: Number(s.neverCleaned).toLocaleString(), sub: 'จากทั้งหมด ' + s.units + ' เครื่อง', color: s.neverCleaned ? 'text-rose-600' : 'text-emerald-600', icon: 'ph-warning-circle' }
+      ];
+
+      const bar = (done, planned) => {
+        const pct = planned ? Math.min((done / planned) * 100, 100) : 0;
+        return `<div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div class="bg-[#1153a1] h-full rounded-full transition-all duration-500" style="width:${pct}%"></div>
+                </div>`;
+      };
+
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2 mb-5">
+            <i class="ph-fill ph-clipboard-text text-[#1153a1]"></i> สรุปการล้างแอร์ปี ${esc(s.year)}
+          </h3>
+
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            ${cards.map(c => `
+              <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <div class="text-xs text-gray-500 mb-1 flex items-center gap-1.5"><i class="ph ${c.icon}"></i>${c.label}</div>
+                <div class="text-2xl font-bold ${c.color}">${esc(c.value)}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">${esc(c.sub)}</div>
+              </div>`).join('')}
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div class="text-sm font-semibold text-gray-700 mb-3">แยกตามรอบ</div>
+              <div class="space-y-3">
+                ${s.rounds.map(r => {
+                  const target = r.done + r.pending;
+                  return `
+                  <div>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class="font-medium text-gray-600">รอบที่ ${r.round}</span>
+                      <span class="text-gray-500">${r.done} / ${target} รอบ · ${baht(r.cost)}${r.cancelled ? ' · ยกเลิก ' + r.cancelled : ''}</span>
+                    </div>
+                    ${bar(r.done, target)}
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>
+
+            <div>
+              <div class="text-sm font-semibold text-gray-700 mb-3">แยกตามภูมิภาค</div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-slate-600 border-b border-gray-200 text-xs">
+                      <th class="py-1.5 pr-3 text-left font-semibold">ภาค</th>
+                      <th class="py-1.5 px-3 text-right font-semibold">เครื่อง</th>
+                      <th class="py-1.5 px-3 text-right font-semibold">ล้างแล้ว</th>
+                      <th class="py-1.5 pl-3 text-right font-semibold">ค่าใช้จ่าย</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 text-gray-700">
+                    ${s.byRegion.map(r => `
+                      <tr class="${r.done ? '' : 'text-gray-400'}">
+                        <td class="py-1.5 pr-3">${esc(r.region)}</td>
+                        <td class="py-1.5 px-3 text-right">${r.units}</td>
+                        <td class="py-1.5 px-3 text-right ${r.done ? 'font-semibold text-gray-800' : ''}">${r.done}</td>
+                        <td class="py-1.5 pl-3 text-right">${r.cost ? baht(r.cost) : '-'}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     async function loadPlan() {
       currentYear = document.getElementById('planYearSelect').value;
       if (!currentYear) return;
@@ -2023,6 +2128,7 @@
       planPage = 1;
 
       renderPlanTable();
+      renderPlanSummary(currentYear);
     }
 
     function renderPlanTable(searchQuery, keepPage) {
