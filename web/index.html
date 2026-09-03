@@ -410,11 +410,17 @@
           </div>
         </div>
 
+        <!-- ป้ายบอกว่ากำลังกรองเฉพาะเครื่องไหนอยู่
+             ต้องมีเพราะเดิมใช้วิธีเติมรหัสลงช่องค้นหา ซึ่งคนไม่รู้ว่ากำลังดูแค่บางส่วน
+             แล้วเข้าใจผิดว่าเครื่องอื่นไม่มีประวัติ -->
+        <div id="historyUnitFilterBar" class="hidden mb-4"></div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="historyTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เหตุการณ์</th>
@@ -2345,14 +2351,54 @@
       currentHistory = (await call('getHistory', null)) || [];
       const searchInput = document.getElementById('historySearch');
       if (pendingHistorySearch !== null) {
-        const code = pendingHistorySearch;
+        // มาจากการกดดูประวัติของเครื่องใดเครื่องหนึ่ง — กรองด้วยรหัสแบบตรงทั้งรหัส
+        // ไม่ใช่เอารหัสไปใส่ช่องค้นหา เพราะนั่นคือการค้นหาข้อความซึ่งกว้างเกินไป
+        historyUnitFilter = pendingHistorySearch;
         pendingHistorySearch = null;
-        if (searchInput) searchInput.value = code;
-        renderHistoryTable(code);
+        if (searchInput) searchInput.value = '';
+        renderHistoryTable();
       } else {
+        historyUnitFilter = null;
         if (searchInput) searchInput.value = '';
         renderHistoryTable();
       }
+    }
+
+    /**
+     * รหัสเครื่องที่กำลังกรองอยู่ (null = ดูทั้งหมด)
+     *
+     * แยกจากช่องค้นหาโดยตั้งใจ เพราะเป็นคนละความหมายกัน
+     * ช่องค้นหาคือ "หาคำนี้" ส่วนตัวนี้คือ "ดูเฉพาะเครื่องนี้"
+     * และการกรองด้วยรหัสต้องตรงทั้งรหัส ไม่ใช่แค่มีคำนี้อยู่ข้างใน
+     * ไม่งั้นพอมี Node ที่มีแอร์เกิน 10 ตัว การดู AIR-1 จะติด AIR-10 AIR-11 มาด้วย
+     */
+    let historyUnitFilter = null;
+
+    /** เทียบรหัสเครื่องแบบไม่สนตัวพิมพ์และช่องว่าง */
+    const sameCode = (a, b) => String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
+
+    function clearHistoryUnitFilter() {
+      historyUnitFilter = null;
+      renderHistoryTable(historyLastQuery);
+    }
+
+    function renderHistoryUnitFilterBar() {
+      const bar = document.getElementById('historyUnitFilterBar');
+      if (!bar) return;
+
+      if (!historyUnitFilter) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+
+      bar.classList.remove('hidden');
+      bar.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm">
+          <i class="ph-fill ph-funnel text-[#1153a1]"></i>
+          <span class="text-gray-700">กำลังดูประวัติเฉพาะเครื่อง</span>
+          <span class="font-semibold text-[#1153a1]">${esc(historyUnitFilter)}</span>
+          <button onclick="clearHistoryUnitFilter()"
+                  class="ml-auto inline-flex items-center gap-1 text-gray-600 hover:text-white hover:bg-[#1153a1] border border-gray-300 hover:border-[#1153a1] rounded-md px-2.5 py-1 transition">
+            <i class="ph ph-x"></i> ดูประวัติทั้งหมด
+          </button>
+        </div>`;
     }
 
     let historyLastQuery = '';
@@ -2362,13 +2408,23 @@
       if (!keepPage) historyPage = 1;
       let displayHistory = currentHistory || [];
 
+      // กรองตามเครื่องก่อน แล้วค่อยค้นหาข้อความภายในผลลัพธ์นั้น
+      if (historyUnitFilter) {
+        displayHistory = displayHistory.filter(h => sameCode(h.AirCode, historyUnitFilter));
+      }
+      renderHistoryUnitFilterBar();
+
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         displayHistory = displayHistory.filter(h => searchText(h).includes(q));
       }
 
       if(displayHistory.length === 0) {
-        tb.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">ไม่พบประวัติ</td></tr>`;
+        // บอกให้ตรงว่าไม่พบเพราะอะไร ไม่งั้นคนจะเข้าใจว่าระบบเสีย
+        const why = historyUnitFilter && !searchQuery
+          ? `เครื่อง ${esc(historyUnitFilter)} ยังไม่มีประวัติที่บันทึกไว้`
+          : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
+        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}</td></tr>`;
         renderTablePager('historyPaginationBar', 0, 1, 'goToHistoryPage');
         lockViewOnlySection('history');
         return;
@@ -2377,6 +2433,7 @@
       historyPage = clampPage(historyPage, displayHistory.length);
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500">${esc(h.ID) || '-'}</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
             <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>
@@ -2462,6 +2519,7 @@
       pendingHistorySearch = code;
       document.querySelector('[data-tab="history"]').click();
     }
+    window.clearHistoryUnitFilter = clearHistoryUnitFilter;
 
     // ทางกลับของ viewAirHistory: จากรหัสเครื่อง ให้กระโดดไปหน้ารายการเครื่องพร้อมค้นหาให้อัตโนมัติ
     function goToAirDevice(code) {
