@@ -32,6 +32,41 @@
     body { font-family: 'Inter', 'Sarabun', sans-serif; background-color: #f8fafc; color: #334155; }
 
     /* ============================================================
+       ชุดสีพาสเทลของหน้าแดชบอร์ด
+       ============================================================
+       เก็บเป็นตัวแปรเพื่อให้สลับตามโหมดสว่าง/มืดได้เอง
+       และเพื่อให้การ์ดกับกราฟใช้สีชุดเดียวกันแน่นอน
+       ถ้าต่างคนต่างกำหนดสี วันหนึ่งจะเพี้ยนกันโดยไม่มีใครรู้
+
+       แต่ละสีมี 3 ค่า
+         --p-X      สีทึบพาสเทล  ใช้กับแท่งกราฟและเส้นกราฟ
+         --p-X-bg   พื้นการ์ด
+         --p-X-fg   สีตัวเลข ต้องเข้มพอที่จะอ่านออกบนพื้นการ์ดของโหมดนั้น */
+    :root {
+      --p-blue:  #8fb5dd;  --p-blue-bg:  #edf4fb;  --p-blue-fg:  #3f6d99;
+      --p-mint:  #93cfae;  --p-mint-bg:  #ecf7f1;  --p-mint-fg:  #3f8a63;
+      --p-peach: #f0c39a;  --p-peach-bg: #fdf3e9;  --p-peach-fg: #a8703a;
+      --p-rose:  #efaab6;  --p-rose-bg:  #fdeef1;  --p-rose-fg:  #a95669;
+      --p-lilac: #bfaee2;  --p-lilac-bg: #f3eefb;  --p-lilac-fg: #6f57a3;
+      --p-aqua:  #97d3dd;  --p-aqua-bg:  #ebf7f9;  --p-aqua-fg:  #3f8792;
+      --p-grey:  #b8b8c0;
+      --p-card-border: rgba(255,255,255,0.9);
+    }
+
+    /* โหมดมืด: สีทึบยังเป็นพาสเทลชุดเดิม เพราะอ่านได้ดีบนพื้นดำอยู่แล้ว
+       เปลี่ยนแค่พื้นการ์ดให้เข้ม และตัวเลขให้สว่างขึ้นแทน */
+    html.dark {
+      --p-blue-bg:  #131b24;  --p-blue-fg:  #a8cbe8;
+      --p-mint-bg:  #121d17;  --p-mint-fg:  #a6dcbe;
+      --p-peach-bg: #221a11;  --p-peach-fg: #f2cda9;
+      --p-rose-bg:  #211318;  --p-rose-fg:  #f0b8c2;
+      --p-lilac-bg: #1a1622;  --p-lilac-fg: #cabbe8;
+      --p-aqua-bg:  #111e21;  --p-aqua-fg:  #a9dde5;
+      --p-grey:     #8a8a92;
+      --p-card-border: rgba(255,255,255,0.06);
+    }
+
+    /* ============================================================
        โหมดกลางคืน
        ============================================================
        หน้าเว็บนี้ใช้คลาสสีของ Tailwind กระจายอยู่หลายพันจุด
@@ -328,14 +363,19 @@
         </style>
 
         <!-- ชั้นที่ 1: แถบหัว (บีบให้เตี้ยลงจากเดิมมาก เพื่อเหลือที่ให้ข้อมูล) -->
-        <div class="flex-shrink-0 mb-3 bg-gradient-to-r from-[#1153a1] to-[#1e75d6] rounded-xl px-5 py-3 text-white shadow relative overflow-hidden flex items-center justify-between">
+        <!-- แถบหัวใช้สีพาสเทลชุดเดียวกับการ์ด ไม่ใช่สีแบรนด์เต็มความเข้ม
+             เพราะถ้าปล่อยไว้จะเป็นจุดเดียวที่สีจัดในหน้าที่เหลือเป็นพาสเทลทั้งหมด
+             ตัวอักษรใช้สีเข้มของโทนน้ำเงิน จึงอ่านได้ทั้งโหมดสว่างและมืด -->
+        <div class="flex-shrink-0 mb-3 rounded-xl px-5 py-3 shadow-sm relative overflow-hidden flex items-center justify-between"
+             style="background:var(--p-blue-bg); border:1px solid var(--p-card-border); color:var(--p-blue-fg)">
           <div class="relative z-10">
             <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 leading-tight">
-              ระบบบริหารจัดการแอร์ ITEL <i class="ph-fill ph-sparkle text-[#f47920]"></i>
+              ระบบบริหารจัดการแอร์ ITEL <i class="ph-fill ph-sparkle" style="color:var(--p-peach)"></i>
             </h2>
-            <p class="text-blue-100 text-xs hidden sm:block">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
+            <!-- เดิมใช้สีที่ทำไว้สำหรับพื้นน้ำเงินเข้ม ซึ่งจะจางหายไปบนพื้นพาสเทลอ่อน -->
+            <p class="text-xs hidden sm:block" style="color:var(--p-blue-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
           </div>
-          <i class="ph-fill ph-wind absolute -right-4 -bottom-8 text-[110px] text-white opacity-10 transform -rotate-12"></i>
+          <i class="ph-fill ph-wind absolute -right-4 -bottom-8 text-[110px] transform -rotate-12" style="color:var(--p-blue); opacity:.18"></i>
         </div>
 
         <!-- ชั้นที่ 2: การ์ดสรุป -->
@@ -1514,46 +1554,47 @@
     /* ============== DASHBOARD ============== */
     async function loadDashboard() {
       const s = await call('getDashboardSummary');
+      // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
-        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-air-conditioner', color: 'text-[#1153a1]', bg: 'bg-gradient-to-br from-blue-50 to-blue-100/50', iconCol: 'text-[#1153a1]', iconBg: 'bg-white' },
-        { num: s.warrantySoon, label: 'หมดประกัน (90 วัน)', icon: 'ph-shield-warning', color: 'text-amber-700', bg: 'bg-gradient-to-br from-amber-50 to-amber-100/50', iconCol: 'text-amber-600', iconBg: 'bg-white' },
-        { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', color: 'text-rose-700', bg: 'bg-gradient-to-br from-rose-50 to-rose-100/50', iconCol: 'text-rose-600', iconBg: 'bg-white' }
+        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-air-conditioner', tone: 'blue' },
+        { num: s.warrantySoon, label: 'หมดประกัน (90 วัน)', icon: 'ph-shield-warning', tone: 'peach' },
+        { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose' }
       ];
       if (s.latestPlanSummary) {
-        cards.push({ 
-          num: `${s.latestPlanSummary.done}/${s.latestPlanSummary.total}`, 
-          label: `คืบหน้าล้างแอร์ปี ${s.latestPlanSummary.year}`, 
-          icon: 'ph-check-circle', color: 'text-emerald-700', bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50', iconCol: 'text-emerald-600', iconBg: 'bg-white' 
+        cards.push({
+          num: `${s.latestPlanSummary.done}/${s.latestPlanSummary.total}`,
+          label: `คืบหน้าล้างแอร์ปี ${s.latestPlanSummary.year}`,
+          icon: 'ph-check-circle', tone: 'mint'
         });
       }
-      
-      cards.push({ 
-        num: `฿${Number(s.totalCleaningCost || 0).toLocaleString()}`, 
-        label: 'ค่าใช้จ่ายล้างแอร์รวม', 
-        icon: 'ph-drop', color: 'text-cyan-700', bg: 'bg-gradient-to-br from-cyan-50 to-cyan-100/50', iconCol: 'text-cyan-600', iconBg: 'bg-white' 
+
+      cards.push({
+        num: `฿${Number(s.totalCleaningCost || 0).toLocaleString()}`,
+        label: 'ค่าใช้จ่ายล้างแอร์รวม', icon: 'ph-drop', tone: 'aqua'
       });
-      cards.push({ 
-        num: `฿${Number(s.totalRepairCost || 0).toLocaleString()}`, 
-        label: 'ค่าซ่อมบำรุงรวม', 
-        icon: 'ph-wrench', color: 'text-[#f47920]', bg: 'bg-gradient-to-br from-orange-50 to-orange-100/50', iconCol: 'text-[#f47920]', iconBg: 'bg-white' 
+      cards.push({
+        num: `฿${Number(s.totalRepairCost || 0).toLocaleString()}`,
+        label: 'ค่าซ่อมบำรุงรวม', icon: 'ph-wrench', tone: 'lilac'
       });
 
       document.getElementById('dashCards').innerHTML = cards.map(c => `
-        <div class="${c.bg} rounded-2xl shadow-sm border border-white p-5 flex flex-col justify-between relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md cursor-default">
+        <div class="rounded-2xl shadow-sm p-5 flex flex-col justify-between relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md cursor-default"
+             style="background:var(--p-${c.tone}-bg); border:1px solid var(--p-card-border)">
           <div class="flex justify-between items-start mb-4 relative z-10">
-            <div class="w-12 h-12 rounded-xl shadow-sm ${c.iconBg} ${c.iconCol} flex items-center justify-center flex-shrink-0">
+            <div class="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center flex-shrink-0"
+                 style="background:var(--p-${c.tone}); color:#fff">
               <i class="ph ${c.icon} text-2xl"></i>
             </div>
           </div>
           <div class="relative z-10">
-            <div class="text-3xl font-extrabold ${c.color} leading-none mb-1">${c.num}</div>
+            <div class="text-3xl font-extrabold leading-none mb-1" style="color:var(--p-${c.tone}-fg)">${c.num}</div>
             <div class="text-sm text-slate-600 font-medium">${c.label}</div>
           </div>
-          <i class="ph-fill ${c.icon} absolute -right-4 -bottom-4 text-[100px] text-black opacity-[0.03]"></i>
+          <i class="ph-fill ${c.icon} absolute -right-4 -bottom-4 text-[100px]" style="color:var(--p-${c.tone}); opacity:.12"></i>
         </div>
       `).join('');
 
-      document.getElementById('regionChart').innerHTML = renderBarChart(s.byRegion, false, 'bg-[#1153a1]');
+      document.getElementById('regionChart').innerHTML = renderBarChart(s.byRegion, false, 'blue');
       renderStatusDonut(s.byStatus);
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
@@ -1607,18 +1648,28 @@
     let trendChartObj = null;
 
     /**
-     * สีประจำสถานะของเครื่อง ใช้ร่วมกันทุกที่ที่แสดงสถานะ
+     * อ่านสีจากชุดพาสเทลกลางที่ประกาศไว้เป็นตัวแปร CSS
+     *
+     * ต้องอ่านตอนเรียกใช้ ไม่ใช่เก็บไว้ตั้งแต่ตอนโหลดหน้า
+     * เพราะค่าเปลี่ยนเมื่อสลับโหมดสว่าง/มืด
+     */
+    function pastel(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue('--p-' + name).trim() || '#94a3b8';
+    }
+
+    /**
+     * สีประจำสถานะของเครื่องบนแดชบอร์ด
      *
      * ต้องเช็คปลดระวางก่อนชำรุด เพราะค่าเดิม "ชำรุด/ปลดระวาง" มีทั้งสองคำอยู่ในสตริงเดียว
      * ถ้าเรียงกลับกันจะได้สีของชำรุดทั้งที่เป็นการปลดระวาง
      */
     function statusColor_(k) {
       const s = String(k || '');
-      if (s.includes('ปกติ')) return '#10b981';      // emerald-500 ใช้งานได้
-      if (s.includes('ปลดระวาง')) return '#475569';  // slate-600  จบอายุการใช้งาน
-      if (s.includes('ชำรุด')) return '#f43f5e';     // rose-500   เสียแต่ยังไม่ปลดระวาง
-      if (s.includes('ซ่อม')) return '#f59e0b';      // amber-500  รอซ่อม
-      return '#94a3b8';                              // slate-400  ไม่ระบุ
+      if (s.includes('ปกติ')) return pastel('mint');       // ใช้งานได้
+      if (s.includes('ปลดระวาง')) return pastel('grey');   // จบอายุการใช้งาน
+      if (s.includes('ชำรุด')) return pastel('rose');      // เสียแต่ยังไม่ปลดระวาง
+      if (s.includes('ซ่อม')) return pastel('peach');      // รอซ่อม
+      return pastel('grey');                               // ไม่ระบุ
     }
 
     function renderStatusDonut(byStatus) {
@@ -1675,8 +1726,9 @@
         data: {
           labels,
           datasets: [
-            { label: 'ค่าล้างแอร์', data: cleanData, borderColor: '#1153a1', backgroundColor: 'rgba(17,83,161,0.1)', fill: true, tension: 0.35, pointRadius: 2 },
-            { label: 'ค่าซ่อมบำรุง', data: repairData, borderColor: '#f47920', backgroundColor: 'rgba(244,121,32,0.1)', fill: true, tension: 0.35, pointRadius: 2 }
+            // ใช้สีพาสเทลชุดเดียวกับการ์ดค่าใช้จ่ายด้านบน จะได้โยงกันได้ด้วยสายตา
+            { label: 'ค่าล้างแอร์', data: cleanData, borderColor: pastel('aqua'), backgroundColor: pastel('aqua') + '33', fill: true, tension: 0.35, pointRadius: 2 },
+            { label: 'ค่าซ่อมบำรุง', data: repairData, borderColor: pastel('lilac'), backgroundColor: pastel('lilac') + '33', fill: true, tension: 0.35, pointRadius: 2 }
           ]
         },
         options: {
@@ -1712,24 +1764,21 @@
         </div>`).join('');
     }
 
-    function renderBarChart(obj, isStatus = false, defaultColor = 'bg-[#1153a1]') {
+    function renderBarChart(obj, isStatus = false, defaultTone = 'blue') {
       const entries = Object.entries(obj || {}).filter(([k]) => k !== 'undefined' && k !== '');
       if(entries.length === 0) return '<p class="text-sm text-gray-400 italic py-4">ไม่มีข้อมูล</p>';
       const max = Math.max(...entries.map(e => e[1]), 1);
+
+      // ใช้ statusColor_ ตัวเดียวกับกราฟวงกลม เพื่อให้สีของสถานะเดียวกันตรงกันทั้งหน้า
+      const base = pastel(defaultTone);
+
       return entries.map(([k, v]) => {
-        let barColor = defaultColor;
-        if(isStatus) {
-           // เรียงลำดับการเช็คให้ตรงกับ statusColor_ เพื่อให้กราฟกับแถบสีไม่ขัดกัน
-           if(k.includes('ปกติ')) barColor = 'bg-emerald-500';
-           else if(k.includes('ปลดระวาง')) barColor = 'bg-slate-600';
-           else if(k.includes('ชำรุด')) barColor = 'bg-rose-500';
-           else if(k.includes('ซ่อม')) barColor = 'bg-amber-500';
-        }
+        const barColor = isStatus ? statusColor_(k) : base;
         return `
         <div class="flex items-center gap-3 text-sm">
           <div class="w-24 flex-shrink-0 font-medium text-gray-600 truncate" title="${esc(k)}">${esc(k)}</div>
           <div class="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-            <div class="${barColor} h-full rounded-full" style="width:${(v/max*100)}%"></div>
+            <div class="h-full rounded-full" style="width:${(v/max*100)}%;background:${barColor}"></div>
           </div>
           <div class="w-8 text-right font-semibold text-gray-700">${v}</div>
         </div>`;
