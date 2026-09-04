@@ -45,49 +45,102 @@
        สีแบรนด์ (น้ำเงิน #1153a1 / ส้ม #f47920) ไม่แตะ เพราะเป็นตัวระบุตัวตนของระบบ
        และตัดกับพื้นเข้มได้ดีอยู่แล้ว */
 
-    html.dark body { background-color: #0f172a; color: #cbd5e1; }
+    /* ---- พื้นหลัง ----
+       ใช้เทาดำกลางๆ ไม่อมน้ำเงิน และไล่ระดับให้ต่างกันพอที่จะแยกชั้นออกจากกัน
+       พื้นหน้า -> การ์ด -> ช่องยกสูง ต่างกันทีละขั้น ไม่งั้นทุกอย่างจมเป็นแผ่นเดียว */
+    html.dark body { background-color: #0a0a0a; color: #e5e5e5; }
 
-    html.dark .bg-white        { background-color: #1e293b !important; }
-    html.dark .bg-slate-50     { background-color: #0f172a !important; }
-    html.dark .bg-gray-50      { background-color: #1e293b !important; }
-    html.dark .bg-gray-100     { background-color: #334155 !important; }
-    html.dark .bg-gray-300     { background-color: #475569 !important; }
-    html.dark .bg-slate-100    { background-color: #334155 !important; }
+    html.dark .bg-white        { background-color: #161616 !important; }
+    html.dark .bg-slate-50     { background-color: #0a0a0a !important; }
+    html.dark .bg-gray-50      { background-color: #161616 !important; }
+    html.dark .bg-gray-100     { background-color: #262626 !important; }
+    html.dark .bg-gray-300     { background-color: #3d3d3d !important; }
+    html.dark .bg-slate-100    { background-color: #262626 !important; }
+    html.dark .bg-slate-900    { background-color: #1c1c1c !important; }
 
+    /* แบบมีความโปร่งใสต่อท้าย ต้องเขียนแยกอีกชุด เพราะเป็นคนละชื่อคลาสกัน
+       ถ้าลืม จะเห็นเป็นแผ่นสีอ่อนสว่างจ้าบนพื้นดำ (เจอมาแล้วกับช่องเสาร์อาทิตย์ในปฏิทิน) */
+    html.dark .bg-gray-50\/60  { background-color: #131313 !important; }
+    html.dark .bg-slate-50\/60 { background-color: #101010 !important; }
+    html.dark .bg-white\/70    { background-color: rgba(22,22,22,0.7) !important; }
+
+    /* ---- ตัวอักษร ----
+       ตั้งใจให้สว่างกว่ามาตรฐานทั่วไป เพราะงานนี้คือการอ่านตารางข้อมูลเป็นหลัก
+       ไม่ใช่หน้าที่ไว้ดูเล่น ตัวเลขกับรหัสเครื่องต้องอ่านออกโดยไม่ต้องเพ่ง */
     html.dark .text-gray-900,
-    html.dark .text-gray-800   { color: #f1f5f9 !important; }
+    html.dark .text-gray-800   { color: #fafafa !important; }
     html.dark .text-gray-700,
-    html.dark .text-slate-700  { color: #e2e8f0 !important; }
+    html.dark .text-slate-700  { color: #ededed !important; }
     html.dark .text-gray-600,
-    html.dark .text-slate-600  { color: #cbd5e1 !important; }
+    html.dark .text-slate-600  { color: #d6d6d6 !important; }
     html.dark .text-gray-500,
-    html.dark .text-slate-500  { color: #94a3b8 !important; }
+    html.dark .text-slate-500  { color: #ababab !important; }
     html.dark .text-gray-400,
     html.dark .text-slate-400,
-    html.dark .text-gray-300   { color: #64748b !important; }
+    html.dark .text-gray-300   { color: #8a8a8a !important; }
 
+    /* ---- เส้นขอบ ----
+       บนพื้นดำ เส้นขอบคือสิ่งเดียวที่บอกขอบเขตของตารางและการ์ด
+       ถ้าจางเกินไปตารางจะกลายเป็นข้อความลอยๆ อ่านยากกว่าโหมดสว่าง */
     html.dark .border-gray-100,
-    html.dark .border-slate-100 { border-color: #1e293b !important; }
+    html.dark .border-slate-100 { border-color: #262626 !important; }
     html.dark .border-gray-200,
-    html.dark .border-slate-200 { border-color: #334155 !important; }
-    html.dark .border-gray-300  { border-color: #475569 !important; }
-    html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
+    html.dark .border-slate-200 { border-color: #333333 !important; }
+    html.dark .border-gray-300  { border-color: #454545 !important; }
+    html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #2b2b2b !important; }
 
-    /* ช่องกรอกข้อมูลต้องแยกจากพื้นหลังให้เห็นชัด ไม่งั้นหาไม่เจอว่าพิมพ์ตรงไหนได้ */
+    /* ช่องกรอกข้อมูลต้องจมกว่าการ์ดที่มันอยู่ เพื่อให้เห็นว่าตรงไหนพิมพ์ได้ */
     html.dark input, html.dark select, html.dark textarea {
-      background-color: #0f172a; color: #e2e8f0; border-color: #475569;
+      background-color: #0a0a0a; color: #fafafa; border-color: #454545;
     }
-    html.dark input::placeholder, html.dark textarea::placeholder { color: #64748b; }
+    html.dark input::placeholder, html.dark textarea::placeholder { color: #737373; }
 
-    /* แถบสีอ่อนที่ใช้เป็นป้ายสถานะ ต้องหรี่ลงไม่งั้นสว่างจ้าบนพื้นเข้ม */
-    html.dark [class*="bg-emerald-100"], html.dark [class*="bg-rose-100"],
-    html.dark [class*="bg-amber-100"], html.dark [class*="bg-blue-100"],
-    html.dark [class*="bg-cyan-100"], html.dark [class*="bg-teal-100"],
-    html.dark [class*="bg-orange-100"], html.dark [class*="bg-indigo-100"],
-    html.dark [class*="bg-purple-100"] { filter: brightness(0.42) saturate(1.5); }
+    /* ---- ป้ายสถานะ ----
+       เขียนสีคู่ (พื้น + ตัวอักษร) เจาะจงทีละสี แทนการหรี่ความสว่างทั้งก้อน
+       เพราะการหรี่ทำให้ตัวอักษรมืดลงไปพร้อมพื้น สุดท้ายอ่านไม่ออก
+       ที่นี่จึงใช้พื้นเข้มคู่กับตัวอักษรสว่าง ซึ่งอ่านชัดกว่ามากบนพื้นดำ
 
-    html.dark .table-container::-webkit-scrollbar-track { background: #1e293b; }
-    html.dark .table-container::-webkit-scrollbar-thumb { background: #475569; }
+       ⚠️ ต้องเขียนชื่อคลาสเต็มทุกตัว ห้ามใช้การจับแบบบางส่วน
+       เพราะ "bg-emerald-500" มีคำว่า "bg-emerald-50" อยู่ข้างใน
+       ถ้าจับแบบบางส่วนจะไปทับสีทึบที่ใช้เป็นจุดสีในกราฟและปฏิทินด้วย */
+    html.dark .bg-emerald-50, html.dark .bg-emerald-100 { background-color: #07281a !important; color: #6ee7b7 !important; }
+    html.dark .bg-green-50,   html.dark .bg-green-100   { background-color: #08260f !important; color: #86efac !important; }
+    html.dark .bg-rose-50,    html.dark .bg-rose-100    { background-color: #2d0c16 !important; color: #fda4af !important; }
+    html.dark .bg-red-50,     html.dark .bg-red-100     { background-color: #2d0d0d !important; color: #fca5a5 !important; }
+    html.dark .bg-amber-50,   html.dark .bg-amber-100   { background-color: #2b1d05 !important; color: #fcd34d !important; }
+    html.dark .bg-orange-50,  html.dark .bg-orange-100  { background-color: #2b1508 !important; color: #fdba74 !important; }
+    html.dark .bg-blue-50,    html.dark .bg-blue-100    { background-color: #0a1e33 !important; color: #93c5fd !important; }
+    html.dark .bg-cyan-50,    html.dark .bg-cyan-100    { background-color: #06232b !important; color: #67e8f9 !important; }
+    html.dark .bg-teal-50,    html.dark .bg-teal-100    { background-color: #062723 !important; color: #5eead4 !important; }
+    html.dark .bg-indigo-50,  html.dark .bg-indigo-100  { background-color: #14142e !important; color: #a5b4fc !important; }
+    html.dark .bg-purple-50,  html.dark .bg-purple-100  { background-color: #21102e !important; color: #d8b4fe !important; }
+
+    /* แบบมีความโปร่งใสต่อท้าย (เช่น bg-blue-50/40 ที่ใช้เป็นพื้นหัวตารางกับช่องวันนี้)
+       ไม่ต้องเปลี่ยนสีตัวอักษร เพราะเป็นพื้นของกล่อง ไม่ใช่ป้าย */
+    html.dark .bg-blue-50\/30,  html.dark .bg-blue-50\/40,
+    html.dark .bg-blue-50\/50,  html.dark .bg-blue-50\/60,
+    html.dark .bg-blue-50\/90   { background-color: #101c28 !important; }
+    html.dark .bg-indigo-50\/90 { background-color: #141428 !important; }
+    html.dark .bg-purple-50\/90 { background-color: #1d1428 !important; }
+    html.dark .bg-amber-50\/50,
+    html.dark .bg-amber-50\/60  { background-color: #241a0a !important; }
+    html.dark .bg-teal-50\/40   { background-color: #0a201d !important; }
+
+    /* ตัวอักษรสีเข้มบนป้าย ต้องสว่างขึ้นด้วย ไม่งั้นเข้มชนเข้มแล้วหายไปกับพื้น */
+    html.dark .text-emerald-800 { color: #6ee7b7 !important; }
+    html.dark .text-rose-800    { color: #fda4af !important; }
+    html.dark .text-amber-800   { color: #fcd34d !important; }
+    html.dark .text-blue-800    { color: #93c5fd !important; }
+    html.dark .text-cyan-800    { color: #67e8f9 !important; }
+    html.dark .text-teal-800    { color: #5eead4 !important; }
+    html.dark .text-orange-800  { color: #fdba74 !important; }
+    html.dark .text-indigo-800  { color: #a5b4fc !important; }
+    html.dark .text-purple-800  { color: #d8b4fe !important; }
+    html.dark .text-green-800   { color: #86efac !important; }
+    html.dark .text-red-800     { color: #fca5a5 !important; }
+
+    html.dark .table-container::-webkit-scrollbar-track { background: #161616; }
+    html.dark .table-container::-webkit-scrollbar-thumb { background: #454545; }
     .view { display: none; animation: fadeIn 0.3s ease; }
     .view.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
