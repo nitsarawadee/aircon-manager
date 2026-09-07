@@ -2380,7 +2380,7 @@
         <div class="mt-4 text-sm ${cal.total ? 'text-gray-600' : 'text-gray-400'}">
           ${cal.total
             ? 'เดือนนี้มีนัดหมายทั้งหมด <b class="text-gray-800">' + cal.total + '</b> รายการ' +
-              (calSelectedDay ? '' : ' · <span class="text-gray-500">กดที่วันเพื่อดูรายการทั้งหมดของวันนั้น</span>')
+              ' · <span class="text-gray-500">กดที่วันเพื่อดูรายการทั้งหมดของวันนั้น</span>'
             : 'เดือนนี้ยังไม่มีนัดหมายล้างแอร์'}
         </div>
 
@@ -2388,11 +2388,13 @@
     }
 
     /**
-     * รายการนัดทั้งหมดของวันที่เลือก แสดงใต้ปฏิทิน
+     * หน้าต่างรายการนัดทั้งหมดของวันที่เลือก ซ้อนขึ้นมาบนปฏิทิน
      *
      * ต้องมีเพราะช่องในปฏิทินแสดงได้แค่ 3 รายการ วันที่งานเยอะจึงเห็นไม่ครบ
-     * เลือกแสดงเป็นรายการใต้ปฏิทินแทนที่จะเปิดหน้าต่างซ้อนอีกชั้น
-     * เพื่อให้ยังเห็นปฏิทินอยู่ กดสลับดูวันอื่นต่อได้เลยโดยไม่ต้องปิดอะไรก่อน
+     *
+     * วางซ้อนที่ z สูงกว่าปฏิทิน และมีฉากหลังของตัวเอง
+     * ฉากหลังนี้ต้องปิดเฉพาะหน้าต่างวัน ไม่ปิดปฏิทินที่อยู่ข้างล่าง
+     * จึงเรียก selectPlanCalendarDay(null) ไม่ใช่ closeModal()
      */
     function renderPlanCalendarDay(cal) {
       if (!calSelectedDay) return '';
@@ -2403,32 +2405,65 @@
       const label = { done: 'ล้างเสร็จแล้ว', cancelled: 'ยกเลิก', pending: 'ยังไม่ได้ล้าง' };
       const chip = { done: 'bg-emerald-100 text-emerald-800', cancelled: 'bg-gray-100 text-gray-500', pending: 'bg-blue-100 text-blue-800' };
 
+      const done = items.filter(i => i.state === 'done').length;
+      const pending = items.filter(i => i.state === 'pending').length;
+      const cancelled = items.filter(i => i.state === 'cancelled').length;
+      const summary = [
+        done ? done + ' ล้างแล้ว' : '',
+        pending ? pending + ' ยังไม่ได้ล้าง' : '',
+        cancelled ? cancelled + ' ยกเลิก' : ''
+      ].filter(Boolean).join(' · ');
+
       return `
-        <div class="border border-gray-200 rounded-xl overflow-hidden">
-          <div class="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-gray-200">
-            <div class="text-sm font-bold text-gray-800">
-              นัดหมายวันที่ ${calSelectedDay} ${TH_MONTHS[calMonth - 1]} ${calYear}
-              <span class="font-normal text-gray-500">· ${items.length} รายการ</span>
+        <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/50 backdrop-blur-[2px]" onclick="selectPlanCalendarDay(null)"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+
+            <div class="flex items-start justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                  <i class="ph-fill ph-calendar-dot text-[#1153a1]"></i>
+                  ${calSelectedDay} ${TH_MONTHS[calMonth - 1]} ${calYear}
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">${items.length} รายการ${summary ? ' · ' + summary : ''}</p>
+              </div>
+              <button onclick="selectPlanCalendarDay(null)" class="text-gray-400 hover:text-gray-700 p-1 -mr-1">
+                <i class="ph ph-x text-xl"></i>
+              </button>
             </div>
-            <button onclick="selectPlanCalendarDay(null)" class="text-gray-400 hover:text-gray-700 text-sm flex items-center gap-1">
-              <i class="ph ph-x"></i> ปิด
-            </button>
-          </div>
-          <div class="max-h-56 overflow-y-auto">
-            <table class="w-full text-sm text-left">
-              <tbody class="divide-y divide-gray-100">
-                ${items.map(it => `
-                  <tr class="hover:bg-blue-50/50">
-                    <td class="px-4 py-2 font-medium ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(it.AirCode)}</td>
-                    <td class="px-4 py-2 text-gray-600 truncate max-w-[220px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
-                    <td class="px-4 py-2 text-gray-500 whitespace-nowrap">รอบที่ ${it.round}</td>
-                    <td class="px-4 py-2 whitespace-nowrap">
-                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
-                    </td>
-                    <td class="px-4 py-2 text-gray-500 whitespace-nowrap text-xs">${it.actualDate ? 'ล้างจริง ' + esc(fmtDate(it.actualDate)) : ''}</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
+
+            <div class="overflow-y-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="sticky top-0 bg-slate-50 border-b border-gray-200 text-xs text-slate-600">
+                  <tr>
+                    <th class="px-5 py-2 font-semibold">รหัสเครื่อง</th>
+                    <th class="px-4 py-2 font-semibold">Node</th>
+                    <th class="px-4 py-2 font-semibold whitespace-nowrap">รอบที่</th>
+                    <th class="px-4 py-2 font-semibold">สถานะ</th>
+                    <th class="px-5 py-2 font-semibold whitespace-nowrap">วันที่ล้างจริง</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  ${items.map(it => `
+                    <tr class="hover:bg-blue-50/50">
+                      <td class="px-5 py-2.5 font-medium whitespace-nowrap ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(it.AirCode)}</td>
+                      <td class="px-4 py-2.5 text-gray-600 truncate max-w-[200px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
+                      <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
+                      <td class="px-4 py-2.5 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
+                      </td>
+                      <td class="px-5 py-2.5 text-gray-500 whitespace-nowrap">${it.actualDate ? esc(fmtDate(it.actualDate)) : '-'}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="px-5 py-3 border-t border-gray-200 flex justify-end">
+              <button onclick="selectPlanCalendarDay(null)"
+                      class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                ปิด
+              </button>
+            </div>
           </div>
         </div>`;
     }
@@ -2438,6 +2473,15 @@
       calSelectedDay = (day && calSelectedDay === day) ? null : day;
       renderPlanCalendar();
     }
+
+    // กด Esc ปิดหน้าต่างรายการของวัน แต่ไม่ปิดปฏิทินที่อยู่ข้างล่าง
+    // จำกัดไว้เฉพาะตอนที่หน้าต่างวันเปิดอยู่ เพื่อไม่ไปเปลี่ยนพฤติกรรมของหน้าต่างอื่นในระบบ
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && calSelectedDay) {
+        e.stopPropagation();
+        selectPlanCalendarDay(null);
+      }
+    });
 
     window.openPlanCalendar = openPlanCalendar;
     window.shiftPlanCalendar = shiftPlanCalendar;
