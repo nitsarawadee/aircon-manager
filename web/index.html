@@ -2194,55 +2194,74 @@
 
       const back = `
         <button onclick="backFromAirDetail()"
-                class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#1153a1] mb-4">
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#1153a1] mb-3">
           <i class="ph ph-arrow-left"></i> กลับ
         </button>`;
 
       if (!u) {
         // เกิดได้จริงเมื่อเครื่องถูกลบไปแล้ว แต่ประวัติของมันยังอยู่
-        view.innerHTML = back + `
-          <div class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-400">
+        view.innerHTML = `<div class="max-w-5xl mx-auto">${back}
+          <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center text-gray-400">
             ไม่พบเครื่องรหัส <b class="text-gray-600">${esc(airDetailCode)}</b> ในรายการเครื่อง<br>
             <span class="text-xs">(อาจถูกลบออกไปแล้ว แต่ประวัติยังอยู่)</span>
-          </div>`;
+          </div></div>`;
         return;
       }
 
       const canEditAir = moduleLevel('airlist') === 'edit';
       const canEditHist = moduleLevel('history') === 'edit';
 
-      view.innerHTML = back + `
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <div class="min-w-0">
-            <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2.5 flex-wrap">
-              <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style="background:var(--p-blue-bg); color:var(--p-blue-fg)">
-                <i class="ph-fill ph-snowflake text-lg"></i>
-              </span>
-              <span class="break-all">${esc(u.AirCode)}</span>
-              ${statusBadge(u.Status)}
-            </h2>
-            <p class="text-sm text-gray-500 mt-1">
-              ${esc(u.NodeName) || 'ยังไม่ระบุ Node'}${u.SiteCode ? ' · ' + esc(u.SiteCode) : ''}${u.Province ? ' · ' + esc(u.Province) : ''}
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            ${canEditHist ? `
-              <button onclick="addHistoryForUnit('${esc(u.AirCode)}')"
-                      class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-                <i class="ph ph-plus"></i> บันทึกประวัติ
-              </button>` : ''}
-            ${canEditAir ? `
-              <button onclick='openAirModal(${JSON.stringify(u).replace(/'/g, "&apos;")})'
-                      class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-                <i class="ph ph-pencil-simple"></i> แก้ไขข้อมูล
-              </button>` : ''}
-          </div>
-        </div>
+      // ที่ตั้งของหลายเครื่องมีชื่อ Node ซ้ำกับชื่อจังหวัด ถ้าต่อกันตรงๆ จะได้
+      // "อ่างทอง · ATG-ATG · อ่างทอง" ซึ่งอ่านแล้วสะดุดเพราะดูเหมือนพิมพ์ผิด
+      const where = [];
+      for (const part of [u.NodeName, u.SiteCode, u.Province, u.Region ? 'ภาค ' + u.Region : '']) {
+        const v = String(part || '').trim();
+        if (v && !where.some(x => x.toLowerCase() === v.toLowerCase())) where.push(v);
+      }
 
-        ${airInfoBody(u)}
+      view.innerHTML = `
+        <div class="max-w-5xl mx-auto">
+          ${back}
 
-        ${moduleLevel('history') === 'none' ? '' : airDetailHistory(u, canEditHist)}`;
+          <div class="bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4 mb-3
+                      flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="min-w-0">
+              <h2 class="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2.5 flex-wrap">
+                <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style="background:var(--p-blue-bg); color:var(--p-blue-fg)">
+                  <i class="ph-fill ph-snowflake text-lg"></i>
+                </span>
+                <span class="break-all">${esc(u.AirCode)}</span>
+                ${statusBadge(u.Status)}
+              </h2>
+              <p class="text-sm text-gray-500 mt-1.5 ml-0.5">${where.map(esc).join(' · ') || 'ยังไม่ระบุที่ตั้ง'}</p>
+            </div>
+            <div class="flex flex-wrap gap-2 flex-shrink-0">
+              ${canEditHist ? `
+                <button onclick="addHistoryForUnit('${esc(u.AirCode)}')"
+                        class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                  <i class="ph ph-plus"></i> บันทึกประวัติ
+                </button>` : ''}
+              ${canEditAir ? `
+                <button onclick='openAirModal(${JSON.stringify(u).replace(/'/g, "&apos;")})'
+                        class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                  <i class="ph ph-pencil-simple"></i> แก้ไขข้อมูล
+                </button>` : ''}
+            </div>
+          </div>
+
+          <!-- สองคอลัมน์บนจอกว้าง ไม่งั้นข้อมูลสั้นๆ จะถูกยืดจนชื่อช่องกับค่าห่างกันคนละฝั่งจอ
+               items-start กันไม่ให้การ์ดเตี้ยถูกยืดตามการ์ดสูงในแถวเดียวกัน -->
+          <div class="grid lg:grid-cols-2 gap-3 items-start">
+            ${airInfoBody(u)}
+          </div>
+
+          <p class="text-[11px] text-gray-400 text-right mt-2">
+            แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
+          </p>
+
+          ${moduleLevel('history') === 'none' ? '' : airDetailHistory(u, canEditHist)}
+        </div>`;
     }
 
     /** เปิดฟอร์มบันทึกประวัติโดยเลือกเครื่องนี้ไว้ให้แล้ว */
@@ -2264,22 +2283,23 @@
       const lastClean = cleans.length ? fmtDate(cleans[0].Date) : null;
 
       const stat = (label, value, tone) => `
-        <div class="rounded-xl px-4 py-2.5 border border-gray-100" style="background:var(--p-${tone}-bg)">
+        <div class="rounded-xl px-4 py-3" style="background:var(--p-${tone}-bg)">
           <div class="text-lg font-extrabold leading-none" style="color:var(--p-${tone}-fg)">${value}</div>
-          <div class="text-[11px] text-gray-500 mt-1">${label}</div>
+          <div class="text-[11px] text-gray-500 mt-1.5">${label}</div>
         </div>`;
 
+      const cols = canEdit ? 7 : 6;
       const body = rows.length === 0
-        ? `<tr><td colspan="${canEdit ? 6 : 5}" class="px-4 py-10 text-center text-gray-400">
+        ? `<tr><td colspan="${cols}" class="px-4 py-12 text-center text-gray-400">
              <i class="ph ph-clock-counter-clockwise text-3xl mb-2 block"></i>เครื่องนี้ยังไม่มีประวัติที่บันทึกไว้
            </td></tr>`
         : rows.map(h => `
             <tr class="hover:bg-blue-50/50 transition-colors">
               <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-gray-600">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
               <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
-              <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
+              <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-right">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
               <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
               ${canEdit ? `<td class="px-4 py-3 text-right">
                 <button onclick="deleteHistory(${h._row})" title="ลบรายการนี้"
@@ -2288,136 +2308,137 @@
             </tr>`).join('');
 
       return `
-        <div class="mt-6">
-          <div class="flex items-center gap-2 mb-3">
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mt-6">
+          <div class="px-5 pt-4 pb-3 flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style="background:var(--p-rose-bg); color:var(--p-rose-fg)">
               <i class="ph-fill ph-clock-counter-clockwise text-sm"></i>
             </span>
-            <span class="text-sm font-bold text-gray-700">ประวัติของเครื่องนี้</span>
-            <span class="text-xs text-gray-400">${rows.length} รายการ</span>
+            <span class="text-xs font-bold text-gray-600">ประวัติของเครื่องนี้</span>
+            <span class="text-[11px] text-gray-400">${rows.length} รายการ</span>
           </div>
 
           ${rows.length ? `
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4">
               ${stat('ล้างแอร์', cleans.length + ' ครั้ง', 'blue')}
               ${stat('งานซ่อม/อื่นๆ', others + ' ครั้ง', 'peach')}
               ${stat('ค่าใช้จ่ายรวม', '฿' + cost.toLocaleString(), 'mint')}
               ${stat('ล้างล่าสุด', lastClean || '—', 'lilac')}
             </div>` : ''}
 
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="overflow-x-auto">
-              <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
-                <thead>
-                  <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
-                    <th class="px-4 py-3">เลขที่</th>
-                    <th class="px-4 py-3">วันที่</th>
-                    <th class="px-4 py-3">เหตุการณ์</th>
-                    <th class="px-4 py-3">รายละเอียด</th>
-                    <th class="px-4 py-3">ค่าใช้จ่าย</th>
-                    <th class="px-4 py-3">ช่าง</th>
-                    ${canEdit ? '<th class="px-4 py-3 text-right"></th>' : ''}
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 text-gray-700">${body}</tbody>
-              </table>
-            </div>
+          <div class="overflow-x-auto border-t border-gray-100">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3">เลขที่</th>
+                  <th class="px-4 py-3">วันที่</th>
+                  <th class="px-4 py-3">เหตุการณ์</th>
+                  <th class="px-4 py-3 w-full">รายละเอียด</th>
+                  <th class="px-4 py-3 text-right">ค่าใช้จ่าย</th>
+                  <th class="px-4 py-3">ช่าง</th>
+                  ${canEdit ? '<th class="px-4 py-3 text-right"></th>' : ''}
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 text-gray-700">${body}</tbody>
+            </table>
           </div>
         </div>`;
     }
 
-    /** ช่องข้อมูลหนึ่งช่อง — ค่าว่างขึ้นขีด ไม่ใช่หายไปเฉยๆ จะได้รู้ว่ายังไม่ได้กรอก */
+    /**
+     * ประกาศช่องข้อมูลหนึ่งช่อง — คืนเป็นข้อมูล ไม่ใช่ HTML
+     * เพราะกล่องกลุ่มต้องรู้ก่อนว่าช่องไหนมีค่าช่องไหนว่าง จึงจะจัดวางได้
+     *
+     * html: ค่าที่เป็นมาร์กอัปอยู่แล้ว (เช่นป้ายอายุที่มีสี) ห้ามหนีอักขระซ้ำ
+     * wide: กินสองคอลัมน์ สำหรับค่าที่ยาว เช่นที่อยู่หรือหมายเหตุ
+     */
     function airInfoField(label, value, opts = {}) {
-      const v = String(value == null ? '' : value).trim();
-
-      // ช่องเปล่าไม่มีทั้งชื่อและค่า = ตัวคั่นให้ขึ้นแถวใหม่ตอนกริดเป็น 3 คอลัมน์
-      // ตอนเป็น 2 คอลัมน์ไม่ต้องใช้ เพราะจับคู่ลงตัวอยู่แล้ว ถ้าใส่ไว้จะเหลือช่องโหว่
-      if (!label && !v) return '<div class="hidden sm:block"></div>';
-
-      // ทุกช่องใช้ตัวหนังสือแบบเดียวกันหมด จะได้อ่านรวดเดียวไม่สะดุด
-      const shown = v
-        ? `<span class="text-sm font-semibold text-gray-800">${opts.html ? v : esc(v)}</span>`
-        : '<span class="text-sm text-gray-300">—</span>';
-
-      return `
-        <div class="${opts.wide ? 'col-span-2 sm:col-span-3' : ''} min-w-0">
-          ${label ? `<div class="text-[11px] text-gray-400 mb-1">${esc(label)}</div>` : ''}
-          <div class="break-words leading-snug">${shown}</div>
-        </div>`;
+      return { label, value: String(value == null ? '' : value).trim(), ...opts };
     }
 
     /**
      * กล่องข้อมูลหนึ่งกลุ่ม
      *
-     * ไอคอนใช้สีจากชุดพาสเทลกลางชุดเดียวกับการ์ดบนแดชบอร์ด
-     * แต่ละกลุ่มได้สีของตัวเอง เวลาเลื่อนดูจะจับกลุ่มได้ด้วยสีโดยไม่ต้องอ่านหัวข้อ
-     * และเปลี่ยนตามโหมดสว่าง/มืดให้เองเพราะเป็นตัวแปร CSS
+     * ช่องที่ยังไม่ได้กรอกไม่แสดงเป็นช่องเปล่า แต่ยุบไปรวมเป็นบรรทัดเดียวท้ายกล่อง
+     * เพราะข้อมูลจริงส่วนใหญ่ยังกรอกไม่ครบ ถ้าแสดงทุกช่องจะเต็มไปด้วยขีดว่าง
+     * จนหาค่าที่มีอยู่จริงไม่เจอ แต่จะตัดทิ้งเงียบๆ ก็ไม่ได้ เพราะคนต้องรู้ว่าต้องไปตามอะไร
+     *
+     * ไอคอนใช้สีจากชุดพาสเทลกลางชุดเดียวกับการ์ดบนแดชบอร์ด แต่ละกลุ่มได้สีของตัวเอง
+     * เวลาเลื่อนดูจะจับกลุ่มได้ด้วยสีโดยไม่ต้องอ่านหัวข้อ และเปลี่ยนตามโหมดสว่าง/มืดเอง
      */
-    function airInfoGroup(title, icon, tone, fields, cols) {
+    function airInfoGroup(title, icon, tone, fields, opts = {}) {
+      const filled = fields.filter(f => f.value !== '');
+      // ช่องที่ระบบคำนวณให้เอง (derived) ไม่เข้ารายการ "ยังไม่ได้กรอก"
+      // เพราะกรอกเองไม่ได้ ต้องไปเติมช่องต้นทางแทน บอกไปก็ทำให้เข้าใจผิดว่าลืมกรอก
+      const missing = fields.filter(f => f.value === '' && f.label && !f.derived);
+
+      const cell = f => `
+        <div class="${f.wide ? 'col-span-2' : ''} min-w-0">
+          ${f.label ? `<div class="text-[11px] text-gray-400 mb-0.5">${esc(f.label)}</div>` : ''}
+          <div class="text-sm font-semibold text-gray-800 break-words leading-snug">${f.html ? f.value : esc(f.value)}</div>
+        </div>`;
+
       return `
-        <div class="mb-3 last:mb-0">
-          <!-- ใช้ bg-gray-50/60 ไม่ใช่ bg-gray-50 เพราะโหมดมืดจับคู่ bg-gray-50
-               กับสีเดียวกับพื้นการ์ด กล่องข้อมูลจะจมหายไปกับพื้นหลัง -->
-          <div class="bg-gray-50/60 rounded-2xl p-4 border border-gray-100">
-            <div class="flex items-center gap-2 mb-3">
-              <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style="background:var(--p-${tone}-bg); color:var(--p-${tone}-fg)">
-                <i class="ph-fill ${icon} text-sm"></i>
-              </span>
-              <span class="text-xs font-bold text-gray-600">${esc(title)}</span>
-            </div>
-            <div class="grid grid-cols-2 ${cols === 2 ? '' : 'sm:grid-cols-3'} gap-x-4 gap-y-3.5">
-              ${fields.join('')}
-            </div>
+        <div class="${opts.wide ? 'lg:col-span-2 ' : ''}bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style="background:var(--p-${tone}-bg); color:var(--p-${tone}-fg)">
+              <i class="ph-fill ${icon} text-sm"></i>
+            </span>
+            <span class="text-xs font-bold text-gray-600">${esc(title)}</span>
           </div>
+
+          ${filled.length ? `<div class="grid grid-cols-2 gap-x-5 gap-y-3">${filled.map(cell).join('')}</div>` : ''}
+
+          ${missing.length ? `
+            <div class="${filled.length ? 'mt-3 pt-3 border-t border-gray-100 ' : ''}flex items-start gap-1.5 text-[11px] text-gray-400">
+              <i class="ph ph-info text-sm leading-none mt-px flex-shrink-0"></i>
+              <span>ยังไม่ได้กรอก: ${missing.map(f => esc(f.label)).join(' · ')}</span>
+            </div>` : ''}
         </div>`;
     }
 
     function airInfoBody(u) {
       const coords = [u.Lat, u.Long].map(x => String(x == null ? '' : x).trim()).filter(Boolean).join(', ');
 
+      // อายุคำนวณจากวันติดตั้ง ถ้ายังไม่มีวันติดตั้งก็ไม่มีอายุให้แสดง
+      // ต้องส่งค่าว่างไป ไม่ใช่ส่งป้าย "ยังไม่ระบุ" ที่ ageCell คืนมา
+      // ไม่งั้นกล่องจะนับว่าช่องนี้มีค่าแล้ว แล้วไม่ไปอยู่ในรายการที่ยังไม่ได้กรอก
+      const age = String(u.InstallDate || '').trim() ? ageCell(u.InstallDate) : '';
+
       // เรียงจาก "ของที่ต้องดูบ่อยสุด" ลงไปหา "ของที่นานๆ ดูที"
-      // ตัวเครื่องกับทะเบียนทรัพย์สินคือสองอย่างที่คนเปิดดูจริงตอนอยู่หน้างาน
-      // ส่วนที่ตั้งมักรู้อยู่แล้วเพราะยืนอยู่ตรงนั้น จึงอยู่ล่างสุด
       return [
         airInfoGroup('ตัวเครื่อง', 'ph-snowflake', 'blue', [
           airInfoField('ยี่ห้อ', u.Brand),
           airInfoField('ขนาด (BTU)', u.BTU ? Number(u.BTU).toLocaleString() : ''),
-          airInfoField('', ''),
           airInfoField('รุ่นคอยล์เย็น (ในอาคาร)', u.ModelIndoor),
           airInfoField('รุ่นคอยล์ร้อน (นอกอาคาร)', u.ModelOutdoor)
         ]),
 
-        // บังคับ 2 คอลัมน์ ให้ Asset กับ S/N ของคอยล์เดียวกันอยู่บรรทัดเดียวกัน
         airInfoGroup('ทะเบียนทรัพย์สิน', 'ph-barcode', 'lilac', [
           airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset),
           airInfoField('Indoor S/N', u.IndoorSN),
           airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset),
           airInfoField('Outdoor S/N', u.OutdoorSN)
-        ], 2),
+        ]),
 
         airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
           airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
-          airInfoField('อายุการใช้งาน', ageCell(u.InstallDate), { html: true }),
+          airInfoField('อายุการใช้งาน', age, { html: true, derived: true }),
           airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
         ]),
 
         airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
-          airInfoField('ภูมิภาค', u.Region),
+          airInfoField('ภูมิภาค', u.Region ? 'ภาค ' + u.Region : ''),
           airInfoField('จังหวัด', u.Province),
-          airInfoField('ประเภทสถานที่', u.LocationType),
           airInfoField('Node', u.NodeName),
           airInfoField('Site Code', u.SiteCode),
+          airInfoField('ประเภทสถานที่', u.LocationType),
           airInfoField('พิกัด', coords),
           airInfoField('ที่อยู่', u.Address, { wide: true })
         ]),
 
-        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', 'aqua', [airInfoField('', u.Note, { wide: true })]) : '',
-
-        `<p class="text-[11px] text-gray-400 text-right mt-3">
-           แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
-         </p>`
+        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', 'aqua', [airInfoField('', u.Note, { wide: true })], { wide: true }) : ''
       ].join('');
     }
 
