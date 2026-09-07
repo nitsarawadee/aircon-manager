@@ -2208,61 +2208,85 @@
     /** ช่องข้อมูลหนึ่งช่อง — ค่าว่างขึ้นขีด ไม่ใช่หายไปเฉยๆ จะได้รู้ว่ายังไม่ได้กรอก */
     function airInfoField(label, value, opts = {}) {
       const v = String(value == null ? '' : value).trim();
+
+      // ช่องเปล่าไม่มีทั้งชื่อและค่า = ตัวคั่นให้ขึ้นแถวใหม่ตอนกริดเป็น 3 คอลัมน์
+      // ตอนเป็น 2 คอลัมน์ไม่ต้องใช้ เพราะจับคู่ลงตัวอยู่แล้ว ถ้าใส่ไว้จะเหลือช่องโหว่
+      if (!label && !v) return '<div class="hidden sm:block"></div>';
+
+      // ตัวเลขทะเบียน/ซีเรียลใช้ฟอนต์ความกว้างเท่ากัน เพราะคนต้องเอาไปเทียบกับสติกเกอร์ที่ตัวเครื่อง
+      // ฟอนต์ธรรมดาทำให้ 0 กับ O และ 1 กับ l ดูเหมือนกันจนอ่านผิด
+      const valueCls = opts.mono
+        ? 'text-[13px] font-mono tracking-tight text-gray-800 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 inline-block'
+        : 'text-sm font-semibold text-gray-800';
+
       const shown = v
-        ? (opts.html ? v : esc(v))
-        : '<span class="text-gray-300 italic">ยังไม่ระบุ</span>';
+        ? `<span class="${opts.html ? 'text-sm font-semibold text-gray-800' : valueCls}">${opts.html ? v : esc(v)}</span>`
+        : '<span class="text-sm text-gray-300">—</span>';
+
       return `
-        <div class="${opts.wide ? 'sm:col-span-2' : ''}">
-          <div class="text-[11px] font-medium text-gray-400 tracking-wide">${esc(label)}</div>
-          <div class="text-sm text-gray-800 mt-0.5 break-words">${shown}</div>
+        <div class="${opts.wide ? 'col-span-2 sm:col-span-3' : ''} min-w-0">
+          ${label ? `<div class="text-[11px] text-gray-400 mb-1">${esc(label)}</div>` : ''}
+          <div class="break-words leading-snug">${shown}</div>
         </div>`;
     }
 
-    function airInfoGroup(title, icon, fields, cols) {
+    /**
+     * กล่องข้อมูลหนึ่งกลุ่ม
+     *
+     * ไอคอนใช้สีจากชุดพาสเทลกลางชุดเดียวกับการ์ดบนแดชบอร์ด
+     * แต่ละกลุ่มได้สีของตัวเอง เวลาเลื่อนดูจะจับกลุ่มได้ด้วยสีโดยไม่ต้องอ่านหัวข้อ
+     * และเปลี่ยนตามโหมดสว่าง/มืดให้เองเพราะเป็นตัวแปร CSS
+     */
+    function airInfoGroup(title, icon, tone, fields, cols) {
       return `
-        <div class="mb-4 last:mb-0">
-          <div class="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
-            <i class="ph ${icon} text-base text-[#1153a1]"></i> ${esc(title)}
-          </div>
+        <div class="mb-3 last:mb-0">
           <!-- ใช้ bg-gray-50/60 ไม่ใช่ bg-gray-50 เพราะโหมดมืดจับคู่ bg-gray-50
                กับสีเดียวกับพื้นการ์ด กล่องข้อมูลจะจมหายไปกับพื้นหลัง -->
-          <div class="grid grid-cols-2 ${cols === 2 ? '' : 'sm:grid-cols-3'} gap-x-4 gap-y-3 bg-gray-50/60 rounded-xl p-3.5 border border-gray-100">
-            ${fields.join('')}
+          <div class="bg-gray-50/60 rounded-2xl p-4 border border-gray-100">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style="background:var(--p-${tone}-bg); color:var(--p-${tone}-fg)">
+                <i class="ph-fill ${icon} text-sm"></i>
+              </span>
+              <span class="text-xs font-bold text-gray-600">${esc(title)}</span>
+            </div>
+            <div class="grid grid-cols-2 ${cols === 2 ? '' : 'sm:grid-cols-3'} gap-x-4 gap-y-3.5">
+              ${fields.join('')}
+            </div>
           </div>
         </div>`;
     }
 
     function airInfoBody(u) {
-      const money = v => {
-        const n = Number(v);
-        return v === '' || v == null || isNaN(n) ? '' : '฿' + n.toLocaleString();
-      };
       const coords = [u.Lat, u.Long].map(x => String(x == null ? '' : x).trim()).filter(Boolean).join(', ');
 
+      // เรียงจาก "ของที่ต้องดูบ่อยสุด" ลงไปหา "ของที่นานๆ ดูที"
+      // ตัวเครื่องกับทะเบียนทรัพย์สินคือสองอย่างที่คนเปิดดูจริงตอนอยู่หน้างาน
+      // ส่วนที่ตั้งมักรู้อยู่แล้วเพราะยืนอยู่ตรงนั้น จึงอยู่ล่างสุด
       return [
-        airInfoGroup('ตัวเครื่อง', 'ph-snowflake', [
+        airInfoGroup('ตัวเครื่อง', 'ph-snowflake', 'blue', [
           airInfoField('ยี่ห้อ', u.Brand),
           airInfoField('ขนาด (BTU)', u.BTU ? Number(u.BTU).toLocaleString() : ''),
-          airInfoField('ราคาล้างต่อรอบ', money(u.CleaningPricePerRound)),
+          airInfoField('', ''),
           airInfoField('รุ่นคอยล์เย็น (ในอาคาร)', u.ModelIndoor),
           airInfoField('รุ่นคอยล์ร้อน (นอกอาคาร)', u.ModelOutdoor)
         ]),
 
-        airInfoGroup('อายุและการรับประกัน', 'ph-timer', [
+        // บังคับ 2 คอลัมน์ ให้ Asset กับ S/N ของคอยล์เดียวกันอยู่บรรทัดเดียวกัน
+        airInfoGroup('ทะเบียนทรัพย์สิน', 'ph-barcode', 'lilac', [
+          airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset, { mono: true }),
+          airInfoField('Indoor S/N', u.IndoorSN, { mono: true }),
+          airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset, { mono: true }),
+          airInfoField('Outdoor S/N', u.OutdoorSN, { mono: true })
+        ], 2),
+
+        airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
           airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
           airInfoField('อายุการใช้งาน', ageCell(u.InstallDate), { html: true }),
           airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
         ]),
 
-        // บังคับ 2 คอลัมน์ ให้ Asset กับ S/N ของคอยล์เดียวกันอยู่บรรทัดเดียวกัน
-        airInfoGroup('ทะเบียนทรัพย์สิน', 'ph-barcode', [
-          airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset),
-          airInfoField('Indoor S/N', u.IndoorSN),
-          airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset),
-          airInfoField('Outdoor S/N', u.OutdoorSN)
-        ], 2),
-
-        airInfoGroup('ที่ตั้ง', 'ph-map-pin', [
+        airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
           airInfoField('ภูมิภาค', u.Region),
           airInfoField('จังหวัด', u.Province),
           airInfoField('ประเภทสถานที่', u.LocationType),
@@ -2272,9 +2296,9 @@
           airInfoField('ที่อยู่', u.Address, { wide: true })
         ]),
 
-        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', [airInfoField('', u.Note, { wide: true })]) : '',
+        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', 'aqua', [airInfoField('', u.Note, { wide: true })]) : '',
 
-        `<p class="text-[11px] text-gray-400 text-right">
+        `<p class="text-[11px] text-gray-400 text-right mt-3">
            แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
          </p>`
       ].join('');
