@@ -133,3 +133,67 @@ test('แปลงไปกลับต้องได้ค่าเดิม�
     assert.equal(thaiToIso(isoToThai(iso)), iso, 'ค่า ' + iso);
   }
 });
+
+/* ==================== อายุการใช้งานของเครื่อง ==================== */
+
+const unitAge = extract('unitAge');
+
+/** วันที่อ้างอิงคงที่ เพื่อให้ผลลัพธ์ไม่เปลี่ยนตามวันที่รันเทสต์ */
+const NOW = new Date(2026, 8, 7);   // 7 ก.ย. 2026
+
+test('ครบปีพอดี ต้องได้ 1 ปี', () => {
+  // ตัวอย่างที่ผู้ใช้ยกมา: ติดตั้ง 7/9/2025 วันนี้ 7/9/2026
+  assert.equal(unitAge('2025-09-07', NOW).text, '1 ปี');
+  assert.equal(unitAge('2025-09-07', NOW).years, 1);
+});
+
+test('ครบหลายปีพอดี', () => {
+  assert.equal(unitAge('2020-09-07', NOW).text, '6 ปี');
+  assert.equal(unitAge('2016-09-07', NOW).text, '10 ปี');
+});
+
+test('ปีกับเดือนปนกัน', () => {
+  assert.equal(unitAge('2025-06-07', NOW).text, '1 ปี 3 เดือน');
+  assert.equal(unitAge('2020-03-15', NOW).text, '6 ปี 5 เดือน');
+});
+
+test('ยังไม่ถึงปี ให้บอกเป็นเดือน', () => {
+  assert.equal(unitAge('2026-06-07', NOW).text, '3 เดือน');
+  assert.equal(unitAge('2026-08-07', NOW).text, '1 เดือน');
+});
+
+test('ยังไม่ถึงเดือน ต้องไม่ขึ้นว่า 0 เดือน', () => {
+  assert.equal(unitAge('2026-09-01', NOW).text, 'ไม่ถึง 1 เดือน');
+  assert.equal(unitAge('2026-09-07', NOW).text, 'ไม่ถึง 1 เดือน', 'ติดตั้งวันนี้');
+});
+
+test('ยังไม่ถึงวันครบรอบของเดือน ต้องยังไม่นับเดือนนั้น', () => {
+  // ติดตั้งวันที่ 20 แต่วันนี้วันที่ 7 ยังไม่ถึงวันครบรอบ
+  assert.equal(unitAge('2025-09-20', NOW).text, '11 เดือน', 'ยังไม่ครบปี');
+  assert.equal(unitAge('2025-09-06', NOW).text, '1 ปี', 'เลยวันครบรอบมาแล้ว');
+});
+
+test('เกณฑ์ควรเปลี่ยนต้องตรงกับแดชบอร์ดที่ใช้ 8 ปี', () => {
+  assert.equal(unitAge('2018-09-08', NOW).isOld, false, '7 ปี 11 เดือน ยังไม่ถึงเกณฑ์');
+  assert.equal(unitAge('2018-09-07', NOW).isOld, true, 'ครบ 8 ปีพอดี');
+  assert.equal(unitAge('2010-01-01', NOW).isOld, true);
+});
+
+test('ยังไม่ได้กรอกวันติดตั้ง ต้องคืน null ไม่ใช่เดาเป็นศูนย์', () => {
+  // ถ้าคืน 0 ปี จะแยกไม่ออกระหว่าง "เครื่องใหม่" กับ "ยังไม่มีใครกรอกข้อมูล"
+  assert.equal(unitAge('', NOW), null);
+  assert.equal(unitAge(null, NOW), null);
+  assert.equal(unitAge('ไม่ทราบ', NOW), null);
+});
+
+test('วันติดตั้งเป็นอนาคต ต้องบอกให้รู้ ไม่ใช่คำนวณเป็นค่าติดลบ', () => {
+  const a = unitAge('2027-01-01', NOW);
+  assert.equal(a.future, true);
+  assert.equal(a.isOld, false);
+});
+
+test('นับแบบปฏิทินจริง ไม่ใช่เอาจำนวนวันมาหาร 365', () => {
+  // ช่วง 2020-2024 มีวันอธิกสุรทิน 1 วัน ถ้าหารด้วย 365 จะได้ 3 ปี 11 เดือน
+  const a = unitAge('2020-02-29', new Date(2024, 1, 29));
+  assert.equal(a.text, '4 ปี', 'ได้ ' + a.text);
+});
