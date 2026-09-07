@@ -2213,14 +2213,9 @@
       // ตอนเป็น 2 คอลัมน์ไม่ต้องใช้ เพราะจับคู่ลงตัวอยู่แล้ว ถ้าใส่ไว้จะเหลือช่องโหว่
       if (!label && !v) return '<div class="hidden sm:block"></div>';
 
-      // ตัวเลขทะเบียน/ซีเรียลใช้ฟอนต์ความกว้างเท่ากัน เพราะคนต้องเอาไปเทียบกับสติกเกอร์ที่ตัวเครื่อง
-      // ฟอนต์ธรรมดาทำให้ 0 กับ O และ 1 กับ l ดูเหมือนกันจนอ่านผิด
-      const valueCls = opts.mono
-        ? 'text-[13px] font-mono tracking-tight text-gray-800 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 inline-block'
-        : 'text-sm font-semibold text-gray-800';
-
+      // ทุกช่องใช้ตัวหนังสือแบบเดียวกันหมด จะได้อ่านรวดเดียวไม่สะดุด
       const shown = v
-        ? `<span class="${opts.html ? 'text-sm font-semibold text-gray-800' : valueCls}">${opts.html ? v : esc(v)}</span>`
+        ? `<span class="text-sm font-semibold text-gray-800">${opts.html ? v : esc(v)}</span>`
         : '<span class="text-sm text-gray-300">—</span>';
 
       return `
@@ -2274,10 +2269,10 @@
 
         // บังคับ 2 คอลัมน์ ให้ Asset กับ S/N ของคอยล์เดียวกันอยู่บรรทัดเดียวกัน
         airInfoGroup('ทะเบียนทรัพย์สิน', 'ph-barcode', 'lilac', [
-          airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset, { mono: true }),
-          airInfoField('Indoor S/N', u.IndoorSN, { mono: true }),
-          airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset, { mono: true }),
-          airInfoField('Outdoor S/N', u.OutdoorSN, { mono: true })
+          airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset),
+          airInfoField('Indoor S/N', u.IndoorSN),
+          airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset),
+          airInfoField('Outdoor S/N', u.OutdoorSN)
         ], 2),
 
         airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
