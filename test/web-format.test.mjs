@@ -21,12 +21,26 @@ const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
 // ถ้าเอาแค่ก้อนแรกจะได้ก้อนนั้นแทนโค้ดหลัก แล้วหาฟังก์ชันไม่เจอ
 const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
 
-/** ดึงฟังก์ชันชื่อที่ระบุออกมาจากโค้ดหน้าเว็บ แล้วทำให้เรียกใช้ได้ */
-function extract(name) {
+/** โค้ดของฟังก์ชันชื่อที่ระบุ ตามที่เขียนไว้จริงในหน้าเว็บ */
+function sourceOf(name) {
   const re = new RegExp(String.raw`function ${name}\([^)]*\)[\s\S]*?\n    \}`);
   const src = js.match(re);
   assert.ok(src, `หาฟังก์ชัน ${name} ในหน้าเว็บไม่เจอ`);
-  return new Function('return ' + src[0])();
+  return src[0];
+}
+
+/** ดึงฟังก์ชันชื่อที่ระบุออกมาจากโค้ดหน้าเว็บ แล้วทำให้เรียกใช้ได้ */
+function extract(name) {
+  return new Function('return ' + sourceOf(name))();
+}
+
+/**
+ * ดึงหลายฟังก์ชันมาไว้ในขอบเขตเดียวกัน สำหรับฟังก์ชันที่เรียกฟังก์ชันอื่นต่อ
+ * (extract ทีละตัวจะได้ฟังก์ชันที่มองไม่เห็นตัวอื่นเลย แล้วพังตอนเรียก)
+ */
+function extractAll(...names) {
+  const body = names.map(sourceOf).join('\n');
+  return new Function(body + '\nreturn { ' + names.join(', ') + ' };')();
 }
 
 const fmtDate = extract('fmtDate');
@@ -196,4 +210,38 @@ test('นับแบบปฏิทินจริง ไม่ใช่เอ�
   // ช่วง 2020-2024 มีวันอธิกสุรทิน 1 วัน ถ้าหารด้วย 365 จะได้ 3 ปี 11 เดือน
   const a = unitAge('2020-02-29', new Date(2024, 1, 29));
   assert.equal(a.text, '4 ปี', 'ได้ ' + a.text);
+});
+
+/* ============ ตัวกรอง "เครื่องที่ควรเปลี่ยน" จากการ์ดบนแดชบอร์ด ============ */
+
+const { isOldUnit } = extractAll('unitAge', 'isOldUnit');
+
+test('ตัวกรองเครื่องเก่า ใช้เกณฑ์เดียวกับป้ายสีแดงในตาราง', () => {
+  assert.equal(isOldUnit({ InstallDate: '2016-09-07' }, NOW), true, 'ครบ 10 ปี');
+  assert.equal(isOldUnit({ InstallDate: '2018-09-07' }, NOW), true, 'ครบ 8 ปีพอดี');
+  assert.equal(isOldUnit({ InstallDate: '2018-09-08' }, NOW), false, '7 ปี 11 เดือน');
+});
+
+test('เครื่องที่ยังไม่ได้กรอกวันติดตั้ง ต้องไม่ถูกนับว่าเก่า', () => {
+  // ไม่รู้อายุ ไม่ใช่ "อายุเยอะ" — ถ้านับเข้ามาด้วย ตัวเลขจะไม่ตรงกับการ์ดบนแดชบอร์ด
+  assert.equal(isOldUnit({ InstallDate: '' }, NOW), false);
+  assert.equal(isOldUnit({ InstallDate: null }, NOW), false);
+  assert.equal(isOldUnit({}, NOW), false);
+  assert.equal(isOldUnit(null, NOW), false, 'แถวเสียก็ต้องไม่พัง');
+});
+
+test('วันติดตั้งเป็นอนาคต ต้องไม่ติดตัวกรองเครื่องเก่า', () => {
+  assert.equal(isOldUnit({ InstallDate: '2030-01-01' }, NOW), false);
+});
+
+test('ส่งเป็น callback ของ filter ตรงๆ ได้ ไม่ต้องห่อ', () => {
+  // filter ยัด index มาเป็นอาร์กิวเมนต์ที่สอง ซึ่งตรงกับพารามิเตอร์วันอ้างอิงพอดี
+  // ถ้าไม่เช็คชนิดก่อนใช้ จะพังทันทีที่เขียน list.filter(isOldUnit) แบบธรรมชาติที่สุด
+  const list = [
+    { AirCode: 'A', InstallDate: '2016-09-07' },   // เก่า
+    { AirCode: 'B', InstallDate: '2024-09-07' },   // ใหม่
+    { AirCode: 'C', InstallDate: '' },             // ไม่รู้
+    { AirCode: 'D', InstallDate: '2000-01-01' }    // เก่ามาก
+  ];
+  assert.deepEqual(list.filter(isOldUnit).map(a => a.AirCode), ['A', 'D']);
 });

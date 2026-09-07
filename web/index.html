@@ -482,6 +482,8 @@
           </div>
         </div>
 
+        <div id="airAgeFilterBar" class="hidden mb-4"></div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="airTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -971,6 +973,7 @@
     // ถ้าตั้งค่าช่องค้นหาและกรองตารางไว้ก่อน พอโหลดเสร็จมันจะรีเซ็ตทับกลับเป็นว่างเปล่า
     // จึงต้องฝากค่าไว้ตรงนี้ ให้ loadAirList/loadHistory ไปหยิบไปใช้เองหลังโหลดเสร็จ
     let pendingAirSearch = null;
+    let pendingAirAgeFilter = false;
     let pendingHistorySearch = null;
     let currentConfig = {};
     let currentYear = null;
@@ -1083,7 +1086,9 @@
       if (!m) return null;
 
       const inst = new Date(+m[1], +m[2] - 1, +m[3]);
-      const ref = now ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : (() => {
+      // เช็ค instanceof ไม่ใช่แค่ว่ามีค่า เพราะฟังก์ชันตระกูลนี้ถูกส่งเป็น callback ของ
+      // map/filter ได้ ซึ่งจะยัด index (ตัวเลข) มาเป็นอาร์กิวเมนต์ที่สองแล้วพังตรง now.getFullYear()
+      const ref = now instanceof Date ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : (() => {
         const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate());
       })();
 
@@ -1114,6 +1119,20 @@
      * ไม่ใช่ขีดเปล่าๆ เพราะขีดทำให้เข้าใจว่าเครื่องใหม่หรือระบบคำนวณไม่ได้
      * ทั้งที่จริงคือยังไม่มีใครกรอกข้อมูลเข้ามา ซึ่งเป็นงานที่ต้องไปตาม
      */
+    /**
+     * เครื่องนี้ถึงเกณฑ์ควรเปลี่ยนหรือยัง
+     *
+     * แยกออกมาเพราะใช้สองที่: ตัวกรองในหน้ารายการเครื่อง กับป้ายสีแดงในคอลัมน์อายุ
+     * ถ้าเขียนเงื่อนไขซ้ำสองที่ วันหนึ่งแก้เกณฑ์ที่เดียวแล้วอีกที่จะเพี้ยนตาม
+     * เครื่องที่ยังไม่ได้กรอกวันติดตั้งถือว่าไม่ถึงเกณฑ์ เพราะไม่รู้อายุจริง
+     *
+     * รับวันอ้างอิงได้เหมือน unitAge เพื่อให้เทสต์ตรึงวันได้ ปกติไม่ต้องส่ง
+     */
+    function isOldUnit(a, now) {
+      const age = unitAge(a && a.InstallDate, now);
+      return !!(age && age.isOld);
+    }
+
     function ageCell(installDate) {
       const a = unitAge(installDate);
       if (!a) return '<span class="text-gray-300 text-xs italic" title="ยังไม่ได้กรอกวันติดตั้ง">ยังไม่ระบุ</span>';
@@ -1832,7 +1851,8 @@
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
         { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'blue' },
-        { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose' }
+        { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose',
+          action: 'goToOldUnits()', hint: 'ดูรายการเครื่องที่อายุ 8 ปีขึ้นไป' }
       ];
       if (s.latestPlanSummary) {
         cards.push({
@@ -1856,22 +1876,30 @@
       const dashCardsEl = document.getElementById('dashCards');
       dashCardsEl.className = 'flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3 lg:grid-cols-' + cards.length;
 
-      dashCardsEl.innerHTML = cards.map(c => `
-        <div class="rounded-2xl shadow-sm p-5 flex flex-col justify-between relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md cursor-default"
-             style="background:var(--p-${c.tone}-bg); border:1px solid var(--p-card-border)">
+      // การ์ดใบที่กดได้ต้องเป็น <button> จริงๆ ไม่ใช่ div ที่แปะ onclick
+      // เพราะ button โฟกัสด้วยปุ่ม Tab และกด Enter/Space ได้เองโดยไม่ต้องเขียนเพิ่ม
+      dashCardsEl.innerHTML = cards.map(c => {
+        const body = `
           <div class="flex justify-between items-start mb-4 relative z-10">
             <div class="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center flex-shrink-0"
                  style="background:var(--p-${c.tone}); color:#fff">
               <i class="ph ${c.icon} text-2xl"></i>
             </div>
+            ${c.action ? `<i class="ph ph-arrow-up-right text-lg" style="color:var(--p-${c.tone}-fg); opacity:.5"></i>` : ''}
           </div>
           <div class="relative z-10">
             <div class="text-3xl font-extrabold leading-none mb-1" style="color:var(--p-${c.tone}-fg)">${c.num}</div>
             <div class="text-sm text-slate-600 font-medium">${c.label}</div>
           </div>
-          <i class="ph-fill ${c.icon} absolute -right-4 -bottom-4 text-[100px]" style="color:var(--p-${c.tone}); opacity:.12"></i>
-        </div>
-      `).join('');
+          <i class="ph-fill ${c.icon} absolute -right-4 -bottom-4 text-[100px]" style="color:var(--p-${c.tone}); opacity:.12"></i>`;
+
+        const cls = 'w-full text-left rounded-2xl shadow-sm p-5 flex flex-col justify-between relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md';
+        const style = `background:var(--p-${c.tone}-bg); border:1px solid var(--p-card-border)`;
+
+        return c.action
+          ? `<button type="button" onclick="${c.action}" title="${esc(c.hint || '')}" class="${cls} cursor-pointer" style="${style}">${body}</button>`
+          : `<div class="${cls} cursor-default" style="${style}">${body}</div>`;
+      }).join('');
 
       document.getElementById('regionChart').innerHTML = renderBarChart(s.byRegion, false, 'blue');
       renderStatusDonut(s.byStatus);
@@ -2067,6 +2095,11 @@
     /* ============== 1. AIR LIST ============== */
     async function loadAirList() {
       currentAirList = (await call('getAirList')) || [];
+
+      // คำสั่งกรองที่ฝากมาจากหน้าอื่น ต้องอ่านหลังโหลดข้อมูลเสร็จ ด้วยเหตุผลเดียวกับ pendingAirSearch
+      airAgeFilter = pendingAirAgeFilter;
+      pendingAirAgeFilter = false;
+
       if (pendingAirSearch !== null) {
         const code = pendingAirSearch;
         pendingAirSearch = null;
@@ -2138,24 +2171,75 @@
       return page;
     }
 
-    function goToAirPage(p) { airPage = p; renderAirTable(airLastList); }
-    function goToHistoryPage(p) { historyPage = p; renderHistoryTable(historyLastQuery); }
-    function goToCleaningFormPage(p) { cleaningFormPage = p; renderCleaningFormTable(); }
+    // ต้องส่ง keepPage = true ไม่งั้นตัววาดตารางจะเด้งกลับหน้า 1 ทุกครั้งที่กดเปลี่ยนหน้า
+    function goToAirPage(p) { airPage = p; renderAirTable(airLastList, true); }
+    function goToHistoryPage(p) { historyPage = p; renderHistoryTable(historyLastQuery, true); }
+    function goToCleaningFormPage(p) { cleaningFormPage = p; renderCleaningFormTable(true); }
+
+    /**
+     * กรองให้เหลือเฉพาะเครื่องที่ถึงเกณฑ์ควรเปลี่ยน (false = ดูทั้งหมด)
+     *
+     * แยกจากช่องค้นหาเหมือนที่หน้าประวัติแยก historyUnitFilter ออกจากช่องค้นหา
+     * เพราะเป็นคนละความหมายกัน และอายุไม่ใช่ข้อความที่พิมพ์ค้นหาได้
+     * ใช้ unitAge() ตัวเดียวกับที่วาดคอลัมน์อายุ ตัวเลขสองที่จึงตรงกันเสมอ
+     */
+    let airAgeFilter = false;
+
+    function clearAirAgeFilter() {
+      airAgeFilter = false;
+      const box = document.getElementById('airSearch');
+      const q = box ? box.value.trim().toLowerCase() : '';
+      renderAirTable(currentAirList.filter(a => searchText(a).includes(q)));
+    }
+    window.clearAirAgeFilter = clearAirAgeFilter;
+
+    /** จากการ์ด "อายุ ≥ 8 ปี" บนแดชบอร์ด มาที่หน้ารายการเครื่องพร้อมกรองไว้ให้เลย */
+    function goToOldUnits() {
+      pendingAirAgeFilter = true;
+      document.querySelector('[data-tab="airlist"]').click();
+    }
+    window.goToOldUnits = goToOldUnits;
+
+    function renderAirAgeFilterBar() {
+      const bar = document.getElementById('airAgeFilterBar');
+      if (!bar) return;
+
+      if (!airAgeFilter) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+
+      bar.classList.remove('hidden');
+      bar.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5 text-sm">
+          <i class="ph-fill ph-funnel text-rose-600"></i>
+          <span class="text-gray-700">กำลังดูเฉพาะเครื่องที่</span>
+          <span class="font-semibold text-rose-700">อายุ 8 ปีขึ้นไป (ควรเปลี่ยน)</span>
+          <button onclick="clearAirAgeFilter()"
+                  class="ml-auto inline-flex items-center gap-1 text-gray-600 hover:text-white hover:bg-rose-600 border border-gray-300 hover:border-rose-600 rounded-md px-2.5 py-1 transition">
+            <i class="ph ph-x"></i> ดูเครื่องทั้งหมด
+          </button>
+        </div>`;
+    }
 
     let airLastList = [];
     function renderAirTable(list, keepPage) {
       buildNodeLookup();
-      airLastList = list || [];
+
+      // กรองอายุทับผลของช่องค้นหาอีกชั้น ทั้งสองอย่างจึงใช้พร้อมกันได้
+      let rows = list || [];
+      if (airAgeFilter) rows = rows.filter(isOldUnit);
+      renderAirAgeFilterBar();
+      airLastList = rows;
       // เปลี่ยนคำค้นหาหรือโหลดข้อมูลใหม่ ให้กลับไปหน้าแรกเสมอ
       // ยกเว้นตอนกดปุ่มเปลี่ยนหน้า ซึ่งต้องคงหน้าที่กดไว้
       if (!keepPage) airPage = 1;
       airPage = clampPage(airPage, airLastList.length);
       const tb = document.querySelector('#airTable tbody');
-      if(list.length === 0) {
-        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400"><i class="ph ph-wind text-4xl mb-2 block"></i>ไม่พบข้อมูล</td></tr>`;
+      if(airLastList.length === 0) {
+        // บอกให้ตรงว่าไม่เจอเพราะตัวกรอง ไม่งั้นจะเข้าใจว่าไม่มีข้อมูลในระบบเลย
+        const why = airAgeFilter ? 'ไม่มีเครื่องที่อายุถึง 8 ปี' : 'ไม่พบข้อมูล';
+        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400"><i class="ph ph-wind text-4xl mb-2 block"></i>${why}</td></tr>`;
         renderTablePager('airPaginationBar', 0, 1, 'goToAirPage');
       } else {
-        tb.innerHTML = list.slice((airPage - 1) * TABLE_PAGE_SIZE, airPage * TABLE_PAGE_SIZE).map(a => {
+        tb.innerHTML = airLastList.slice((airPage - 1) * TABLE_PAGE_SIZE, airPage * TABLE_PAGE_SIZE).map(a => {
           // เม้าส์ชี้รหัสเครื่องแล้วโชว์ Asset/SN ทั้ง Indoor และ Outdoor โดยไม่ต้องเปิด modal
           const snTip = `Indoor Asset: ${a.IndoorAsset || '-'}\nIndoor SN: ${a.IndoorSN || '-'}\nOutdoor Asset: ${a.OutdoorAsset || '-'}\nOutdoor SN: ${a.OutdoorSN || '-'}`;
           return `
