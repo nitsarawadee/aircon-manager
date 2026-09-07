@@ -1065,6 +1065,193 @@
       return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
     }
 
+    /* ============================================================
+       ช่องกรอกวันที่แบบ วัน/เดือน/ปี
+       ============================================================
+       ทำไมต้องทำเอง: ช่อง <input type="date"> ของเบราว์เซอร์
+       แสดงรูปแบบตามภาษาที่ผู้ใช้ตั้งไว้ในเครื่อง ไม่ใช่ตามที่เว็บกำหนด
+       เครื่องที่ตั้งเป็นอังกฤษจึงเห็น mm/dd/yyyy ส่วนเครื่องที่ตั้งเป็นไทยเห็นอีกแบบ
+       เว็บสั่งไม่ได้เลย แม้จะใส่ lang="th" ไว้แล้วก็ตาม (ทดสอบแล้ว)
+
+       ผลคือคนละเครื่องเห็นคนละรูปแบบ ซึ่งอันตรายกับวันที่
+       เพราะ 03/09 อ่านได้ทั้ง 3 ก.ย. และ 9 มี.ค. โดยไม่มีอะไรบอก
+
+       วิธีแก้: ทำช่องข้อความเองที่บังคับเป็น วัน/เดือน/ปี เหมือนกันทุกเครื่อง
+       โดยเก็บค่าจริงไว้ในช่องซ่อนที่ใช้ id เดิม
+       โค้ดส่วนอื่นที่อ่านค่าด้วย getElementById(id).value จึงไม่ต้องแก้อะไรเลย */
+
+    /** แปลงค่าที่เก็บ (ปปปป-ดด-วว) เป็นข้อความที่คนอ่าน (วว/ดด/ปปปป) */
+    function isoToThai(iso) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '').trim());
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+    }
+
+    /**
+     * แปลงข้อความที่คนพิมพ์ กลับเป็นค่าที่เก็บ คืนค่าว่างถ้าใช้ไม่ได้
+     *
+     * รับปีพุทธศักราชด้วย เพราะคนไทยพิมพ์ 2569 ติดมือ
+     * ถ้าไม่ดักไว้ ระบบจะบันทึกเป็นปี 2569 จริงๆ คือเลยไปอีก 543 ปี
+     * แล้วรายงานทุกหน้าจะเพี้ยนโดยไม่มีใครรู้ว่าเพราะอะไร
+     */
+    function thaiToIso(text) {
+      const m = /^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})$/.exec(String(text || '').trim());
+      if (!m) return '';
+
+      const d = +m[1], mo = +m[2];
+      let y = +m[3];
+      if (y > 2400) y -= 543;   // พิมพ์เป็นปีพุทธศักราชมา แปลงให้เป็นคริสต์ศักราช
+
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+
+      // ตรวจว่ามีวันนั้นอยู่จริง กัน 31 กุมภาพันธ์ หรือ 31 เมษายน
+      const dt = new Date(y, mo - 1, d);
+      if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+
+      const p = n => String(n).padStart(2, '0');
+      return y + '-' + p(mo) + '-' + p(d);
+    }
+
+    /** สร้าง HTML ของช่องกรอกวันที่ ใช้แทน <input type="date"> */
+    function dateField(id, iso, extraClass) {
+      const cls = extraClass || 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none';
+      return `<div class="relative datefield">
+        <input type="hidden" id="${esc(id)}" value="${esc(iso || '')}">
+        <input type="text" inputmode="numeric" autocomplete="off" placeholder="วว/ดด/ปปปป"
+               value="${esc(isoToThai(iso))}" class="${cls} pr-9"
+               oninput="dfType(this)" onblur="dfCommit(this)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();dfCommit(this);}">
+        <button type="button" tabindex="-1" onclick="dfPicker(this)"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1153a1] p-0.5">
+          <i class="ph ph-calendar-blank"></i>
+        </button>
+      </div>`;
+    }
+
+    /** ใส่ขีดคั่นให้อัตโนมัติระหว่างพิมพ์ คนจะได้ไม่ต้องพิมพ์เอง */
+    function dfType(el) {
+      const digits = el.value.replace(/\D/g, '').slice(0, 8);
+      let out = digits.slice(0, 2);
+      if (digits.length > 2) out += '/' + digits.slice(2, 4);
+      if (digits.length > 4) out += '/' + digits.slice(4, 8);
+      el.value = out;
+      if (digits.length === 8) dfCommit(el);
+    }
+
+    /** ตรวจและเก็บค่าลงช่องซ่อน พร้อมบอกให้เห็นถ้าวันที่ใช้ไม่ได้ */
+    function dfCommit(el) {
+      const wrap = el.closest('.datefield');
+      const hidden = wrap.querySelector('input[type="hidden"]');
+      const text = el.value.trim();
+
+      if (!text) { hidden.value = ''; el.classList.remove('border-rose-400'); return; }
+
+      const iso = thaiToIso(text);
+      if (iso) {
+        hidden.value = iso;
+        el.value = isoToThai(iso);        // จัดรูปแบบให้เรียบร้อย เช่น 3/9/2026 เป็น 03/09/2026
+        el.classList.remove('border-rose-400');
+      } else {
+        // ไม่ล้างสิ่งที่พิมพ์ทิ้ง เพราะคนอาจพิมพ์ยังไม่จบ แค่ทำขอบแดงให้รู้ว่ายังไม่ผ่าน
+        hidden.value = '';
+        el.classList.add('border-rose-400');
+      }
+    }
+
+    /** ปฏิทินเล็กสำหรับเลือกวัน แทนปฏิทินของเบราว์เซอร์ที่เราคุมรูปแบบไม่ได้ */
+    function dfPicker(btn) {
+      const wrap = btn.closest('.datefield');
+      const open = wrap.querySelector('.df-pop');
+      if (open) { open.remove(); return; }
+
+      document.querySelectorAll('.df-pop').forEach(p => p.remove());
+
+      const hidden = wrap.querySelector('input[type="hidden"]');
+      const base = /^\d{4}-\d{2}-\d{2}$/.test(hidden.value) ? new Date(hidden.value + 'T00:00:00') : new Date();
+      wrap._y = base.getFullYear();
+      wrap._m = base.getMonth() + 1;
+
+      const pop = document.createElement('div');
+      pop.className = 'df-pop absolute z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-64';
+      pop.style.top = '100%'; pop.style.right = '0';
+      wrap.append(pop);
+      dfDraw(wrap);
+
+      // กดที่อื่นแล้วปิด ต้องรอให้จบรอบเหตุการณ์นี้ก่อน ไม่งั้นปิดทันทีที่เพิ่งเปิด
+      setTimeout(() => {
+        const close = e => {
+          if (!wrap.contains(e.target)) { pop.remove(); document.removeEventListener('mousedown', close); }
+        };
+        document.addEventListener('mousedown', close);
+      }, 0);
+    }
+
+    function dfShift(btn, delta) {
+      const wrap = btn.closest('.datefield');
+      let m = wrap._m + delta, y = wrap._y;
+      if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
+      wrap._m = m; wrap._y = y;
+      dfDraw(wrap);
+    }
+
+    function dfPick(btn, day) {
+      const wrap = btn.closest('.datefield');
+      const p = n => String(n).padStart(2, '0');
+      const iso = wrap._y + '-' + p(wrap._m) + '-' + p(day);
+      wrap.querySelector('input[type="hidden"]').value = iso;
+      const text = wrap.querySelector('input[type="text"]');
+      text.value = isoToThai(iso);
+      text.classList.remove('border-rose-400');
+      wrap.querySelector('.df-pop').remove();
+    }
+
+    function dfDraw(wrap) {
+      const pop = wrap.querySelector('.df-pop');
+      if (!pop) return;
+      const y = wrap._y, m = wrap._m;
+      const first = new Date(y, m - 1, 1).getDay();
+      const days = new Date(y, m, 0).getDate();
+      const cur = wrap.querySelector('input[type="hidden"]').value;
+      const today = new Date();
+
+      const cells = [];
+      for (let i = 0; i < first; i++) cells.push('<div></div>');
+      for (let d = 1; d <= days; d++) {
+        const p = n => String(n).padStart(2, '0');
+        const iso = y + '-' + p(m) + '-' + p(d);
+        const sel = iso === cur;
+        const isToday = today.getFullYear() === y && today.getMonth() + 1 === m && today.getDate() === d;
+        cells.push(`<button type="button" onclick="dfPick(this,${d})"
+          class="h-7 rounded text-xs ${sel ? 'bg-[#1153a1] text-white font-semibold'
+            : isToday ? 'border border-[#1153a1] text-[#1153a1] font-semibold' : 'hover:bg-gray-100 text-gray-700'}">${d}</button>`);
+      }
+
+      pop.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <button type="button" onclick="dfShift(this,-1)" class="p-1 rounded hover:bg-gray-100 text-gray-600"><i class="ph ph-caret-left"></i></button>
+          <div class="text-sm font-semibold text-gray-800">${TH_MONTHS[m - 1]} ${y}</div>
+          <button type="button" onclick="dfShift(this,1)" class="p-1 rounded hover:bg-gray-100 text-gray-600"><i class="ph ph-caret-right"></i></button>
+        </div>
+        <div class="grid grid-cols-7 gap-0.5 mb-1">
+          ${TH_DOW.map(d => `<div class="text-center text-[10px] text-gray-400 font-medium">${d}</div>`).join('')}
+        </div>
+        <div class="grid grid-cols-7 gap-0.5">${cells.join('')}</div>
+        <button type="button" class="df-today mt-2 w-full text-xs text-[#1153a1] hover:underline">วันนี้</button>`;
+
+      // ต้องเลือกด้วยคลาสเฉพาะ ห้ามใช้ button:last-child
+      // เพราะปุ่มเลื่อนเดือนถัดไปก็เป็นลูกตัวสุดท้ายของกล่องหัวเหมือนกัน
+      // และอยู่ก่อนในลำดับเอกสาร จึงถูกเลือกไปแทน ทำให้กดเลื่อนเดือนแล้วเด้งเป็นวันนี้
+      const todayBtn = pop.querySelector('.df-today');
+
+      // ปุ่ม "วันนี้" ต้องพาไปเดือนปัจจุบันก่อน ไม่งั้นจะเลือกวันที่ผิดเดือน
+      todayBtn.onclick = () => {
+        wrap._y = today.getFullYear(); wrap._m = today.getMonth() + 1;
+        dfPick(todayBtn, today.getDate());
+      };
+    }
+
+    window.dfType = dfType; window.dfCommit = dfCommit;
+    window.dfPicker = dfPicker; window.dfShift = dfShift; window.dfPick = dfPick;
+
     /**
      * ข้อความที่ใช้ค้นหาในตาราง
      *
@@ -2004,8 +2191,8 @@
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ</label><select id="f_Brand" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Brand, data.Brand)}</select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">BTU</label><input id="f_BTU" type="number" value="${esc(data.BTU)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label><select id="f_Status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Status, data.Status)}</select></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label><input type="date" id="f_InstallDate" value="${esc(data.InstallDate)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label><input type="date" id="f_WarrantyExpire" value="${esc(data.WarrantyExpire)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label>${dateField('f_InstallDate', data.InstallDate)}</div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label>${dateField('f_WarrantyExpire', data.WarrantyExpire)}</div>
 
                 <div class="md:col-span-3 pt-2 pb-2 border-b border-gray-100 mt-2"><h4 class="text-sm font-semibold text-[#1153a1] uppercase tracking-wider">สถานที่ตั้ง</h4></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">Region</label><input id="f_Region" value="${esc(data.Region)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
@@ -2168,9 +2355,9 @@
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">BTU</label>
                 <input id="r_BTU" type="number" value="${esc(data.BTU)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้งเครื่องใหม่</label>
-                <input type="date" id="r_InstallDate" value="${today}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
+                ${dateField('r_InstallDate', today, 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none')}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label>
-                <input type="date" id="r_WarrantyExpire" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
+                ${dateField('r_WarrantyExpire', '', 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none')}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N Indoor</label>
                 <input id="r_IndoorSN" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N Outdoor</label>
@@ -2786,8 +2973,8 @@
             </div>
             <div class="p-6 space-y-4">
               <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-xs font-medium text-gray-500 mb-1">แผนล้าง</label><input type="date" id="rp_plan" value="${esc(p['R'+r+'_PlanDate'])}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
-                <div><label class="block text-xs font-medium text-[#1153a1] mb-1">ดำเนินการ</label><input type="date" id="rp_actual" value="${esc(p['R'+r+'_ActualDate'])}" class="w-full rounded-lg border-blue-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-blue-50"></div>
+                <div><label class="block text-xs font-medium text-gray-500 mb-1">แผนล้าง</label>${dateField('rp_plan', p['R'+r+'_PlanDate'], 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none')}</div>
+                <div><label class="block text-xs font-medium text-[#1153a1] mb-1">ดำเนินการ</label>${dateField('rp_actual', p['R'+r+'_ActualDate'], 'w-full rounded-lg border-blue-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-blue-50')}</div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
                 <select id="rp_status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">
@@ -2943,9 +3130,9 @@
                   ${nodes.map(n => `<option value="${esc(n)}" ${n===curFilter?'selected':''}>${esc(n)}</option>`).join('')}
                 </select>
               </div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 1</label><input type="date" id="nd_r1" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 2</label><input type="date" id="nd_r2" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 3</label><input type="date" id="nd_r3" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 1</label>${dateField('nd_r1', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}</div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 2</label>${dateField('nd_r2', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}</div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">แผนล้าง รอบที่ 3</label>${dateField('nd_r3', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}</div>
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
@@ -3142,7 +3329,7 @@
                 </select>
               </div>
               <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ดำเนินการ <span class="text-red-500">*</span></label><input type="date" id="h_date" value="${new Date().toISOString().slice(0,10)}" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ดำเนินการ <span class="text-red-500">*</span></label>${dateField('h_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]')}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเหตุการณ์</label><select id="h_type" class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]">${opt(currentConfig.EventType)}</select></div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียด / อาการเสีย</label><textarea id="h_detail" rows="3" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></textarea></div>
@@ -3302,7 +3489,7 @@
                 <i class="ph ph-info text-lg shrink-0"></i><p>เมื่อกดบันทึก สถานะของแอร์ <b>${esc(data.AirCode)}</b> จะถูกเปลี่ยนกลับเป็น "ใช้งานปกติ" และข้อมูลจะถูกบันทึกลงหน้าประวัติให้อัตโนมัติ</p>
               </div>
               <input type="hidden" id="cr_air" value="${esc(data.AirCode)}">
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label><input type="date" id="cr_date" value="${new Date().toISOString().slice(0,10)}" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label>${dateField('cr_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500')}</div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียดการซ่อม / อะไหล่ที่เปลี่ยน</label><textarea id="cr_detail" rows="3" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm">อ้างอิงอาการเสีย: ${esc(data.Note)}</textarea></div>
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label><input type="number" id="cr_cost" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></div>
@@ -3715,7 +3902,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             <div class="grid grid-cols-3 gap-4">
               <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ <span class="text-red-500">*</span></label>
-                <input type="date" id="cf_date" value="${new Date().toISOString().slice(0,10)}" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
+                ${dateField('cf_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]')}</div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่ม</label>
                 <input type="time" id="cf_timeStart" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาสิ้นสุด</label>
@@ -4038,8 +4225,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             <div class="grid grid-cols-2 gap-3 mb-4">
               <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">วันที่ล้างจริง <span class="text-rose-500">*</span></label>
-                <input type="date" id="ap_date" value="${esc(p['R' + r + '_ActualDate'] || new Date().toISOString().slice(0, 10))}"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]">
+                ${dateField('ap_date', p['R' + r + '_ActualDate'] || new Date().toISOString().slice(0, 10), 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]')}
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">ผู้รับเหมา / ช่าง</label>
@@ -4830,8 +5016,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">วันที่ล้างจริง <span class="text-rose-500">*</span></label>
-          <input type="date" id="ad_date" value="${esc(new Date().toISOString().slice(0, 10))}"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]">
+          ${dateField('ad_date', new Date().toISOString().slice(0, 10), 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]')}
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อช่างผู้ล้าง</label>
