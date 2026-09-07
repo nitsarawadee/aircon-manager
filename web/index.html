@@ -1273,9 +1273,8 @@
 
       const pop = document.createElement('div');
       pop.className = 'df-pop absolute z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-72';
-      pop.style.top = '100%'; pop.style.right = '0';
       wrap.append(pop);
-      dfDraw(wrap);
+      dfDraw(wrap);   // dfDraw เรียก dfPlace ต่อ เพื่อจัดตำแหน่งหลังรู้ขนาดจริงแล้ว
 
       // กดที่อื่นแล้วปิด ต้องรอให้จบรอบเหตุการณ์นี้ก่อน ไม่งั้นปิดทันทีที่เพิ่งเปิด
       setTimeout(() => {
@@ -1336,6 +1335,59 @@
       wrap.querySelector('.df-pop').remove();
     }
 
+    /**
+     * ขอบเขตที่ป๊อปอัปโผล่ได้ คือกรอบของกล่องที่ตัดส่วนเกินทิ้งซึ่งใกล้ที่สุด
+     *
+     * หน้าต่างหลายอันในระบบตั้ง overflow-hidden ไว้เพื่อให้มุมโค้งไม่แหว่ง
+     * อะไรที่ล้นออกนอกหน้าต่างจึงถูกตัดหายไปเลย ไม่ใช่แค่เลยขอบจอ
+     * ถ้าวัดกับขอบจออย่างเดียว ปฏิทินจะดูเหมือนพอดีทั้งที่โดนตัดไปแล้วครึ่งหนึ่ง
+     */
+    function dfClipBounds(el) {
+      for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+        const st = getComputedStyle(n);
+        if (/(auto|scroll|hidden)/.test(st.overflowX) || /(auto|scroll|hidden)/.test(st.overflowY)) {
+          const r = n.getBoundingClientRect();
+          return { left: r.left, right: r.right };
+        }
+      }
+      return { left: 0, right: window.innerWidth };
+    }
+
+    /**
+     * วางปฏิทินให้อยู่ในกรอบเสมอ
+     *
+     * เดิมตรึงชิดขวาของช่องตายตัว ช่องที่แคบกว่าปฏิทินจึงมีส่วนยื่นไปทางซ้าย
+     * แล้วโดนขอบหน้าต่างตัดทิ้ง (เจอในหน้าต่างอัปเดตผลรอบล้าง ซึ่งช่องแคบกว่าปฏิทิน)
+     *
+     * ตอนนี้ตั้งต้นชิดซ้ายของช่อง ถ้าล้นขวาค่อยสลับไปชิดขวา
+     * ถ้ายังล้นซ้ายอีก (ช่องอยู่ริมซ้ายพอดี) ก็ดันเข้ามาให้พอดีขอบ
+     */
+    function dfPlace(wrap) {
+      const pop = wrap.querySelector('.df-pop');
+      if (!pop) return;
+
+      const M = 8;                       // เว้นจากขอบไว้หน่อย จะได้ไม่ดูติดกันเป๊ะ
+      pop.style.right = 'auto';
+      pop.style.left = '0px';
+
+      const f = wrap.getBoundingClientRect();
+      const b = dfClipBounds(wrap);
+      const w = pop.offsetWidth;
+
+      let left = 0;
+      if (f.left + w > b.right - M) left = f.width - w;        // ชิดขวาของช่องแทน
+      if (f.left + left < b.left + M) left = (b.left + M) - f.left;   // ยังล้นซ้าย ดันเข้ามา
+      pop.style.left = Math.round(left) + 'px';
+
+      // ล้นก้นจอและข้างบนมีที่มากกว่า ให้เปิดขึ้นบนแทน
+      const h = pop.offsetHeight;
+      const openUp = f.bottom + h > window.innerHeight - M && f.top - h > M;
+      pop.style.top = openUp ? 'auto' : '100%';
+      pop.style.bottom = openUp ? '100%' : 'auto';
+      pop.style.marginTop = openUp ? '0' : '';
+      pop.style.marginBottom = openUp ? '4px' : '0';
+    }
+
     function dfDraw(wrap) {
       const pop = wrap.querySelector('.df-pop');
       if (!pop) return;
@@ -1391,6 +1443,9 @@
         wrap._y = today.getFullYear(); wrap._m = today.getMonth() + 1;
         dfPick(todayBtn, today.getDate());
       };
+
+      // จัดตำแหน่งทุกครั้งที่วาดใหม่ เพราะบางเดือนมี 6 สัปดาห์ ความสูงจึงไม่เท่ากัน
+      dfPlace(wrap);
     }
 
     window.dfType = dfType; window.dfCommit = dfCommit;
