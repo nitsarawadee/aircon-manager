@@ -469,6 +469,12 @@
             <p class="text-sm text-gray-500">จัดการข้อมูล Master Data ของเครื่องทั้งหมด</p>
           </div>
           <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+                <i class="ph ph-map-pin text-gray-500"></i>
+                <select id="airRegionFilter" onchange="refreshAirTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุก Region</option>
+                </select>
+              </div>
             <div class="relative flex-1 sm:w-64">
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm">
@@ -520,6 +526,13 @@
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
                 <i class="ph ph-calendar-blank text-gray-500"></i>
                 <select id="planYearSelect" onchange="loadPlan()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700"></select>
+              </div>
+
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-map-pin text-gray-500"></i>
+                <select id="planRegionFilter" onchange="renderPlanTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุก Region</option>
+                </select>
               </div>
 
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
@@ -604,6 +617,12 @@
             <p class="text-sm text-gray-500">บันทึกการซ่อมบำรุงและเหตุการณ์ต่างๆ</p>
           </div>
           <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+                <i class="ph ph-map-pin text-gray-500"></i>
+                <select id="historyRegionFilter" onchange="refreshHistoryTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุก Region</option>
+                </select>
+              </div>
              <div class="relative flex-1 sm:w-64">
                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                <input type="text" id="historySearch" placeholder="ค้นหารหัสเครื่อง, ช่าง, เหตุการณ์..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -1075,6 +1094,32 @@
       const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v).trim());
       return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
     }
+
+    /**
+     * เติมตัวเลือกภูมิภาคลงในช่องกรอง แล้วคืนค่าที่กำลังเลือกอยู่
+     *
+     * สร้างรายการจากข้อมูลที่มีจริง ไม่ใช่จากรายการตั้งค่า
+     * เพราะรายการตั้งค่าอาจมีภูมิภาคที่ยังไม่มีเครื่องอยู่เลย เลือกแล้วได้ตารางเปล่า
+     * และผู้ใช้ที่ไม่ใช่ Admin เห็นข้อมูลแค่บางภูมิภาค ก็ไม่ควรมีตัวเลือกที่กดแล้วว่าง
+     *
+     * ต้องคงค่าที่เลือกไว้ตอนวาดใหม่ ไม่งั้นพิมพ์ค้นหาทีนึงตัวกรองจะหลุดทุกครั้ง
+     */
+    function syncRegionFilter(selectId, values) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return '';
+
+      const list = [...new Set((values || []).map(v => String(v == null ? '' : v).trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'th', { numeric: true }));
+
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">ทุก Region</option>' +
+        list.map(r => `<option value="${esc(r)}">${esc(regionLabel(r))}</option>`).join('');
+      sel.value = list.includes(cur) ? cur : '';
+      return sel.value;
+    }
+
+    /** เทียบภูมิภาคแบบไม่สนช่องว่างหน้าหลัง (ข้อมูลบางแถวมีช่องว่างติดมา) */
+    const sameRegion = (a, b) => String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim();
 
     /**
      * ชื่อภูมิภาคสำหรับแสดงผล
@@ -2668,11 +2713,17 @@
      */
     let airAgeFilter = false;
 
-    function clearAirAgeFilter() {
-      airAgeFilter = false;
+    /** วาดตารางเครื่องใหม่ตามตัวกรองที่ตั้งไว้ตอนนี้ ใช้ร่วมกันทุกที่ที่ตัวกรองเปลี่ยน */
+    function refreshAirTable() {
       const box = document.getElementById('airSearch');
       const q = box ? box.value.trim().toLowerCase() : '';
-      renderAirTable(currentAirList.filter(a => searchText(a).includes(q)));
+      renderAirTable((currentAirList || []).filter(a => searchText(a).includes(q)));
+    }
+    window.refreshAirTable = refreshAirTable;
+
+    function clearAirAgeFilter() {
+      airAgeFilter = false;
+      refreshAirTable();
     }
     window.clearAirAgeFilter = clearAirAgeFilter;
 
@@ -2706,8 +2757,14 @@
     function renderAirTable(list, keepPage) {
       buildNodeLookup();
 
-      // กรองอายุทับผลของช่องค้นหาอีกชั้น ทั้งสองอย่างจึงใช้พร้อมกันได้
+      // ตัวกรองทุกตัวซ้อนทับกันได้ ค้นหา + ภูมิภาค + อายุ ใช้พร้อมกันได้หมด
       let rows = list || [];
+
+      // สร้างตัวเลือกจากรายการเต็ม ไม่ใช่จากผลที่กรองแล้ว
+      // ไม่งั้นพอเลือกภูมิภาคหนึ่ง ตัวเลือกภูมิภาคอื่นจะหายไปจนกลับไปเลือกไม่ได้
+      const region = syncRegionFilter('airRegionFilter', (currentAirList || []).map(a => a.Region));
+      if (region) rows = rows.filter(a => sameRegion(a.Region, region));
+
       if (airAgeFilter) rows = rows.filter(isOldUnit);
       renderAirAgeFilterBar();
       airLastList = rows;
@@ -2793,10 +2850,7 @@
       return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${esc(t)}</span>`;
     }
 
-    document.getElementById('airSearch').addEventListener('input', e => {
-      const q = e.target.value.trim().toLowerCase();
-      renderAirTable(currentAirList.filter(a => searchText(a).includes(q)));
-    });
+    document.getElementById('airSearch').addEventListener('input', () => refreshAirTable());
 
     function openAirModal(data = {}) {
       const opt = (arr, val) => (arr || []).map(o => `<option value="${esc(o)}" ${o===val?'selected':''}>${esc(o)}</option>`).join('');
@@ -3444,12 +3498,6 @@
       if (!currentYear) return;
       currentPlan = (await call('getCleaningPlan', currentYear)) || [];
       
-      const nodes = [...new Set(currentPlan.map(p => p.NodeName).filter(n => n))].sort();
-      const nodeSel = document.getElementById('planNodeFilter');
-      const curFilter = nodeSel.value;
-      nodeSel.innerHTML = '<option value="">-- ดูทุก Node --</option>' + nodes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-      if (nodes.includes(curFilter)) nodeSel.value = curFilter;
-
       const searchInput = document.getElementById('planSearch');
       if(searchInput) searchInput.value = '';
       planLastQuery = '';
@@ -3465,9 +3513,14 @@
       if (!keepPage) planPage = 1;
 
       const tb = document.querySelector('#planTable tbody');
-      const filterNode = document.getElementById('planNodeFilter').value;
 
-      let displayPlan = currentPlan;
+      // กรองภูมิภาคก่อน แล้วให้ตัวเลือก Node เหลือเฉพาะ Node ในภูมิภาคนั้น
+      // ทั้งระบบมี 237 Node ถ้าไม่หดตามภูมิภาค ก็ยังต้องรู้เองอยู่ดีว่า Node ไหนอยู่ภาคไหน
+      const region = syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
+      let displayPlan = currentPlan || [];
+      if (region) displayPlan = displayPlan.filter(p => sameRegion(p.Region, region));
+
+      const filterNode = syncPlanNodeFilter(displayPlan);
       if (filterNode) displayPlan = displayPlan.filter(p => p.NodeName === filterNode);
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -3549,6 +3602,24 @@
             ถัดไป <i class="ph ph-caret-right"></i>
           </button>
         </div>`;
+    }
+
+    /**
+     * เติมตัวเลือก Node ให้เหลือเฉพาะที่อยู่ในผลลัพธ์ตอนนี้ แล้วคืนค่าที่เลือกอยู่
+     *
+     * ถ้า Node ที่เลือกไว้ไม่อยู่ในภูมิภาคที่เพิ่งเลือก ต้องล้างทิ้ง
+     * ไม่งั้นจะได้ตารางเปล่าโดยไม่รู้ว่าเพราะตัวกรองสองอันขัดกันเอง
+     */
+    function syncPlanNodeFilter(rows) {
+      const sel = document.getElementById('planNodeFilter');
+      if (!sel) return '';
+
+      const nodes = [...new Set((rows || []).map(p => p.NodeName).filter(Boolean))].sort();
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">-- ดูทุก Node --</option>' +
+        nodes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      sel.value = nodes.includes(cur) ? cur : '';
+      return sel.value;
     }
 
     function goToPlanPage(p) {
@@ -3911,6 +3982,9 @@
       }
       renderHistoryUnitFilterBar();
 
+      const region = syncRegionFilter('historyRegionFilter', (currentHistory || []).map(h => h.Region));
+      if (region) displayHistory = displayHistory.filter(h => sameRegion(h.Region, region));
+
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         displayHistory = displayHistory.filter(h => searchText(h).includes(q));
@@ -3920,7 +3994,9 @@
         // บอกให้ตรงว่าไม่พบเพราะอะไร ไม่งั้นคนจะเข้าใจว่าระบบเสีย
         const why = historyUnitFilter && !searchQuery
           ? `เครื่อง ${esc(historyUnitFilter)} ยังไม่มีประวัติที่บันทึกไว้`
-          : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
+          : region && !searchQuery
+            ? `${esc(regionLabel(region))} ยังไม่มีประวัติที่บันทึกไว้`
+            : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
         tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}</td></tr>`;
         renderTablePager('historyPaginationBar', 0, 1, 'goToHistoryPage');
         lockViewOnlySection('history');
@@ -3947,9 +4023,14 @@
       lockViewOnlySection('history');
     }
 
-    document.getElementById('historySearch').addEventListener('input', e => {
-      renderHistoryTable(e.target.value.trim());
-    });
+    /** วาดตารางประวัติใหม่ตามตัวกรองที่ตั้งไว้ตอนนี้ */
+    function refreshHistoryTable() {
+      const box = document.getElementById('historySearch');
+      renderHistoryTable(box ? box.value.trim() : '');
+    }
+    window.refreshHistoryTable = refreshHistoryTable;
+
+    document.getElementById('historySearch').addEventListener('input', () => refreshHistoryTable());
 
     function openHistoryModal() {
       const opt = (arr) => (arr || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');

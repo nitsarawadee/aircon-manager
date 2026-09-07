@@ -41,10 +41,20 @@ export async function getCleaningPlan(ctx, year) {
   await ctx.ss.load(name);
   await ctx.ss.ensureColumns(name, PLAN_HEADERS);
 
+  // ตารางแผนไม่ได้เก็บภูมิภาคไว้ (อยู่ในรายการเครื่อง) แต่หน้าเว็บต้องใช้กรอง
+  // จึงแปะติดไปกับแถวตอนส่งออก เหมือนที่ตารางแผนเก็บ NodeName/SiteCode ซ้ำไว้อยู่แล้ว
+  // ถ้าให้หน้าเว็บไปหาเองจะพังตอนเปิดหน้าแผนก่อนหน้ารายการเครื่อง เพราะยังไม่มีข้อมูลเครื่องในมือ
+  await ctx.ensureBase();
+  const regionOf = new Map();
+  for (const u of ctx.ss.objects(SHEETS.AIRLIST)) {
+    if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim());
+  }
+
   let list = ctx.ss.objects(name).map(o => {
     const out = { ...o };
     ['R1_PlanDate', 'R1_ActualDate', 'R2_PlanDate', 'R2_ActualDate', 'R3_PlanDate', 'R3_ActualDate']
       .forEach(k => { out[k] = formatDate(o[k]); });
+    out.Region = regionOf.get(normalizeCode(o.AirCode)) || '';
     return out;
   });
 
@@ -75,6 +85,18 @@ const ROUND_DONE = 'ล้างเสร็จสิ้น';
 const ROUND_CANCELLED = 'ยกเลิก';
 
 /** สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending' */
+/**
+ * เรียง Node ที่ค้างมากที่สุดไว้บน
+ *
+ * รายการนี้มีไว้ใช้ตามงาน ไม่ได้มีไว้ดูว่าทำได้ดีแค่ไหน
+ * ที่ที่ยังไม่ได้ล้างเลยจึงต้องอยู่บนสุด ไม่ใช่ไปจมอยู่ท้ายรายการ 51 บรรทัด
+ * Node ที่ยกเลิกทุกรอบไม่มีงานเหลือ ถือว่าเสร็จ (1) จะได้ไม่ลอยขึ้นมากวน
+ */
+function sortNodesByProgress(nodes) {
+  const rate = n => (n.done + n.pending) ? n.done / (n.done + n.pending) : 1;
+  return nodes.sort((a, b) => rate(a) - rate(b) || String(a.node).localeCompare(String(b.node), 'th'));
+}
+
 function roundState(row, r) {
   const status = String(row['R' + r + '_Status'] || '').trim();
   if (status === ROUND_CANCELLED) return 'cancelled';
@@ -103,9 +125,22 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
   for (const row of planRows || []) {
     const region = regionOf.get(normalizeCode(row.AirCode)) || 'ไม่ระบุ';
-    if (!byRegion.has(region)) byRegion.set(region, { region, units: 0, ...blank() });
+    if (!byRegion.has(region)) byRegion.set(region, { region, units: 0, ...blank(), nodes: new Map() });
     const reg = byRegion.get(region);
     reg.units++;
+
+    // ยอดรวมของภูมิภาคบอกได้แค่ว่าคืบหน้าเท่าไหร่ ไม่ได้บอกว่า "ที่ไหน" ยังไม่ได้ล้าง
+    // ซึ่งเป็นคำถามที่ต้องใช้ตอนตามงานจริง จึงต้องแยกย่อยลงไปถึงระดับ Node
+    const nodeName = String(row.NodeName || '').trim() || 'ไม่ระบุ Node';
+    if (!reg.nodes.has(nodeName)) {
+      reg.nodes.set(nodeName, {
+        node: nodeName,
+        siteCode: String(row.SiteCode || '').trim(),
+        units: 0, ...blank(), lastDone: ''
+      });
+    }
+    const nd = reg.nodes.get(nodeName);
+    nd.units++;
 
     let doneThisUnit = 0;
 
@@ -115,11 +150,18 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
       rounds[r - 1][state]++;
       reg[state]++;
+      nd[state]++;
 
       if (state === 'done') {
         doneThisUnit++;
         rounds[r - 1].cost += cost;
         reg.cost += cost;
+        nd.cost += cost;
+
+        // เทียบวันที่เป็นข้อความได้เลย เพราะรูปแบบ ปปปป-ดด-วว เรียงตามตัวอักษร
+        // แล้วได้ลำดับตรงกับเรียงตามเวลาพอดี ไม่ต้องแปลงเป็น Date ให้เสี่ยงเรื่องเขตเวลา
+        const at = String(row['R' + r + '_ActualDate'] || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(at) && at > nd.lastDone) nd.lastDone = at;
       }
     }
 
@@ -143,7 +185,9 @@ export function summarizeCleaning(planRows, airUnits, year) {
     cost: sum('cost'),
     percent: planned ? Math.round((done / planned) * 100) : 0,
     neverCleaned,
-    byRegion: [...byRegion.values()].sort((a, b) => String(a.region).localeCompare(String(b.region), 'th'))
+    byRegion: [...byRegion.values()]
+      .map(r => ({ ...r, nodes: sortNodesByProgress([...r.nodes.values()]) }))
+      .sort((a, b) => String(a.region).localeCompare(String(b.region), 'th'))
   };
 }
 

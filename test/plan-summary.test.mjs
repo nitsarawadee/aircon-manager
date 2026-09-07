@@ -164,3 +164,93 @@ test('เสร็จ + ค้าง + ยกเลิก ต้องเท่�
 
   assert.equal(s.done + s.pending + s.cancelled, rows.length * 3);
 });
+
+/* ==================== สรุปราย Node ภายในภูมิภาค ====================
+   ยอดรวมของภูมิภาคบอกได้แค่ว่าคืบหน้าเท่าไหร่ ไม่ได้บอกว่า "ที่ไหน" ยังไม่ได้ล้าง
+   ซึ่งเป็นคำถามที่ต้องใช้ตอนตามงานจริง ภูมิภาคหนึ่งมี Node ได้ถึง 51 แห่ง
+   ============================================================================ */
+
+/** แถวที่ระบุ Node ได้ ต่างจาก row() ที่ตรึงชื่อ Node ไว้ตัวเดียว */
+const nodeRow = (AirCode, NodeName, SiteCode, over = {}) => ({
+  ...row(AirCode, over), NodeName, SiteCode
+});
+
+test('แยกย่อยราย Node ในแต่ละภูมิภาคได้', () => {
+  const s = summarizeCleaning([
+    nodeRow('A-A-AIR-1', 'วังน้อย', 'AYA-WNI', { R1_Status: 'ล้างเสร็จสิ้น', R1_Price: 850 }),
+    nodeRow('A-A-AIR-2', 'วังน้อย', 'AYA-WNI'),
+    nodeRow('B-B-AIR-1', 'ชลบุรี', 'CBI-CBI')
+  ], units, 2026);
+
+  const r1 = s.byRegion.find(r => r.region === '1');
+  assert.equal(r1.nodes.length, 1, 'ภูมิภาค 1 มี Node เดียว แม้จะมี 2 เครื่อง');
+  assert.equal(r1.nodes[0].node, 'วังน้อย');
+  assert.equal(r1.nodes[0].siteCode, 'AYA-WNI');
+  assert.equal(r1.nodes[0].units, 2);
+  assert.equal(r1.nodes[0].done, 1);
+  assert.equal(r1.nodes[0].cost, 850);
+
+  const r2 = s.byRegion.find(r => r.region === '2');
+  assert.equal(r2.nodes.length, 1);
+  assert.equal(r2.nodes[0].node, 'ชลบุรี');
+});
+
+test('Node ที่ค้างมากที่สุดต้องอยู่บนสุด', () => {
+  // รายการนี้มีไว้ใช้ตามงาน ที่ที่ยังไม่ได้ล้างเลยต้องไม่ไปจมอยู่ท้ายรายการ
+  const s = summarizeCleaning([
+    nodeRow('A-A-AIR-1', 'เสร็จหมดแล้ว', 'S1', {
+      R1_Status: 'ล้างเสร็จสิ้น', R2_Status: 'ล้างเสร็จสิ้น', R3_Status: 'ล้างเสร็จสิ้น'
+    }),
+    nodeRow('A-A-AIR-2', 'ยังไม่ได้ล้างเลย', 'S2')
+  ], [{ AirCode: 'A-A-AIR-1', Region: '1' }, { AirCode: 'A-A-AIR-2', Region: '1' }], 2026);
+
+  assert.deepEqual(
+    s.byRegion[0].nodes.map(n => n.node),
+    ['ยังไม่ได้ล้างเลย', 'เสร็จหมดแล้ว']
+  );
+});
+
+test('Node ที่ยกเลิกทุกรอบ ต้องไม่ลอยขึ้นมาปนกับงานที่ยังค้าง', () => {
+  // ยกเลิกแล้วคือไม่มีงานเหลือ ไม่ใช่งานที่ต้องไปตาม
+  const s = summarizeCleaning([
+    nodeRow('A-A-AIR-1', 'ยกเลิกหมด', 'S1', {
+      R1_Status: 'ยกเลิก', R2_Status: 'ยกเลิก', R3_Status: 'ยกเลิก'
+    }),
+    nodeRow('A-A-AIR-2', 'ยังค้างอยู่', 'S2')
+  ], [{ AirCode: 'A-A-AIR-1', Region: '1' }, { AirCode: 'A-A-AIR-2', Region: '1' }], 2026);
+
+  assert.equal(s.byRegion[0].nodes[0].node, 'ยังค้างอยู่');
+});
+
+test('วันที่ล้างล่าสุดของ Node ต้องเป็นวันที่ใหม่สุด ไม่ใช่วันที่เจอเป็นอันสุดท้าย', () => {
+  const s = summarizeCleaning([
+    nodeRow('A-A-AIR-1', 'วังน้อย', 'S1', { R1_Status: 'ล้างเสร็จสิ้น', R1_ActualDate: '2026-05-20' }),
+    nodeRow('A-A-AIR-2', 'วังน้อย', 'S1', { R1_Status: 'ล้างเสร็จสิ้น', R1_ActualDate: '2026-03-10' })
+  ], [{ AirCode: 'A-A-AIR-1', Region: '1' }, { AirCode: 'A-A-AIR-2', Region: '1' }], 2026);
+
+  assert.equal(s.byRegion[0].nodes[0].lastDone, '2026-05-20');
+});
+
+test('Node ที่ยังไม่เคยล้าง ต้องไม่มีวันที่ล้างล่าสุด', () => {
+  const s = summarizeCleaning([nodeRow('A-A-AIR-1', 'วังน้อย', 'S1')],
+    [{ AirCode: 'A-A-AIR-1', Region: '1' }], 2026);
+  assert.equal(s.byRegion[0].nodes[0].lastDone, '');
+});
+
+test('ยอดรวมราย Node ต้องบวกกันได้เท่ายอดของภูมิภาค', () => {
+  // ถ้าสองตัวเลขนี้ไม่ตรงกัน คนอ่านจะไม่รู้ว่าอันไหนถูก
+  const s = summarizeCleaning([
+    nodeRow('A-A-AIR-1', 'วังน้อย', 'S1', { R1_Status: 'ล้างเสร็จสิ้น', R1_Price: 850 }),
+    nodeRow('A-A-AIR-2', 'บางปะอิน', 'S2', { R2_ActualDate: '2026-04-01', R2_Price: 700 }),
+    nodeRow('B-B-AIR-1', 'ชลบุรี', 'S3', { R3_Status: 'ยกเลิก' })
+  ], units, 2026);
+
+  for (const reg of s.byRegion) {
+    const sum = k => reg.nodes.reduce((t, n) => t + n[k], 0);
+    assert.equal(sum('units'), reg.units, 'จำนวนเครื่องของ Region ' + reg.region);
+    assert.equal(sum('done'), reg.done, 'ล้างแล้วของ Region ' + reg.region);
+    assert.equal(sum('pending'), reg.pending, 'ค้างของ Region ' + reg.region);
+    assert.equal(sum('cancelled'), reg.cancelled, 'ยกเลิกของ Region ' + reg.region);
+    assert.equal(sum('cost'), reg.cost, 'ค่าใช้จ่ายของ Region ' + reg.region);
+  }
+});

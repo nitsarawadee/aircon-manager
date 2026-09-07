@@ -11,8 +11,17 @@ export async function getHistory(ctx, airCode) {
   if (!(await ctx.canView('history'))) return [];
   await ctx.ensureBase();
 
+  // แปะภูมิภาคของเครื่องติดไปกับแต่ละแถว เพื่อให้หน้าประวัติกรองตามภูมิภาคได้
+  // ประวัติเก็บแค่รหัสเครื่อง ไม่ได้เก็บภูมิภาคไว้เอง และไม่ควรเก็บ
+  // เพราะเครื่องย้ายภูมิภาคได้ ถ้าเก็บซ้ำไว้ในประวัติจะกลายเป็นข้อมูลที่ไม่ตรงกัน
+  const regionOf = new Map();
+  for (const u of ctx.ss.objects(SHEETS.AIRLIST)) {
+    if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim());
+  }
+
   let list = ctx.ss.objects(SHEETS.HISTORY).map(o => ({
     ...o,
+    Region: regionOf.get(normalizeCode(o.AirCode)) || '',
     Date: formatDate(o.Date),
     CreatedAt: formatDate(o.CreatedAt)
   }));
