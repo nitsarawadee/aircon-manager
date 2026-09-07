@@ -913,6 +913,11 @@
   <!-- ============================ MODALS & OVERLAYS ============================ -->
   <div id="modalRoot" class="relative z-50"></div>
 
+  <!-- ป๊อปอัปข้อมูลเครื่องต้องมีที่วางของตัวเอง แยกจาก modalRoot
+       เพราะเปิดจากในหน้าต่างอื่นได้ (เช่นรายการนัดรายวันในปฏิทิน)
+       ถ้าเขียนทับ modalRoot หน้าต่างที่เปิดอยู่ข้างใต้จะหายไปทั้งอัน -->
+  <div id="airInfoRoot" class="relative z-[70]"></div>
+
   <!-- Custom Confirm Modal -->
   <div id="confirmDialog" class="fixed inset-0 z-[60] hidden">
     <div class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"></div>
@@ -1647,7 +1652,8 @@
       }
       section.querySelectorAll('[onclick]').forEach(el => {
         const oc = el.getAttribute('onclick') || '';
-        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal')) return;
+        // ปุ่มที่แค่ "ดู" ต้องไม่ถูกปิด เพราะคนที่มีสิทธิ์ดูอย่างเดียวก็ต้องดูได้
+        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') || oc.includes('openAirInfo(')) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -1926,7 +1932,7 @@
                   </div>
                   <div class="flex-1 min-w-0">
                      <div class="text-sm font-bold text-gray-800 truncate" title="${esc(up.NodeName)}">${esc(up.NodeName)}</div>
-                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-snowflake text-gray-400"></i> ${esc(up.AirCode)}</div>
+                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-snowflake text-gray-400"></i> ${airCodeBtn(up.AirCode, 'text-gray-500 hover:text-[#1153a1] underline decoration-dotted underline-offset-2')}</div>
                   </div>
                </div>
                <div class="text-xs font-medium text-gray-600 bg-gray-50 rounded-lg px-2.5 py-2 flex items-center justify-between group-hover:bg-blue-50 group-hover:text-[#1153a1] transition-colors border border-gray-100 group-hover:border-blue-100">
@@ -2079,7 +2085,7 @@
             <i class="ph ph-wrench"></i>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-semibold text-gray-800 truncate">${esc(w.AirCode)} <span class="text-gray-400 font-normal">· ${esc(w.NodeName)}</span></div>
+            <div class="text-sm font-semibold text-gray-800 truncate">${airCodeBtn(w.AirCode, 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-semibold')} <span class="text-gray-400 font-normal">· ${esc(w.NodeName)}</span></div>
             <div class="text-xs text-gray-500 truncate" title="${esc(w.Note)}">${esc(w.Note) || 'ไม่ระบุอาการเสีย'}</div>
           </div>
         </div>`).join('');
@@ -2105,6 +2111,197 @@
         </div>`;
       }).join('');
     }
+
+    /* ============================================================================
+       ป๊อปอัปข้อมูลเครื่อง
+       ============================================================================
+       รหัสเครื่องโผล่อยู่แทบทุกหน้า (รายการเครื่อง แผนล้าง ประวัติ งานซ่อม ปฏิทิน
+       แดชบอร์ด) เดิมกดแล้วเด้งข้ามหน้าไปเลย ซึ่งทำให้เสียที่ที่กำลังดูอยู่
+       ทั้งที่ส่วนใหญ่แค่อยากรู้ว่า "เครื่องนี้ยี่ห้ออะไร กี่บีทียู ติดตั้งเมื่อไหร่"
+       ป๊อปอัปตอบตรงนั้นได้โดยไม่ต้องออกจากหน้า และยังมีปุ่มไปหน้าอื่นให้อยู่
+       ============================================================================ */
+
+    /**
+     * หาข้อมูลเครื่องจากรหัส
+     *
+     * ป๊อปอัปเปิดได้จากทุกหน้า แต่ currentAirList จะมีข้อมูลก็ต่อเมื่อเคยเปิด
+     * หน้ารายการเครื่องมาแล้ว ถ้ายังว่างต้องไปดึงมาก่อน ไม่ใช่ขึ้นว่าไม่พบเครื่อง
+     */
+    async function findAirUnit(code) {
+      const hit = (currentAirList || []).find(a => sameCode(a.AirCode, code));
+      if (hit) return hit;
+
+      currentAirList = (await call('getAirList')) || [];
+      return (currentAirList || []).find(a => sameCode(a.AirCode, code)) || null;
+    }
+
+    function closeAirInfo() {
+      document.getElementById('airInfoRoot').innerHTML = '';
+    }
+    window.closeAirInfo = closeAirInfo;
+
+    async function openAirInfo(code) {
+      const root = document.getElementById('airInfoRoot');
+      root.innerHTML = airInfoShell('<div class="py-16 text-center text-gray-400">กำลังโหลด...</div>', code);
+
+      let unit;
+      try {
+        unit = await findAirUnit(code);
+      } catch (err) {
+        root.innerHTML = airInfoShell('<div class="py-16 text-center text-rose-500">โหลดข้อมูลไม่สำเร็จ: ' + esc(err.message || err) + '</div>', code);
+        return;
+      }
+
+      if (!unit) {
+        // เกิดได้จริงเมื่อเครื่องถูกลบไปแล้ว แต่ประวัติของมันยังอยู่
+        root.innerHTML = airInfoShell(
+          '<div class="py-16 text-center text-gray-400">ไม่พบเครื่องรหัสนี้ในรายการเครื่อง<br>' +
+          '<span class="text-xs">(อาจถูกลบออกไปแล้ว แต่ประวัติยังอยู่)</span></div>', code);
+        return;
+      }
+
+      root.innerHTML = airInfoShell(airInfoBody(unit), unit.AirCode, unit);
+    }
+    window.openAirInfo = openAirInfo;
+
+    function airInfoShell(body, code, unit) {
+      return `
+        <div class="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/50 backdrop-blur-[2px]" onclick="closeAirInfo()"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col">
+
+            <div class="flex items-start justify-between px-5 py-4 border-b border-gray-200">
+              <div class="min-w-0">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2 flex-wrap">
+                  <i class="ph-fill ph-snowflake text-[#1153a1]"></i>
+                  <span class="truncate">${esc(code)}</span>
+                  ${unit ? statusBadge(unit.Status) : ''}
+                </h3>
+                ${unit ? `<p class="text-xs text-gray-500 mt-0.5 truncate">${esc(unit.NodeName) || '-'} ${unit.SiteCode ? '· ' + esc(unit.SiteCode) : ''}</p>` : ''}
+              </div>
+              <button onclick="closeAirInfo()" class="text-gray-400 hover:text-gray-700 p-1 -mr-1 flex-shrink-0">
+                <i class="ph ph-x text-xl"></i>
+              </button>
+            </div>
+
+            <div class="overflow-y-auto px-5 py-4">${body}</div>
+
+            <div class="px-5 py-3 border-t border-gray-200 flex flex-wrap justify-end gap-2">
+              ${unit ? `
+                <button onclick="closeAirInfo(); viewAirHistory('${esc(unit.AirCode)}')"
+                        class="px-3 py-2 text-sm font-medium text-[#1153a1] bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 flex items-center gap-1.5">
+                  <i class="ph ph-clock-counter-clockwise"></i> ดูประวัติเครื่องนี้
+                </button>
+                <button onclick="closeAirInfo(); goToAirDevice('${esc(unit.AirCode)}')"
+                        class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5">
+                  <i class="ph ph-list-magnifying-glass"></i> เปิดในรายการเครื่อง
+                </button>` : ''}
+              <button onclick="closeAirInfo()"
+                      class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    /** ช่องข้อมูลหนึ่งช่อง — ค่าว่างขึ้นขีด ไม่ใช่หายไปเฉยๆ จะได้รู้ว่ายังไม่ได้กรอก */
+    function airInfoField(label, value, opts = {}) {
+      const v = String(value == null ? '' : value).trim();
+      const shown = v
+        ? (opts.html ? v : esc(v))
+        : '<span class="text-gray-300 italic">ยังไม่ระบุ</span>';
+      return `
+        <div class="${opts.wide ? 'sm:col-span-2' : ''}">
+          <div class="text-[11px] font-medium text-gray-400 tracking-wide">${esc(label)}</div>
+          <div class="text-sm text-gray-800 mt-0.5 break-words">${shown}</div>
+        </div>`;
+    }
+
+    function airInfoGroup(title, icon, fields, cols) {
+      return `
+        <div class="mb-4 last:mb-0">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+            <i class="ph ${icon} text-base text-[#1153a1]"></i> ${esc(title)}
+          </div>
+          <!-- ใช้ bg-gray-50/60 ไม่ใช่ bg-gray-50 เพราะโหมดมืดจับคู่ bg-gray-50
+               กับสีเดียวกับพื้นการ์ด กล่องข้อมูลจะจมหายไปกับพื้นหลัง -->
+          <div class="grid grid-cols-2 ${cols === 2 ? '' : 'sm:grid-cols-3'} gap-x-4 gap-y-3 bg-gray-50/60 rounded-xl p-3.5 border border-gray-100">
+            ${fields.join('')}
+          </div>
+        </div>`;
+    }
+
+    function airInfoBody(u) {
+      const money = v => {
+        const n = Number(v);
+        return v === '' || v == null || isNaN(n) ? '' : '฿' + n.toLocaleString();
+      };
+      const coords = [u.Lat, u.Long].map(x => String(x == null ? '' : x).trim()).filter(Boolean).join(', ');
+
+      return [
+        airInfoGroup('ตัวเครื่อง', 'ph-snowflake', [
+          airInfoField('ยี่ห้อ', u.Brand),
+          airInfoField('ขนาด (BTU)', u.BTU ? Number(u.BTU).toLocaleString() : ''),
+          airInfoField('ราคาล้างต่อรอบ', money(u.CleaningPricePerRound)),
+          airInfoField('รุ่นคอยล์เย็น (ในอาคาร)', u.ModelIndoor),
+          airInfoField('รุ่นคอยล์ร้อน (นอกอาคาร)', u.ModelOutdoor)
+        ]),
+
+        airInfoGroup('อายุและการรับประกัน', 'ph-timer', [
+          airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
+          airInfoField('อายุการใช้งาน', ageCell(u.InstallDate), { html: true }),
+          airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
+        ]),
+
+        // บังคับ 2 คอลัมน์ ให้ Asset กับ S/N ของคอยล์เดียวกันอยู่บรรทัดเดียวกัน
+        airInfoGroup('ทะเบียนทรัพย์สิน', 'ph-barcode', [
+          airInfoField('Indoor Asset (คอยล์เย็น)', u.IndoorAsset),
+          airInfoField('Indoor S/N', u.IndoorSN),
+          airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset),
+          airInfoField('Outdoor S/N', u.OutdoorSN)
+        ], 2),
+
+        airInfoGroup('ที่ตั้ง', 'ph-map-pin', [
+          airInfoField('ภูมิภาค', u.Region),
+          airInfoField('จังหวัด', u.Province),
+          airInfoField('ประเภทสถานที่', u.LocationType),
+          airInfoField('Node', u.NodeName),
+          airInfoField('Site Code', u.SiteCode),
+          airInfoField('พิกัด', coords),
+          airInfoField('ที่อยู่', u.Address, { wide: true })
+        ]),
+
+        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', [airInfoField('', u.Note, { wide: true })]) : '',
+
+        `<p class="text-[11px] text-gray-400 text-right">
+           แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
+         </p>`
+      ].join('');
+    }
+
+    /**
+     * รหัสเครื่องแบบกดดูข้อมูลได้ ใช้ชุดเดียวกันทุกหน้า
+     *
+     * stopPropagation เพราะบางที่รหัสอยู่ในการ์ดที่กดแล้วเด้งไปหน้าอื่น
+     * (เช่นการ์ดนัดหมายบนแดชบอร์ด) กดที่รหัสต้องได้ป๊อปอัป ไม่ใช่โดนเด้งไปด้วย
+     */
+    function airCodeBtn(code, cls) {
+      const c = esc(code);
+      return `<button type="button" onclick="event.stopPropagation(); openAirInfo('${c}')"
+                      title="ดูข้อมูลเครื่อง ${c}"
+                      class="${cls || 'text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2 font-medium'}">${c}</button>`;
+    }
+
+    // กด Esc ปิดป๊อปอัปข้อมูลเครื่องก่อน ไม่ให้ทะลุไปปิดหน้าต่างที่อยู่ข้างใต้
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      const root = document.getElementById('airInfoRoot');
+      if (root && root.innerHTML) {
+        e.stopPropagation();
+        closeAirInfo();
+      }
+    }, true);
 
     /* ============== 1. AIR LIST ============== */
     async function loadAirList() {
@@ -2254,11 +2451,10 @@
         renderTablePager('airPaginationBar', 0, 1, 'goToAirPage');
       } else {
         tb.innerHTML = airLastList.slice((airPage - 1) * TABLE_PAGE_SIZE, airPage * TABLE_PAGE_SIZE).map(a => {
-          // เม้าส์ชี้รหัสเครื่องแล้วโชว์ Asset/SN ทั้ง Indoor และ Outdoor โดยไม่ต้องเปิด modal
-          const snTip = `Indoor Asset: ${a.IndoorAsset || '-'}\nIndoor SN: ${a.IndoorSN || '-'}\nOutdoor Asset: ${a.OutdoorAsset || '-'}\nOutdoor SN: ${a.OutdoorSN || '-'}`;
+          // Asset/SN ย้ายไปอยู่ในป๊อปอัปข้อมูลเครื่องแล้ว ไม่ต้องทำ tooltip ซ้ำอีกชุด
           return `
           <tr class="hover:bg-blue-50/50 transition-colors group">
-            <td class="px-4 py-3 font-medium text-gray-900"><span title="${esc(snTip)}" class="cursor-help border-b border-dotted border-gray-400">${esc(a.AirCode)}</span></td>
+            <td class="px-4 py-3 font-medium text-gray-900">${airCodeBtn(a.AirCode, 'text-gray-900 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
             <td class="px-4 py-3 text-gray-600">
               <div class="text-sm">${esc(a.Province)}</div>
               <div class="text-xs text-gray-400">${esc(a.Region)}</div>
@@ -2828,7 +3024,7 @@
                 <tbody class="divide-y divide-gray-100">
                   ${items.map(it => `
                     <tr class="hover:bg-blue-50/50">
-                      <td class="px-5 py-2.5 font-medium whitespace-nowrap ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(it.AirCode)}</td>
+                      <td class="px-5 py-2.5 font-medium whitespace-nowrap">${airCodeBtn(it.AirCode, it.state === 'cancelled' ? 'text-gray-400 line-through hover:text-gray-600 underline decoration-dotted underline-offset-2' : 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
                       <td class="px-4 py-2.5 text-gray-600 truncate max-w-[200px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
                       <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${esc(it.planYear || '-')}</td>
                       <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
@@ -3028,7 +3224,7 @@
         return `
         <tr class="hover:bg-gray-50 transition-colors group cursor-pointer">
           <td class="px-3 py-2 font-medium text-gray-900 border-r border-gray-100 bg-white group-hover:bg-gray-50 sticky left-0 z-10 min-w-[100px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-            <button onclick="viewAirHistory('${esc(p.AirCode)}')" title="ดูประวัติเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(p.AirCode)}</button>
+            ${airCodeBtn(p.AirCode)}
           </td>
           <td class="px-3 py-2 text-gray-600 border-r border-gray-100 bg-white group-hover:bg-gray-50">
             <div class="text-[13px] font-medium text-gray-800">${esc(p.NodeName)}</div>
@@ -3464,7 +3660,7 @@
           <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
-            <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>
+            ${airCodeBtn(h.AirCode)}
           </td>
           <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
           <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
@@ -3592,7 +3788,7 @@
           pendingTb.innerHTML = pendingList.map(a => `
             <tr class="hover:bg-amber-50/50 transition-colors group">
               <td class="px-4 py-3 font-medium text-gray-900">
-                <button onclick="goToAirDevice('${esc(a.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(a.AirCode)}</button>
+                ${airCodeBtn(a.AirCode)}
               </td>
               <td class="px-4 py-3 text-gray-600">
                 <div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
@@ -3635,7 +3831,7 @@
               <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 font-medium text-gray-900">
-                <button onclick="goToAirDevice('${esc(h.AirCode)}')" title="ดูรายละเอียดเครื่องนี้" class="transition-colors" style="color:#1153a1;text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${esc(h.AirCode)}</button>
+                ${airCodeBtn(h.AirCode)}
               </td>
               <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
               <td class="px-4 py-3 text-gray-600 max-w-xs truncate text-sm" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
