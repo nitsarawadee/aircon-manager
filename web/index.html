@@ -906,6 +906,11 @@
         </div>
       </section>
 
+      <!-- ====================== VIEW: หน้าของเครื่องแต่ละตัว ======================
+           ไม่มีปุ่มในเมนูด้านซ้าย เพราะเข้ามาได้ทางเดียวคือกดรหัสเครื่องจากหน้าอื่น
+           เนื้อหาทั้งหมดวาดด้วย JavaScript เพราะขึ้นกับว่ากำลังดูเครื่องไหน -->
+      <section id="view-airdetail" class="view"></section>
+
     </div>
   </main>
   </div><!-- /#appShell -->
@@ -913,10 +918,6 @@
   <!-- ============================ MODALS & OVERLAYS ============================ -->
   <div id="modalRoot" class="relative z-50"></div>
 
-  <!-- ป๊อปอัปข้อมูลเครื่องต้องมีที่วางของตัวเอง แยกจาก modalRoot
-       เพราะเปิดจากในหน้าต่างอื่นได้ (เช่นรายการนัดรายวันในปฏิทิน)
-       ถ้าเขียนทับ modalRoot หน้าต่างที่เปิดอยู่ข้างใต้จะหายไปทั้งอัน -->
-  <div id="airInfoRoot" class="relative z-[70]"></div>
 
   <!-- Custom Confirm Modal -->
   <div id="confirmDialog" class="fixed inset-0 z-[60] hidden">
@@ -1407,6 +1408,8 @@
           b.classList.add('text-slate-500', 'hover:bg-slate-50');
         });
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        // ออกจากหน้าของเครื่องเมื่อกดแท็บอื่น ไม่งั้นตัววาดหน้านั้นจะยังทำงานอยู่เบื้องหลัง
+        airDetailCode = null;
         btn.classList.remove('text-slate-500', 'hover:bg-slate-50');
         btn.classList.add('active', 'bg-gradient-to-r', 'from-blue-50', 'to-orange-50', 'text-[#1153a1]', 'border', 'border-[#f47920]/30', 'shadow-sm');
         document.getElementById('view-' + btn.dataset.tab).classList.add('active');
@@ -1653,7 +1656,7 @@
       section.querySelectorAll('[onclick]').forEach(el => {
         const oc = el.getAttribute('onclick') || '';
         // ปุ่มที่แค่ "ดู" ต้องไม่ถูกปิด เพราะคนที่มีสิทธิ์ดูอย่างเดียวก็ต้องดูได้
-        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') || oc.includes('openAirInfo(')) return;
+        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') || oc.includes('openAirDetail(')) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -2113,18 +2116,27 @@
     }
 
     /* ============================================================================
-       ป๊อปอัปข้อมูลเครื่อง
+       หน้าของเครื่องแต่ละตัว
        ============================================================================
        รหัสเครื่องโผล่อยู่แทบทุกหน้า (รายการเครื่อง แผนล้าง ประวัติ งานซ่อม ปฏิทิน
-       แดชบอร์ด) เดิมกดแล้วเด้งข้ามหน้าไปเลย ซึ่งทำให้เสียที่ที่กำลังดูอยู่
-       ทั้งที่ส่วนใหญ่แค่อยากรู้ว่า "เครื่องนี้ยี่ห้ออะไร กี่บีทียู ติดตั้งเมื่อไหร่"
-       ป๊อปอัปตอบตรงนั้นได้โดยไม่ต้องออกจากหน้า และยังมีปุ่มไปหน้าอื่นให้อยู่
+       แดชบอร์ด) กดแล้วมาที่หน้านี้ ซึ่งรวมทุกอย่างของเครื่องตัวนั้นไว้ที่เดียว
+       ทั้งข้อมูลตัวเครื่องและประวัติการทำงานทั้งหมด
+
+       เป็นหน้าเต็ม ไม่ใช่หน้าต่างซ้อน เพราะประวัติอาจยาวหลายสิบรายการ
+       ยัดลงหน้าต่างเล็กๆ แล้วต้องเลื่อนสองชั้นซ้อนกัน
+
+       หน้านี้ไม่มีปุ่มในเมนูซ้าย เพราะไม่มีความหมายถ้าไม่ได้เลือกเครื่องมาก่อน
        ============================================================================ */
+
+    /** รหัสเครื่องที่หน้านี้กำลังแสดงอยู่ (null = ไม่ได้อยู่ที่หน้านี้) */
+    let airDetailCode = null;
+    /** แท็บที่จากมา ใช้ตอนกดปุ่มย้อนกลับ */
+    let airDetailFrom = 'airlist';
 
     /**
      * หาข้อมูลเครื่องจากรหัส
      *
-     * ป๊อปอัปเปิดได้จากทุกหน้า แต่ currentAirList จะมีข้อมูลก็ต่อเมื่อเคยเปิด
+     * หน้านี้เข้าได้จากทุกหน้า แต่ currentAirList จะมีข้อมูลก็ต่อเมื่อเคยเปิด
      * หน้ารายการเครื่องมาแล้ว ถ้ายังว่างต้องไปดึงมาก่อน ไม่ใช่ขึ้นว่าไม่พบเครื่อง
      */
     async function findAirUnit(code) {
@@ -2135,71 +2147,181 @@
       return (currentAirList || []).find(a => sameCode(a.AirCode, code)) || null;
     }
 
-    function closeAirInfo() {
-      document.getElementById('airInfoRoot').innerHTML = '';
-    }
-    window.closeAirInfo = closeAirInfo;
+    async function openAirDetail(code) {
+      // เข้ามาจากในหน้าต่างซ้อนได้ (เช่นรายการนัดรายวันในปฏิทิน) ต้องปิดก่อน
+      // ไม่งั้นหน้าต่างจะค้างทับหน้าใหม่อยู่
+      closeModal();
 
-    async function openAirInfo(code) {
-      const root = document.getElementById('airInfoRoot');
-      root.innerHTML = airInfoShell('<div class="py-16 text-center text-gray-400">กำลังโหลด...</div>', code);
+      const fromBtn = document.querySelector('.tab-btn.active');
+      if (fromBtn) airDetailFrom = fromBtn.dataset.tab;
 
-      let unit;
+      airDetailCode = code;
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      const view = document.getElementById('view-airdetail');
+      view.classList.add('active');
+      view.innerHTML = '<div class="py-20 text-center text-gray-400">กำลังโหลด...</div>';
+      window.scrollTo(0, 0);
+
       try {
-        unit = await findAirUnit(code);
+        await findAirUnit(code);
+        // ประวัติเก็บรวมทุกเครื่องไว้ก้อนเดียว หน้านี้กรองเอาเองจากก้อนนั้น
+        // ทำให้บันทึก/ลบประวัติแล้วหน้านี้อัปเดตตามได้ทันทีโดยไม่ต้องยิงซ้ำ
+        if (!currentHistory || currentHistory.length === 0) {
+          if (moduleLevel('history') !== 'none') currentHistory = (await call('getHistory', null)) || [];
+        }
       } catch (err) {
-        root.innerHTML = airInfoShell('<div class="py-16 text-center text-rose-500">โหลดข้อมูลไม่สำเร็จ: ' + esc(err.message || err) + '</div>', code);
+        view.innerHTML = '<div class="py-20 text-center text-rose-500">โหลดข้อมูลไม่สำเร็จ: ' + esc(err.message || err) + '</div>';
         return;
       }
 
-      if (!unit) {
-        // เกิดได้จริงเมื่อเครื่องถูกลบไปแล้ว แต่ประวัติของมันยังอยู่
-        root.innerHTML = airInfoShell(
-          '<div class="py-16 text-center text-gray-400">ไม่พบเครื่องรหัสนี้ในรายการเครื่อง<br>' +
-          '<span class="text-xs">(อาจถูกลบออกไปแล้ว แต่ประวัติยังอยู่)</span></div>', code);
-        return;
-      }
-
-      root.innerHTML = airInfoShell(airInfoBody(unit), unit.AirCode, unit);
+      renderAirDetail();
     }
-    window.openAirInfo = openAirInfo;
+    window.openAirDetail = openAirDetail;
 
-    function airInfoShell(body, code, unit) {
+    /** กลับไปหน้าที่จากมา */
+    function backFromAirDetail() {
+      const btn = document.querySelector('[data-tab="' + airDetailFrom + '"]') ||
+                  document.querySelector('[data-tab="airlist"]');
+      if (btn) btn.click();
+    }
+    window.backFromAirDetail = backFromAirDetail;
+
+    function renderAirDetail() {
+      const view = document.getElementById('view-airdetail');
+      if (!view || !airDetailCode) return;
+
+      const u = (currentAirList || []).find(a => sameCode(a.AirCode, airDetailCode));
+
+      const back = `
+        <button onclick="backFromAirDetail()"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#1153a1] mb-4">
+          <i class="ph ph-arrow-left"></i> กลับ
+        </button>`;
+
+      if (!u) {
+        // เกิดได้จริงเมื่อเครื่องถูกลบไปแล้ว แต่ประวัติของมันยังอยู่
+        view.innerHTML = back + `
+          <div class="bg-white rounded-2xl border border-gray-200 p-10 text-center text-gray-400">
+            ไม่พบเครื่องรหัส <b class="text-gray-600">${esc(airDetailCode)}</b> ในรายการเครื่อง<br>
+            <span class="text-xs">(อาจถูกลบออกไปแล้ว แต่ประวัติยังอยู่)</span>
+          </div>`;
+        return;
+      }
+
+      const canEditAir = moduleLevel('airlist') === 'edit';
+      const canEditHist = moduleLevel('history') === 'edit';
+
+      view.innerHTML = back + `
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div class="min-w-0">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2.5 flex-wrap">
+              <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style="background:var(--p-blue-bg); color:var(--p-blue-fg)">
+                <i class="ph-fill ph-snowflake text-lg"></i>
+              </span>
+              <span class="break-all">${esc(u.AirCode)}</span>
+              ${statusBadge(u.Status)}
+            </h2>
+            <p class="text-sm text-gray-500 mt-1">
+              ${esc(u.NodeName) || 'ยังไม่ระบุ Node'}${u.SiteCode ? ' · ' + esc(u.SiteCode) : ''}${u.Province ? ' · ' + esc(u.Province) : ''}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${canEditHist ? `
+              <button onclick="addHistoryForUnit('${esc(u.AirCode)}')"
+                      class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                <i class="ph ph-plus"></i> บันทึกประวัติ
+              </button>` : ''}
+            ${canEditAir ? `
+              <button onclick='openAirModal(${JSON.stringify(u).replace(/'/g, "&apos;")})'
+                      class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                <i class="ph ph-pencil-simple"></i> แก้ไขข้อมูล
+              </button>` : ''}
+          </div>
+        </div>
+
+        ${airInfoBody(u)}
+
+        ${moduleLevel('history') === 'none' ? '' : airDetailHistory(u, canEditHist)}`;
+    }
+
+    /** เปิดฟอร์มบันทึกประวัติโดยเลือกเครื่องนี้ไว้ให้แล้ว */
+    function addHistoryForUnit(code) {
+      openHistoryModal();
+      const sel = document.getElementById('h_air');
+      if (sel) sel.value = code;
+    }
+    window.addHistoryForUnit = addHistoryForUnit;
+
+    /** ส่วนประวัติของเครื่องตัวนี้ ต่อท้ายข้อมูลเครื่องในหน้าเดียวกัน */
+    function airDetailHistory(u, canEdit) {
+      const rows = (currentHistory || []).filter(h => sameCode(h.AirCode, u.AirCode));
+
+      // สรุปจากรายการเดียวกับที่แสดงในตาราง ตัวเลขกับตารางจึงตรงกันเสมอ
+      const cleans = rows.filter(h => String(h.EventType || '').includes('ล้าง'));
+      const others = rows.length - cleans.length;
+      const cost = rows.reduce((sum, h) => sum + (Number(h.Cost) || 0), 0);
+      const lastClean = cleans.length ? fmtDate(cleans[0].Date) : null;
+
+      const stat = (label, value, tone) => `
+        <div class="rounded-xl px-4 py-2.5 border border-gray-100" style="background:var(--p-${tone}-bg)">
+          <div class="text-lg font-extrabold leading-none" style="color:var(--p-${tone}-fg)">${value}</div>
+          <div class="text-[11px] text-gray-500 mt-1">${label}</div>
+        </div>`;
+
+      const body = rows.length === 0
+        ? `<tr><td colspan="${canEdit ? 6 : 5}" class="px-4 py-10 text-center text-gray-400">
+             <i class="ph ph-clock-counter-clockwise text-3xl mb-2 block"></i>เครื่องนี้ยังไม่มีประวัติที่บันทึกไว้
+           </td></tr>`
+        : rows.map(h => `
+            <tr class="hover:bg-blue-50/50 transition-colors">
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
+              <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
+              <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
+              <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
+              <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
+              ${canEdit ? `<td class="px-4 py-3 text-right">
+                <button onclick="deleteHistory(${h._row})" title="ลบรายการนี้"
+                        class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+              </td>` : ''}
+            </tr>`).join('');
+
       return `
-        <div class="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-[2px]" onclick="closeAirInfo()"></div>
-          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col">
+        <div class="mt-6">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style="background:var(--p-rose-bg); color:var(--p-rose-fg)">
+              <i class="ph-fill ph-clock-counter-clockwise text-sm"></i>
+            </span>
+            <span class="text-sm font-bold text-gray-700">ประวัติของเครื่องนี้</span>
+            <span class="text-xs text-gray-400">${rows.length} รายการ</span>
+          </div>
 
-            <div class="flex items-start justify-between px-5 py-4 border-b border-gray-200">
-              <div class="min-w-0">
-                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2 flex-wrap">
-                  <i class="ph-fill ph-snowflake text-[#1153a1]"></i>
-                  <span class="truncate">${esc(code)}</span>
-                  ${unit ? statusBadge(unit.Status) : ''}
-                </h3>
-                ${unit ? `<p class="text-xs text-gray-500 mt-0.5 truncate">${esc(unit.NodeName) || '-'} ${unit.SiteCode ? '· ' + esc(unit.SiteCode) : ''}</p>` : ''}
-              </div>
-              <button onclick="closeAirInfo()" class="text-gray-400 hover:text-gray-700 p-1 -mr-1 flex-shrink-0">
-                <i class="ph ph-x text-xl"></i>
-              </button>
-            </div>
+          ${rows.length ? `
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              ${stat('ล้างแอร์', cleans.length + ' ครั้ง', 'blue')}
+              ${stat('งานซ่อม/อื่นๆ', others + ' ครั้ง', 'peach')}
+              ${stat('ค่าใช้จ่ายรวม', '฿' + cost.toLocaleString(), 'mint')}
+              ${stat('ล้างล่าสุด', lastClean || '—', 'lilac')}
+            </div>` : ''}
 
-            <div class="overflow-y-auto px-5 py-4">${body}</div>
-
-            <div class="px-5 py-3 border-t border-gray-200 flex flex-wrap justify-end gap-2">
-              ${unit ? `
-                <button onclick="closeAirInfo(); viewAirHistory('${esc(unit.AirCode)}')"
-                        class="px-3 py-2 text-sm font-medium text-[#1153a1] bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 flex items-center gap-1.5">
-                  <i class="ph ph-clock-counter-clockwise"></i> ดูประวัติเครื่องนี้
-                </button>
-                <button onclick="closeAirInfo(); goToAirDevice('${esc(unit.AirCode)}')"
-                        class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5">
-                  <i class="ph ph-list-magnifying-glass"></i> เปิดในรายการเครื่อง
-                </button>` : ''}
-              <button onclick="closeAirInfo()"
-                      class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                ปิด
-              </button>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                    <th class="px-4 py-3">เลขที่</th>
+                    <th class="px-4 py-3">วันที่</th>
+                    <th class="px-4 py-3">เหตุการณ์</th>
+                    <th class="px-4 py-3">รายละเอียด</th>
+                    <th class="px-4 py-3">ค่าใช้จ่าย</th>
+                    <th class="px-4 py-3">ช่าง</th>
+                    ${canEdit ? '<th class="px-4 py-3 text-right"></th>' : ''}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700">${body}</tbody>
+              </table>
             </div>
           </div>
         </div>`;
@@ -2300,27 +2422,17 @@
     }
 
     /**
-     * รหัสเครื่องแบบกดดูข้อมูลได้ ใช้ชุดเดียวกันทุกหน้า
+     * รหัสเครื่องแบบกดเข้าไปดูหน้าของเครื่องตัวนั้นได้ ใช้ชุดเดียวกันทุกหน้า
      *
      * stopPropagation เพราะบางที่รหัสอยู่ในการ์ดที่กดแล้วเด้งไปหน้าอื่น
-     * (เช่นการ์ดนัดหมายบนแดชบอร์ด) กดที่รหัสต้องได้ป๊อปอัป ไม่ใช่โดนเด้งไปด้วย
+     * (เช่นการ์ดนัดหมายบนแดชบอร์ด) กดที่รหัสต้องมาที่หน้าของเครื่อง ไม่ใช่โดนเด้งไปด้วย
      */
     function airCodeBtn(code, cls) {
       const c = esc(code);
-      return `<button type="button" onclick="event.stopPropagation(); openAirInfo('${c}')"
-                      title="ดูข้อมูลเครื่อง ${c}"
+      return `<button type="button" onclick="event.stopPropagation(); openAirDetail('${c}')"
+                      title="เปิดหน้าของเครื่อง ${c}"
                       class="${cls || 'text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2 font-medium'}">${c}</button>`;
     }
-
-    // กด Esc ปิดป๊อปอัปข้อมูลเครื่องก่อน ไม่ให้ทะลุไปปิดหน้าต่างที่อยู่ข้างใต้
-    document.addEventListener('keydown', e => {
-      if (e.key !== 'Escape') return;
-      const root = document.getElementById('airInfoRoot');
-      if (root && root.innerHTML) {
-        e.stopPropagation();
-        closeAirInfo();
-      }
-    }, true);
 
     /* ============== 1. AIR LIST ============== */
     async function loadAirList() {
@@ -2623,6 +2735,7 @@
         currentHistory = result.history;
         renderAirTable(currentAirList);
         if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
+        if (airDetailCode) renderAirDetail();
         closeModal();
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
         loadDashboard();
@@ -3739,6 +3852,7 @@
       try {
         currentHistory = await call('addHistoryRecord', record);
         renderHistoryTable();
+        if (airDetailCode) renderAirDetail();
         closeModal();
         showToast('บันทึกประวัติสำเร็จ');
         loadDashboard(); 
@@ -3752,6 +3866,7 @@
       try {
         currentHistory = await call('deleteHistoryRecord', row);
         renderHistoryTable();
+        if (airDetailCode) renderAirDetail();
         showToast('ลบประวัติสำเร็จ');
         loadDashboard();
         loadBudget();
