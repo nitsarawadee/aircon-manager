@@ -1584,7 +1584,7 @@
       const s = await call('getDashboardSummary');
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
-        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-air-conditioner', tone: 'blue' },
+        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'blue' },
         { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose' }
       ];
       if (s.latestPlanSummary) {
@@ -1651,7 +1651,7 @@
                   </div>
                   <div class="flex-1 min-w-0">
                      <div class="text-sm font-bold text-gray-800 truncate" title="${esc(up.NodeName)}">${esc(up.NodeName)}</div>
-                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-air-conditioner text-gray-400"></i> ${esc(up.AirCode)}</div>
+                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-snowflake text-gray-400"></i> ${esc(up.AirCode)}</div>
                   </div>
                </div>
                <div class="text-xs font-medium text-gray-600 bg-gray-50 rounded-lg px-2.5 py-2 flex items-center justify-between group-hover:bg-blue-50 group-hover:text-[#1153a1] transition-colors border border-gray-100 group-hover:border-blue-100">
