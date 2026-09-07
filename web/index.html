@@ -2262,12 +2262,15 @@
 
     /** เดือนที่ปฏิทินกำลังเปิดอยู่ */
     let calYear = null, calMonth = null;
+    /** วันที่กำลังกางรายละเอียดอยู่ (null = ยังไม่ได้เลือก) */
+    let calSelectedDay = null;
 
     function openPlanCalendar(year, month) {
       const now = new Date();
       // เปิดที่เดือนปัจจุบันก่อนเสมอ เพราะเป็นเดือนที่คนต้องดูบ่อยที่สุด
       calYear = Number(year) || now.getFullYear();
       calMonth = Number(month) || (now.getMonth() + 1);
+      calSelectedDay = null;
       renderPlanCalendar();
     }
 
@@ -2276,7 +2279,7 @@
       let m = calMonth + delta, y = calYear;
       if (m < 1) { m = 12; y--; }
       else if (m > 12) { m = 1; y++; }
-      calYear = y; calMonth = m;
+      calYear = y; calMonth = m; calSelectedDay = null;
       renderPlanCalendar();
     }
 
@@ -2327,24 +2330,29 @@
         const dow = new Date(calYear, calMonth - 1, d).getDay();
         const weekend = dow === 0 || dow === 6;
 
-        // แสดงได้ 3 รายการต่อวัน ที่เหลือบอกจำนวน ไม่งั้นวันที่งานเยอะจะดันช่องอื่นจนตารางเสียรูป
+        // ในช่องแสดงได้ 3 รายการ ที่เหลือกดดูทั้งหมดได้ในรายการด้านล่าง
+        // จำกัดไว้เพราะถ้าปล่อยให้ยาวตามจำนวนงาน ช่องนั้นจะดันแถวอื่นจนตารางทั้งเดือนเสียรูป
         const shown = items.slice(0, 3);
         const rest = items.length - shown.length;
+        const selected = calSelectedDay === d;
 
         cells.push(`
-          <div class="min-h-[92px] rounded-lg border p-1.5 flex flex-col gap-1
-                      ${isToday ? 'border-[#1153a1] border-2 bg-blue-50/40' : weekend ? 'border-gray-100 bg-slate-50/60' : 'border-gray-100'}">
+          <div ${items.length ? `onclick="selectPlanCalendarDay(${d})" role="button" tabindex="0"` : ''}
+               class="min-h-[92px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors
+                      ${items.length ? 'cursor-pointer hover:border-[#1153a1]' : ''}
+                      ${selected ? 'border-[#1153a1] border-2 ring-2 ring-[#1153a1]/20'
+                        : isToday ? 'border-[#1153a1] border-2 bg-blue-50/40'
+                        : weekend ? 'border-gray-100 bg-slate-50/60' : 'border-gray-100'}">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold ${isToday ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
+              <span class="text-xs font-semibold ${isToday || selected ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
               ${items.length ? `<span class="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1">${items.length}</span>` : ''}
             </div>
             ${shown.map(it => `
-              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
-                   title="${esc(it.AirCode)} รอบ ${it.round}${it.NodeName ? ' · ' + esc(it.NodeName) : ''}${it.status ? ' · ' + esc(it.status) : ''}">
+              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}">
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
               </div>`).join('')}
-            ${rest > 0 ? `<div class="text-[10px] text-gray-400">+ อีก ${rest} รายการ</div>` : ''}
+            ${rest > 0 ? `<div class="text-[10px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
           </div>`);
       }
 
@@ -2371,13 +2379,69 @@
 
         <div class="mt-4 text-sm ${cal.total ? 'text-gray-600' : 'text-gray-400'}">
           ${cal.total
-            ? 'เดือนนี้มีนัดหมายทั้งหมด <b class="text-gray-800">' + cal.total + '</b> รายการ'
+            ? 'เดือนนี้มีนัดหมายทั้งหมด <b class="text-gray-800">' + cal.total + '</b> รายการ' +
+              (calSelectedDay ? '' : ' · <span class="text-gray-500">กดที่วันเพื่อดูรายการทั้งหมดของวันนั้น</span>')
             : 'เดือนนี้ยังไม่มีนัดหมายล้างแอร์'}
-        </div>`);
+        </div>
+
+        <div id="calDayDetail" class="mt-3">${renderPlanCalendarDay(cal)}</div>`);
+    }
+
+    /**
+     * รายการนัดทั้งหมดของวันที่เลือก แสดงใต้ปฏิทิน
+     *
+     * ต้องมีเพราะช่องในปฏิทินแสดงได้แค่ 3 รายการ วันที่งานเยอะจึงเห็นไม่ครบ
+     * เลือกแสดงเป็นรายการใต้ปฏิทินแทนที่จะเปิดหน้าต่างซ้อนอีกชั้น
+     * เพื่อให้ยังเห็นปฏิทินอยู่ กดสลับดูวันอื่นต่อได้เลยโดยไม่ต้องปิดอะไรก่อน
+     */
+    function renderPlanCalendarDay(cal) {
+      if (!calSelectedDay) return '';
+
+      const items = (cal.days && cal.days[calSelectedDay]) || [];
+      if (!items.length) return '';
+
+      const label = { done: 'ล้างเสร็จแล้ว', cancelled: 'ยกเลิก', pending: 'ยังไม่ได้ล้าง' };
+      const chip = { done: 'bg-emerald-100 text-emerald-800', cancelled: 'bg-gray-100 text-gray-500', pending: 'bg-blue-100 text-blue-800' };
+
+      return `
+        <div class="border border-gray-200 rounded-xl overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-gray-200">
+            <div class="text-sm font-bold text-gray-800">
+              นัดหมายวันที่ ${calSelectedDay} ${TH_MONTHS[calMonth - 1]} ${calYear}
+              <span class="font-normal text-gray-500">· ${items.length} รายการ</span>
+            </div>
+            <button onclick="selectPlanCalendarDay(null)" class="text-gray-400 hover:text-gray-700 text-sm flex items-center gap-1">
+              <i class="ph ph-x"></i> ปิด
+            </button>
+          </div>
+          <div class="max-h-56 overflow-y-auto">
+            <table class="w-full text-sm text-left">
+              <tbody class="divide-y divide-gray-100">
+                ${items.map(it => `
+                  <tr class="hover:bg-blue-50/50">
+                    <td class="px-4 py-2 font-medium ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(it.AirCode)}</td>
+                    <td class="px-4 py-2 text-gray-600 truncate max-w-[220px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
+                    <td class="px-4 py-2 text-gray-500 whitespace-nowrap">รอบที่ ${it.round}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
+                    </td>
+                    <td class="px-4 py-2 text-gray-500 whitespace-nowrap text-xs">${it.actualDate ? 'ล้างจริง ' + esc(fmtDate(it.actualDate)) : ''}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    /** เลือก/ยกเลิกวันที่กำลังดูรายละเอียด — กดวันเดิมซ้ำคือปิด */
+    function selectPlanCalendarDay(day) {
+      calSelectedDay = (day && calSelectedDay === day) ? null : day;
+      renderPlanCalendar();
     }
 
     window.openPlanCalendar = openPlanCalendar;
     window.shiftPlanCalendar = shiftPlanCalendar;
+    window.selectPlanCalendarDay = selectPlanCalendarDay;
 
     /**
      * วาดสรุปการล้างแอร์รายปี ไว้เหนือตารางแผน
