@@ -3399,17 +3399,61 @@
      * โหลดแยกจากตารางโดยตั้งใจ เพราะถ้าสรุปโหลดไม่ได้ ตารางต้องยังใช้งานได้ตามปกติ
      * การสรุปเป็นข้อมูลประกอบ ไม่ใช่ของที่ขาดแล้วทำงานต่อไม่ได้
      */
+    /** ผลสรุปล่าสุดที่ดึงมา เก็บไว้เพื่อกางหรือยุบแถวได้โดยไม่ต้องยิงเซิร์ฟเวอร์ใหม่ */
+    let currentPlanSummary = null;
+
+    /** ภูมิภาคที่กางดูราย Node อยู่ตอนนี้ (null = ยุบหมด) กางได้ทีละภูมิภาคเพื่อไม่ให้ตารางยาวเกิน */
+    let planSummaryOpenRegion = null;
+
     async function renderPlanSummary(year) {
       const box = document.getElementById('planSummary');
       if (!box) return;
 
-      let s;
       try {
-        s = await call('getCleaningSummary', year);
+        currentPlanSummary = await call('getCleaningSummary', year);
       } catch (err) {
+        currentPlanSummary = null;
         box.classList.add('hidden');
         return;
       }
+      planSummaryOpenRegion = null;
+      drawPlanSummary();
+    }
+
+    /** กาง/ยุบราย Node ของภูมิภาคนั้น กดซ้ำที่เดิมคือยุบ */
+    function togglePlanSummaryRegion(region) {
+      planSummaryOpenRegion = planSummaryOpenRegion === region ? null : region;
+      drawPlanSummary();
+    }
+    window.togglePlanSummaryRegion = togglePlanSummaryRegion;
+
+    /**
+     * กดจากตารางสรุปแล้วให้ตารางแผนข้างล่างกรองตามนั้นเลย
+     *
+     * ตัวเลขในสรุปตอบว่า "เหลือเท่าไหร่" แต่พอจะไปตามงานต่อต้องเห็นรายเครื่อง
+     * ถ้าไม่เชื่อมให้ ก็ต้องเลื่อนลงไปตั้งตัวกรองเองซ้ำกับที่เพิ่งกดไป
+     */
+    function filterPlanBy(region, node) {
+      const rs = document.getElementById('planRegionFilter');
+      if (rs) {
+        // เติมตัวเลือกให้ครบก่อนค่อยสั่งเลือก ถ้าสั่ง value ตอนที่ยังไม่มีตัวเลือกนั้นอยู่
+        // เบราว์เซอร์จะไม่ติดให้เงียบๆ แล้วกลายเป็นกรองไม่ตรงกับที่กด
+        syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
+        rs.value = region || '';
+      }
+      renderPlanTable();                    // ต้องวาดก่อน ตัวเลือก Node ถึงจะถูกเติมตามภูมิภาคใหม่
+
+      const ns = document.getElementById('planNodeFilter');
+      if (ns && node) { ns.value = node; renderPlanTable(); }
+
+      document.getElementById('planTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    window.filterPlanBy = filterPlanBy;
+
+    function drawPlanSummary() {
+      const box = document.getElementById('planSummary');
+      const s = currentPlanSummary;
+      if (!box) return;
       if (!s || !s.units) { box.classList.add('hidden'); return; }
 
       const baht = v => '฿' + Number(v || 0).toLocaleString();
@@ -3466,31 +3510,92 @@
             </div>
 
             <div>
-              <div class="text-sm font-semibold text-gray-700 mb-3">แยกตามภูมิภาค</div>
-              <div class="overflow-x-auto">
+              <div class="text-sm font-semibold text-gray-700 mb-1">แยกตามภูมิภาค</div>
+              <div class="text-[11px] text-gray-400 mb-2">กดที่ภูมิภาคเพื่อดูว่าที่ไหนล้างไปแล้วบ้าง · กดชื่อ Node เพื่อกรองตารางข้างล่าง</div>
+              <div class="overflow-x-auto max-h-[24rem] overflow-y-auto border border-gray-100 rounded-lg">
                 <table class="w-full text-sm">
                   <thead>
-                    <tr class="text-slate-600 border-b border-gray-200 text-xs">
-                      <th class="py-1.5 pr-3 text-left font-semibold">ภาค</th>
+                    <tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 sticky top-0 z-10">
+                      <th class="py-1.5 px-3 text-left font-semibold">ภูมิภาค / Node</th>
                       <th class="py-1.5 px-3 text-right font-semibold">เครื่อง</th>
                       <th class="py-1.5 px-3 text-right font-semibold">ล้างแล้ว</th>
-                      <th class="py-1.5 pl-3 text-right font-semibold">ค่าใช้จ่าย</th>
+                      <th class="py-1.5 px-3 text-right font-semibold">ค่าใช้จ่าย</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-100 text-gray-700">
-                    ${s.byRegion.map(r => `
-                      <tr class="${r.done ? '' : 'text-gray-400'}">
-                        <td class="py-1.5 pr-3">${esc(regionLabel(r.region))}</td>
-                        <td class="py-1.5 px-3 text-right">${r.units}</td>
-                        <td class="py-1.5 px-3 text-right ${r.done ? 'font-semibold text-gray-800' : ''}">${r.done}</td>
-                        <td class="py-1.5 pl-3 text-right">${r.cost ? baht(r.cost) : '-'}</td>
-                      </tr>`).join('')}
+                    ${s.byRegion.map(r => planSummaryRegionRows(r, baht)).join('')}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
         </div>`;
+    }
+
+    /**
+     * แถวของภูมิภาคหนึ่ง พร้อมแถวราย Node ถ้ากางอยู่
+     *
+     * ยอดรวมของภูมิภาคบอกได้แค่ว่าคืบหน้าเท่าไหร่ ไม่ได้บอกว่า "ที่ไหน" ยังไม่ได้ล้าง
+     * ซึ่งเป็นคำถามที่ต้องใช้ตอนตามงานจริง ภูมิภาคหนึ่งมี Node ได้ถึง 51 แห่ง
+     * เซิร์ฟเวอร์เรียง Node ที่ค้างมากที่สุดมาให้บนสุดแล้ว
+     */
+    function planSummaryRegionRows(r, baht) {
+      const open = planSummaryOpenRegion === r.region;
+      const target = r.done + r.pending;
+
+      const head = `
+        <tr class="bg-white hover:bg-slate-50 transition-colors">
+          <td class="py-1.5 px-3">
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="togglePlanSummaryRegion('${esc(r.region)}')"
+                      title="${open ? 'ยุบรายการ Node' : 'ดูราย Node'}"
+                      class="flex items-center gap-1.5 font-semibold text-gray-800 hover:text-[#1153a1]">
+                <!-- เขียนชื่อไอคอนเต็มทั้งสองแบบ ไม่ต่อสตริงเอา
+                     เพราะเทสต์ตรวจว่าไอคอนที่ใช้มีอยู่จริงไหม โดยอ่านจากชื่อที่เขียนไว้ในไฟล์
+                     ถ้าต่อสตริงมันจะตรวจไม่ได้ แล้วไอคอนที่พิมพ์ผิดจะกลายเป็นกล่องว่างโดยไม่มีใครรู้ -->
+                <i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'} text-xs"></i>
+                ${esc(regionLabel(r.region))}
+                <span class="text-[11px] font-normal text-gray-400">${r.nodes.length} Node</span>
+              </button>
+              <button type="button" onclick="filterPlanBy('${esc(r.region)}')" title="กรองตารางข้างล่างด้วยภูมิภาคนี้"
+                      class="ml-1 text-gray-300 hover:text-[#1153a1] p-0.5"><i class="ph ph-funnel text-xs"></i></button>
+            </div>
+          </td>
+          <td class="py-1.5 px-3 text-right">${r.units}</td>
+          <td class="py-1.5 px-3 text-right ${r.done ? 'font-semibold text-gray-800' : 'text-gray-400'}">${r.done} / ${target}</td>
+          <td class="py-1.5 px-3 text-right">${r.cost ? baht(r.cost) : '-'}</td>
+        </tr>`;
+
+      if (!open) return head;
+
+      const nodes = r.nodes.map(n => {
+        const t = n.done + n.pending;
+
+        // บอกสถานะของ Node ด้วยคำ ไม่ใช่ให้ไปตีความจากตัวเลขเอง
+        // เพราะรายการนี้มีไว้กวาดตาหาที่ที่ต้องไปตาม ไม่ได้มีไว้อ่านทีละบรรทัด
+        const note = t === 0
+          ? '<span class="text-gray-400">ยกเลิกทุกรอบ</span>'
+          : n.done === 0
+            ? '<span class="text-rose-500">ยังไม่ได้ล้างเลยปีนี้</span>'
+            : n.done >= t
+              ? '<span class="text-emerald-600">ครบแล้ว · ล่าสุด ' + esc(fmtDate(n.lastDone)) + '</span>'
+              : '<span class="text-amber-600">เหลืออีก ' + (t - n.done) + ' รอบ</span>' +
+                (n.lastDone ? '<span class="text-gray-400"> · ล่าสุด ' + esc(fmtDate(n.lastDone)) + '</span>' : '');
+
+        return `
+          <tr class="bg-slate-50/60 hover:bg-blue-50/50 transition-colors cursor-pointer"
+              onclick="filterPlanBy('${esc(r.region)}', '${esc(n.node)}')" title="กรองตารางข้างล่างด้วย Node นี้">
+            <td class="py-1.5 px-3 pl-8">
+              <div class="text-gray-800">${esc(n.node)}<span class="text-[11px] text-gray-400"> ${esc(n.siteCode)}</span></div>
+              <div class="text-[11px]">${note}</div>
+            </td>
+            <td class="py-1.5 px-3 text-right align-top text-gray-600">${n.units}</td>
+            <td class="py-1.5 px-3 text-right align-top ${n.done ? 'text-gray-800' : 'text-gray-400'}">${n.done} / ${t}</td>
+            <td class="py-1.5 px-3 text-right align-top text-gray-600">${n.cost ? baht(n.cost) : '-'}</td>
+          </tr>`;
+      }).join('');
+
+      return head + nodes;
     }
 
     async function loadPlan() {
