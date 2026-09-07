@@ -7,8 +7,8 @@
  *   node scripts/renumber-history.mjs --apply   เปลี่ยนจริง
  *
  * รูปแบบใหม่:
- *   PM20260901    งานล้างแอร์ ก.ย. 2026 ลำดับที่ 1
- *   CM202611123   งานซ่อม พ.ย. 2026 ลำดับที่ 123
+ *   PM2609-01     งานล้างแอร์ ก.ย. 2026 ลำดับที่ 1
+ *   CM2611-123    งานซ่อม พ.ย. 2026 ลำดับที่ 123
  *
  * ปลอดภัยเพราะตรวจแล้วว่าไม่มีตารางไหนอ้างถึง ID ของประวัติเลย
  * (ฟอร์มล้างแอร์ใช้ ID ของตัวเองที่ขึ้นต้นด้วย CF ไม่เกี่ยวกัน)
@@ -64,7 +64,7 @@ for (const r of rows) {
   }
 
   const { y, m } = partsOf(d);
-  const stem = historyPrefix(r.EventType) + y + String(m).padStart(2, '0');
+  const stem = historyPrefix(r.EventType) + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
 
   const n = (counters.get(stem) || 0) + 1;
   counters.set(stem, n);
