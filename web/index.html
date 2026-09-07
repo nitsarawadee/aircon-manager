@@ -1272,7 +1272,7 @@
       wrap._m = base.getMonth() + 1;
 
       const pop = document.createElement('div');
-      pop.className = 'df-pop absolute z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-64';
+      pop.className = 'df-pop absolute z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-72';
       pop.style.top = '100%'; pop.style.right = '0';
       wrap.append(pop);
       dfDraw(wrap);
@@ -1284,6 +1284,37 @@
         };
         document.addEventListener('mousedown', close);
       }, 0);
+    }
+
+    /**
+     * ช่วงปีที่ให้เลือกได้
+     *
+     * ย้อนหลัง 30 ปีเพราะแอร์บางตัวติดตั้งมาตั้งแต่รุ่นเก่ามาก
+     * และเผื่อไปข้างหน้า 5 ปีเพราะแผนล้างแอร์ลงนัดล่วงหน้าข้ามปีได้
+     * ถ้าค่าที่กรอกไว้อยู่นอกช่วงนี้ ต้องขยายช่วงให้ครอบมันด้วย
+     * ไม่งั้นเปิดปฏิทินแล้วปีของตัวเองหายไปจากรายการ
+     */
+    function dfYears(wrap) {
+      const now = new Date().getFullYear();
+      const lo = Math.min(now - 30, wrap._y);
+      const hi = Math.max(now + 5, wrap._y);
+
+      // เรียงปีล่าสุดไว้บน เพราะข้อมูลที่กรอกกันจริงส่วนใหญ่อยู่ใกล้ปัจจุบัน
+      const out = [];
+      for (let y = hi; y >= lo; y--) out.push(y);
+      return out;
+    }
+
+    function dfSetMonth(sel) {
+      const wrap = sel.closest('.datefield');
+      wrap._m = Number(sel.value);
+      dfDraw(wrap);
+    }
+
+    function dfSetYear(sel) {
+      const wrap = sel.closest('.datefield');
+      wrap._y = Number(sel.value);
+      dfDraw(wrap);
     }
 
     function dfShift(btn, delta) {
@@ -1327,10 +1358,22 @@
       }
 
       pop.innerHTML = `
-        <div class="flex items-center justify-between mb-2">
-          <button type="button" onclick="dfShift(this,-1)" class="p-1 rounded hover:bg-gray-100 text-gray-600"><i class="ph ph-caret-left"></i></button>
-          <div class="text-sm font-semibold text-gray-800">${TH_MONTHS[m - 1]} ${y}</div>
-          <button type="button" onclick="dfShift(this,1)" class="p-1 rounded hover:bg-gray-100 text-gray-600"><i class="ph ph-caret-right"></i></button>
+        <div class="flex items-center gap-1 mb-2">
+          <button type="button" onclick="dfShift(this,-1)" title="เดือนก่อนหน้า"
+                  class="p-1 rounded hover:bg-gray-100 text-gray-600 flex-shrink-0"><i class="ph ph-caret-left"></i></button>
+
+          <select onchange="dfSetMonth(this)" title="เลือกเดือน"
+                  class="flex-1 min-w-0 text-sm font-semibold text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-[#1153a1] rounded px-1 py-0.5 outline-none cursor-pointer">
+            ${TH_MONTHS.map((name, i) => `<option value="${i + 1}" ${i + 1 === m ? 'selected' : ''}>${name}</option>`).join('')}
+          </select>
+
+          <select onchange="dfSetYear(this)" title="เลือกปี (พิมพ์เลขปีเพื่อกระโดดได้)"
+                  class="text-sm font-semibold text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-[#1153a1] rounded px-1 py-0.5 outline-none cursor-pointer">
+            ${dfYears(wrap).map(yy => `<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}</option>`).join('')}
+          </select>
+
+          <button type="button" onclick="dfShift(this,1)" title="เดือนถัดไป"
+                  class="p-1 rounded hover:bg-gray-100 text-gray-600 flex-shrink-0"><i class="ph ph-caret-right"></i></button>
         </div>
         <div class="grid grid-cols-7 gap-0.5 mb-1">
           ${TH_DOW.map(d => `<div class="text-center text-[10px] text-gray-400 font-medium">${d}</div>`).join('')}
@@ -1352,6 +1395,7 @@
 
     window.dfType = dfType; window.dfCommit = dfCommit;
     window.dfPicker = dfPicker; window.dfShift = dfShift; window.dfPick = dfPick;
+    window.dfSetMonth = dfSetMonth; window.dfSetYear = dfSetYear;
 
     /**
      * ข้อความที่ใช้ค้นหาในตาราง
