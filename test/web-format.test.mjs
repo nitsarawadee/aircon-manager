@@ -245,3 +245,28 @@ test('ส่งเป็น callback ของ filter ตรงๆ ได้ ไ
   ];
   assert.deepEqual(list.filter(isOldUnit).map(a => a.AirCode), ['A', 'D']);
 });
+
+/* ==================== ชื่อภูมิภาคที่แสดงผล ==================== */
+
+const regionLabel = extract('regionLabel');
+
+test('ภูมิภาคที่เก็บเป็นตัวเลข ต้องแสดงพร้อมคำว่า Region', () => {
+  // ข้อมูลจริงเก็บเป็นเลข 1-6 ตามที่บริษัทแบ่งพื้นที่ เลขลอยๆ ในตารางหรือกราฟไม่บอกอะไร
+  assert.equal(regionLabel('1'), 'Region 1');
+  assert.equal(regionLabel('6'), 'Region 6');
+  assert.equal(regionLabel(3), 'Region 3', 'ค่าที่มาเป็นตัวเลขจริง ไม่ใช่ข้อความ');
+});
+
+test('ค่าที่ไม่ใช่ตัวเลข ต้องแสดงตามเดิม ไม่เติมคำซ้อน', () => {
+  // เผื่อวันหนึ่งเปลี่ยนไปเก็บเป็นชื่อภาคจริง จะได้ไม่กลายเป็น "Region ภาคกลาง"
+  assert.equal(regionLabel('ภาคกลาง'), 'ภาคกลาง');
+  assert.equal(regionLabel('ไม่ระบุ'), 'ไม่ระบุ', 'คีย์ที่แดชบอร์ดใช้กับเครื่องที่ไม่ได้ระบุภูมิภาค');
+  assert.equal(regionLabel('Region 1'), 'Region 1', 'เรียกซ้ำต้องไม่เติมคำเพิ่ม');
+});
+
+test('ค่าว่างต้องได้ข้อความว่าง ไม่ใช่คำว่า Region ลอยๆ', () => {
+  assert.equal(regionLabel(''), '');
+  assert.equal(regionLabel(null), '');
+  assert.equal(regionLabel(undefined), '');
+  assert.equal(regionLabel('   '), '');
+});

@@ -1077,6 +1077,22 @@
     }
 
     /**
+     * ชื่อภูมิภาคสำหรับแสดงผล
+     *
+     * ข้อมูลจริงเก็บเป็นเลข 1-6 ตามที่บริษัทแบ่งพื้นที่ไว้ เลขลอยๆ ตัวเดียว
+     * ไม่บอกอะไรเลยเวลาไปโผล่ในตาราง กราฟ หรือรายการติ๊กสิทธิ์
+     * จึงเติมคำว่า Region นำหน้า ซึ่งเป็นคำเดียวกับที่ฟอร์มแก้ไขข้อมูลเครื่องใช้อยู่แล้ว
+     *
+     * แปลงตอนแสดงเท่านั้น ค่าที่บันทึกลงฐานข้อมูลยังเป็นเลขล้วนเหมือนเดิม
+     * ถ้าวันหนึ่งเปลี่ยนไปเก็บเป็นชื่อภาคจริง ก็จะแสดงชื่อนั้นตามที่เก็บ ไม่ไปเติมคำซ้อน
+     */
+    function regionLabel(v) {
+      const t = String(v == null ? '' : v).trim();
+      if (!t) return '';
+      return /^\d+$/.test(t) ? 'Region ' + t : t;
+    }
+
+    /**
      * อายุการใช้งานของเครื่อง นับจากวันติดตั้งถึงวันที่กำหนด
      *
      * นับแบบปฏิทินจริง ไม่ได้เอาจำนวนวันมาหารด้วย 365
@@ -1750,7 +1766,7 @@
         const checked = String(data.Regions == null ? '' : data.Regions)
           .split(',').map(s => s.trim()).includes(String(r).trim());
         return `<label class="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" class="u_region_chk" value="${esc(r)}" ${checked ? 'checked' : ''}> ${esc(r)}
+          <input type="checkbox" class="u_region_chk" value="${esc(r)}" ${checked ? 'checked' : ''}> ${esc(regionLabel(r))}
         </label>`;
       }).join('');
       const currentPerms = parsePermStringToObj(data.Permissions);
@@ -1910,7 +1926,11 @@
           : `<div class="${cls} cursor-default" style="${style}">${body}</div>`;
       }).join('');
 
-      document.getElementById('regionChart').innerHTML = renderBarChart(s.byRegion, false, 'blue');
+      // เปลี่ยนชื่อแกนตอนวาดเท่านั้น ตัวเลขที่เซิร์ฟเวอร์ส่งมายังเป็นคีย์เดิม
+      const byRegionLabelled = Object.fromEntries(
+        Object.entries(s.byRegion || {}).map(([k, v]) => [regionLabel(k), v])
+      );
+      document.getElementById('regionChart').innerHTML = renderBarChart(byRegionLabelled, false, 'blue');
       renderStatusDonut(s.byStatus);
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
@@ -2214,7 +2234,7 @@
       // ที่ตั้งของหลายเครื่องมีชื่อ Node ซ้ำกับชื่อจังหวัด ถ้าต่อกันตรงๆ จะได้
       // "อ่างทอง · ATG-ATG · อ่างทอง" ซึ่งอ่านแล้วสะดุดเพราะดูเหมือนพิมพ์ผิด
       const where = [];
-      for (const part of [u.NodeName, u.SiteCode, u.Province, u.Region ? 'ภาค ' + u.Region : '']) {
+      for (const part of [u.NodeName, u.SiteCode, u.Province, regionLabel(u.Region)]) {
         const v = String(part || '').trim();
         if (v && !where.some(x => x.toLowerCase() === v.toLowerCase())) where.push(v);
       }
@@ -2424,7 +2444,7 @@
         ]),
 
         airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
-          airInfoField('ภูมิภาค', u.Region ? 'ภาค ' + u.Region : ''),
+          airInfoField('ภูมิภาค', regionLabel(u.Region)),
           airInfoField('จังหวัด', u.Province),
           airInfoField('Node', u.NodeName),
           airInfoField('Site Code', u.SiteCode),
@@ -2610,7 +2630,7 @@
             <td class="px-4 py-3 font-medium text-gray-900">${airCodeBtn(a.AirCode, 'text-gray-900 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
             <td class="px-4 py-3 text-gray-600">
               <div class="text-sm">${esc(a.Province)}</div>
-              <div class="text-xs text-gray-400">${esc(a.Region)}</div>
+              <div class="text-xs text-gray-400">${esc(regionLabel(a.Region))}</div>
             </td>
             <td class="px-4 py-3 text-gray-600">
               <div class="text-sm truncate max-w-[150px]" title="${esc(a.NodeName)}">${esc(a.NodeName)}</div>
@@ -3307,7 +3327,7 @@
                   <tbody class="divide-y divide-gray-100 text-gray-700">
                     ${s.byRegion.map(r => `
                       <tr class="${r.done ? '' : 'text-gray-400'}">
-                        <td class="py-1.5 pr-3">${esc(r.region)}</td>
+                        <td class="py-1.5 pr-3">${esc(regionLabel(r.region))}</td>
                         <td class="py-1.5 px-3 text-right">${r.units}</td>
                         <td class="py-1.5 px-3 text-right ${r.done ? 'font-semibold text-gray-800' : ''}">${r.done}</td>
                         <td class="py-1.5 pl-3 text-right">${r.cost ? baht(r.cost) : '-'}</td>
