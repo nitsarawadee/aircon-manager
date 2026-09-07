@@ -2251,8 +2251,9 @@
           </div>
 
           <!-- สองคอลัมน์บนจอกว้าง ไม่งั้นข้อมูลสั้นๆ จะถูกยืดจนชื่อช่องกับค่าห่างกันคนละฝั่งจอ
-               items-start กันไม่ให้การ์ดเตี้ยถูกยืดตามการ์ดสูงในแถวเดียวกัน -->
-          <div class="grid lg:grid-cols-2 gap-3 items-start">
+               การ์ดในแถวเดียวกันสูงเท่ากัน (items-stretch) เพื่อให้ขอบล่างตรงกันเป็นแนวเดียว
+               ส่วนที่ว่างที่เกิดขึ้นในการ์ดเตี้ย ถูกใช้ดันบรรทัด "ยังไม่ได้กรอก" ไปชิดก้นการ์ด -->
+          <div class="grid lg:grid-cols-2 gap-3 items-stretch">
             ${airInfoBody(u)}
           </div>
 
@@ -2379,7 +2380,7 @@
         </div>`;
 
       return `
-        <div class="${opts.wide ? 'lg:col-span-2 ' : ''}bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+        <div class="${opts.wide ? 'lg:col-span-2 ' : ''}bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col">
           <div class="flex items-center gap-2 mb-3">
             <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style="background:var(--p-${tone}-bg); color:var(--p-${tone}-fg)">
@@ -2391,7 +2392,7 @@
           ${filled.length ? `<div class="grid grid-cols-2 gap-x-5 gap-y-3">${filled.map(cell).join('')}</div>` : ''}
 
           ${missing.length ? `
-            <div class="${filled.length ? 'mt-3 pt-3 border-t border-gray-100 ' : ''}flex items-start gap-1.5 text-[11px] text-gray-400">
+            <div class="${filled.length ? 'mt-auto pt-4 border-t border-gray-100 ' : 'mt-auto '}flex items-start gap-1.5 text-[11px] text-gray-400">
               <i class="ph ph-info text-sm leading-none mt-px flex-shrink-0"></i>
               <span>ยังไม่ได้กรอก: ${missing.map(f => esc(f.label)).join(' · ')}</span>
             </div>` : ''}
@@ -2422,12 +2423,6 @@
           airInfoField('Outdoor S/N', u.OutdoorSN)
         ]),
 
-        airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
-          airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
-          airInfoField('อายุการใช้งาน', age, { html: true, derived: true }),
-          airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
-        ]),
-
         airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
           airInfoField('ภูมิภาค', u.Region ? 'ภาค ' + u.Region : ''),
           airInfoField('จังหวัด', u.Province),
@@ -2436,6 +2431,12 @@
           airInfoField('ประเภทสถานที่', u.LocationType),
           airInfoField('พิกัด', coords),
           airInfoField('ที่อยู่', u.Address, { wide: true })
+        ]),
+
+        airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
+          airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
+          airInfoField('อายุการใช้งาน', age, { html: true, derived: true }),
+          airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
         ]),
 
         u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', 'aqua', [airInfoField('', u.Note, { wide: true })], { wide: true }) : ''
