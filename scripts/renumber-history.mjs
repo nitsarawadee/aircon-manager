@@ -38,7 +38,7 @@ const db = new DatabaseSync(DB);
 db.exec('PRAGMA busy_timeout = 5000');
 
 // เรียงตาม row_id เพราะเป็นลำดับที่ข้อมูลถูกบันทึกเข้ามาจริง
-// ลำดับในเลขที่เอกสารจึงสะท้อนลำดับการทำงานจริงภายในเดือนนั้น
+// ลำดับในเลขที่เอกสารจึงไล่ตามลำดับการทำงานจริงทั้งชุด
 const rows = db.prepare('SELECT row_id, ID, Date, AirCode, EventType, Detail FROM history ORDER BY row_id').all();
 
 /* ---------------- 1. แก้เหตุการณ์ปลดระวาง ---------------- */
@@ -53,7 +53,7 @@ for (const r of eventFixes) r.EventType = 'ปลดระวาง';
 
 /* ---------------- 2. คำนวณเลขที่ใหม่ทั้งชุด ---------------- */
 
-const counters = new Map();   // stem -> ลำดับล่าสุด
+const counters = new Map();   // ตัวย่อ (PM/CM) -> ลำดับล่าสุด
 const plan = [];
 
 for (const r of rows) {
@@ -64,10 +64,13 @@ for (const r of rows) {
   }
 
   const { y, m } = partsOf(d);
-  const stem = historyPrefix(r.EventType) + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
+  const prefix = historyPrefix(r.EventType);
+  const stem = prefix + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
 
-  const n = (counters.get(stem) || 0) + 1;
-  counters.set(stem, n);
+  // นับต่อเนื่องทั้งชุดของตัวย่อนั้น ไม่ได้เริ่มใหม่ทุกเดือน
+  // จึงใช้ตัวย่ออย่างเดียวเป็นกุญแจของตัวนับ ไม่รวมปีเดือน
+  const n = (counters.get(prefix) || 0) + 1;
+  counters.set(prefix, n);
 
   const id = stem + String(n).padStart(2, '0');
   if (id !== r.ID) plan.push({ row_id: r.row_id, from: r.ID, to: id, r });
@@ -98,9 +101,10 @@ if (plan.length) {
   console.log();
 }
 
-console.log('=== สรุปตามเดือน ===');
-for (const [stem, n] of [...counters].sort()) {
-  console.log('  ' + stem + '  ' + String(n).padStart(3) + ' รายการ   (ล่าสุด ' + stem + String(n).padStart(2, '0') + ')');
+console.log('=== สรุปตามประเภทงาน ===');
+for (const [prefix, n] of [...counters].sort()) {
+  const label = prefix === 'PM' ? 'งานล้างตามแผน' : 'งานแก้ไข/ซ่อม';
+  console.log('  ' + prefix + '  ' + label.padEnd(16) + String(n).padStart(3) + ' รายการ   (ลำดับล่าสุด ' + n + ')');
 }
 console.log();
 
