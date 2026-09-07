@@ -174,6 +174,22 @@
     html.dark .text-green-800   { color: #86efac !important; }
     html.dark .text-red-800     { color: #fca5a5 !important; }
 
+    /* ---- พื้นไล่ระดับ ----
+       คลาสไล่ระดับของ Tailwind (from- via- to-) เป็นคนละชื่อกับคลาสพื้นธรรมดา
+       จึงไม่โดนกฎข้างบนเลย ต้องเขียนทับแยกอีกชุด
+       ถ้าลืม หน้าล็อกอินจะเป็นพื้นสีอ่อนสว่างทั้งจอในโหมดมืด */
+    html.dark #authScreen {
+      background-image: linear-gradient(to bottom right, #0a0a0a, #101620, #16110b) !important;
+    }
+
+    /* ปุ่มเมนูที่กำลังเลือกอยู่ ใช้ไล่ระดับฟ้า-ส้มอ่อน ซึ่งสว่างจ้าบนแถบเมนูสีดำ
+       เปลี่ยนเป็นโทนเดียวกันแต่เข้ม และให้ตัวอักษรสว่างขึ้นเพื่อให้ยังอ่านออก */
+    html.dark .tab-btn.active {
+      background-image: linear-gradient(to right, #12202e, #241a10) !important;
+      color: #a8cbe8 !important;
+      border-color: rgba(244, 121, 32, 0.35) !important;
+    }
+
     html.dark .table-container::-webkit-scrollbar-track { background: #161616; }
     html.dark .table-container::-webkit-scrollbar-thumb { background: #454545; }
     .view { display: none; animation: fadeIn 0.3s ease; }
@@ -205,7 +221,7 @@
              ไม่งั้นจะเป็นขอบสองชั้นแล้วตัวโลโก้ดูเล็กลอยอยู่กลางกล่อง
              ใช้พื้นขาวของภาพเป็นตัวการ์ดเลย แค่มนมุมกับใส่เงาให้ -->
         <img src="assets/logo.png" alt="INTERLINK Telecom"
-             class="h-20 w-auto mx-auto mb-3 rounded-xl shadow-sm" style="background:#fff">
+             class="h-20 w-auto mx-auto mb-3">
         <div class="text-xs text-slate-400 font-medium tracking-wide">AIRCON MANAGER</div>
       </div>
 
@@ -264,7 +280,7 @@
            การใส่พื้นรองมนๆ ทำให้ดูเป็นป้ายที่ตั้งใจ ไม่ใช่ภาพที่ลืมทำพื้นโปร่งใส -->
       <div class="flex flex-col gap-0.5 min-w-0">
         <img src="assets/logo.png" alt="INTERLINK Telecom"
-             class="h-11 md:h-14 w-auto rounded-lg" style="background:#fff">
+             class="h-11 md:h-14 w-auto">
         <div class="text-[10px] text-slate-400 font-medium tracking-wide pl-1">AIRCON MANAGER</div>
       </div>
 

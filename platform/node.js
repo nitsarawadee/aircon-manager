@@ -96,7 +96,20 @@ const MIME = {
   '.pdf': 'application/pdf'
 };
 
-async function serveStatic(pathname, res) {
+/**
+ * เสิร์ฟไฟล์หน้าเว็บ
+ *
+ * ⚠️ เรื่องแคชสำคัญกว่าที่คิด
+ * เดิมสั่งให้เบราว์เซอร์เก็บไฟล์ไว้ 1 ชั่วโมง ซึ่งแปลว่าเปลี่ยนโลโก้หรือแก้หน้าเว็บแล้ว
+ * ผู้ใช้จะยังเห็นของเก่าไปอีกชั่วโมงโดยไม่รู้ตัว และคิดว่าระบบไม่ทำงาน
+ * (เจอมาแล้วตอนเปลี่ยนไฟล์โลโก้ ต้องกด Ctrl+F5 ถึงจะเห็น)
+ *
+ * ตอนนี้ให้ถามเซิร์ฟเวอร์ทุกครั้งว่าไฟล์เปลี่ยนหรือยัง (no-cache)
+ * ถ้าไม่เปลี่ยนตอบ 304 กลับไปซึ่งไม่มีเนื้อไฟล์ติดไปด้วย จึงเบามาก
+ * ระบบนี้รันในวงแลนของบริษัท การถามเพิ่มหนึ่งครั้งไม่มีผลกับความเร็ว
+ * แต่การเห็นข้อมูลเก่ามีผลกับความเชื่อถือของทั้งระบบ
+ */
+async function serveStatic(pathname, res, req) {
   // ตัด query string ออก และแปลง %20 ฯลฯ กลับเป็นตัวอักษรปกติ
   let rel = decodeURIComponent(pathname.split('?')[0]);
   if (rel === '/' || rel === '') rel = '/index.html';
@@ -120,11 +133,24 @@ async function serveStatic(pathname, res) {
 
   try {
     const info = await stat(filePath);
+
+    // ใช้เวลาแก้ไขไฟล์เป็นตัวบอกว่าไฟล์เปลี่ยนหรือยัง
+    // ตัดเศษมิลลิวินาทีทิ้งก่อน เพราะรูปแบบวันเวลาของ HTTP ละเอียดถึงแค่วินาที
+    // ถ้าไม่ตัด การเทียบจะไม่ตรงกันเสมอ แล้วจะไม่มีวันตอบ 304 เลย
+    const mtime = new Date(Math.floor(info.mtimeMs / 1000) * 1000);
+    const since = req && req.headers['if-modified-since'];
+
+    if (since && new Date(since).getTime() >= mtime.getTime()) {
+      res.writeHead(304, { 'Cache-Control': 'no-cache', 'Last-Modified': mtime.toUTCString() }).end();
+      return;
+    }
+
     res.writeHead(200, {
       'Content-Type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream',
       'Content-Length': info.size,
-      // หน้าเว็บหลักห้ามแคช ไม่งั้นผู้ใช้จะยังเห็นเวอร์ชันเก่าหลังอัปเดตระบบ
-      'Cache-Control': filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=3600'
+      'Last-Modified': mtime.toUTCString(),
+      // no-cache ไม่ได้แปลว่าห้ามเก็บ แต่แปลว่าเก็บได้และต้องถามก่อนใช้ทุกครั้ง
+      'Cache-Control': 'no-cache'
     });
     createReadStream(filePath).pipe(res);
   } catch {
@@ -206,7 +232,7 @@ const server = createServer(async (req, res) => {
   const pathname = (req.url || '/').split('?')[0];
 
   if (!isApiPath(pathname)) {
-    return serveStatic(req.url || '/', res);
+    return serveStatic(req.url || '/', res, req);
   }
   if (req.method !== 'POST') {
     res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
