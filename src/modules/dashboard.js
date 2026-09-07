@@ -55,38 +55,46 @@ export async function getDashboardSummary(ctx) {
     // years[0] คือชื่อชีตเต็ม เช่น "Plan_2026" ต้องตัด "Plan_" ออกก่อน
     // เพราะ getCleaningPlan จะเติม "Plan_" นำหน้าปีที่ส่งเข้าไปเองอีกชั้น
     const latestYear = years[0].replace('Plan_', '');
-    const plan = await getCleaningPlan(ctx, latestYear); // กรองตามภูมิภาคมาแล้ว
-
-    let done = 0;
-    const total = plan.length * 3;
-
     const futureLimit = new Date(today.getTime() + 30 * 86400000 + 86399999);
 
-    plan.forEach(p => {
-      [1, 2, 3].forEach(r => {
-        if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') {
-          done++;
-        } else if (p['R' + r + '_PlanDate']) {
-          // ดึงเฉพาะแผนที่ยังไม่เสร็จ และอยู่ในช่วง 30 วันข้างหน้า
-          const pDate = safeParseDate(p['R' + r + '_PlanDate']);
-          if (pDate && pDate >= today && pDate <= futureLimit && p['R' + r + '_Status'] !== 'ยกเลิก') {
-            upcomingPlans.push({
-              AirCode: p.AirCode,
-              NodeName: p.NodeName,
-              Round: r,
-              PlanDate: p['R' + r + '_PlanDate'],
-              RawDate: pDate.getTime()
-            });
+    // นัดหมายต้องมองทุกแผน ไม่ใช่แค่แผนปีล่าสุด
+    // เพราะแผนคนละปีลงนัดคาบเกี่ยวกันได้ (แผนปี 2027 มีนัดตั้งแต่ปลายปี 2026)
+    // ถ้าดูแค่แผนล่าสุด นัดของแผนปีก่อนที่ยังไม่ถึงกำหนดจะหายไปเงียบๆ
+    // และต้องเป็นชุดเดียวกับที่ปฏิทินเห็น ไม่งั้นสองที่จะบอกไม่ตรงกัน
+    for (const name of years) {
+      const py = name.replace('Plan_', '');
+      const plan = await getCleaningPlan(ctx, py); // กรองตามภูมิภาคมาแล้ว
+
+      let done = 0;
+
+      plan.forEach(p => {
+        [1, 2, 3].forEach(r => {
+          if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') {
+            done++;
+          } else if (p['R' + r + '_PlanDate']) {
+            // ดึงเฉพาะแผนที่ยังไม่เสร็จ และอยู่ในช่วง 30 วันข้างหน้า
+            const pDate = safeParseDate(p['R' + r + '_PlanDate']);
+            if (pDate && pDate >= today && pDate <= futureLimit && p['R' + r + '_Status'] !== 'ยกเลิก') {
+              upcomingPlans.push({
+                AirCode: p.AirCode,
+                NodeName: p.NodeName,
+                Round: r,
+                PlanYear: py,
+                PlanDate: p['R' + r + '_PlanDate'],
+                RawDate: pDate.getTime()
+              });
+            }
           }
-        }
+        });
       });
-    });
+
+      // ความคืบหน้ายังคิดจากแผนปีล่าสุดปีเดียว เพราะการ์ดบอกชัดว่าเป็นของปีไหน
+      if (py === latestYear) latestPlanSummary = { year: latestYear, done, total: plan.length * 3 };
+    }
 
     // เรียงตามวันที่ใกล้สุดก่อน และแสดงแค่ 12 รายการแรกเพื่อไม่ให้หน้าจอรก
     upcomingPlans.sort((a, b) => a.RawDate - b.RawDate);
     upcomingPlans = upcomingPlans.slice(0, 12);
-
-    latestPlanSummary = { year: latestYear, done, total };
   }
 
   const hList = await getHistory(ctx); // กรองตามภูมิภาคมาแล้ว

@@ -188,6 +188,8 @@ export function planCalendar(planRows, year, month) {
       (days[day] ||= []).push({
         AirCode: row.AirCode,
         NodeName: row.NodeName || '',
+        // ปีของแผนที่นัดนี้สังกัด ไม่ใช่ปีของวันที่นัด (สองอย่างนี้ไม่จำเป็นต้องตรงกัน)
+        planYear: String(row.PlanYear || ''),
         round: r,
         status: String(row['R' + r + '_Status'] || '').trim(),
         state: roundState(row, r),
@@ -198,21 +200,39 @@ export function planCalendar(planRows, year, month) {
   }
 
   // เรียงในแต่ละวันให้คงที่ เพื่อให้หน้าจอไม่สลับตำแหน่งเองทุกครั้งที่โหลด
+  // เครื่องเดียวกันโผล่ได้หลายแผน จึงต้องมีปีของแผนเป็นตัวตัดสินซ้อนเข้าไปด้วย
   for (const d of Object.keys(days)) {
-    days[d].sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th') || a.round - b.round);
+    days[d].sort((a, b) =>
+      String(a.AirCode).localeCompare(String(b.AirCode), 'th') ||
+      String(a.planYear).localeCompare(String(b.planYear)) ||
+      a.round - b.round);
   }
 
   return { year: y, month: m, days, total };
 }
 
-/** ปฏิทินนัดหมายของเดือนที่ระบุ */
+/**
+ * ปฏิทินนัดหมายของเดือนที่ระบุ รวมนัดจากแผนทุกปีที่มีในระบบ
+ *
+ * ต้องรวมทุกแผน เพราะ "แผนปี 2027" ไม่ได้แปลว่านัดทุกใบอยู่ในปี 2027
+ * แผนปีถัดไปมักเริ่มลงนัดตั้งแต่ปลายปีก่อนหน้า เช่นแผนปี 2027 มีนัดเดือน ก.ย. 2026
+ * ถ้าเปิดปฏิทินเดือน ก.ย. 2026 แล้วดูแค่แผนปี 2026 นัดพวกนั้นจะหายไปทั้งที่มีอยู่จริง
+ * (เป็นบั๊กที่เจอจากหน้าแดชบอร์ด: รายการนัดขึ้น แต่กดดูปฏิทินแล้วว่างเปล่า)
+ */
 export async function getPlanCalendar(ctx, year, month) {
   await ctx.requireAccess();
   if (!(await ctx.canView('plan'))) return null;
 
+  const years = await getPlanYears(ctx);
+
   // ใช้ getCleaningPlan เพื่อให้กรองตามสิทธิ์ชุดเดียวกับตารางแผน
-  const plan = await getCleaningPlan(ctx, year);
-  return planCalendar(plan, year, month);
+  const rows = [];
+  for (const name of years) {
+    const py = name.replace('Plan_', '');
+    for (const row of await getCleaningPlan(ctx, py)) rows.push({ ...row, PlanYear: py });
+  }
+
+  return planCalendar(rows, year, month);
 }
 
 /** สรุปการล้างแอร์ของปีที่ระบุ สำหรับแสดงหัวหน้าตารางแผน */

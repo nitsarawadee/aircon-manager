@@ -1917,7 +1917,7 @@
             const isToday = pDate.getTime() === todayRaw.getTime();
             
             return `
-            <div onclick="goToPlan('${up.NodeName}')" class="border border-gray-200 rounded-xl p-4 hover:border-[#1153a1] hover:shadow-md transition-all cursor-pointer bg-white relative overflow-hidden group">
+            <div onclick="goToPlan('${up.NodeName}', '${up.PlanYear || ''}')" class="border border-gray-200 rounded-xl p-4 hover:border-[#1153a1] hover:shadow-md transition-all cursor-pointer bg-white relative overflow-hidden group">
                ${isToday ? `<div class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg shadow-sm z-10">วันนี้</div>` : ''}
                <div class="flex items-center gap-3 mb-3">
                   <div class="w-12 h-12 rounded-xl ${isToday ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-blue-50 text-[#1153a1] border border-blue-100'} flex flex-col items-center justify-center flex-shrink-0 shadow-inner">
@@ -1930,7 +1930,7 @@
                   </div>
                </div>
                <div class="text-xs font-medium text-gray-600 bg-gray-50 rounded-lg px-2.5 py-2 flex items-center justify-between group-hover:bg-blue-50 group-hover:text-[#1153a1] transition-colors border border-gray-100 group-hover:border-blue-100">
-                 <div class="flex items-center gap-1.5"><i class="ph-fill ph-calendar-check opacity-70"></i> แผนรอบที่ ${up.Round}</div>
+                 <div class="flex items-center gap-1.5"><i class="ph-fill ph-calendar-check opacity-70"></i> แผนปี ${esc(up.PlanYear || '-')} รอบที่ ${up.Round}</div>
                  <i class="ph ph-arrow-right opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1"></i>
                </div>
             </div>
@@ -1941,8 +1941,22 @@
       }
     }
 
-    function goToPlan(nodeName) {
+    /**
+     * จากการ์ดนัดหมาย ไปที่ตารางแผนของ Node นั้น
+     *
+     * ต้องสลับปีให้ตรงกับแผนที่นัดใบนั้นสังกัดด้วย เพราะนัดของแผนปีหน้า
+     * โผล่ในช่วง 30 วันข้างหน้าได้ ถ้าไม่สลับปีจะเปิดตารางผิดปีแล้วหา Node ไม่เจอ
+     */
+    async function goToPlan(nodeName, planYear) {
       document.querySelector('[data-tab="plan"]').click();
+
+      const yearSel = document.getElementById('planYearSelect');
+      if (planYear && yearSel && yearSel.value !== String(planYear) &&
+          [...yearSel.options].some(o => o.value === String(planYear))) {
+        yearSel.value = String(planYear);
+        await loadPlan();
+      }
+
       const nodeSel = document.getElementById('planNodeFilter');
       if (nodeSel) {
          nodeSel.value = nodeName;
@@ -2678,6 +2692,13 @@
       // สีตามสถานะ ใช้ชุดเดียวกับที่ใช้ในตารางแผน เพื่อไม่ให้ต้องจำสองชุด
       const dot = { done: 'bg-emerald-500', pending: 'bg-[#1153a1]', cancelled: 'bg-gray-300' };
 
+      // ปฏิทินรวมนัดจากแผนทุกปีไว้ด้วยกัน เดือนหนึ่งจึงมีนัดจากสองแผนปนกันได้
+      // ถ้ามีปนกันจริงต้องบอกให้รู้ว่าใบไหนเป็นของแผนปีไหน ไม่งั้นดูแล้วนึกว่าซ้ำ
+      const calYears = [...new Set(
+        Object.values(cal.days || {}).flat().map(it => it.planYear).filter(Boolean)
+      )].sort();
+      const mixedYears = calYears.length > 1;
+
       const cells = [];
       for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[92px] rounded-lg bg-gray-50/60"></div>');
 
@@ -2705,9 +2726,11 @@
               ${items.length ? `<span class="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1">${items.length}</span>` : ''}
             </div>
             ${shown.map(it => `
-              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}">
+              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
+                   title="${esc(it.AirCode)} · แผนปี ${esc(it.planYear || '-')} รอบที่ ${it.round}">
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
+                ${mixedYears && it.planYear ? `<span class="ml-auto text-[9px] text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
               </div>`).join('')}
             ${rest > 0 ? `<div class="text-[10px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
           </div>`);
@@ -2737,6 +2760,7 @@
         <div class="mt-4 text-sm ${cal.total ? 'text-gray-600' : 'text-gray-400'}">
           ${cal.total
             ? 'เดือนนี้มีนัดหมายทั้งหมด <b class="text-gray-800">' + cal.total + '</b> รายการ' +
+              (calYears.length ? ' · จากแผนปี <b class="text-gray-800">' + calYears.join(', ') + '</b>' : '') +
               ' · <span class="text-gray-500">กดที่วันเพื่อดูรายการทั้งหมดของวันนั้น</span>'
             : 'เดือนนี้ยังไม่มีนัดหมายล้างแอร์'}
         </div>
@@ -2795,6 +2819,7 @@
                   <tr>
                     <th class="px-5 py-2 font-semibold">รหัสเครื่อง</th>
                     <th class="px-4 py-2 font-semibold">Node</th>
+                    <th class="px-4 py-2 font-semibold whitespace-nowrap">แผนปี</th>
                     <th class="px-4 py-2 font-semibold whitespace-nowrap">รอบที่</th>
                     <th class="px-4 py-2 font-semibold">สถานะ</th>
                     <th class="px-5 py-2 font-semibold whitespace-nowrap">วันที่ล้างจริง</th>
@@ -2805,6 +2830,7 @@
                     <tr class="hover:bg-blue-50/50">
                       <td class="px-5 py-2.5 font-medium whitespace-nowrap ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(it.AirCode)}</td>
                       <td class="px-4 py-2.5 text-gray-600 truncate max-w-[200px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
+                      <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${esc(it.planYear || '-')}</td>
                       <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
                       <td class="px-4 py-2.5 whitespace-nowrap">
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
