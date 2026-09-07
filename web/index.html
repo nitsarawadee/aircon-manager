@@ -408,12 +408,18 @@
             <div id="statusChartLegend" class="mt-2 space-y-1 text-xs flex-shrink-0"></div>
           </div>
 
-          <!-- ขวา สูงเต็ม 2 แถว: เครื่องที่ควรจับตา -->
+          <!-- ขวา สูงเต็ม 2 แถว: นัดหมายล้างแอร์
+               วางไว้ช่องสูงเพราะเป็นรายการที่ยาวได้เรื่อยๆ ตามจำนวนนัด -->
           <div class="lg:col-span-4 lg:row-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
-            <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
-              <i class="ph-fill ph-wrench text-rose-500"></i> เครื่องที่ควรจับตา (รอซ่อม)
-            </h3>
-            <div id="watchlistContainer" class="dash-scroll space-y-2 pr-1"></div>
+            <div class="flex items-center justify-between mb-2 flex-shrink-0 gap-2">
+              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i class="ph ph-calendar-check text-[#1153a1]"></i> นัดหมาย 30 วัน
+              </h3>
+              <button onclick="openPlanCalendar()" class="text-xs text-[#1153a1] hover:underline font-medium whitespace-nowrap flex items-center gap-1"><i class="ph ph-calendar-blank"></i> ดูปฏิทินทั้งเดือน</button>
+            </div>
+            <div id="upcomingPlanContainer" class="dash-scroll grid grid-cols-1 gap-2 pr-1">
+              <!-- จะถูก Inject ผ่าน JavaScript -->
+            </div>
           </div>
 
           <!-- แถวล่างซ้าย: แนวโน้มค่าใช้จ่าย -->
@@ -424,17 +430,12 @@
             <div class="dash-canvas"><canvas id="trendChartCanvas"></canvas></div>
           </div>
 
-          <!-- แถวล่างกลาง: นัดหมายล้างแอร์ -->
+          <!-- แถวล่างกลาง: เครื่องที่ควรจับตา -->
           <div class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
-            <div class="flex items-center justify-between mb-2 flex-shrink-0 gap-2">
-              <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <i class="ph ph-calendar-check text-[#1153a1]"></i> นัดหมาย 30 วัน
-              </h3>
-              <button onclick="openPlanCalendar()" class="text-xs text-[#1153a1] hover:underline font-medium whitespace-nowrap flex items-center gap-1"><i class="ph ph-calendar-blank"></i> ดูปฏิทินทั้งเดือน</button>
-            </div>
-            <div id="upcomingPlanContainer" class="dash-scroll grid grid-cols-1 gap-2 pr-1">
-              <!-- จะถูก Inject ผ่าน JavaScript -->
-            </div>
+            <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
+              <i class="ph-fill ph-wrench text-rose-500"></i> เครื่องที่ควรจับตา (รอซ่อม)
+            </h3>
+            <div id="watchlistContainer" class="dash-scroll space-y-2 pr-1"></div>
           </div>
 
         </div>
@@ -1564,7 +1565,6 @@
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
         { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-air-conditioner', tone: 'blue' },
-        { num: s.warrantySoon, label: 'หมดประกัน (90 วัน)', icon: 'ph-shield-warning', tone: 'peach' },
         { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose' }
       ];
       if (s.latestPlanSummary) {
@@ -1584,7 +1584,12 @@
         label: 'ค่าซ่อมบำรุงรวม', icon: 'ph-wrench', tone: 'lilac'
       });
 
-      document.getElementById('dashCards').innerHTML = cards.map(c => `
+      // จำนวนคอลัมน์ตามจำนวนการ์ดจริง เพราะการ์ดใบ "คืบหน้าล้างแอร์" จะมีหรือไม่มี
+      // ขึ้นกับว่าปีนั้นสร้างแผนไว้หรือยัง ถ้าตรึงจำนวนไว้ตายตัวจะเหลือช่องว่างค้าง
+      const dashCardsEl = document.getElementById('dashCards');
+      dashCardsEl.className = 'flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3 lg:grid-cols-' + cards.length;
+
+      dashCardsEl.innerHTML = cards.map(c => `
         <div class="rounded-2xl shadow-sm p-5 flex flex-col justify-between relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md cursor-default"
              style="background:var(--p-${c.tone}-bg); border:1px solid var(--p-card-border)">
           <div class="flex justify-between items-start mb-4 relative z-10">
