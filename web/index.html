@@ -1022,6 +1022,9 @@
     let pendingAirSearch = null;
     let pendingAirAgeFilter = false;
     let pendingHistorySearch = null;
+    // ปีที่ถูกขอมาจากการ์ดคืบหน้าบนแดชบอร์ด ต้องชนะค่าเริ่มต้นของหน้าแผน (ปีล่าสุด)
+    // ด้วยเหตุผลเดียวกับข้างบน คือกดแท็บแล้ว loadPlanYears จะไปตั้งปีทับให้เอง
+    let pendingPlanYear = null;
     let currentConfig = {};
     let currentYear = null;
     let currentBudget = null;
@@ -2082,7 +2085,9 @@
         cards.push({
           num: `${s.latestPlanSummary.done}/${s.latestPlanSummary.total}`,
           label: `คืบหน้าล้างแอร์ปี ${s.latestPlanSummary.year}`,
-          icon: 'ph-check-circle', tone: 'mint'
+          icon: 'ph-check-circle', tone: 'mint',
+          action: `goToPlanProgress('${s.latestPlanSummary.year}')`,
+          hint: `ดูแผนล้างแอร์ปี ${s.latestPlanSummary.year} แยกตามภูมิภาค`
         });
       }
 
@@ -2207,6 +2212,23 @@
         renderPlanTable(nodeName || '');
       }
     }
+
+    /**
+     * มาจากการ์ด "คืบหน้าล้างแอร์" บนแดชบอร์ด
+     *
+     * การ์ดตอบได้แค่ตัวเลขรวม แต่คำถามถัดไปคือ "แล้วที่ไหนบ้าง เหลืออะไร"
+     * ซึ่งต้องกรองภูมิภาค ค้นหา Node และไล่ดูทีละรอบ จึงพามาที่หน้าแผนของปีนั้นตรงๆ
+     * ถ้าเปิดเป็นกล่องซ้อนขึ้นมา ดูเสร็จก็ต้องปิดแล้วเดินมาหน้านี้อยู่ดี
+     *
+     * กางกล่องสรุปให้ด้วย เพราะคนที่กดมาจากตัวเลขคืบหน้า มาเพื่อดูตัวเลขแยกภูมิภาค
+     * ถ้าเคยพับเก็บไว้แล้วกดมาเจอแต่ตาราง จะเหมือนกดแล้วไม่เกิดอะไรขึ้น
+     */
+    function goToPlanProgress(year) {
+      pendingPlanYear = year || null;
+      planSummaryForceOpen = true;
+      document.querySelector('[data-tab="plan"]').click();
+    }
+    window.goToPlanProgress = goToPlanProgress;
 
     /* ============== DASHBOARD: กราฟโดนัทสถานะ / แนวโน้มค่าใช้จ่าย / เครื่องที่ควรจับตา ============== */
     let statusChartObj = null;
@@ -3207,6 +3229,18 @@
         return;
       }
       sel.innerHTML = years.map(y => `<option value="${y.replace('Plan_','')}">ปี ${y.replace('Plan_','')}</option>`).join('');
+
+      // ตั้งปีที่ถูกขอมาก่อนโหลด ไม่ใช่โหลดปีล่าสุดแล้วค่อยเปลี่ยนทีหลัง
+      // ไม่งั้นจะยิงเซิร์ฟเวอร์สองรอบ และจอจะกระพริบเป็นปีที่ไม่ได้ขอแวบหนึ่ง
+      const wantYear = pendingPlanYear;
+      pendingPlanYear = null;
+      if (wantYear && [...sel.options].some(o => o.value === String(wantYear))) {
+        sel.value = String(wantYear);
+      } else {
+        // เข้าหน้าแผนเองตามปกติ ให้กล่องสรุปกลับไปใช้ความชอบที่จำไว้
+        planSummaryForceOpen = false;
+      }
+
       currentYear = sel.value;
       await loadPlan();
     }
@@ -3579,13 +3613,21 @@
      *
      * จำไว้ในเครื่องของแต่ละคน เพราะเป็นความชอบส่วนตัว ไม่ใช่ค่าตั้งของระบบ
      */
+    // กางครั้งเดียวเมื่อถูกพามาจากการ์ดคืบหน้า ไม่เขียนทับความชอบที่จำไว้
+    // คนที่ตั้งใจพับเก็บกล่องนี้ ไม่ควรถูกเปลี่ยนค่าถาวรเพราะเผลอกดการ์ดครั้งเดียว
+    let planSummaryForceOpen = false;
+
     function planSummaryOpen() {
+      if (planSummaryForceOpen) return true;
       try { return localStorage.getItem('acmgr_plan_summary') !== 'closed'; }
       catch { return true; }   // เบราว์เซอร์ที่ปิดการเก็บข้อมูล ให้ถือว่ากางไว้
     }
 
     function togglePlanSummary() {
-      try { localStorage.setItem('acmgr_plan_summary', planSummaryOpen() ? 'closed' : 'open'); }
+      const wasOpen = planSummaryOpen();
+      // ต้องล้างก่อนบันทึก ไม่งั้นตอนถูกบังคับกางอยู่ จะกดพับแล้วไม่มีอะไรเกิดขึ้น
+      planSummaryForceOpen = false;
+      try { localStorage.setItem('acmgr_plan_summary', wasOpen ? 'closed' : 'open'); }
       catch { /* เก็บไม่ได้ก็ไม่เป็นไร แค่ไม่จำข้ามครั้ง */ }
       drawPlanSummary();
     }
