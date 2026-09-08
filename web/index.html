@@ -456,10 +456,13 @@
             </div>
           </div>
 
-          <!-- แถวล่างซ้าย: แนวโน้มค่าใช้จ่าย -->
+          <!-- แถวล่างซ้าย: ค่าใช้จ่ายรายเดือน -->
           <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
             <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
-              <i class="ph ph-trend-up text-[#1153a1]"></i> <span id="trendTitle">แนวโน้มค่าใช้จ่ายรายเดือน</span>
+              <i class="ph ph-chart-bar text-[#1153a1]"></i> <span id="trendTitle">ค่าใช้จ่ายรายเดือน</span>
+              <!-- ยอดรวมทั้งปีวางไว้บนหัวกราฟ เพราะกราฟตอบได้แค่ว่าเดือนไหนใช้เยอะ
+                   แต่คำถามที่ถูกถามคู่กันเสมอคือ "ทั้งปีไปเท่าไหร่แล้ว" ซึ่งกราฟไม่ตอบ -->
+              <span id="trendTotals" class="ml-auto text-[11px] font-normal text-gray-500 whitespace-nowrap"></span>
             </h3>
             <div class="dash-canvas"><canvas id="trendChartCanvas"></canvas></div>
           </div>
@@ -2126,8 +2129,22 @@
       );
       document.getElementById('regionChart').innerHTML = renderBarChart(byRegionLabelled, false, 'brand');
       renderStatusDonut(s.byStatus);
-      const trendTitle = document.getElementById(`trendTitle`);
-      if (trendTitle) trendTitle.textContent = `แนวโน้มค่าใช้จ่ายรายเดือน ปี ` + s.year;
+      const trendTitle = document.getElementById('trendTitle');
+      if (trendTitle) trendTitle.textContent = 'ค่าใช้จ่ายรายเดือน ปี ' + s.year;
+
+      // สรุปยอดทั้งปีไว้มุมขวาของหัวกราฟ
+      // แยกล้าง/ซ่อมให้ตรงกับสองเส้นในกราฟ แล้วปิดท้ายด้วยยอดรวม
+      const trendTotals = document.getElementById('trendTotals');
+      if (trendTotals) {
+        const clean = Number(s.totalCleaningCost || 0);
+        const repair = Number(s.totalRepairCost || 0);
+        const baht = v => '฿' + v.toLocaleString();
+        trendTotals.innerHTML = clean + repair === 0
+          ? '<span class="text-gray-400">ยังไม่มีค่าใช้จ่ายปีนี้</span>'
+          : `ล้าง <b class="text-gray-700">${baht(clean)}</b> ·
+             ซ่อม <b class="text-gray-700">${baht(repair)}</b> ·
+             รวม <b class="text-gray-800">${baht(clean + repair)}</b>`;
+      }
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
 
