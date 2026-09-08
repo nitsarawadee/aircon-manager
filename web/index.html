@@ -402,6 +402,16 @@
             <!-- เดิมใช้สีที่ทำไว้สำหรับพื้นน้ำเงินเข้ม ซึ่งจะจางหายไปบนพื้นพาสเทลอ่อน -->
             <p class="text-xs hidden sm:block" style="color:var(--p-blue-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
           </div>
+
+          <!-- เลือกปี: คุมเฉพาะตัวเลขที่ขึ้นกับปี (คืบหน้าล้างแอร์ · ค่าใช้จ่าย · กราฟแนวโน้ม)
+               ส่วนจำนวนเครื่องและเครื่องรอซ่อมเป็นสภาพ ณ ตอนนี้ ไม่เปลี่ยนตามปีที่เลือก -->
+          <div class="relative z-10 flex items-center gap-2 bg-white/70 border rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0"
+               style="border-color:var(--p-card-border)">
+            <i class="ph ph-calendar-blank" style="color:var(--p-blue-fg)"></i>
+            <select id="dashYearSelect" onchange="loadDashboard()"
+                    class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-semibold"
+                    style="color:var(--p-blue-fg)"></select>
+          </div>
           <i class="ph-fill ph-wind absolute -right-4 -bottom-8 text-[110px] transform -rotate-12" style="color:var(--p-blue); opacity:.18"></i>
         </div>
 
@@ -445,7 +455,7 @@
           <!-- แถวล่างซ้าย: แนวโน้มค่าใช้จ่าย -->
           <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
             <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
-              <i class="ph ph-trend-up text-[#1153a1]"></i> แนวโน้มค่าใช้จ่าย 12 เดือนล่าสุด
+              <i class="ph ph-trend-up text-[#1153a1]"></i> <span id="trendTitle">แนวโน้มค่าใช้จ่ายรายเดือน</span>
             </h3>
             <div class="dash-canvas"><canvas id="trendChartCanvas"></canvas></div>
           </div>
@@ -2036,13 +2046,29 @@
 
     /* ============== DASHBOARD ============== */
     async function loadDashboard() {
-      const s = await call('getDashboardSummary');
+      const sel = document.getElementById('dashYearSelect');
+      const s = await call('getDashboardSummary', sel && sel.value ? Number(sel.value) : null);
+
+      // เติมตัวเลือกปีจากที่เซิร์ฟเวอร์ส่งมา (ปีที่มีแผนหรือมีประวัติจริง)
+      // สร้างใหม่ทุกครั้งเพราะปีอาจเพิ่มขึ้นหลังสร้างแผนปีใหม่หรือบันทึกประวัติข้ามปี
+      if (sel && Array.isArray(s.availableYears)) {
+        sel.innerHTML = s.availableYears.map(y =>
+          `<option value="${y}" ${y === s.year ? 'selected' : ''}>ปี ${y}</option>`).join('');
+      }
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
         { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'blue' },
         { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose',
           action: 'goToOldUnits()', hint: 'ดูรายการเครื่องที่อายุ 8 ปีขึ้นไป' }
       ];
+      // ปีที่ยังไม่ได้สร้างแผน ต้องขึ้นการ์ดบอกว่ายังไม่มี ไม่ใช่ซ่อนหายไปเฉยๆ
+      // ไม่งั้นเลือกปีแล้วการ์ดหายไปหนึ่งใบ คนจะงงว่ากดอะไรผิดหรือเปล่า
+      if (!s.latestPlanSummary) {
+        cards.push({
+          num: '—', label: 'ยังไม่มีแผนล้างแอร์ปี ' + s.year,
+          icon: 'ph-check-circle', tone: 'peach'
+        });
+      }
       if (s.latestPlanSummary) {
         cards.push({
           num: `${s.latestPlanSummary.done}/${s.latestPlanSummary.total}`,
@@ -2053,11 +2079,11 @@
 
       cards.push({
         num: `฿${Number(s.totalCleaningCost || 0).toLocaleString()}`,
-        label: 'ค่าใช้จ่ายล้างแอร์รวม', icon: 'ph-drop', tone: 'aqua'
+        label: 'ค่าล้างแอร์ปี ' + s.year, icon: 'ph-drop', tone: 'aqua'
       });
       cards.push({
         num: `฿${Number(s.totalRepairCost || 0).toLocaleString()}`,
-        label: 'ค่าซ่อมบำรุงรวม', icon: 'ph-wrench', tone: 'lilac'
+        label: 'ค่าซ่อมบำรุงปี ' + s.year, icon: 'ph-wrench', tone: 'lilac'
       });
 
       // จำนวนคอลัมน์ตามจำนวนการ์ดจริง เพราะการ์ดใบ "คืบหน้าล้างแอร์" จะมีหรือไม่มี
@@ -2096,6 +2122,8 @@
       );
       document.getElementById('regionChart').innerHTML = renderBarChart(byRegionLabelled, false, 'blue');
       renderStatusDonut(s.byStatus);
+      const trendTitle = document.getElementById(`trendTitle`);
+      if (trendTitle) trendTitle.textContent = `แนวโน้มค่าใช้จ่ายรายเดือน ปี ` + s.year;
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
 
