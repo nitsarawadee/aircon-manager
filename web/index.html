@@ -515,7 +515,6 @@
         </div>
 
         <div id="airAgeFilterBar" class="hidden mb-4"></div>
-        <div id="airLifeNote" class="hidden mb-4"></div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
@@ -2903,12 +2902,8 @@
       if (region) rows = rows.filter(a => sameRegion(a.Region, region));
 
       // ค่าเริ่มต้นคือซ่อนเครื่องที่ออกจากการใช้งานแล้ว เพราะรายการนี้ใช้ทำงานประจำวัน
-      // แต่ต้องหาเจอได้ ไม่ใช่หายไปเฉยๆ เลยทำเป็นตัวเลือกแทนที่จะซ่อนตายตัว
+      // ยังหาเจอได้จากช่องตัวกรองด้านบน ซึ่งเห็นอยู่ตลอดว่ากำลังกรองอะไรอยู่
       const life = document.getElementById('airLifeFilter')?.value || 'active';
-
-      // นับของที่ซ่อนจากผลที่ผ่านตัวกรองอื่นมาแล้ว ไม่ใช่จากรายการเต็ม
-      // ไม่งั้นตอนกรอง Region 1 อยู่ จะขึ้นว่าซ่อนไว้ 5 เครื่องทั้งที่เป็นของ Region อื่น
-      const hiddenByLife = rows.filter(a => isRetiredStatus(a.Status)).length;
 
       if (life === 'active') rows = rows.filter(a => !isRetiredStatus(a.Status));
       else if (life === 'retired') rows = rows.filter(a => isRetiredStatus(a.Status));
@@ -2961,33 +2956,7 @@
         }).join('');
         renderTablePager('airPaginationBar', airLastList.length, airPage, 'goToAirPage');
       }
-      renderAirLifeNote(life, hiddenByLife);
       if(typeof renderRepairView === 'function') renderRepairView(document.getElementById('repairSearch').value);
-    }
-
-    /**
-     * บอกว่ากำลังซ่อนเครื่องที่ออกจากการใช้งานไว้กี่เครื่อง
-     *
-     * ถ้าซ่อนเงียบๆ คนจะนับเครื่องในตารางแล้วไม่ตรงกับที่เคยจำได้ แล้วนึกว่าข้อมูลหาย
-     * บอกไปตรงๆ พร้อมทางกดไปดู จะได้ไม่ต้องเดา
-     */
-    function renderAirLifeNote(life, hidden) {
-      const bar = document.getElementById('airLifeNote');
-      if (!bar) return;
-
-      if (life !== 'active' || !hidden) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
-
-      bar.classList.remove('hidden');
-      bar.innerHTML = `
-        <div class="flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm">
-          <i class="ph ph-archive text-slate-500"></i>
-          <span class="text-gray-600">ซ่อนเครื่องที่รื้อถอน/Write off ไว้</span>
-          <span class="font-semibold text-gray-800">${hidden} เครื่อง</span>
-          <button onclick="document.getElementById('airLifeFilter').value='retired'; refreshAirTable();"
-                  class="ml-auto inline-flex items-center gap-1 text-gray-600 hover:text-white hover:bg-slate-600 border border-gray-300 hover:border-slate-600 rounded-md px-2.5 py-1 transition">
-            <i class="ph ph-eye"></i> ดูเครื่องเหล่านั้น
-          </button>
-        </div>`;
     }
 
     function statusBadge(s) {
