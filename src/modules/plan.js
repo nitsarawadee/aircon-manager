@@ -46,8 +46,12 @@ export async function getCleaningPlan(ctx, year) {
   // ถ้าให้หน้าเว็บไปหาเองจะพังตอนเปิดหน้าแผนก่อนหน้ารายการเครื่อง เพราะยังไม่มีข้อมูลเครื่องในมือ
   await ctx.ensureBase();
   const regionOf = new Map();
+  const retiredSet = new Set();
   for (const u of ctx.ss.objects(SHEETS.AIRLIST)) {
-    if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim());
+    if (!u.AirCode) continue;
+    const code = normalizeCode(u.AirCode);
+    regionOf.set(code, String(u.Region || '').trim());
+    if (isRetiredStatus(u.Status)) retiredSet.add(code);
   }
 
   let list = ctx.ss.objects(name).map(o => {
@@ -55,6 +59,10 @@ export async function getCleaningPlan(ctx, year) {
     ['R1_PlanDate', 'R1_ActualDate', 'R2_PlanDate', 'R2_ActualDate', 'R3_PlanDate', 'R3_ActualDate']
       .forEach(k => { out[k] = formatDate(o[k]); });
     out.Region = regionOf.get(normalizeCode(o.AirCode)) || '';
+
+    // เครื่องที่รื้อถอน/Write off ไปแล้ว แถวแผนของมันยังอยู่ (ลบทิ้งไม่ได้ เพราะรอบที่ล้างไปแล้ว
+    // เป็นเงินที่จ่ายจริง) แต่ต้องบอกทุกที่ที่ใช้แถวนี้ว่าไม่ต้องไปล้างอีกแล้ว
+    out.Retired = retiredSet.has(normalizeCode(o.AirCode));
     return out;
   });
 
@@ -96,12 +104,22 @@ function sortNodesByProgress(nodes) {
   return nodes.sort((a, b) => rate(a) - rate(b) || String(a.node).localeCompare(String(b.node), 'th'));
 }
 
-/** สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending' */
-function roundState(row, r) {
+/**
+ * สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending'
+ *
+ * รอบที่ยังไม่ได้ทำของเครื่องที่รื้อถอน/Write off ไปแล้ว นับเป็นยกเลิก
+ * เพราะจะไม่มีวันได้ล้าง ถ้ายังนับเป็น "รอดำเนินการ" ความคืบหน้าจะไม่มีวันถึง 100%
+ * และตัวหารจะไม่ตรงกับจำนวนเครื่องที่ใช้งานอยู่จริงบนแดชบอร์ด
+ *
+ * ส่วนรอบที่ล้างไปแล้วยังนับเป็นเสร็จตามเดิม เพราะงานทำไปจริงและเงินจ่ายไปจริง
+ * ถ้าตัดทิ้งด้วย ค่าใช้จ่ายที่เคยรายงานไปแล้วจะหายไปจากสรุปเฉยๆ
+ */
+function roundState(row, r, retired) {
   const status = String(row['R' + r + '_Status'] || '').trim();
   if (status === ROUND_CANCELLED) return 'cancelled';
   if (status === ROUND_DONE) return 'done';
-  return String(row['R' + r + '_ActualDate'] || '').trim() ? 'done' : 'pending';
+  if (String(row['R' + r + '_ActualDate'] || '').trim()) return 'done';
+  return retired ? 'cancelled' : 'pending';
 }
 
 /**
@@ -113,8 +131,12 @@ function roundState(row, r) {
  */
 export function summarizeCleaning(planRows, airUnits, year) {
   const regionOf = new Map();
+  const retiredSet = new Set();
   for (const u of airUnits || []) {
-    if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim() || 'ไม่ระบุ');
+    if (!u.AirCode) continue;
+    const code = normalizeCode(u.AirCode);
+    regionOf.set(code, String(u.Region || '').trim() || 'ไม่ระบุ');
+    if (isRetiredStatus(u.Status)) retiredSet.add(code);
   }
 
   const blank = () => ({ done: 0, pending: 0, cancelled: 0, cost: 0 });
@@ -124,10 +146,13 @@ export function summarizeCleaning(planRows, airUnits, year) {
   let neverCleaned = 0;
 
   for (const row of planRows || []) {
+    // แถวยังอยู่ในตาราง แต่ไม่นับเป็น "เครื่องที่ต้องล้าง" อีกแล้ว
+    const retired = retiredSet.has(normalizeCode(row.AirCode));
+
     const region = regionOf.get(normalizeCode(row.AirCode)) || 'ไม่ระบุ';
     if (!byRegion.has(region)) byRegion.set(region, { region, units: 0, ...blank(), nodes: new Map() });
     const reg = byRegion.get(region);
-    reg.units++;
+    if (!retired) reg.units++;
 
     // ยอดรวมของภูมิภาคบอกได้แค่ว่าคืบหน้าเท่าไหร่ ไม่ได้บอกว่า "ที่ไหน" ยังไม่ได้ล้าง
     // ซึ่งเป็นคำถามที่ต้องใช้ตอนตามงานจริง จึงต้องแยกย่อยลงไปถึงระดับ Node
@@ -140,12 +165,12 @@ export function summarizeCleaning(planRows, airUnits, year) {
       });
     }
     const nd = reg.nodes.get(nodeName);
-    nd.units++;
+    if (!retired) nd.units++;
 
     let doneThisUnit = 0;
 
     for (const r of [1, 2, 3]) {
-      const state = roundState(row, r);
+      const state = roundState(row, r, retired);
       const cost = Number(row['R' + r + '_Price']) || 0;
 
       rounds[r - 1][state]++;
@@ -167,7 +192,8 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
     // เครื่องที่ยังไม่ได้ล้างเลยสักรอบ คือรายการที่ต้องตามงานจริงๆ
     // ต่างจากตัวเลขรวมที่บอกแค่ว่าเหลืออีกเท่าไหร่
-    if (!doneThisUnit) neverCleaned++;
+    // เครื่องที่ถูกรื้อถอนไปแล้วไม่นับ เพราะไม่ใช่งานที่ตามได้
+    if (!doneThisUnit && !retired) neverCleaned++;
   }
 
   const sum = k => rounds.reduce((s, x) => s + x[k], 0);
@@ -176,7 +202,8 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
   return {
     year: Number(year),
-    units: (planRows || []).length,
+    // นับเฉพาะเครื่องที่ยังใช้งานอยู่ ให้ตรงกับการ์ด "เครื่องทั้งหมด" บนแดชบอร์ด
+    units: [...byRegion.values()].reduce((n, r) => n + r.units, 0),
     rounds,
     done,
     pending: sum('pending'),

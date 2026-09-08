@@ -254,3 +254,63 @@ test('ยอดรวมราย Node ต้องบวกกันได้�
     assert.equal(sum('cost'), reg.cost, 'ค่าใช้จ่ายของ Region ' + reg.region);
   }
 });
+
+/* ==================== เครื่องที่รื้อถอน/Write off ไปแล้ว ====================
+   แถวแผนของเครื่องพวกนี้ลบทิ้งไม่ได้ เพราะรอบที่ล้างไปแล้วเป็นเงินที่จ่ายจริง
+   แต่จะไม่มีใครไปล้างมันอีก การนับจึงต้องแยกสองเรื่องนี้ออกจากกันให้ได้
+   ================================================================================ */
+
+/** รายการเครื่องชุดเดียวกับข้างบน แต่ B-B-AIR-1 ถูกรื้อถอนไปแล้ว */
+const unitsWithRetired = [
+  { AirCode: 'A-A-AIR-1', Region: '1' },
+  { AirCode: 'A-A-AIR-2', Region: '1' },
+  { AirCode: 'B-B-AIR-1', Region: '2', Status: 'รื้อถอน/ปลดระวาง' }
+];
+
+test('รอบที่ยังไม่ได้ล้างของเครื่องที่รื้อถอนแล้ว ต้องไม่นับเป็นงานค้าง', () => {
+  const s = summarizeCleaning([row('A-A-AIR-1'), row('B-B-AIR-1')], unitsWithRetired, 2026);
+
+  assert.equal(s.pending, 3, 'เหลือแค่ 3 รอบของเครื่องที่ยังใช้งานอยู่');
+  assert.equal(s.cancelled, 3, 'อีก 3 รอบของเครื่องที่รื้อถอนแล้ว ถือว่ายกเลิก');
+  assert.equal(s.planned, 3, 'ตัวหารต้องไม่รวมงานที่ไม่มีวันได้ทำ');
+});
+
+test('ความคืบหน้าต้องขึ้นถึง 100% ได้ ถึงแม้จะมีเครื่องที่รื้อถอนค้างอยู่ในแผน', () => {
+  // เดิมเป็นบัค: 3 รอบของเครื่องที่ถูกรื้อจะค้างเป็น "รอดำเนินการ" ตลอดไป
+  // ทำให้เปอร์เซ็นต์ตันอยู่ที่ 50% ทั้งที่งานที่ทำได้ ทำครบหมดแล้ว
+  const s = summarizeCleaning([
+    row('A-A-AIR-1', { R1_Status: 'ล้างเสร็จสิ้น', R2_Status: 'ล้างเสร็จสิ้น', R3_Status: 'ล้างเสร็จสิ้น' }),
+    row('B-B-AIR-1')
+  ], unitsWithRetired, 2026);
+
+  assert.equal(s.percent, 100);
+});
+
+test('รอบที่ล้างไปแล้วของเครื่องที่รื้อถอน ยังนับเป็นเสร็จและยังนับค่าใช้จ่าย', () => {
+  // เงินจ่ายไปจริงก่อนจะรื้อ ถ้าตัดทิ้งด้วย ยอดที่เคยรายงานไปแล้วจะหายไปเฉยๆ
+  const s = summarizeCleaning([
+    row('B-B-AIR-1', { R1_Status: 'ล้างเสร็จสิ้น', R1_Price: 900 })
+  ], unitsWithRetired, 2026);
+
+  assert.equal(s.done, 1);
+  assert.equal(s.cost, 900);
+  assert.equal(s.pending, 0, 'อีกสองรอบที่เหลือไม่ต้องตามแล้ว');
+});
+
+test('จำนวนเครื่องต้องนับเฉพาะที่ยังใช้งานอยู่ ให้ตรงกับการ์ดบนแดชบอร์ด', () => {
+  const s = summarizeCleaning([row('A-A-AIR-1'), row('A-A-AIR-2'), row('B-B-AIR-1')], unitsWithRetired, 2026);
+  assert.equal(s.units, 2);
+});
+
+test('เครื่องที่รื้อถอนแล้ว ต้องไม่ถูกนับว่า "ยังไม่ได้ล้างเลย"', () => {
+  // รายการนี้มีไว้ตามงาน เครื่องที่ไม่มีอยู่แล้วตามไม่ได้
+  const s = summarizeCleaning([row('A-A-AIR-1'), row('B-B-AIR-1')], unitsWithRetired, 2026);
+  assert.equal(s.neverCleaned, 1);
+});
+
+test('Write off ก็ต้องได้ผลเหมือนรื้อถอน/ปลดระวาง', () => {
+  const s = summarizeCleaning([row('B-B-AIR-1')],
+    [{ AirCode: 'B-B-AIR-1', Region: '2', Status: 'Write off' }], 2026);
+  assert.equal(s.pending, 0);
+  assert.equal(s.units, 0);
+});

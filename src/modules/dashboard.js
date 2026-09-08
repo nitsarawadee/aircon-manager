@@ -1,6 +1,6 @@
 import { SHEETS } from '../schema.js';
 import { isRetiredStatus, normalizeRegion, partsOf, safeParseDate, todayStart } from '../values.js';
-import { getPlanYears, getCleaningPlan } from './plan.js';
+import { getPlanYears, getCleaningPlan, summarizeCleaning } from './plan.js';
 import { getHistory } from './history.js';
 
 /**
@@ -83,31 +83,39 @@ export async function getDashboardSummary(ctx, year) {
       const py = name.replace('Plan_', '');
       const plan = await getCleaningPlan(ctx, py); // กรองตามภูมิภาคมาแล้ว
 
-      let done = 0;
-
       plan.forEach(p => {
+        // เครื่องที่รื้อถอน/Write off ไปแล้ว ต้องไม่ขึ้นเป็นนัดหมาย
+        // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ถูกรื้อไปแล้ว
+        if (p.Retired) return;
+
         [1, 2, 3].forEach(r => {
-          if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') {
-            done++;
-          } else if (p['R' + r + '_PlanDate']) {
-            // ดึงเฉพาะแผนที่ยังไม่เสร็จ และอยู่ในช่วง 30 วันข้างหน้า
-            const pDate = safeParseDate(p['R' + r + '_PlanDate']);
-            if (pDate && pDate >= today && pDate <= futureLimit && p['R' + r + '_Status'] !== 'ยกเลิก') {
-              upcomingPlans.push({
-                AirCode: p.AirCode,
-                NodeName: p.NodeName,
-                Round: r,
-                PlanYear: py,
-                PlanDate: p['R' + r + '_PlanDate'],
-                RawDate: pDate.getTime()
-              });
-            }
+          if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') return;
+          if (!p['R' + r + '_PlanDate']) return;
+
+          // ดึงเฉพาะแผนที่ยังไม่เสร็จ และอยู่ในช่วง 30 วันข้างหน้า
+          const pDate = safeParseDate(p['R' + r + '_PlanDate']);
+          if (pDate && pDate >= today && pDate <= futureLimit && p['R' + r + '_Status'] !== 'ยกเลิก') {
+            upcomingPlans.push({
+              AirCode: p.AirCode,
+              NodeName: p.NodeName,
+              Round: r,
+              PlanYear: py,
+              PlanDate: p['R' + r + '_PlanDate'],
+              RawDate: pDate.getTime()
+            });
           }
         });
       });
 
       // ความคืบหน้าคิดจากแผนของปีที่เลือกปีเดียว การ์ดบอกชัดอยู่แล้วว่าเป็นของปีไหน
-      if (Number(py) === viewYear) latestPlanSummary = { year: py, done, total: plan.length * 3 };
+      //
+      // ใช้ตัวสรุปตัวเดียวกับหน้าแผน ไม่นับเองซ้ำอีกชุด
+      // เดิมนับเองด้วยสูตร plan.length * 3 ซึ่งรวมทั้งรอบที่ยกเลิกและเครื่องที่รื้อถอนไปแล้ว
+      // ทำให้การ์ดบอก 29/1371 แต่หน้าแผนบอก 29/1364 ทั้งที่เป็นเรื่องเดียวกัน
+      if (Number(py) === viewYear) {
+        const sum = summarizeCleaning(plan, ctx.ss.objects(SHEETS.AIRLIST), py);
+        latestPlanSummary = { year: py, done: sum.done, total: sum.planned };
+      }
     }
 
     // เรียงตามวันที่ใกล้สุดก่อน และแสดงแค่ 12 รายการแรกเพื่อไม่ให้หน้าจอรก
