@@ -1025,6 +1025,7 @@
     // ปีที่ถูกขอมาจากการ์ดคืบหน้าบนแดชบอร์ด ต้องชนะค่าเริ่มต้นของหน้าแผน (ปีล่าสุด)
     // ด้วยเหตุผลเดียวกับข้างบน คือกดแท็บแล้ว loadPlanYears จะไปตั้งปีทับให้เอง
     let pendingPlanYear = null;
+    let pendingBudgetYear = null;
     let currentConfig = {};
     let currentYear = null;
     let currentBudget = null;
@@ -2068,10 +2069,16 @@
           `<option value="${y}" ${y === s.year ? 'selected' : ''}>ปี ${y}</option>`).join('');
       }
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
+      // การ์ดจะกดได้ก็ต่อเมื่อหน้าปลายทางยังอยู่ คนที่ไม่มีสิทธิ์ดูหน้านั้นจะถูกถอดแท็บออกไปแล้ว
+      // ถ้าไม่เช็ค การ์ดจะดูเหมือนกดได้แต่กดแล้วเงียบ ซึ่งแย่กว่าการ์ดที่กดไม่ได้ตั้งแต่แรก
+      const canGo = tab => !!document.querySelector(`[data-tab="${tab}"]`);
+      const go = (tab, action, hint) => (canGo(tab) ? { action, hint } : {});
+
       const cards = [
-        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'brand' },
+        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'brand',
+          ...go('airlist', 'goToAirList()', 'ดูรายการเครื่องทั้งหมด') },
         { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose',
-          action: 'goToOldUnits()', hint: 'ดูรายการเครื่องที่อายุ 8 ปีขึ้นไป' }
+          ...go('airlist', 'goToOldUnits()', 'ดูรายการเครื่องที่อายุ 8 ปีขึ้นไป') }
       ];
       // ปีที่ยังไม่ได้สร้างแผน ต้องขึ้นการ์ดบอกว่ายังไม่มี ไม่ใช่ซ่อนหายไปเฉยๆ
       // ไม่งั้นเลือกปีแล้วการ์ดหายไปหนึ่งใบ คนจะงงว่ากดอะไรผิดหรือเปล่า
@@ -2086,18 +2093,22 @@
           num: `${s.latestPlanSummary.done}/${s.latestPlanSummary.total}`,
           label: `คืบหน้าล้างแอร์ปี ${s.latestPlanSummary.year}`,
           icon: 'ph-check-circle', tone: 'mint',
-          action: `goToPlanProgress('${s.latestPlanSummary.year}')`,
-          hint: `ดูแผนล้างแอร์ปี ${s.latestPlanSummary.year} แยกตามภูมิภาค`
+          ...go('plan', `goToPlanProgress('${s.latestPlanSummary.year}')`,
+                `ดูแผนล้างแอร์ปี ${s.latestPlanSummary.year} แยกตามภูมิภาค`)
         });
       }
 
+      // การ์ดค่าใช้จ่ายทั้งสองใบพาไปหน้างบประมาณ เพราะที่นั่นมีตัวเลขเดียวกันวางคู่กับงบที่ตั้งไว้
+      // และมีตารางแยกรายเดือนทั้งค่าล้างและค่าซ่อม ซึ่งตอบต่อว่า "แล้วเหลืองบเท่าไหร่"
       cards.push({
         num: `฿${Number(s.totalCleaningCost || 0).toLocaleString()}`,
-        label: 'ค่าล้างแอร์ปี ' + s.year, icon: 'ph-drop', tone: 'aqua'
+        label: 'ค่าล้างแอร์ปี ' + s.year, icon: 'ph-drop', tone: 'aqua',
+        ...go('budget', `goToBudget('${s.year}')`, `ดูงบประมาณล้างแอร์ปี ${s.year}`)
       });
       cards.push({
         num: `฿${Number(s.totalRepairCost || 0).toLocaleString()}`,
-        label: 'ค่าซ่อมบำรุงปี ' + s.year, icon: 'ph-wrench', tone: 'lilac'
+        label: 'ค่าซ่อมบำรุงปี ' + s.year, icon: 'ph-wrench', tone: 'lilac',
+        ...go('budget', `goToBudget('${s.year}')`, `ดูงบประมาณซ่อมบำรุงปี ${s.year}`)
       });
 
       // จำนวนคอลัมน์ตามจำนวนการ์ดจริง เพราะการ์ดใบ "คืบหน้าล้างแอร์" จะมีหรือไม่มี
@@ -2223,6 +2234,34 @@
      * กางกล่องสรุปให้ด้วย เพราะคนที่กดมาจากตัวเลขคืบหน้า มาเพื่อดูตัวเลขแยกภูมิภาค
      * ถ้าเคยพับเก็บไว้แล้วกดมาเจอแต่ตาราง จะเหมือนกดแล้วไม่เกิดอะไรขึ้น
      */
+    /**
+     * มาจากการ์ด "เครื่องทั้งหมด"
+     *
+     * ล้างตัวกรองที่ค้างอยู่ก่อน เพราะการ์ดบอกจำนวนเครื่องที่ใช้งานอยู่ทั้งหมด
+     * ถ้าปล่อยให้ช่องค้นหาหรือตัวกรองรอบก่อนค้างไว้ จำนวนแถวจะไม่ตรงกับตัวเลขบนการ์ด
+     * แล้วคนจะสงสัยว่าตัวเลขไหนผิด (ตัวกรองภูมิภาคไม่ล้าง เพราะแดชบอร์ดก็ถูกจำกัดภูมิภาคเหมือนกัน)
+     */
+    function goToAirList() {
+      const search = document.getElementById('airSearch');
+      if (search) search.value = '';
+      const life = document.getElementById('airLifeFilter');
+      if (life) life.value = 'active';
+      document.querySelector('[data-tab="airlist"]').click();
+    }
+    window.goToAirList = goToAirList;
+
+    /**
+     * มาจากการ์ดค่าล้างแอร์ / ค่าซ่อมบำรุง
+     *
+     * ฝากปีไว้ก่อนกดแท็บ ด้วยเหตุผลเดียวกับ pendingPlanYear คือกดแท็บแล้ว
+     * loadBudget จะอ่านปีจากช่องเลือกทันที ซึ่งอาจเป็นปีที่ค้างจากรอบก่อน
+     */
+    function goToBudget(year) {
+      pendingBudgetYear = year || null;
+      document.querySelector('[data-tab="budget"]').click();
+    }
+    window.goToBudget = goToBudget;
+
     function goToPlanProgress(year) {
       pendingPlanYear = year || null;
       planSummaryForceOpen = true;
@@ -4676,7 +4715,11 @@
     /* ============== 5. BUDGET (งบประมาณ) ============== */
     async function loadBudget() {
       const yearInput = document.getElementById('budgetYearSelect');
-      const y = (yearInput && yearInput.value) ? yearInput.value : null;
+
+      // ปีที่ถูกขอมาจากการ์ดบนแดชบอร์ด ต้องชนะปีที่ค้างอยู่ในช่องเลือก
+      const wantYear = pendingBudgetYear;
+      pendingBudgetYear = null;
+      const y = wantYear || (yearInput && yearInput.value) || null;
 
       currentBudget = await call('getBudgetSummary', y);
 
