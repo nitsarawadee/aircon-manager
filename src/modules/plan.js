@@ -1,5 +1,5 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
-import { formatDate, normalizeCode } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { Ctx } from '../context.js';
 
@@ -84,7 +84,6 @@ export async function getCleaningPlan(ctx, year) {
 const ROUND_DONE = 'ล้างเสร็จสิ้น';
 const ROUND_CANCELLED = 'ยกเลิก';
 
-/** สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending' */
 /**
  * เรียง Node ที่ค้างมากที่สุดไว้บน
  *
@@ -97,6 +96,7 @@ function sortNodesByProgress(nodes) {
   return nodes.sort((a, b) => rate(a) - rate(b) || String(a.node).localeCompare(String(b.node), 'th'));
 }
 
+/** สรุปสถานะของรอบหนึ่ง คืน 'done' | 'cancelled' | 'pending' */
 function roundState(row, r) {
   const status = String(row['R' + r + '_Status'] || '').trim();
   if (status === ROUND_CANCELLED) return 'cancelled';
@@ -305,9 +305,12 @@ export async function createCleaningPlan(ctx, year) {
     }
 
     // เช็คข้อมูลแอร์ก่อนสร้างชีต เพื่อป้องกันการสร้างตารางเปล่าค้างไว้
-    const airList = ctx.ss.objects(SHEETS.AIRLIST);
+    //
+    // เครื่องที่รื้อถอนหรือขายออกไปแล้วต้องไม่ถูกดึงเข้าแผน ไม่งั้นช่างจะได้ใบสั่ง
+    // ไปล้างแอร์ที่ไม่มีอยู่ที่หน้างานแล้ว และตัวเลขคืบหน้าจะไม่มีวันเต็ม 100%
+    const airList = ctx.ss.objects(SHEETS.AIRLIST).filter(a => !isRetiredStatus(a.Status));
     if (airList.length === 0) {
-      throw new Error('ยังไม่มีข้อมูลเครื่องปรับอากาศในระบบ กรุณาเพิ่มแอร์ก่อนสร้างแผนครับ');
+      throw new Error('ยังไม่มีข้อมูลเครื่องปรับอากาศที่ใช้งานอยู่ในระบบ กรุณาเพิ่มแอร์ก่อนสร้างแผนครับ');
     }
 
     await ctx.ss.ensureSheet(name, PLAN_HEADERS);

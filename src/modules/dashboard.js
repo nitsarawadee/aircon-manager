@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { normalizeRegion, partsOf, safeParseDate, todayStart } from '../values.js';
+import { isRetiredStatus, normalizeRegion, partsOf, safeParseDate, todayStart } from '../values.js';
 import { getPlanYears, getCleaningPlan } from './plan.js';
 import { getHistory } from './history.js';
 
@@ -20,6 +20,11 @@ export async function getDashboardSummary(ctx) {
   if (info.role !== 'Admin') {
     airList = airList.filter(a => (info.regions || []).includes(normalizeRegion(a.Region)));
   }
+
+  // เครื่องที่รื้อถอนหรือขายออกไปแล้วไม่นับเป็นของที่มีอยู่
+  // ข้อมูลยังอยู่ในระบบเพราะต้องเก็บประวัติ แต่ถ้านับรวมด้วย ยอดจะบวมขึ้นทุกปี
+  // จนไม่ตรงกับจำนวนเครื่องที่ต้องดูแลจริง ซึ่งเป็นตัวเลขที่คนเอาไปใช้วางแผน
+  airList = airList.filter(a => !isRetiredStatus(a.Status));
 
   const totalUnits = airList.length;
   const byRegion = {};
