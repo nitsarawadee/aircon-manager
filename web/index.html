@@ -46,26 +46,30 @@
          --p-X      สีทึบพาสเทล  ใช้กับแท่งกราฟและเส้นกราฟ
          --p-X-bg   พื้นการ์ด
          --p-X-fg   สีตัวเลข ต้องเข้มพอที่จะอ่านออกบนพื้นการ์ดของโหมดนั้น */
+    /* ชื่อ brand คือสีหลักของระบบ = ส้มของ ITEL (#f47920) ตัวเดียวกับปุ่มหลัก
+       ที่เหลือเป็นพาสเทลที่แบกความหมายไว้ ห้ามเปลี่ยนจนแยกกันไม่ออก
+         mint  = ปกติ / เสร็จแล้ว        rose  = ต้องระวัง / รอซ่อม
+         peach = ค้างอยู่ ยังไม่ได้ทำ      aqua/lilac = หมวดข้อมูล ไม่ได้สื่อสถานะ */
     :root {
-      --p-blue:  #8fb5dd;  --p-blue-bg:  #edf4fb;  --p-blue-fg:  #3f6d99;
-      --p-mint:  #93cfae;  --p-mint-bg:  #ecf7f1;  --p-mint-fg:  #3f8a63;
-      --p-peach: #f0c39a;  --p-peach-bg: #fdf3e9;  --p-peach-fg: #a8703a;
-      --p-rose:  #efaab6;  --p-rose-bg:  #fdeef1;  --p-rose-fg:  #a95669;
-      --p-lilac: #bfaee2;  --p-lilac-bg: #f3eefb;  --p-lilac-fg: #6f57a3;
-      --p-aqua:  #97d3dd;  --p-aqua-bg:  #ebf7f9;  --p-aqua-fg:  #3f8792;
-      --p-grey:  #b8b8c0;
+      --p-brand: #f47920;  --p-brand-bg: #fdecdd;  --p-brand-fg: #8f5624;
+      --p-mint:  #4bca84;  --p-mint-bg:  #e0f4e9;  --p-mint-fg:  #2c744f;
+      --p-peach: #f0ad4a;  --p-peach-bg: #fdf0da;  --p-peach-fg: #8a6019;
+      --p-rose:  #f15b75;  --p-rose-bg:  #fcdfe5;  --p-rose-fg:  #974054;
+      --p-lilac: #8d67dd;  --p-lilac-bg: #eae1f9;  --p-lilac-fg: #5a4091;
+      --p-aqua:  #4cc7db;  --p-aqua-bg:  #def3f7;  --p-aqua-fg:  #2c727c;
+      --p-grey:  #a8a8b4;
       --p-card-border: rgba(255,255,255,0.9);
     }
 
     /* โหมดมืด: สีทึบยังเป็นพาสเทลชุดเดิม เพราะอ่านได้ดีบนพื้นดำอยู่แล้ว
        เปลี่ยนแค่พื้นการ์ดให้เข้ม และตัวเลขให้สว่างขึ้นแทน */
     html.dark {
-      --p-blue-bg:  #131b24;  --p-blue-fg:  #a8cbe8;
-      --p-mint-bg:  #121d17;  --p-mint-fg:  #a6dcbe;
-      --p-peach-bg: #221a11;  --p-peach-fg: #f2cda9;
-      --p-rose-bg:  #211318;  --p-rose-fg:  #f0b8c2;
-      --p-lilac-bg: #1a1622;  --p-lilac-fg: #cabbe8;
-      --p-aqua-bg:  #111e21;  --p-aqua-fg:  #a9dde5;
+      --p-brand-bg: #241a10;  --p-brand-fg: #f7c191;
+      --p-mint-bg:  #10201a;  --p-mint-fg:  #96e0b7;
+      --p-peach-bg: #231c0f;  --p-peach-fg: #f5cf90;
+      --p-rose-bg:  #241318;  --p-rose-fg:  #f8adbc;
+      --p-lilac-bg: #1b1626;  --p-lilac-fg: #c4aef0;
+      --p-aqua-bg:  #0f2024;  --p-aqua-fg:  #96dfec;
       --p-grey:     #8a8a92;
       --p-card-border: rgba(255,255,255,0.06);
     }
@@ -394,25 +398,25 @@
              เพราะถ้าปล่อยไว้จะเป็นจุดเดียวที่สีจัดในหน้าที่เหลือเป็นพาสเทลทั้งหมด
              ตัวอักษรใช้สีเข้มของโทนน้ำเงิน จึงอ่านได้ทั้งโหมดสว่างและมืด -->
         <div class="flex-shrink-0 mb-3 rounded-xl px-5 py-3 shadow-sm relative overflow-hidden flex items-center justify-between"
-             style="background:var(--p-blue-bg); border:1px solid var(--p-card-border); color:var(--p-blue-fg)">
+             style="background:var(--p-brand-bg); border:1px solid var(--p-card-border); color:var(--p-brand-fg)">
           <div class="relative z-10">
             <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 leading-tight">
               ระบบบริหารจัดการแอร์ ITEL <i class="ph-fill ph-sparkle" style="color:var(--p-peach)"></i>
             </h2>
             <!-- เดิมใช้สีที่ทำไว้สำหรับพื้นน้ำเงินเข้ม ซึ่งจะจางหายไปบนพื้นพาสเทลอ่อน -->
-            <p class="text-xs hidden sm:block" style="color:var(--p-blue-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
+            <p class="text-xs hidden sm:block" style="color:var(--p-brand-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
           </div>
 
           <!-- เลือกปี: คุมเฉพาะตัวเลขที่ขึ้นกับปี (คืบหน้าล้างแอร์ · ค่าใช้จ่าย · กราฟแนวโน้ม)
                ส่วนจำนวนเครื่องและเครื่องรอซ่อมเป็นสภาพ ณ ตอนนี้ ไม่เปลี่ยนตามปีที่เลือก -->
           <div class="relative z-10 flex items-center gap-2 bg-white/70 border rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0"
                style="border-color:var(--p-card-border)">
-            <i class="ph ph-calendar-blank" style="color:var(--p-blue-fg)"></i>
+            <i class="ph ph-calendar-blank" style="color:var(--p-brand-fg)"></i>
             <select id="dashYearSelect" onchange="loadDashboard()"
                     class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-semibold"
-                    style="color:var(--p-blue-fg)"></select>
+                    style="color:var(--p-brand-fg)"></select>
           </div>
-          <i class="ph-fill ph-wind absolute -right-4 -bottom-8 text-[110px] transform -rotate-12" style="color:var(--p-blue); opacity:.18"></i>
+          <i class="ph-fill ph-wind absolute -right-4 -bottom-8 text-[110px] transform -rotate-12" style="color:var(--p-brand); opacity:.18"></i>
         </div>
 
         <!-- ชั้นที่ 2: การ์ดสรุป -->
@@ -2057,7 +2061,7 @@
       }
       // สีของแต่ละการ์ดอ้างจากชุดพาสเทลกลาง จึงเปลี่ยนตามโหมดสว่าง/มืดให้เอง
       const cards = [
-        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'blue' },
+        { num: s.totalUnits, label: 'เครื่องทั้งหมด (ตัว)', icon: 'ph-snowflake', tone: 'brand' },
         { num: s.oldUnits, label: 'อายุ ≥ 8 ปี (ควรเปลี่ยน)', icon: 'ph-timer', tone: 'rose',
           action: 'goToOldUnits()', hint: 'ดูรายการเครื่องที่อายุ 8 ปีขึ้นไป' }
       ];
@@ -2120,7 +2124,7 @@
       const byRegionLabelled = Object.fromEntries(
         Object.entries(s.byRegion || {}).map(([k, v]) => [regionLabel(k), v])
       );
-      document.getElementById('regionChart').innerHTML = renderBarChart(byRegionLabelled, false, 'blue');
+      document.getElementById('regionChart').innerHTML = renderBarChart(byRegionLabelled, false, 'brand');
       renderStatusDonut(s.byStatus);
       const trendTitle = document.getElementById(`trendTitle`);
       if (trendTitle) trendTitle.textContent = `แนวโน้มค่าใช้จ่ายรายเดือน ปี ` + s.year;
@@ -2306,7 +2310,7 @@
         </div>`).join('');
     }
 
-    function renderBarChart(obj, isStatus = false, defaultTone = 'blue') {
+    function renderBarChart(obj, isStatus = false, defaultTone = 'brand') {
       const entries = Object.entries(obj || {}).filter(([k]) => k !== 'undefined' && k !== '');
       if(entries.length === 0) return '<p class="text-sm text-gray-400 italic py-4">ไม่มีข้อมูล</p>';
       const max = Math.max(...entries.map(e => e[1]), 1);
@@ -2440,7 +2444,7 @@
             <div class="min-w-0">
               <h2 class="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2.5 flex-wrap">
                 <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style="background:var(--p-blue-bg); color:var(--p-blue-fg)">
+                      style="background:var(--p-brand-bg); color:var(--p-brand-fg)">
                   <i class="ph-fill ph-snowflake text-lg"></i>
                 </span>
                 <span class="break-all">${esc(u.AirCode)}</span>
@@ -2538,8 +2542,8 @@
 
           ${rows.length ? `
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4">
-              ${stat('ล้างแอร์', cleans.length + ' ครั้ง', 'blue')}
-              ${stat('งานซ่อม/อื่นๆ', others + ' ครั้ง', 'peach')}
+              ${stat('ล้างแอร์', cleans.length + ' ครั้ง', 'brand')}
+              ${stat('งานซ่อม/อื่นๆ', others + ' ครั้ง', 'rose')}
               ${stat('ค่าใช้จ่ายรวม', '฿' + cost.toLocaleString(), 'mint')}
               ${stat('ล้างล่าสุด', lastClean || '—', 'lilac')}
             </div>` : ''}
@@ -2626,7 +2630,7 @@
 
       // เรียงจาก "ของที่ต้องดูบ่อยสุด" ลงไปหา "ของที่นานๆ ดูที"
       return [
-        airInfoGroup('ตัวเครื่อง', 'ph-snowflake', 'blue', [
+        airInfoGroup('ตัวเครื่อง', 'ph-snowflake', 'brand', [
           airInfoField('ยี่ห้อ', u.Brand),
           airInfoField('ขนาด (BTU)', u.BTU ? Number(u.BTU).toLocaleString() : ''),
           airInfoField('รุ่นคอยล์เย็น (ในอาคาร)', u.ModelIndoor),
