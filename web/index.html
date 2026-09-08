@@ -2495,7 +2495,7 @@
 
       if (!u) {
         // เกิดได้จริงเมื่อเครื่องถูกลบไปแล้ว แต่ประวัติของมันยังอยู่
-        view.innerHTML = `<div class="max-w-5xl mx-auto">${back}
+        view.innerHTML = `<div>${back}
           <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center text-gray-400">
             ไม่พบเครื่องรหัส <b class="text-gray-600">${esc(airDetailCode)}</b> ในรายการเครื่อง<br>
             <span class="text-xs">(อาจถูกลบออกไปแล้ว แต่ประวัติยังอยู่)</span>
@@ -2515,7 +2515,7 @@
       }
 
       view.innerHTML = `
-        <div class="max-w-5xl mx-auto">
+        <div>
           ${back}
 
           <div class="bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4 mb-3
