@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { formatDate, normalizeCode, partsOf, safeParseDate, ymdhms } from '../values.js';
+import { formatDate, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -172,6 +172,64 @@ export async function deleteHistoryRecord(ctx, row) {
   });
 }
 
+/**
+ * แจ้งซ่อม — ขาเปิดเรื่อง คู่กับ completeRepairRecord ที่เป็นขาปิด
+ *
+ * แยกออกมาจากการแก้ข้อมูลเครื่องโดยตั้งใจ ด้วยเหตุผลสองข้อ
+ *
+ * 1. คนแจ้งไม่ควรต้องเปิดหน้าจอที่แก้ยี่ห้อ/BTU/SN/Node ได้ทั้งหมด
+ *    เพื่อจะพิมพ์ประโยคเดียวว่าแอร์ไม่เย็น
+ * 2. สิทธิ์ควรตรงกับงาน — ตรวจด้วยโมดูล repair เหมือนขาปิดเรื่อง
+ *    ช่างที่มีสิทธิ์ซ่อมจึงแจ้งซ่อมได้ โดยไม่ต้องให้สิทธิ์แก้ทะเบียนเครื่อง
+ *
+ * เขียนลงตารางเครื่องได้แค่สถานะกับอาการเสีย ช่องอื่นแตะไม่ได้เลยแม้แต่ช่องเดียว
+ */
+export async function reportRepair(ctx, record) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('repair');
+    await ctx.ensureBase();
+
+    const list = ctx.ss.objects(SHEETS.AIRLIST);
+    const target = normalizeCode(record.AirCode);
+    const found = list.find(a => normalizeCode(a.AirCode) === target);
+
+    if (!found) {
+      throw new Error('ไม่พบรหัสเครื่อง ' + record.AirCode + ' ในระบบ ไม่สามารถแจ้งซ่อมได้');
+    }
+    await ctx.assertRegionAccess(found.Region);
+
+    const detail = String(record.Detail || '').trim();
+    if (!detail) throw new Error('กรุณาระบุอาการเสีย');
+
+    // เครื่องที่ปลดระวางไปแล้วไม่รับแจ้งซ่อม ไม่งั้นการแจ้งจะดึงสถานะกลับมาเงียบๆ
+    // ทั้งที่เครื่องถูกถอดออกจากการใช้งานไปแล้ว
+    if (String(found.Status || '').includes('ปลดระวาง')) {
+      throw new Error('เครื่อง ' + found.AirCode + ' ปลดระวางไปแล้ว ไม่สามารถแจ้งซ่อมได้');
+    }
+
+    await addHistoryRaw(ctx, {
+      AirCode: found.AirCode,
+      Date: record.Date || ymd(new Date()),
+      EventType: 'แจ้งซ่อม',
+      Detail: detail,
+      Cost: '',
+      Technician: ''
+    });
+
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
+      Status: 'รอซ่อม',
+      Note: detail,
+      UpdatedAt: ymdhms(new Date()),
+      UpdatedBy: await ctx.currentUser()
+    });
+
+    await ctx.ss.flush();
+
+    const { getAirList } = await import('./airlist.js');
+    return { air: await getAirList(ctx), history: await getHistory(ctx) };
+  });
+}
+
 /** ปิดงานซ่อม: บันทึกประวัติการซ่อม แล้วเปลี่ยนสถานะเครื่องกลับเป็น "ใช้งานปกติ" */
 export async function completeRepairRecord(ctx, record) {
   return ctx.withLock(async () => {
@@ -188,17 +246,29 @@ export async function completeRepairRecord(ctx, record) {
     }
     await ctx.assertRegionAccess(found.Region);
 
+    // เก็บอาการเสียที่แจ้งไว้ลงประวัติก่อน แล้วค่อยล้างออกจากข้อมูลเครื่อง
+    // ไม่พึ่งข้อความที่หน้าเว็บเติมมาให้ เพราะคนกรอกลบทิ้งได้
+    // ถ้าไม่ดักตรงนี้ อาการเสียจะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
+    const reported = String(found.Note || '').trim();
+    let detail = String(record.Detail || '').trim();
+    if (reported && !detail.includes(reported)) {
+      detail = 'อาการที่แจ้งไว้: ' + reported + (detail ? ' — ' + detail : '');
+    }
+
     await addHistoryRaw(ctx, {
       AirCode: record.AirCode,
       Date: record.Date,
       EventType: 'ซ่อมแล้ว',
-      Detail: record.Detail,
+      Detail: detail,
       Cost: record.Cost,
       Technician: record.Technician
     });
 
+    // ล้างอาการเสียทิ้งพร้อมกับปิดงาน ไม่งั้นเครื่องที่ซ่อมเสร็จแล้วจะยังขึ้นอาการเดิมค้างอยู่
+    // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
       Status: 'ใช้งานปกติ',
+      Note: '',
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()
     });

@@ -2,7 +2,7 @@ import { Ctx } from './context.js';
 
 import { getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit } from './modules/airlist.js';
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
-import { getHistory, addHistoryRecord, deleteHistoryRecord, completeRepairRecord } from './modules/history.js';
+import { getHistory, addHistoryRecord, deleteHistoryRecord, reportRepair, completeRepairRecord } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
 import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
 import {
@@ -55,6 +55,7 @@ const API_FUNCTIONS = {
   getHistory,
   addHistoryRecord,
   deleteHistoryRecord,
+  reportRepair,
   completeRepairRecord,
 
   getPlanYears,

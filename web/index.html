@@ -676,7 +676,7 @@
                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                <input type="text" id="repairSearch" placeholder="ค้นหารหัสแอร์, อาการเสีย..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
             </div>
-            <button onclick="document.querySelector('[data-tab=\'airlist\']').click(); document.getElementById('airSearch').focus();" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+            <button onclick="openReportRepairModal()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-wrench"></i> แจ้งซ่อมแอร์ใหม่
             </button>
           </div>
@@ -1816,7 +1816,11 @@
       section.querySelectorAll('[onclick]').forEach(el => {
         const oc = el.getAttribute('onclick') || '';
         // ปุ่มที่แค่ "ดู" ต้องไม่ถูกปิด เพราะคนที่มีสิทธิ์ดูอย่างเดียวก็ต้องดูได้
-        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') || oc.includes('openAirDetail(')) return;
+        // ปุ่มที่ไม่ได้แก้ข้อมูลของโมดูลนี้ ต้องไม่ถูกปิดไปด้วย
+        // แจ้งซ่อมใช้สิทธิ์ของโมดูล repair ไม่ใช่ airlist คนที่ดูรายการเครื่องได้อย่างเดียว
+        // แต่มีสิทธิ์ซ่อม จึงต้องกดแจ้งซ่อมจากหน้านี้ได้
+        if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
+            oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(')) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -2401,6 +2405,11 @@
               <p class="text-sm text-gray-500 mt-1.5 ml-0.5">${where.map(esc).join(' · ') || 'ยังไม่ระบุที่ตั้ง'}</p>
             </div>
             <div class="flex flex-wrap gap-2 flex-shrink-0">
+              ${moduleLevel('repair') === 'edit' && !String(u.Status || '').includes('ปลดระวาง') ? `
+                <button onclick="openReportRepairModal('${esc(u.AirCode)}')"
+                        class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                  <i class="ph ph-wrench"></i> แจ้งซ่อม
+                </button>` : ''}
               ${canEditHist ? `
                 <button onclick="addHistoryForUnit('${esc(u.AirCode)}')"
                         class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
@@ -2800,6 +2809,7 @@
             <td class="px-4 py-3 whitespace-nowrap">${ageCell(a.InstallDate)}</td>
             <td class="px-4 py-3">${statusBadge(a.Status)}</td>
             <td class="px-4 py-3 text-right space-x-1">
+              <button onclick="openReportRepairModal('${esc(a.AirCode)}')" title="แจ้งซ่อมเครื่องนี้" class="text-rose-500 hover:text-white hover:bg-rose-500 p-1.5 rounded transition"><i class="ph ph-wrench text-lg"></i></button>
               <button onclick="viewAirHistory('${esc(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
               <button onclick='openMoveModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="ย้ายเครื่อง" class="text-teal-600 hover:text-white hover:bg-teal-500 p-1.5 rounded transition"><i class="ph ph-arrows-left-right text-lg"></i></button>
               <button onclick='openReplaceModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="เปลี่ยนเครื่อง (ชำรุดซ่อมไม่ได้)" class="text-[#f47920] hover:text-white hover:bg-[#f47920] p-1.5 rounded transition"><i class="ph ph-arrows-clockwise text-lg"></i></button>
@@ -4307,6 +4317,133 @@
     document.getElementById('repairSearch').addEventListener('input', e => {
       renderRepairView(e.target.value.trim());
     });
+
+    /**
+     * ฟอร์มแจ้งซ่อม — ขาเปิดเรื่อง คู่กับฟอร์มปิดงานข้างล่าง
+     *
+     * มีฟอร์มของตัวเองแทนที่จะให้ไปแก้ในหน้าข้อมูลเครื่อง เพราะการบอกว่าแอร์เสีย
+     * ไม่ควรต้องเปิดหน้าจอที่แก้ยี่ห้อ/BTU/SN/Node ได้ทั้งหมด
+     * และคนแจ้งจะได้ไม่ต้องมีสิทธิ์แก้ทะเบียนเครื่อง
+     * (ฝั่งเซิร์ฟเวอร์ตรวจด้วยสิทธิ์ repair เหมือนขาปิดเรื่อง)
+     *
+     * @param {string} [code] รหัสเครื่อง ถ้าไม่ส่งมา จะให้เลือกเองในฟอร์ม
+     */
+    function openReportRepairModal(code) {
+      // เครื่องที่ปลดระวางแล้วไม่ให้เลือก เพราะเซิร์ฟเวอร์ก็ปฏิเสธอยู่ดี
+      // ให้เห็นตัวเลือกที่กดแล้วขึ้น error เป็นการเสียเวลาเปล่า
+      const pick = (currentAirList || [])
+        .filter(a => !String(a.Status || '').includes('ปลดระวาง'))
+        .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th'));
+
+      const unit = code ? (currentAirList || []).find(a => sameCode(a.AirCode, code)) : null;
+      const chosen = unit ? unit.AirCode : '';
+
+      const picker = unit
+        ? `<input type="hidden" id="rr_air" value="${esc(unit.AirCode)}">
+           <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+             <div class="text-[11px] text-gray-400">เครื่องที่แจ้ง</div>
+             <div class="text-sm font-semibold text-gray-800">${esc(unit.AirCode)}
+               <span class="font-normal text-gray-500">· ${esc(unit.NodeName) || '-'}</span></div>
+           </div>`
+        : `<div>
+             <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องที่แจ้ง <span class="text-red-500">*</span></label>
+             <select id="rr_air" onchange="rrSyncHint()" class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm">
+               <option value="">-- เลือกเครื่อง --</option>
+               ${pick.map(a => `<option value="${esc(a.AirCode)}">${esc(a.AirCode)}${a.NodeName ? ' (' + esc(a.NodeName) + ')' : ''}</option>`).join('')}
+             </select>
+           </div>`;
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 class="text-lg font-bold text-rose-700 flex items-center gap-2"><i class="ph ph-wrench"></i> แจ้งซ่อม</h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+
+            <div class="p-6 space-y-4">
+              ${picker}
+              <div id="rr_hint"></div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">อาการเสีย <span class="text-red-500">*</span></label>
+                <textarea id="rr_detail" rows="3" placeholder="เช่น แอร์ไม่เย็น มีน้ำหยดจากคอยล์เย็น"
+                          class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm"></textarea>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">วันที่แจ้ง <span class="text-red-500">*</span></label>
+                ${dateField('rr_date', new Date().toISOString().slice(0, 10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm')}
+              </div>
+
+              <div class="bg-rose-50 text-rose-700 text-xs p-3 rounded-lg flex gap-2">
+                <i class="ph ph-info text-lg shrink-0"></i>
+                <p>เมื่อกดแจ้ง สถานะของเครื่องจะเปลี่ยนเป็น "รอซ่อม" และบันทึกลงประวัติให้อัตโนมัติ
+                   ข้อมูลอื่นของเครื่องไม่ถูกแก้</p>
+              </div>
+            </div>
+
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+              <button onclick="submitReportRepair()" class="px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 shadow-sm"><i class="ph ph-wrench"></i> แจ้งซ่อม</button>
+            </div>
+          </div>
+        </div>`;
+
+      rrSyncHint(chosen);
+      setTimeout(() => document.getElementById('rr_detail')?.focus(), 60);
+    }
+    window.openReportRepairModal = openReportRepairModal;
+
+    /**
+     * เตือนเมื่อเครื่องที่เลือกติดสถานะรอซ่อมอยู่แล้ว
+     *
+     * แจ้งซ้ำได้ (ถือว่าอัปเดตอาการ) แต่อาการเดิมจะถูกเขียนทับ
+     * ต้องบอกก่อนกด ไม่ใช่ให้รู้ตอนที่ของเดิมหายไปแล้ว
+     */
+    function rrSyncHint(code) {
+      const box = document.getElementById('rr_hint');
+      if (!box) return;
+
+      const el = document.getElementById('rr_air');
+      const value = code !== undefined ? code : (el ? el.value : '');
+      const unit = value ? (currentAirList || []).find(a => sameCode(a.AirCode, value)) : null;
+
+      if (!unit || String(unit.Status || '') !== 'รอซ่อม') { box.innerHTML = ''; return; }
+
+      box.innerHTML = `
+        <div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs p-3 rounded-lg flex gap-2">
+          <i class="ph ph-warning text-lg shrink-0"></i>
+          <p>เครื่องนี้ติดสถานะ "รอซ่อม" อยู่แล้ว อาการที่แจ้งไว้เดิมคือ
+             "<b>${esc(unit.Note) || 'ไม่ระบุ'}</b>" ถ้าแจ้งใหม่ อาการเดิมจะถูกแทนที่</p>
+        </div>`;
+    }
+    window.rrSyncHint = rrSyncHint;
+
+    async function submitReportRepair() {
+      const record = {
+        AirCode: document.getElementById('rr_air').value,
+        Detail: document.getElementById('rr_detail').value.trim(),
+        Date: document.getElementById('rr_date').value
+      };
+      if (!record.AirCode) { showToast('กรุณาเลือกเครื่องที่ต้องการแจ้งซ่อม', 'error'); return; }
+      if (!record.Detail) { showToast('กรุณาระบุอาการเสีย', 'error'); return; }
+      if (!record.Date) { showToast('กรุณาระบุวันที่แจ้ง', 'error'); return; }
+
+      try {
+        const result = await call('reportRepair', record);
+        currentAirList = result.air;
+        currentHistory = result.history;
+        refreshAirTable();
+        renderHistoryTable();
+        if (airDetailCode) renderAirDetail();
+        closeModal();
+        showToast('แจ้งซ่อมสำเร็จ — เครื่องเปลี่ยนเป็นสถานะรอซ่อมแล้ว', 'success');
+        loadDashboard();
+      } catch (e) {}
+    }
+    window.submitReportRepair = submitReportRepair;
 
     function openCompleteRepairModal(data) {
       const content = `
