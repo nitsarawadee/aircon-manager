@@ -12,7 +12,7 @@
 export const ALLOWED = {
   Region: ['1', '2', '3', '4', '5', '6'],
   LocationType: ['Shop House', 'Container', 'Pole', 'Office', 'Building', 'Warehouse', 'Room'],
-  Status: ['ใช้งานปกติ', 'ชำรุด', 'รอซ่อม', 'ปลดระวาง']
+  Status: ['ใช้งานปกติ', 'ชำรุด', 'รอซ่อม', 'รื้อถอน/ปลดระวาง', 'Write off']
 };
 
 /**

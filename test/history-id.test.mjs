@@ -10,6 +10,7 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { makeHistoryId, historyPrefix } from '../src/modules/history.js';
 import { statusChangeEvent } from '../src/modules/airlist.js';
+import { isRetiredStatus } from '../src/values.js';
 
 /* ==================== ตัวอย่างที่ตกลงกันไว้ ==================== */
 
@@ -101,8 +102,8 @@ test('ID ว่างหรือ null ปนอยู่ ต้องไม่�
 /* ==================== สถานะเครื่อง -> ชื่อเหตุการณ์ ==================== */
 
 test('เปลี่ยนสถานะเป็นชำรุด/ปลดระวาง ต้องบันทึกว่า "ปลดระวาง" ไม่ใช่ "อื่นๆ"', () => {
-  assert.equal(statusChangeEvent('ชำรุด/ปลดระวาง'), 'ปลดระวาง');
-  assert.equal(statusChangeEvent('ปลดระวาง'), 'ปลดระวาง');
+  assert.equal(statusChangeEvent('ชำรุด/ปลดระวาง'), 'รื้อถอน/ปลดระวาง');
+  assert.equal(statusChangeEvent('ปลดระวาง'), 'รื้อถอน/ปลดระวาง');
 });
 
 test('เปลี่ยนสถานะเป็นรอซ่อม ยังเป็นแจ้งซ่อมเหมือนเดิม', () => {
@@ -129,12 +130,12 @@ test('ชำรุด กับ ปลดระวาง ต้องเป็�
   // แยกกันเพราะความหมายต่างกัน ชำรุดคือเสียแต่ยังอยู่ในระบบ
   // ปลดระวางคือเลิกใช้ถาวร ถ้ารวมกันจะดูไม่ออกว่าเครื่องไหนยังมีโอกาสกลับมา
   assert.equal(statusChangeEvent('ชำรุด'), 'ชำรุด');
-  assert.equal(statusChangeEvent('ปลดระวาง'), 'ปลดระวาง');
+  assert.equal(statusChangeEvent('ปลดระวาง'), 'รื้อถอน/ปลดระวาง');
 });
 
 test('ค่าเดิม "ชำรุด/ปลดระวาง" ที่ยังค้างอยู่ ต้องถือเป็นปลดระวาง', () => {
   // สตริงนี้มีทั้งสองคำ ถ้าเช็คผิดลำดับจะได้ "ชำรุด" ซึ่งผิดความหมายเดิม
-  assert.equal(statusChangeEvent('ชำรุด/ปลดระวาง'), 'ปลดระวาง');
+  assert.equal(statusChangeEvent('ชำรุด/ปลดระวาง'), 'รื้อถอน/ปลดระวาง');
 });
 
 /* ==================== การกลับมาใช้งาน เชื่อมกับงานซ่อม ==================== */
@@ -174,4 +175,45 @@ test('ปิดงานซ่อม กับ แก้สถานะเอง
   // ส่วนตอนแก้สถานะเองมาจาก statusChangeEvent — สองที่นี้ต้องไม่หลุดจากกัน
   // ถ้าใครแก้ที่เดียวแล้วลืมอีกที่ ประวัติจะมีสองคำที่หมายถึงเรื่องเดียวกัน
   assert.equal(statusChangeEvent('ใช้งานปกติ'), 'ซ่อมแล้ว');
+});
+
+/* ==================== สถานะที่ออกจากการใช้งานแล้ว ====================
+   วงจรของเครื่องจบที่ "รื้อถอน/ปลดระวาง" (ถอดออกจากหน้างาน) แล้วไป "Write off"
+   ตอนขายออก เครื่องพวกนี้ยังอยู่ในระบบเพราะต้องเก็บประวัติ แต่ต้องไม่ถูกนับ
+   เป็นของที่ยังมีอยู่ ไม่งั้นยอดรวมจะบวมทุกปี และแผนล้างจะสั่งไปล้างเครื่องที่ไม่มีแล้ว
+   ============================================================================ */
+
+test('สถานะที่ถือว่าออกจากการใช้งานแล้ว', () => {
+  assert.equal(isRetiredStatus('รื้อถอน/ปลดระวาง'), true);
+  assert.equal(isRetiredStatus('Write off'), true);
+  assert.equal(isRetiredStatus('write-off'), true, 'พิมพ์ต่างกันเล็กน้อยก็ต้องจับได้');
+  assert.equal(isRetiredStatus('WRITE OFF'), true);
+});
+
+test('ชื่อสถานะแบบเก่าที่ยังค้างในข้อมูล ต้องยังถือว่าออกจากการใช้งานแล้ว', () => {
+  // ข้อมูลที่ย้ายมาจากชีตเดิมบางแถวยังใช้ชื่อเก่าอยู่ ถ้าไม่รองรับจะกลับไปถูกนับใหม่
+  assert.equal(isRetiredStatus('ปลดระวาง'), true);
+  assert.equal(isRetiredStatus('ชำรุด/ปลดระวาง'), true);
+});
+
+test('สถานะที่ยังใช้งานอยู่ ต้องไม่ถูกนับว่าออกจากระบบ', () => {
+  assert.equal(isRetiredStatus('ใช้งานปกติ'), false);
+  assert.equal(isRetiredStatus('ชำรุด'), false, 'เสียแต่ยังอยู่หน้างาน ยังต้องนับ');
+  assert.equal(isRetiredStatus('รอซ่อม'), false);
+  assert.equal(isRetiredStatus(''), false);
+  assert.equal(isRetiredStatus(null), false);
+});
+
+test('เปลี่ยนสถานะเป็นรื้อถอนหรือ Write off ต้องได้เหตุการณ์คนละอัน', () => {
+  // เป็นคนละขั้นของวงจรเดียวกัน ถ้าบันทึกเป็นอันเดียวกันจะแยกไม่ออกว่า
+  // เครื่องถูกถอดออกมาแล้วหรือขายออกไปแล้ว
+  assert.equal(statusChangeEvent('รื้อถอน/ปลดระวาง'), 'รื้อถอน/ปลดระวาง');
+  assert.equal(statusChangeEvent('Write off'), 'Write off');
+  assert.equal(statusChangeEvent('ปลดระวาง'), 'รื้อถอน/ปลดระวาง', 'ชื่อเก่าต้องยังจับได้');
+});
+
+test('ทุกเหตุการณ์ของขาออกต้องได้เลขขึ้นต้นด้วย CM', () => {
+  for (const s of ['รื้อถอน/ปลดระวาง', 'Write off']) {
+    assert.equal(historyPrefix(statusChangeEvent(s)), 'CM', 'สถานะ ' + s);
+  }
 });

@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { formatDate, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -201,10 +201,11 @@ export async function reportRepair(ctx, record) {
     const detail = String(record.Detail || '').trim();
     if (!detail) throw new Error('กรุณาระบุอาการเสีย');
 
-    // เครื่องที่ปลดระวางไปแล้วไม่รับแจ้งซ่อม ไม่งั้นการแจ้งจะดึงสถานะกลับมาเงียบๆ
-    // ทั้งที่เครื่องถูกถอดออกจากการใช้งานไปแล้ว
-    if (String(found.Status || '').includes('ปลดระวาง')) {
-      throw new Error('เครื่อง ' + found.AirCode + ' ปลดระวางไปแล้ว ไม่สามารถแจ้งซ่อมได้');
+    // เครื่องที่ออกจากการใช้งานไปแล้วไม่รับแจ้งซ่อม ไม่งั้นการแจ้งจะดึงสถานะกลับมาเงียบๆ
+    // ทั้งที่เครื่องถูกถอดออกจากหน้างานหรือขายออกไปแล้ว
+    if (isRetiredStatus(found.Status)) {
+      throw new Error('เครื่อง ' + found.AirCode + ' อยู่ในสถานะ "' + found.Status +
+                      '" ไม่ได้ใช้งานแล้ว จึงแจ้งซ่อมไม่ได้');
     }
 
     await addHistoryRaw(ctx, {

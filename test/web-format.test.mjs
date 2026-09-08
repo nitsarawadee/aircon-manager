@@ -13,6 +13,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRetiredStatus as isRetiredStatusServer } from '../src/values.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
@@ -269,4 +270,29 @@ test('ค่าว่างต้องได้ข้อความว่า�
   assert.equal(regionLabel(null), '');
   assert.equal(regionLabel(undefined), '');
   assert.equal(regionLabel('   '), '');
+});
+
+/* ==================== สถานะที่ออกจากการใช้งานแล้ว ====================
+   ตรรกะนี้มีสองชุด — ฝั่งเซิร์ฟเวอร์ใช้ตัดสินว่าจะนับเครื่องไหน
+   ฝั่งหน้าเว็บใช้ตัดสินว่าจะโชว์ปุ่มไหนและกรองอะไรออก
+   ถ้าสองฝั่งตอบไม่ตรงกัน ยอดที่เห็นบนจอกับยอดที่เซิร์ฟเวอร์คิดจะขัดกัน
+   แล้วไม่มีใครรู้ว่าอันไหนถูก เทสต์นี้บังคับให้ตอบเหมือนกันทุกค่า
+   ============================================================================ */
+
+const isRetiredStatusWeb = extract('isRetiredStatus');
+
+test('ตัวตัดสินสถานะของหน้าเว็บ ต้องตอบตรงกับของเซิร์ฟเวอร์ทุกค่า', () => {
+  const cases = [
+    'ใช้งานปกติ', 'ชำรุด', 'รอซ่อม',
+    'รื้อถอน/ปลดระวาง', 'Write off', 'write-off', 'WRITE OFF', 'write_off',
+    'ปลดระวาง', 'ชำรุด/ปลดระวาง',      // ชื่อเก่าที่ยังค้างในข้อมูล
+    '', '   ', null, undefined
+  ];
+
+  for (const c of cases) {
+    assert.equal(
+      isRetiredStatusWeb(c), isRetiredStatusServer(c),
+      'ค่า ' + JSON.stringify(c) + ' ตอบไม่ตรงกัน'
+    );
+  }
 });

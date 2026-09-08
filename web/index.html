@@ -1122,6 +1122,19 @@
     const sameRegion = (a, b) => String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim();
 
     /**
+     * เครื่องนี้ออกจากการใช้งานไปแล้วหรือยัง
+     *
+     * ต้องให้ผลตรงกับ isRetiredStatus() ฝั่งเซิร์ฟเวอร์เป๊ะๆ ไม่งั้นยอดที่หน้าเว็บนับเอง
+     * กับยอดที่เซิร์ฟเวอร์ส่งมาจะไม่ตรงกัน แล้วไม่มีใครรู้ว่าอันไหนถูก
+     * (มีเทสต์คุมไว้ว่าสองฝั่งตอบเหมือนกันทุกค่า)
+     */
+    function isRetiredStatus(status) {
+      const t = String(status == null ? '' : status).trim();
+      if (!t) return false;
+      return t.includes('ปลดระวาง') || t.includes('รื้อถอน') || /write\s*[-_]?\s*off/i.test(t);
+    }
+
+    /**
      * ชื่อภูมิภาคสำหรับแสดงผล
      *
      * ข้อมูลจริงเก็บเป็นเลข 1-6 ตามที่บริษัทแบ่งพื้นที่ไว้ เลขลอยๆ ตัวเดียว
@@ -2164,8 +2177,8 @@
     function statusColor_(k) {
       const s = String(k || '');
       if (s.includes('ปกติ')) return pastel('mint');       // ใช้งานได้
-      if (s.includes('ปลดระวาง')) return pastel('grey');   // จบอายุการใช้งาน
-      if (s.includes('ชำรุด')) return pastel('rose');      // เสียแต่ยังไม่ปลดระวาง
+      if (isRetiredStatus(s)) return pastel('grey');       // จบอายุการใช้งานแล้ว
+      if (s.includes('ชำรุด')) return pastel('rose');      // เสียแต่ยังอยู่หน้างาน
       if (s.includes('ซ่อม')) return pastel('peach');      // รอซ่อม
       return pastel('grey');                               // ไม่ระบุ
     }
@@ -2405,7 +2418,7 @@
               <p class="text-sm text-gray-500 mt-1.5 ml-0.5">${where.map(esc).join(' · ') || 'ยังไม่ระบุที่ตั้ง'}</p>
             </div>
             <div class="flex flex-wrap gap-2 flex-shrink-0">
-              ${moduleLevel('repair') === 'edit' && !String(u.Status || '').includes('ปลดระวาง') ? `
+              ${moduleLevel('repair') === 'edit' && !isRetiredStatus(u.Status) ? `
                 <button onclick="openReportRepairModal('${esc(u.AirCode)}')"
                         class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                   <i class="ph ph-wrench"></i> แจ้งซ่อม
@@ -2830,7 +2843,7 @@
       // เช็คปลดระวางก่อนชำรุด เพราะค่าเดิม "ชำรุด/ปลดระวาง" มีทั้งสองคำ
       let cls = 'bg-rose-100 text-rose-800';
       if (s.includes('ปกติ')) cls = 'bg-emerald-100 text-emerald-800';
-      else if (s.includes('ปลดระวาง')) cls = 'bg-slate-700 text-white';
+      else if (isRetiredStatus(s)) cls = 'bg-slate-700 text-white';
       else if (s.includes('ชำรุด')) cls = 'bg-rose-100 text-rose-800';
       else if (s.includes('ซ่อม')) cls = 'bg-amber-100 text-amber-800';
 
@@ -2853,8 +2866,10 @@
         'แจ้งซ่อม':      'bg-rose-100 text-rose-800',
         'ซ่อมแล้ว':      'bg-emerald-100 text-emerald-800',
         'ชำรุด':         'bg-rose-100 text-rose-800',
-        // ปลดระวางคือจุดจบของเครื่อง ใช้สีเข้มกว่าเหตุการณ์อื่นเพื่อให้สะดุดตาตอนไล่ดูย้อนหลัง
-        'ปลดระวาง':      'bg-slate-700 text-white'
+        // สองอันนี้คือจุดจบของเครื่อง ใช้สีเข้มกว่าเหตุการณ์อื่นเพื่อให้สะดุดตาตอนไล่ดูย้อนหลัง
+        'ปลดระวาง':          'bg-slate-700 text-white',
+        'รื้อถอน/ปลดระวาง': 'bg-slate-700 text-white',
+        'Write off':         'bg-slate-900 text-white'
       };
       const cls = map[t] || 'bg-gray-100 text-gray-800';
       return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${esc(t)}</span>`;
@@ -3037,7 +3052,7 @@
             <div class="p-6 space-y-4">
               <div class="bg-rose-50 border border-rose-100 rounded-lg p-3 text-sm text-rose-700 flex items-start gap-2">
                 <i class="ph-fill ph-warning-circle text-lg flex-shrink-0 mt-0.5"></i>
-                <div>เครื่องเดิม <strong>${esc(data.AirCode)}</strong> จะถูกปลดระวาง (สถานะ: ปลดระวาง) และสร้างเครื่องใหม่ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) แทนที่โดยอัตโนมัติ</div>
+                <div>เครื่องเดิม <strong>${esc(data.AirCode)}</strong> จะถูกเปลี่ยนสถานะเป็น "รื้อถอน/ปลดระวาง" และสร้างเครื่องใหม่ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) แทนที่โดยอัตโนมัติ</div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องใหม่ (AirCode) <span class="text-red-500">*</span></label>
@@ -4287,7 +4302,8 @@
         // ทั้งที่หน้าประวัติเห็น แต่หน้างานซ่อมไม่เห็น ซึ่งขัดกันเอง
         let repairHist = currentHistory.filter(h => {
           const t = String(h.EventType == null ? '' : h.EventType);
-          return t.includes('ซ่อม') || t.includes('เปลี่ยน') || t.includes('ชำรุด') || t.includes('ปลดระวาง');
+          return t.includes('ซ่อม') || t.includes('เปลี่ยน') || t.includes('ชำรุด') ||
+                 t.includes('ปลดระวาง') || t.includes('รื้อถอน') || /write\s*off/i.test(t);
         });
         if(searchQuery) {
            const q = searchQuery.toLowerCase();
@@ -4329,10 +4345,10 @@
      * @param {string} [code] รหัสเครื่อง ถ้าไม่ส่งมา จะให้เลือกเองในฟอร์ม
      */
     function openReportRepairModal(code) {
-      // เครื่องที่ปลดระวางแล้วไม่ให้เลือก เพราะเซิร์ฟเวอร์ก็ปฏิเสธอยู่ดี
+      // เครื่องที่ออกจากการใช้งานแล้วไม่ให้เลือก เพราะเซิร์ฟเวอร์ก็ปฏิเสธอยู่ดี
       // ให้เห็นตัวเลือกที่กดแล้วขึ้น error เป็นการเสียเวลาเปล่า
       const pick = (currentAirList || [])
-        .filter(a => !String(a.Status || '').includes('ปลดระวาง'))
+        .filter(a => !isRetiredStatus(a.Status))
         .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th'));
 
       const unit = code ? (currentAirList || []).find(a => sameCode(a.AirCode, code)) : null;

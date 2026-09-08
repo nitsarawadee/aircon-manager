@@ -32,9 +32,13 @@ export function statusChangeEvent(status) {
 
   if (now === 'รอซ่อม') return 'แจ้งซ่อม';
 
+  // เช็คขายออกก่อนรื้อถอน เพราะเป็นคนละขั้นของวงจรเดียวกัน
+  // ถ้าเช็คกลับกัน การขายออกจะถูกบันทึกเป็นการรื้อถอนซ้ำอีกใบ
+  if (/write\s*[-_]?\s*off/i.test(now)) return 'Write off';
+
   // เช็คปลดระวางก่อนชำรุด เพื่อให้ค่าเดิม "ชำรุด/ปลดระวาง" ที่ยังค้างอยู่
   // ถูกจัดเป็นปลดระวาง ไม่ใช่ชำรุด
-  if (now.includes('ปลดระวาง')) return 'ปลดระวาง';
+  if (now.includes('ปลดระวาง') || now.includes('รื้อถอน')) return 'รื้อถอน/ปลดระวาง';
   if (now.includes('ชำรุด')) return 'ชำรุด';
 
   if (now === 'ใช้งานปกติ') return 'ซ่อมแล้ว';
@@ -217,7 +221,7 @@ export async function replaceAirUnit(ctx, oldRow, newUnit) {
     // ปลดระวางเครื่องเก่า
     const oldNote = oldUnit.Note ? oldUnit.Note + ' | ' : '';
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, oldRow, {
-      Status: 'ปลดระวาง',
+      Status: 'รื้อถอน/ปลดระวาง',
       Note: oldNote + 'ถูกเปลี่ยนเครื่องใหม่แทนแล้ว (' + (newUnit.AirCode || '-') + ')',
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()
