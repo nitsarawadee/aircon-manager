@@ -1,5 +1,6 @@
 import { SHEETS, BUDGET_HEADERS } from '../schema.js';
 import { partsOf, safeParseDate, ymdhms } from '../values.js';
+import { getPlanYears } from './plan.js';
 import { Ctx } from '../context.js';
 
 /**
@@ -66,6 +67,41 @@ export function monthlyBreakdown(historyRows, year) {
   return months;
 }
 
+/**
+ * ปีที่ให้เลือกได้ในหน้างบประมาณ
+ *
+ * เดิมหน้าเว็บใช้ช่องกรอกตัวเลข พิมพ์ปีอะไรก็ได้ ซึ่งกดพลาดเป็นปี 202 หรือ 20266
+ * แล้วได้หน้าว่างเปล่าโดยไม่มีอะไรบอกว่าพิมพ์ผิด จึงเปลี่ยนมาเป็นรายการปิด
+ *
+ * เกณฑ์ว่าปีไหนควรอยู่ในรายการ
+ *   ตั้งงบไว้แล้ว   ต้องเข้าไปดูย้อนหลังได้
+ *   มีประวัติ       มีค่าใช้จ่ายเกิดขึ้นจริง ต้องเทียบกับงบได้
+ *   มีแผนล้าง       รู้ล่วงหน้าว่าจะใช้เงิน ต้องตั้งงบรอไว้ได้
+ *   ปีนี้/ปีหน้า      ตั้งงบล่วงหน้าได้เสมอ แม้ยังไม่ได้สร้างแผน
+ *
+ * ข้อสุดท้ายสำคัญ เพราะช่องปีในกล่องตั้งงบเป็น readonly คือยึดตามปีที่เลือกอยู่
+ * ถ้ารายการมีแต่ปีที่มีข้อมูลแล้ว จะไม่เหลือทางตั้งงบให้ปีใหม่เลย
+ */
+async function budgetYears(ctx, currentYear) {
+  const nowY = new Date().getFullYear();
+  const years = new Set([nowY, nowY + 1, currentYear]);
+
+  for (const r of ctx.ss.objects(SHEETS.BUDGET)) {
+    const y = Number(r.Year);
+    if (y) years.add(y);
+  }
+  for (const h of ctx.ss.objects(SHEETS.HISTORY)) {
+    const d = safeParseDate(h.Date);
+    if (d) years.add(partsOf(d).y);
+  }
+  for (const name of await getPlanYears(ctx)) {
+    const y = Number(name.replace('Plan_', ''));
+    if (y) years.add(y);
+  }
+
+  return [...years].filter(Boolean).sort((a, b) => b - a);
+}
+
 export async function getBudgetSummary(ctx, year) {
   await ctx.requireAccess();
   const currentYear = Number(year) || new Date().getFullYear();
@@ -74,7 +110,8 @@ export async function getBudgetSummary(ctx, year) {
     // ต้องคืน monthly ครบ 12 เดือนด้วย ไม่งั้นหน้าเว็บที่วาดกราฟจะพังทั้งหน้า
     // สำหรับคนที่ไม่มีสิทธิ์ดูงบ ซึ่งเป็นคนละเรื่องกับการไม่ให้เห็นตัวเลข
     return {
-      year: currentYear, budgetCleaning: 0, budgetRepair: 0, totalBudget: 0,
+      year: currentYear, availableYears: [currentYear],
+      budgetCleaning: 0, budgetRepair: 0, totalBudget: 0,
       expenseCleaning: 0, expenseRepair: 0, totalExpense: 0,
       remainCleaning: 0, remainRepair: 0, remaining: 0,
       monthly: monthlyBreakdown([], currentYear), note: ''
@@ -105,6 +142,7 @@ export async function getBudgetSummary(ctx, year) {
 
   return {
     year: currentYear,
+    availableYears: await budgetYears(ctx, currentYear),
     budgetCleaning,
     budgetRepair,
     totalBudget: budgetCleaning + budgetRepair,

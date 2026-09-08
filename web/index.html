@@ -798,7 +798,9 @@
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
               <i class="ph ph-calendar-blank text-gray-500"></i>
-              <input type="number" id="budgetYearSelect" onchange="loadBudget()" class="bg-transparent border-none text-sm focus:ring-0 outline-none w-20 font-medium text-gray-700 text-center">
+              <!-- รายการปิด ไม่ใช่ช่องกรอก เพราะพิมพ์ปีที่ไม่มีข้อมูลแล้วได้หน้าว่างโดยไม่มีอะไรบอก
+                   ตัวเลือกมาจากเซิร์ฟเวอร์ = ปีที่ตั้งงบ/มีประวัติ/มีแผน บวกปีนี้กับปีหน้า -->
+              <select id="budgetYearSelect" onchange="loadBudget()" class="bg-transparent border-none text-sm focus:ring-0 outline-none font-medium text-gray-700 cursor-pointer pr-6"></select>
             </div>
             <button onclick="openBudgetModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-coins"></i> ตั้งค่างบประมาณ
@@ -1771,8 +1773,8 @@
       renderUserBadge();
 
       try {
-        const budgetYearSelectEl = document.getElementById('budgetYearSelect');
-        if (budgetYearSelectEl) budgetYearSelectEl.value = new Date().getFullYear();
+        // ไม่ต้องตั้งค่าปีล่วงหน้าแล้ว ปล่อยให้ loadBudget() ขอปีปัจจุบันจากเซิร์ฟเวอร์
+        // แล้วเติมตัวเลือกกลับมาเอง การใส่ค่าใส่ select ก่อนมี option จะเงียบหายไปเฉยๆ
         currentConfig = await call('getConfig');
 
         // คงลำดับการโหลดเดิมไว้ แต่เปลี่ยนมาใช้ allSettled เพื่อความทนทาน:
@@ -4632,10 +4634,16 @@
     /* ============== 5. BUDGET (งบประมาณ) ============== */
     async function loadBudget() {
       const yearInput = document.getElementById('budgetYearSelect');
-      let y = yearInput ? yearInput.value : new Date().getFullYear();
-      if(!y) y = new Date().getFullYear();
+      const y = (yearInput && yearInput.value) ? yearInput.value : null;
 
       currentBudget = await call('getBudgetSummary', y);
+
+      // เติมตัวเลือกปีจากที่เซิร์ฟเวอร์ส่งมา สร้างใหม่ทุกครั้งเพราะปีอาจเพิ่ม
+      // หลังตั้งงบปีใหม่หรือสร้างแผนปีถัดไป
+      if (yearInput && Array.isArray(currentBudget.availableYears)) {
+        yearInput.innerHTML = currentBudget.availableYears.map(yy =>
+          `<option value="${yy}" ${yy === currentBudget.year ? 'selected' : ''}>${yy}</option>`).join('');
+      }
 
       // --- Cleaning Budget ---
       document.getElementById('bdg_clean_total').innerText = `฿${Number(currentBudget.budgetCleaning).toLocaleString()}`;
@@ -4757,7 +4765,7 @@
     }
 
     function openBudgetModal() {
-      let y = document.getElementById('budgetYearSelect').value || new Date().getFullYear();
+      let y = (currentBudget && currentBudget.year) || new Date().getFullYear();
       let currentClean = currentBudget ? currentBudget.budgetCleaning : 0;
       let currentRepair = currentBudget ? currentBudget.budgetRepair : 0;
       let currentNote = currentBudget ? currentBudget.note : '';
