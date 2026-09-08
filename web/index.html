@@ -545,13 +545,6 @@
                 </select>
               </div>
 
-              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
-                <i class="ph ph-buildings text-gray-500"></i>
-                <select id="planNodeFilter" onchange="renderPlanTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
-                  <option value="">-- ดูทุก Node --</option>
-                </select>
-              </div>
-
               <div class="relative flex-1 sm:w-48">
                 <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 <input type="text" id="planSearch" placeholder="ค้นหารหัส, Node..." class="w-full pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -2157,10 +2150,10 @@
         await loadPlan();
       }
 
-      const nodeSel = document.getElementById('planNodeFilter');
-      if (nodeSel) {
-         nodeSel.value = nodeName;
-         renderPlanTable();
+      const box = document.getElementById('planSearch');
+      if (box) {
+        box.value = nodeName || '';
+        renderPlanTable(nodeName || '');
       }
     }
 
@@ -3516,10 +3509,11 @@
         syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
         rs.value = region || '';
       }
-      renderPlanTable();                    // ต้องวาดก่อน ตัวเลือก Node ถึงจะถูกเติมตามภูมิภาคใหม่
-
-      const ns = document.getElementById('planNodeFilter');
-      if (ns && node) { ns.value = node; renderPlanTable(); }
+      // ชื่อ Node ใส่ลงช่องค้นหา ไม่ได้มีตัวกรอง Node แยกแล้ว
+      // ข้อดีคือเห็นว่ากรองอะไรอยู่และลบทิ้งเองได้ทันที ไม่ต้องหาว่าตัวกรองซ่อนอยู่ตรงไหน
+      const box = document.getElementById('planSearch');
+      if (box) box.value = node || '';
+      renderPlanTable(node || '');
 
       document.getElementById('planTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -3741,14 +3735,9 @@
 
       const tb = document.querySelector('#planTable tbody');
 
-      // กรองภูมิภาคก่อน แล้วให้ตัวเลือก Node เหลือเฉพาะ Node ในภูมิภาคนั้น
-      // ทั้งระบบมี 237 Node ถ้าไม่หดตามภูมิภาค ก็ยังต้องรู้เองอยู่ดีว่า Node ไหนอยู่ภาคไหน
       const region = syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
       let displayPlan = currentPlan || [];
       if (region) displayPlan = displayPlan.filter(p => sameRegion(p.Region, region));
-
-      const filterNode = syncPlanNodeFilter(displayPlan);
-      if (filterNode) displayPlan = displayPlan.filter(p => p.NodeName === filterNode);
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         displayPlan = displayPlan.filter(p => searchText(p).includes(q));
@@ -3829,24 +3818,6 @@
             ถัดไป <i class="ph ph-caret-right"></i>
           </button>
         </div>`;
-    }
-
-    /**
-     * เติมตัวเลือก Node ให้เหลือเฉพาะที่อยู่ในผลลัพธ์ตอนนี้ แล้วคืนค่าที่เลือกอยู่
-     *
-     * ถ้า Node ที่เลือกไว้ไม่อยู่ในภูมิภาคที่เพิ่งเลือก ต้องล้างทิ้ง
-     * ไม่งั้นจะได้ตารางเปล่าโดยไม่รู้ว่าเพราะตัวกรองสองอันขัดกันเอง
-     */
-    function syncPlanNodeFilter(rows) {
-      const sel = document.getElementById('planNodeFilter');
-      if (!sel) return '';
-
-      const nodes = [...new Set((rows || []).map(p => p.NodeName).filter(Boolean))].sort();
-      const cur = sel.value;
-      sel.innerHTML = '<option value="">-- ดูทุก Node --</option>' +
-        nodes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-      sel.value = nodes.includes(cur) ? cur : '';
-      return sel.value;
     }
 
     function goToPlanPage(p) {
@@ -4052,7 +4023,9 @@
     function openNodeDateModal() {
       const nodes = [...new Set(currentPlan.map(p => p.NodeName).filter(n => n))].sort();
       if(nodes.length === 0) { showToast('ไม่พบข้อมูล Node ในแผนปีปัจจุบัน', 'error'); return; }
-      const curFilter = document.getElementById('planNodeFilter').value;
+      // เดาว่าจะตั้งวันของ Node ไหน จากสิ่งที่กำลังค้นหาอยู่ ถ้าตรงกับชื่อ Node พอดี
+      const typed = (document.getElementById('planSearch')?.value || '').trim();
+      const curFilter = nodes.find(n => n === typed) || '';
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -4087,8 +4060,11 @@
       if(!dates.r1 && !dates.r2 && !dates.r3) { showToast('กรุณาระบุวันที่อย่างน้อย 1 รอบ', 'error'); return; }
       try {
         currentPlan = await call('updatePlanDatesByNode', currentYear, nodeName, dates);
-        document.getElementById('planNodeFilter').value = nodeName;
-        renderPlanTable();
+
+        // ค้นหาด้วยชื่อ Node ที่เพิ่งตั้งวันให้ เพื่อให้เห็นผลทันทีว่าลงวันครบไหม
+        const box = document.getElementById('planSearch');
+        if (box) box.value = nodeName;
+        renderPlanTable(nodeName);
         closeModal();
         showToast(`อัปเดตวันล้างแอร์ Node: ${nodeName} เรียบร้อย`);
       } catch(e) {}
