@@ -4482,10 +4482,10 @@
             </div>
             <div class="p-6 space-y-4">
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องปรับอากาศ <span class="text-red-500">*</span></label>
-                <select id="h_air" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 bg-white outline-none">
-                  <option value="">-- เลือกเครื่อง --</option>
-                  ${currentAirList.map(a=>`<option value="${esc(a.AirCode)}">${esc(a.AirCode)} ${a.NodeName?'('+esc(a.NodeName)+')':''}</option>`).join('')}
-                </select>
+                ${airPickerInput({
+                  id: 'h_air', units: currentAirList,
+                  focusCls: 'focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]'
+                })}
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ดำเนินการ <span class="text-red-500">*</span></label>${dateField('h_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]')}</div>
@@ -4507,8 +4507,24 @@
     }
 
     async function saveHistory() {
-      const record = { AirCode: document.getElementById('h_air').value, Date: document.getElementById('h_date').value, EventType: document.getElementById('h_type').value, Detail: document.getElementById('h_detail').value, Cost: document.getElementById('h_cost').value, Technician: document.getElementById('h_tech').value };
-      if(!record.AirCode || !record.Date) { showToast('กรุณาระบุรหัสเครื่องและวันที่', 'error'); return; }
+      const airInput = document.getElementById('h_air');
+      const typed = String(airInput.value || '').trim();
+
+      const record = {
+        // ช่องนี้พิมพ์เองได้ ต้องแปลงกลับเป็นรหัสจริงก่อนส่งเสมอ
+        AirCode: airPickerCode(typed),
+        Date: document.getElementById('h_date').value,
+        EventType: document.getElementById('h_type').value,
+        Detail: document.getElementById('h_detail').value,
+        Cost: document.getElementById('h_cost').value,
+        Technician: document.getElementById('h_tech').value
+      };
+      if (!record.AirCode) {
+        showToast(typed ? `ไม่พบเครื่องรหัส "${typed}" กรุณาเลือกจากรายการ` : 'กรุณาเลือกเครื่อง', 'error');
+        airInput.focus();
+        return;
+      }
+      if (!record.Date) { showToast('กรุณาระบุวันที่', 'error'); return; }
       try {
         currentHistory = await call('addHistoryRecord', record);
         renderHistoryTable();
@@ -4672,21 +4688,11 @@
         : `<div>
              <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องที่แจ้ง <span class="text-red-500">*</span></label>
 
-             <!-- ช่องพิมพ์ค้นหา ไม่ใช่รายการเลื่อนหา เพราะมีเครื่องหลายร้อยตัว
-                  เลื่อนหาทีละตัวบนมือถือแทบเป็นไปไม่ได้
-                  ใช้ datalist ของเบราว์เซอร์เอง ไม่ต้องเขียนตัวกรองเอง และใช้ได้บนมือถือ
-
-                  ตัวเลือกเก็บ "รหัส · ชื่อ Node" ไว้ในค่า ไม่ใช่แค่รหัส เพราะเบราว์เซอร์
-                  กรองจากค่าเป็นหลัก ถ้าเก็บแค่รหัสจะพิมพ์ชื่อสถานที่ค้นไม่ได้
-                  ตอนส่งค่อยตัดเอาเฉพาะรหัสข้างหน้า -->
-             <input id="rr_air" list="rr_air_list" autocomplete="off"
-                    placeholder="พิมพ์รหัสเครื่อง หรือชื่อ Node เพื่อค้นหา"
-                    oninput="rrSyncHint()"
-                    class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm">
-             <datalist id="rr_air_list">
-               ${pick.map(a => `<option value="${esc(rrAirOption(a))}"></option>`).join('')}
-             </datalist>
-             <p class="text-[11px] text-gray-400 mt-1">มีเครื่องที่ใช้งานอยู่ ${pick.length.toLocaleString()} ตัว</p>
+             ${airPickerInput({
+               id: 'rr_air', units: pick, oninput: 'rrSyncHint()',
+               focusCls: 'focus:border-rose-500 focus:ring-1 focus:ring-rose-500',
+               note: 'มีเครื่องที่ใช้งานอยู่ ' + pick.length.toLocaleString() + ' ตัว'
+             })}
            </div>`;
 
       document.getElementById('modalRoot').innerHTML = `
@@ -4738,13 +4744,18 @@
      * แจ้งซ้ำได้ (ถือว่าอัปเดตอาการ) แต่อาการเดิมจะถูกเขียนทับ
      * ต้องบอกก่อนกด ไม่ใช่ให้รู้ตอนที่ของเดิมหายไปแล้ว
      */
+    /* ============== ช่องเลือกเครื่องแบบพิมพ์ค้นหา (ใช้ร่วมกันทุกฟอร์ม) ==============
+       มีเครื่องหลายร้อยตัว รายการเลื่อนหาจึงใช้งานจริงไม่ได้ โดยเฉพาะบนมือถือ
+       ใช้ datalist ของเบราว์เซอร์เอง ไม่ต้องเขียนตัวกรองเอง และไม่เพิ่มไลบรารี
+       =========================================================================== */
+
     /**
      * ข้อความที่โชว์ในรายการค้นหา — "รหัส · ชื่อ Node"
      *
      * ต้องเป็นค่าของตัวเลือกเลย ไม่ใช่ label เพราะเบราว์เซอร์แต่ละตัวกรองจาก label
      * ไม่เหมือนกัน แต่กรองจากค่าเหมือนกันหมด พิมพ์ชื่อ Node จึงค้นเจอทุกเบราว์เซอร์
      */
-    function rrAirOption(a) {
+    function airPickerLabel(a) {
       return a.NodeName ? a.AirCode + ' · ' + a.NodeName : String(a.AirCode);
     }
 
@@ -4753,13 +4764,39 @@
      *
      * รับได้ทั้งที่เลือกจากรายการ ("AYA-BPC-AIR-1 · สถานีรถไฟบ้านภาชี")
      * และที่พิมพ์เองแค่รหัส คืน '' ถ้าหาเครื่องที่ตรงไม่เจอ ผู้เรียกจะได้รู้ว่าใช้ไม่ได้
+     *
+     * ทุกฟอร์มที่ใช้ช่องนี้ต้องเรียกตัวนี้ก่อนส่งเสมอ เพราะช่องพิมพ์เองได้
+     * ถ้าไม่แปลงกลับ ข้อความที่พิมพ์ผิดจะถูกส่งไปเป็นรหัสเครื่องตรงๆ
      */
-    function rrAirCode(text) {
+    function airPickerCode(text) {
       const raw = String(text == null ? '' : text).trim();
       if (!raw) return '';
       const head = raw.split('·')[0].trim();
       const unit = (currentAirList || []).find(a => sameCode(a.AirCode, head));
       return unit ? unit.AirCode : '';
+    }
+
+    /**
+     * สร้าง HTML ของช่องเลือกเครื่อง
+     *
+     * @param {Object} o
+     * @param {string} o.id        id ของช่อง (datalist ใช้ id + '_list')
+     * @param {Array}  o.units     รายการเครื่องที่ให้เลือก
+     * @param {string} o.focusCls  คลาสสีตอนโฟกัส ให้เข้ากับสีของฟอร์มนั้น
+     * @param {string} [o.oninput] โค้ดที่จะเรียกตอนพิมพ์ (ถ้ามี)
+     * @param {string} [o.note]    ข้อความใต้ช่อง
+     */
+    function airPickerInput(o) {
+      const listId = o.id + '_list';
+      return `
+        <input id="${o.id}" list="${listId}" autocomplete="off"
+               placeholder="พิมพ์รหัสเครื่อง หรือชื่อ Node เพื่อค้นหา"
+               ${o.oninput ? `oninput="${o.oninput}"` : ''}
+               class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none text-sm ${o.focusCls}">
+        <datalist id="${listId}">
+          ${(o.units || []).map(a => `<option value="${esc(airPickerLabel(a))}"></option>`).join('')}
+        </datalist>
+        <p class="text-[11px] text-gray-400 mt-1">${esc(o.note || ('มีเครื่องให้เลือก ' + (o.units || []).length.toLocaleString() + ' ตัว'))}</p>`;
     }
 
     function rrSyncHint(code) {
@@ -4768,7 +4805,7 @@
 
       const el = document.getElementById('rr_air');
       const raw = code !== undefined ? code : (el ? el.value : '');
-      const value = rrAirCode(raw);
+      const value = airPickerCode(raw);
       const unit = value ? (currentAirList || []).find(a => sameCode(a.AirCode, value)) : null;
 
       if (!unit || String(unit.Status || '') !== 'รอซ่อม') { box.innerHTML = ''; return; }
@@ -4789,7 +4826,7 @@
       const record = {
         // ช่องนี้พิมพ์เองได้ จึงต้องแปลงกลับเป็นรหัสจริงและตรวจว่ามีเครื่องนั้นอยู่
         // ไม่งั้นข้อความที่พิมพ์ผิดจะถูกส่งไปเป็นรหัสเครื่องตรงๆ
-        AirCode: rrAirCode(typed),
+        AirCode: airPickerCode(typed),
         Detail: document.getElementById('rr_detail').value.trim(),
         Date: document.getElementById('rr_date').value
       };
