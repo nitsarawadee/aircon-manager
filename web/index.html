@@ -653,7 +653,7 @@
                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                <input type="text" id="historySearch" placeholder="ค้นหารหัสเครื่อง, ช่าง, เหตุการณ์..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
             </div>
-            <button onclick="exportCSV(currentHistory, 'History')" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+            <button onclick="exportHistoryCSV()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
               <i class="ph ph-download-simple"></i> CSV
             </button>
             <button onclick="openHistoryModal()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
@@ -2984,6 +2984,27 @@
     }
 
     let airLastList = [];
+
+    /** ประวัติที่ผ่านตัวกรองทั้งหมดแล้ว ตรงกับที่เห็นบนจอ (ไม่รวมการแบ่งหน้า) */
+    let historyLastList = [];
+
+    /**
+     * ดาวน์โหลดประวัติตามที่กรองอยู่ ไม่ใช่ทั้งหมด
+     *
+     * คนกดปุ่มนี้หลังกรองเสร็จ ย่อมคาดหวังว่าได้ของที่เห็นตรงหน้า
+     * ถ้าให้ทั้งหมดจะรู้ตัวก็ต่อเมื่อเปิดไฟล์แล้วเจอรายการที่ไม่ได้ขอ
+     *
+     * บอกจำนวนในข้อความยืนยันด้วย จะได้เห็นทันทีว่าได้กี่รายการ
+     */
+    function exportHistoryCSV() {
+      const rows = historyLastList || [];
+      const filtered = rows.length !== (currentHistory || []).length;
+      exportCSV(rows, 'History');
+      if (rows.length && filtered) {
+        showToast('ดาวน์โหลด ' + rows.length.toLocaleString() + ' รายการตามที่กรองอยู่');
+      }
+    }
+    window.exportHistoryCSV = exportHistoryCSV;
     function renderAirTable(list, keepPage) {
       buildNodeLookup();
 
@@ -4425,6 +4446,10 @@
         const q = searchQuery.toLowerCase();
         displayHistory = displayHistory.filter(h => searchText(h).includes(q));
       }
+
+      // เก็บผลที่กรองแล้วไว้ให้ปุ่ม CSV ใช้ ไม่ให้มันไปอ่านรายการเต็มเอง
+      // ไม่งั้นสิ่งที่ดาวน์โหลดได้จะไม่ตรงกับสิ่งที่เห็นบนจอ ซึ่งไม่มีอะไรบอกเลย
+      historyLastList = displayHistory;
 
       if(displayHistory.length === 0) {
         // บอกให้ตรงว่าไม่พบเพราะอะไร ไม่งั้นคนจะเข้าใจว่าระบบเสีย
