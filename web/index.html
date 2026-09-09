@@ -642,6 +642,13 @@
                   <option value="">ทุก Region</option>
                 </select>
               </div>
+
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+                <i class="ph ph-funnel text-gray-500"></i>
+                <select id="historyEventFilter" onchange="refreshHistoryTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกเหตุการณ์</option>
+                </select>
+              </div>
              <div class="relative flex-1 sm:w-64">
                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                <input type="text" id="historySearch" placeholder="ค้นหารหัสเครื่อง, ช่าง, เหตุการณ์..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -1139,6 +1146,31 @@
       const cur = sel.value;
       sel.innerHTML = '<option value="">ทุก Region</option>' +
         list.map(r => `<option value="${esc(r)}">${esc(regionLabel(r))}</option>`).join('');
+      sel.value = list.includes(cur) ? cur : '';
+      return sel.value;
+    }
+
+    /**
+     * เติมตัวเลือกในช่องกรองเหตุการณ์ จากเหตุการณ์ที่มีอยู่จริงในข้อมูล
+     *
+     * สร้างจากข้อมูลจริง ไม่ใช่จากรายการตัวเลือกใน Config โดยตั้งใจ
+     * เพราะบางเหตุการณ์ระบบเขียนเองโดยที่ไม่มีในรายการให้เลือกตอนบันทึก
+     * เช่น "ชำรุด" ที่เกิดตอนเปลี่ยนสถานะเครื่อง ถ้าอ่านจาก Config อันนั้นจะหลุด
+     * จากตัวกรอง แล้วจะกรองหารายการที่มีอยู่จริงไม่เจอ
+     *
+     * สร้างใหม่ทุกครั้งที่วาดตาราง เพราะประเภทเหตุการณ์เพิ่มได้ตลอดเวลา
+     * และคงตัวที่เลือกไว้ถ้ายังมีอยู่ ไม่งั้นตัวกรองจะรีเซ็ตเองทุกครั้งที่โหลดใหม่
+     */
+    function syncEventFilter(rows) {
+      const sel = document.getElementById('historyEventFilter');
+      if (!sel) return '';
+
+      const list = [...new Set((rows || []).map(h => String(h.EventType == null ? '' : h.EventType).trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'th'));
+
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">ทุกเหตุการณ์</option>' +
+        list.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
       sel.value = list.includes(cur) ? cur : '';
       return sel.value;
     }
@@ -4382,6 +4414,13 @@
       const region = syncRegionFilter('historyRegionFilter', (currentHistory || []).map(h => h.Region));
       if (region) displayHistory = displayHistory.filter(h => sameRegion(h.Region, region));
 
+      // สร้างตัวเลือกจากรายการเต็มเสมอ ไม่ใช่จากผลที่กรองแล้ว
+      // ไม่งั้นพอเลือกเหตุการณ์หนึ่ง ตัวเลือกอื่นจะหายไปจนกลับไปเลือกไม่ได้
+      const eventType = syncEventFilter(currentHistory || []);
+      if (eventType) {
+        displayHistory = displayHistory.filter(h => String(h.EventType == null ? '' : h.EventType).trim() === eventType);
+      }
+
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         displayHistory = displayHistory.filter(h => searchText(h).includes(q));
@@ -4391,9 +4430,11 @@
         // บอกให้ตรงว่าไม่พบเพราะอะไร ไม่งั้นคนจะเข้าใจว่าระบบเสีย
         const why = historyUnitFilter && !searchQuery
           ? `เครื่อง ${esc(historyUnitFilter)} ยังไม่มีประวัติที่บันทึกไว้`
-          : region && !searchQuery
-            ? `${esc(regionLabel(region))} ยังไม่มีประวัติที่บันทึกไว้`
-            : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
+          : eventType && !searchQuery
+            ? `ไม่มีรายการ "${esc(eventType)}"${region ? ' ใน ' + esc(regionLabel(region)) : ''}`
+            : region && !searchQuery
+              ? `${esc(regionLabel(region))} ยังไม่มีประวัติที่บันทึกไว้`
+              : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
         tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}</td></tr>`;
         renderTablePager('historyPaginationBar', 0, 1, 'goToHistoryPage');
         lockViewOnlySection('history');
