@@ -219,16 +219,34 @@ const MACHINE_FIELDS = [
   'InstallDate', 'WarrantyExpire', 'CleaningPricePerRound'
 ];
 
-/** บรรยายตัวเครื่องหนึ่งตัวแบบสั้น ใช้เขียนลงประวัติให้คนอ่านรู้ว่าเป็นเครื่องไหน */
+/**
+ * บรรยายตัวเครื่องหนึ่งตัวแบบสั้น ใช้เขียนลงประวัติ
+ *
+ * ข้อความนี้เป็นที่เดียวที่เก็บสเปกของเครื่องที่ถูกยกออกไปแล้ว หลังเปลี่ยนเครื่อง
+ * ช่องในตารางเครื่องจะเป็นของเครื่องใหม่ทั้งหมด จึงต้องใส่ให้ครบทุกช่องที่ระบุตัวได้
+ * (ยี่ห้อ ขนาด รุ่น S/N ทะเบียนทรัพย์สิน วันติดตั้ง) ไม่ใช่แค่พอให้รู้ว่าเปลี่ยนแล้ว
+ *
+ * วันที่เขียนเป็น วว/ดด/ปปปป เพราะข้อความนี้มีไว้ให้คนอ่าน ไม่ได้เอาไปคำนวณต่อ
+ */
 function describeMachine(u) {
   const parts = [];
-  const spec = [u.Brand, u.BTU ? u.BTU + ' BTU' : ''].filter(Boolean).join(' ');
+  const spec = [u.Brand, u.BTU ? Number(u.BTU).toLocaleString() + ' BTU' : ''].filter(Boolean).join(' ');
   if (spec) parts.push(spec);
+
+  const model = [u.ModelIndoor, u.ModelOutdoor].filter(Boolean).join(' / ');
+  if (model) parts.push('รุ่น ' + model);
+
   const sn = [u.IndoorSN, u.OutdoorSN].filter(Boolean).join(' / ');
   if (sn) parts.push('S/N ' + sn);
+
   const asset = [u.IndoorAsset, u.OutdoorAsset].filter(Boolean).join(' / ');
   if (asset) parts.push('ทะเบียน ' + asset);
-  if (u.InstallDate) parts.push('ติดตั้ง ' + formatDate(u.InstallDate));
+
+  if (u.InstallDate) {
+    const iso = formatDate(u.InstallDate);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+    parts.push('ติดตั้ง ' + (m ? m[3] + '/' + m[2] + '/' + m[1] : iso));
+  }
   return parts.join(' · ') || 'ไม่ระบุข้อมูลเครื่อง';
 }
 

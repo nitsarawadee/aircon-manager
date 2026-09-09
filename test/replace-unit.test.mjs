@@ -176,3 +176,21 @@ test('เครื่องที่ไม่มีหมายเหตุอ�
   const h = (await getHistory(ctxOf(db)))[0];
   assert.ok(!h.Detail.includes('หมายเหตุเดิม'), 'ไม่มีหมายเหตุก็ไม่ต้องเขียนถึง');
 });
+
+test('รายละเอียดในใบเปลี่ยนเครื่องต้องมีรุ่นคอยล์ และวันที่แบบ วว/ดด/ปปปป', () => {
+  // หน้าเว็บแบ่งบล็อกสองฝั่งด้วยลูกศร " → " ที่ข้อความนี้ใส่ไว้
+  // ถ้ารูปแบบเปลี่ยน บล็อกจะยุบเป็นก้อนเดียว (ยังครบ แต่ไม่แยกฝั่ง) เทสต์จึงล็อกไว้
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET ModelIndoor='WFM18F', ModelOutdoor='AFM18F' WHERE AirCode='AYA-BPC-AIR-1'").run();
+
+  return (async () => {
+    await replaceAirUnit(ctxOf(db), (await only(db))._row, { ...NEW, ModelIndoor: 'FTKC18', ModelOutdoor: 'RKC18' }, 'AYA-BPC-AIR-1');
+    const d = (await getHistory(ctxOf(db)))[0].Detail;
+
+    assert.ok(d.includes(' → '), 'ต้องมีลูกศรคั่นสองฝั่ง');
+    assert.ok(d.includes('รุ่น WFM18F / AFM18F'), 'ต้องมีรุ่นของเครื่องเก่า');
+    assert.ok(d.includes('รุ่น FTKC18 / RKC18'), 'ต้องมีรุ่นของเครื่องใหม่');
+    assert.ok(d.includes('ติดตั้ง 13/09/2011'), 'วันที่ต้องเป็นแบบไทย ไม่ใช่ 2011-09-13');
+    assert.ok(d.includes('18,500 BTU'), 'ขนาดต้องมีตัวคั่นหลักพัน');
+  })();
+});

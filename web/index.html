@@ -2619,18 +2619,49 @@
              <i class="ph ph-clock-counter-clockwise text-3xl mb-2 block"></i>เครื่องนี้ยังไม่มีประวัติที่บันทึกไว้
            </td></tr>`
         : rows.map(h => {
-            let head = '';
-            let tail = '';
-            if (swaps) {
-              // รายการเรียงใหม่ไปเก่า หัวข้อแรกจึงเป็นเครื่องที่ใช้อยู่ตอนนี้
-              if (era === 0) { head = eraHeader('เครื่องที่ใช้อยู่ปัจจุบัน'); era = 1; }
-              if (String(h.EventType || '').trim() === 'เปลี่ยนเครื่อง') {
-                // ใบนี้เป็นเส้นแบ่ง — วางหัวข้อไว้ "ใต้" ใบนี้ เพราะการเปลี่ยนเครื่อง
-                // คือเหตุการณ์ที่ทำให้เครื่องปัจจุบันมาอยู่ตรงนี้ ไม่ใช่เรื่องของเครื่องเก่า
-                tail = eraHeader('ประวัติของเครื่องตัวเก่า', 'ก่อนเปลี่ยนเครื่องวันที่ ' + fmtDate(h.Date));
-                era++;
-              }
+            // ใบเปลี่ยนเครื่องเก็บสเปกของเครื่องที่ถูกยกออกไปแล้ว ซึ่งไม่มีที่อื่นเก็บอีก
+            // ถ้าวาดเป็นแถวธรรมดา ข้อความจะถูกตัดจบด้วย … ต้องเอาเมาส์ไปชี้จึงเห็นหมด
+            // เท่ากับเก็บไว้แต่ดูไม่ได้ จึงวาดเป็นบล็อกเต็มความกว้างแยกสองฝั่ง
+            //
+            // แบ่งสองฝั่งด้วยลูกศรที่ฝั่งเซิร์ฟเวอร์ใส่ไว้เอง ไม่ได้แกะทีละช่อง
+            // ถ้าข้อความรูปแบบอื่น (ข้อมูลเก่าก่อนแก้เรื่องนี้) จะแสดงทั้งก้อนตามเดิม
+            // ซึ่งยังครบถ้วน แค่ไม่ได้แยกฝั่งให้
+            if (String(h.EventType || '').trim() === 'เปลี่ยนเครื่อง') {
+              const raw = String(h.Detail || '').replace(/^[^—]*—\s*/, '');
+              const half = raw.split(' → ');
+              const line = (text, tone) => `
+                <div class="text-[12px] leading-relaxed ${tone}">${esc(text)}</div>`;
+
+              const block = `
+                <tr class="bg-amber-50/40">
+                  <td colspan="${cols}" class="px-4 py-3 border-y border-amber-100">
+                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                      <i class="ph-fill ph-arrows-clockwise text-[#f47920]"></i>
+                      <span class="text-xs font-bold text-gray-700">เปลี่ยนเครื่อง</span>
+                      <span class="text-[11px] text-gray-500">${esc(fmtDate(h.Date))}</span>
+                      ${h.Cost ? `<span class="text-[11px] text-gray-500">· ฿${Number(h.Cost).toLocaleString()}</span>` : ''}
+                      ${h.Technician ? `<span class="text-[11px] text-gray-500">· ${esc(h.Technician)}</span>` : ''}
+                      <span class="text-[11px] text-gray-400 font-mono ml-auto">${esc(h.ID) || ''}</span>
+                      ${canEdit ? `<button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" title="ลบรายการนี้"
+                              class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition"><i class="ph ph-trash"></i></button>` : ''}
+                    </div>
+                    ${half.length === 2
+                      ? line(half[0], 'text-gray-500') + line(half[1], 'text-gray-800 font-medium')
+                      : line(raw, 'text-gray-700')}
+                  </td>
+                </tr>`;
+
+              // หัวข้อ "เครื่องตัวเก่า" วางใต้บล็อกนี้ เพราะทุกอย่างที่เก่ากว่าเป็นของเครื่องก่อน
+              const headerAbove = era === 0 ? eraHeader('เครื่องที่ใช้อยู่ปัจจุบัน') : '';
+              if (era === 0) era = 1;
+              era++;
+              return headerAbove + block +
+                     eraHeader('ประวัติของเครื่องตัวเก่า', 'ก่อนเปลี่ยนเครื่องวันที่ ' + fmtDate(h.Date));
             }
+
+            // ใบเปลี่ยนเครื่องถูกจัดการไปแล้วข้างบน เหลือแค่หัวข้อของยุคปัจจุบัน
+            let head = '';
+            if (swaps && era === 0) { head = eraHeader('เครื่องที่ใช้อยู่ปัจจุบัน'); era = 1; }
             return head + `
             <tr class="hover:bg-blue-50/50 transition-colors">
               <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
@@ -2643,7 +2674,7 @@
                 <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" title="ลบรายการนี้"
                         class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
               </td>` : ''}
-            </tr>` + tail;
+            </tr>`;
           }).join('');
 
       return `
