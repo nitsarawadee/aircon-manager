@@ -34,6 +34,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
+const { backupDatabase, pruneBackups } = await import('./backup.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -212,6 +213,7 @@ if (useSqlite) {
   db.exec('PRAGMA busy_timeout = 5000');
 
   console.log('แหล่งข้อมูล: SQLite (' + dbPath + ')');
+  startAutoBackup(db, join(ROOT, 'data', 'backups'));
 } else {
   const missing = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'SPREADSHEET_ID']
     .filter(k => !env[k]);
@@ -221,6 +223,41 @@ if (useSqlite) {
     process.exit(1);
   }
   console.log('แหล่งข้อมูล: Google Sheets');
+}
+
+/** สำรองอัตโนมัติทุก 24 ชั่วโมง */
+const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * สำรองฐานข้อมูลอัตโนมัติ — ตอนเปิดเซิร์ฟเวอร์ครั้งหนึ่ง แล้วทุกวัน
+ *
+ * ก่อนหน้านี้สำรองเฉพาะตอนรันสคริปต์บำรุงรักษา ซึ่งนานๆ ครั้ง
+ * ถ้าไฟล์ฐานข้อมูลเสียหรือมีคนแก้ผิดแล้วรู้ตัวช้า จะย้อนได้แค่ถึงวันที่รันสคริปต์
+ * ครั้งล่าสุดเท่านั้น ข้อมูลที่กรอกหลังจากนั้นหายทั้งหมด
+ *
+ * ใช้ VACUUM INTO ไม่ใช่การคัดลอกไฟล์ เพราะฐานข้อมูลเปิดโหมด WAL อยู่
+ * การคัดลอกไฟล์เฉยๆ จะได้สำเนาที่ขาดข้อมูลล่าสุดที่ยังค้างอยู่ใน WAL
+ * และ VACUUM INTO อ่านภาพ ณ ขณะนั้นได้โดยไม่ต้องหยุดให้คนอื่นใช้งาน
+ *
+ * ห้ามให้การสำรองล้มแล้วทำให้ระบบล่ม — ดิสก์เต็มหรือเขียนไม่ได้ ต้องแค่เตือน
+ * แล้วให้ระบบทำงานต่อ เพราะการใช้งานประจำวันสำคัญกว่าการสำรองรอบเดียว
+ */
+function startAutoBackup(db, dir) {
+  const once = label => {
+    try {
+      const { name } = backupDatabase(db, dir, label);
+      const removed = pruneBackups(dir);
+      console.log('สำรองข้อมูล: ' + name + (removed.length ? ' (ลบไฟล์เก่า ' + removed.length + ' ไฟล์)' : ''));
+    } catch (err) {
+      console.error('⚠️  สำรองข้อมูลไม่สำเร็จ: ' + String((err && err.message) || err));
+    }
+  };
+
+  once('เปิดเซิร์ฟเวอร์');
+
+  // ปล่อยให้ตัวจับเวลาไม่กันไม่ให้โปรเซสปิด เวลาสั่งหยุดจะได้ปิดได้ทันที
+  const timer = setInterval(() => once('อัตโนมัติรายวัน'), BACKUP_EVERY_MS);
+  if (timer.unref) timer.unref();
 }
 
 const state = new LocalState(join(ROOT, '.sessions.json'));
