@@ -161,45 +161,66 @@ export async function getCleaningForms(ctx, airCode) {
   return list.sort((a, b) => (a.CreatedAt < b.CreatedAt ? 1 : -1));
 }
 
-/** บันทึกฟอร์มล้างแอร์: เขียนลงชีต + สร้าง PDF + ปิดงานในแผน + บันทึกประวัติ */
+/**
+ * บันทึกฟอร์มล้างแอร์: เขียนลงชีต + สร้าง PDF + ปิดงานในแผน + บันทึกประวัติ
+ *
+ * ============================================================================
+ * ทำไมสร้าง PDF "นอก" ล็อก
+ * ============================================================================
+ * การสร้าง PDF เรียกบริการภายนอกผ่านเน็ต ซึ่งรอได้นานถึง 2 นาที (TIMEOUT_MS)
+ * แต่ล็อกเขียนข้อมูลถือว่า "ค้าง" แล้วยกให้คนถัดไปเมื่อเกิน LOCK_HOLD_MS
+ *
+ * เดิมเรียก PDF อยู่ในล็อก พอบริการตอบช้ากว่าเวลานั้น ล็อกจะถูกยกให้คนถัดไป
+ * ทั้งที่คนแรกยังเขียนไม่เสร็จ กลายเป็นมีคนเขียนพร้อมกันสองคน ต่างคนต่างถือ
+ * สำเนาข้อมูลที่โหลดมาคนละเวลา ใครบันทึกทีหลังทับของคนแรกโดยไม่มีอะไรฟ้อง
+ *
+ * ตอนนี้ในล็อกเหลือเฉพาะงานฐานข้อมูลซึ่งเสร็จในหลักมิลลิวินาที
+ * การรอเน็ตย้ายมาอยู่นอกล็อกทั้งหมด คนอื่นจึงไม่ต้องรอตามไปด้วย
+ *
+ * ผลข้างเคียงที่ยอมรับ: ถ้าสร้าง PDF สำเร็จแล้วการเขียนฐานข้อมูลล้มทีหลัง
+ * จะเหลือไฟล์ PDF ที่ไม่มีใครอ้างถึง ซึ่งดีกว่าข้อมูลการล้างแอร์หายไปเงียบๆ
+ */
 export async function saveCleaningForm(ctx, record) {
+  // ---------- ตรวจและเตรียมข้อมูล (ยังไม่แตะฐานข้อมูล จึงไม่ต้องถือล็อก) ----------
+  await ctx.assertModuleEdit('cleaningform');
+
+  if (!record.NodeName) throw new Error('กรุณาเลือก Node');
+  // โหมดแยกใบต่อเครื่องอาจส่งเครื่องมาลงช่อง AirCode2 แทน (กรณีเป็นเครื่องตัวที่ 2 ของ Node)
+  // จึงเช็คว่ามีเครื่องอย่างน้อย 1 ใน 2 ช่อง ไม่ใช่บังคับช่องแรกเสมอ
+  if (!record.AirCode1 && !record.AirCode2) throw new Error('กรุณาเลือกเครื่องปรับอากาศอย่างน้อย 1 เครื่อง');
+  if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
+  await ctx.assertRegionAccess(record.Region);
+
+  const units = unitsFromRecord(record);
+
+  record.ID = 'CF' + Date.now();
+  record.ChecklistJSON = JSON.stringify(record.Checklist || []);
+  record.CreatedAt = ymdhms(new Date());
+  record.RecordedBy = await ctx.currentUser();
+  record.Source = 'form';
+  // คอลัมน์ Price เก็บยอดรวมทั้งใบไว้เพื่อให้ตารางสรุปอ่านง่าย
+  // ส่วนการคิดงบจริงใช้ราคารายเครื่องที่ลงในประวัติ
+  record.Price = units.reduce((sum, u) => sum + (hasPrice(u.price) ? Number(u.price) : 0), 0) || '';
+
+  // ---------- สร้าง PDF (รอเน็ตได้นาน จึงต้องอยู่นอกล็อก) ----------
+  // พลาดก็ยังบันทึกข้อมูลต่อ ไม่ให้งานทั้งหมดล้มเพราะบริการ PDF ล่ม
+  // แต่ต้องส่งข้อความ error กลับไปบอกผู้ใช้ด้วย ไม่ใช่เงียบหายไป
+  let pdfUrl = '';
+  let pdfFileId = '';
+  let pdfError = '';
+  try {
+    const pdf = await buildCleaningPdf(ctx.env, record);
+    pdfUrl = pdf.url || '';
+    pdfFileId = pdf.fileId || '';
+  } catch (e) {
+    pdfError = String((e && e.message) || e);
+  }
+  record.PdfUrl = pdfUrl;
+  record.PdfFileId = pdfFileId;
+
+  // ---------- เขียนฐานข้อมูล (ต้องถือล็อก แต่ใช้เวลาสั้นมาก) ----------
   return ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
-
-    if (!record.NodeName) throw new Error('กรุณาเลือก Node');
-    // โหมดแยกใบต่อเครื่องอาจส่งเครื่องมาลงช่อง AirCode2 แทน (กรณีเป็นเครื่องตัวที่ 2 ของ Node)
-    // จึงเช็คว่ามีเครื่องอย่างน้อย 1 ใน 2 ช่อง ไม่ใช่บังคับช่องแรกเสมอ
-    if (!record.AirCode1 && !record.AirCode2) throw new Error('กรุณาเลือกเครื่องปรับอากาศอย่างน้อย 1 เครื่อง');
-    if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
-    await ctx.assertRegionAccess(record.Region);
-
     await ctx.ensureBase();
-
-    const units = unitsFromRecord(record);
-
-    record.ID = 'CF' + Date.now();
-    record.ChecklistJSON = JSON.stringify(record.Checklist || []);
-    record.CreatedAt = ymdhms(new Date());
-    record.RecordedBy = await ctx.currentUser();
-    record.Source = 'form';
-    // คอลัมน์ Price เก็บยอดรวมทั้งใบไว้เพื่อให้ตารางสรุปอ่านง่าย
-    // ส่วนการคิดงบจริงใช้ราคารายเครื่องที่ลงในประวัติ
-    record.Price = units.reduce((sum, u) => sum + (hasPrice(u.price) ? Number(u.price) : 0), 0) || '';
-
-    // สร้าง PDF ก่อน ถ้าพลาด (เช่นบริการ PDF ล่ม) ก็ยังบันทึกข้อมูลลงชีตไว้
-    // ไม่ให้งานทั้งหมดล้มเหลว — แต่ต้องส่งข้อความ error กลับไปบอกผู้ใช้ด้วย ไม่ใช่เงียบหายไป
-    let pdfUrl = '';
-    let pdfFileId = '';
-    let pdfError = '';
-    try {
-      const pdf = await buildCleaningPdf(ctx.env, record);
-      pdfUrl = pdf.url || '';
-      pdfFileId = pdf.fileId || '';
-    } catch (e) {
-      pdfError = String((e && e.message) || e);
-    }
-    record.PdfUrl = pdfUrl;
-    record.PdfFileId = pdfFileId;
 
     const headers = ctx.ss.headers(SHEETS.CLEANFORM);
     ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
