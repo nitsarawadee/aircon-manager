@@ -208,52 +208,91 @@ export async function moveAirUnit(ctx, row, dest, note, expectCode) {
 }
 
 /**
- * เปลี่ยนเครื่องปรับอากาศ: ใช้เมื่อเครื่องเดิมชำรุดซ่อมไม่ได้
- * เครื่องเก่าจะถูกปลดระวาง และสร้างเครื่องใหม่ที่ Node/Site เดิมให้อัตโนมัติ
- * พร้อมบันทึกประวัติทั้ง 'เปลี่ยนเครื่อง' (เครื่องเก่า) และ 'ติดตั้ง' (เครื่องใหม่)
+ * ช่องที่เป็นของ "ตัวเครื่อง" — เปลี่ยนไปตามเครื่องใหม่ตอนเปลี่ยนเครื่อง
+ *
+ * ที่ไม่อยู่ในรายการนี้คือของ "ตำแหน่ง" ได้แก่ รหัสเครื่อง Node SiteCode
+ * ภูมิภาค จังหวัด ประเภทสถานที่ พิกัด ที่อยู่ — ต้องคงเดิมทุกครั้ง
  */
-export async function replaceAirUnit(ctx, oldRow, newUnit, expectCode) {
+const MACHINE_FIELDS = [
+  'Brand', 'BTU', 'ModelIndoor', 'ModelOutdoor',
+  'IndoorAsset', 'IndoorSN', 'OutdoorAsset', 'OutdoorSN',
+  'InstallDate', 'WarrantyExpire', 'CleaningPricePerRound'
+];
+
+/** บรรยายตัวเครื่องหนึ่งตัวแบบสั้น ใช้เขียนลงประวัติให้คนอ่านรู้ว่าเป็นเครื่องไหน */
+function describeMachine(u) {
+  const parts = [];
+  const spec = [u.Brand, u.BTU ? u.BTU + ' BTU' : ''].filter(Boolean).join(' ');
+  if (spec) parts.push(spec);
+  const sn = [u.IndoorSN, u.OutdoorSN].filter(Boolean).join(' / ');
+  if (sn) parts.push('S/N ' + sn);
+  const asset = [u.IndoorAsset, u.OutdoorAsset].filter(Boolean).join(' / ');
+  if (asset) parts.push('ทะเบียน ' + asset);
+  if (u.InstallDate) parts.push('ติดตั้ง ' + formatDate(u.InstallDate));
+  return parts.join(' · ') || 'ไม่ระบุข้อมูลเครื่อง';
+}
+
+/**
+ * เปลี่ยนตัวเครื่องของตำแหน่งเดิม — ใช้เมื่อเครื่องเก่าชำรุดซ่อมไม่ได้
+ *
+ * ============================================================================
+ * ทำไมไม่สร้างแถวใหม่ (เดิมทำแบบนั้น และผิด)
+ * ============================================================================
+ * รหัสเครื่องคือชื่อของ "ตำแหน่ง" ไม่ใช่ชื่อของตัวเครื่อง — AYA-BPC-AIR-1
+ * หมายถึงแอร์ตัวที่ 1 ของ Node บ้านภาชี เปลี่ยนตัวเครื่องไปกี่รอบก็ยังเป็นตัวที่ 1
+ * ของ Node นั้น
+ *
+ * เวอร์ชันเดิมปลดระวางรหัสเดิมแล้วสร้างแถวใหม่ ซึ่งบังคับให้ต้องตั้งรหัสใหม่
+ * เพราะรหัสห้ามซ้ำ ผลคือตำแหน่งเดิมหายไปจากรายการที่ใช้งานอยู่ ทั้งที่หน้างาน
+ * ยังมีแอร์ตัวนั้นอยู่ และรายการเครื่องจะบวมด้วยแถวรื้อถอนทุกครั้งที่เปลี่ยนเครื่อง
+ *
+ * เวอร์ชันนี้แก้แถวเดิมในที่เดิม เปลี่ยนเฉพาะข้อมูลของตัวเครื่อง (S/N ทะเบียน
+ * ยี่ห้อ BTU วันติดตั้ง) แล้วบันทึกประวัติหนึ่งใบที่เก็บสเปกของเครื่องเก่าไว้
+ * ประวัติการล้าง/ซ่อมทั้งหมดยังผูกกับตำแหน่งเดิมและตามย้อนได้ว่ารายการไหน
+ * เกิดกับเครื่องตัวไหน โดยดูว่าอยู่ก่อนหรือหลังใบ "เปลี่ยนเครื่อง"
+ *
+ * สถานะรื้อถอน/ปลดระวางเก็บไว้ใช้กับกรณีที่เลิกใช้ตำแหน่งนั้นจริง
+ * ซึ่งเป็นเหตุการณ์คนละอันกับการเปลี่ยนตัวเครื่อง
+ */
+export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
     await ctx.ensureBase();
-    ctx.assertRowIs(SHEETS.AIRLIST, oldRow, 'AirCode', expectCode, 'เครื่องรหัส');
+    ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
     const oldUnit = {};
-    headers.forEach((h, i) => { if (h) oldUnit[h] = ctx.ss.cell(SHEETS.AIRLIST, oldRow, i + 1); });
+    headers.forEach((h, i) => { if (h) oldUnit[h] = ctx.ss.cell(SHEETS.AIRLIST, row, i + 1); });
 
     await ctx.assertRegionAccess(oldUnit.Region);
 
-    // ปลดระวางเครื่องเก่า
-    const oldNote = oldUnit.Note ? oldUnit.Note + ' | ' : '';
-    ctx.ss.writeByHeaders(SHEETS.AIRLIST, oldRow, {
-      Status: 'รื้อถอน/ปลดระวาง',
-      Note: oldNote + 'ถูกเปลี่ยนเครื่องใหม่แทนแล้ว (' + (newUnit.AirCode || '-') + ')',
+    // ต้องระบุตัวระบุของเครื่องใหม่มาอย่างน้อยหนึ่งอย่าง ไม่งั้นใบประวัติจะไม่มี
+    // ความหมาย — บอกว่าเปลี่ยนเครื่องแล้วแต่ไม่มีอะไรบอกว่าเปลี่ยนเป็นตัวไหน
+    const hasId = ['IndoorSN', 'OutdoorSN', 'IndoorAsset', 'OutdoorAsset']
+      .some(k => String(newUnit[k] == null ? '' : newUnit[k]).trim());
+    if (!hasId) {
+      throw new Error('กรุณาระบุ S/N หรือเลขทะเบียนทรัพย์สินของเครื่องใหม่อย่างน้อยหนึ่งช่อง');
+    }
+
+    // เขียนเฉพาะช่องของตัวเครื่อง ช่องของตำแหน่งไม่ถูกแตะแม้แต่ช่องเดียว
+    const payload = {
+      Status: 'ใช้งานปกติ',
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()
-    });
-
-    // สร้างเครื่องใหม่แทนที่ ณ ตำแหน่งเดิม เว้นแต่ผู้ใช้จะระบุใหม่เอง
-    const merged = Object.assign({
-      Region: oldUnit.Region, Province: oldUnit.Province, NodeName: oldUnit.NodeName,
-      SiteCode: oldUnit.SiteCode, LocationType: oldUnit.LocationType, Status: 'ใช้งานปกติ'
-    }, newUnit);
-    await insertAirUnitRaw(ctx, merged);
+    };
+    for (const f of MACHINE_FIELDS) {
+      if (newUnit[f] !== undefined) payload[f] = newUnit[f];
+    }
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, row, payload);
 
     await addHistoryRaw(ctx, {
       AirCode: oldUnit.AirCode,
-      Date: ymd(new Date()),
+      Date: newUnit.InstallDate || ymd(new Date()),
       EventType: 'เปลี่ยนเครื่อง',
-      Detail: `เครื่องชำรุดซ่อมไม่ได้ เปลี่ยนเครื่องใหม่เป็น ${merged.AirCode}`,
+      Detail: 'เปลี่ยนตัวเครื่องใหม่ที่ตำแหน่งเดิม' +
+              ' — เครื่องเดิม: ' + describeMachine(oldUnit) +
+              ' → เครื่องใหม่: ' + describeMachine({ ...oldUnit, ...payload }),
       Cost: newUnit.ReplaceCost || '',
-      Technician: newUnit.Technician || ''
-    });
-    await addHistoryRaw(ctx, {
-      AirCode: merged.AirCode,
-      Date: merged.InstallDate || ymd(new Date()),
-      EventType: 'ติดตั้ง',
-      Detail: `ติดตั้งทดแทนเครื่องเดิม ${oldUnit.AirCode} ที่ชำรุด`,
-      Cost: '',
       Technician: newUnit.Technician || ''
     });
 

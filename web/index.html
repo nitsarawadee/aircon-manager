@@ -2590,11 +2590,48 @@
         </div>`;
 
       const cols = canEdit ? 7 : 6;
+
+      /**
+       * แบ่งประวัติเป็นช่วงตามตัวเครื่อง
+       *
+       * รหัสเครื่องเป็นชื่อของตำแหน่ง เปลี่ยนตัวเครื่องแล้วรหัสไม่เปลี่ยน
+       * ประวัติของเครื่องเก่ากับเครื่องใหม่จึงอยู่ใต้รหัสเดียวกัน
+       * ถ้าไม่กำกับไว้ จะอ่านไม่ออกว่าการล้างเมื่อปีก่อนเป็นของเครื่องตัวไหน
+       *
+       * ใบ "เปลี่ยนเครื่อง" ทำหน้าที่เป็นเส้นแบ่ง — รายการที่เก่ากว่าใบนั้น
+       * เป็นของเครื่องตัวก่อน ไม่ต้องเก็บข้อมูลเพิ่มที่ไหนเลย วันที่กับชนิด
+       * เหตุการณ์บอกได้ครบ (สเปกของเครื่องแต่ละตัวอยู่ในรายละเอียดของใบนั้น)
+       *
+       * ไม่มีการเปลี่ยนเครื่องเลยก็ไม่ต้องขึ้นหัวข้อ จะได้ไม่รกโดยไม่ได้ความ
+       */
+      const swaps = rows.filter(h => String(h.EventType || '').trim() === 'เปลี่ยนเครื่อง').length;
+      const eraHeader = (label, sub) => `
+        <tr class="bg-slate-50/80">
+          <td colspan="${cols}" class="px-4 py-2 border-y border-slate-200">
+            <span class="text-[11px] font-bold text-slate-600">${esc(label)}</span>
+            ${sub ? `<span class="text-[11px] text-slate-400"> · ${esc(sub)}</span>` : ''}
+          </td>
+        </tr>`;
+
+      let era = 0;
       const body = rows.length === 0
         ? `<tr><td colspan="${cols}" class="px-4 py-12 text-center text-gray-400">
              <i class="ph ph-clock-counter-clockwise text-3xl mb-2 block"></i>เครื่องนี้ยังไม่มีประวัติที่บันทึกไว้
            </td></tr>`
-        : rows.map(h => `
+        : rows.map(h => {
+            let head = '';
+            let tail = '';
+            if (swaps) {
+              // รายการเรียงใหม่ไปเก่า หัวข้อแรกจึงเป็นเครื่องที่ใช้อยู่ตอนนี้
+              if (era === 0) { head = eraHeader('เครื่องที่ใช้อยู่ปัจจุบัน'); era = 1; }
+              if (String(h.EventType || '').trim() === 'เปลี่ยนเครื่อง') {
+                // ใบนี้เป็นเส้นแบ่ง — วางหัวข้อไว้ "ใต้" ใบนี้ เพราะการเปลี่ยนเครื่อง
+                // คือเหตุการณ์ที่ทำให้เครื่องปัจจุบันมาอยู่ตรงนี้ ไม่ใช่เรื่องของเครื่องเก่า
+                tail = eraHeader('ประวัติของเครื่องตัวเก่า', 'ก่อนเปลี่ยนเครื่องวันที่ ' + fmtDate(h.Date));
+                era++;
+              }
+            }
+            return head + `
             <tr class="hover:bg-blue-50/50 transition-colors">
               <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600">${esc(fmtDate(h.Date))}</td>
@@ -2606,7 +2643,8 @@
                 <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" title="ลบรายการนี้"
                         class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
               </td>` : ''}
-            </tr>`).join('');
+            </tr>` + tail;
+          }).join('');
 
       return `
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mt-6">
@@ -3167,6 +3205,10 @@
     function openReplaceModal(data) {
       const opt = (arr, val) => (arr || []).map(o => `<option value="${esc(o)}" ${o===val?'selected':''}>${esc(o)}</option>`).join('');
       const today = new Date().toISOString().slice(0, 10);
+
+      // บอกค่าเดิมไว้ใต้ช่อง เพราะคนกรอกต้องเทียบกับที่ติดอยู่บนเครื่องจริงหน้างาน
+      // ไม่ใส่เป็นค่าเริ่มต้นในช่อง S/N เพราะถ้าลืมแก้จะกลายเป็นเครื่องใหม่ที่ใช้ S/N เดิม
+      const wasHint = v => (v ? `<p class="text-[11px] text-gray-400 mt-1">เดิม: ${esc(v)}</p>` : '');
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -3176,25 +3218,37 @@
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition"><i class="ph ph-x text-2xl"></i></button>
             </div>
             <div class="p-6 space-y-4">
-              <div class="bg-rose-50 border border-rose-100 rounded-lg p-3 text-sm text-rose-700 flex items-start gap-2">
-                <i class="ph-fill ph-warning-circle text-lg flex-shrink-0 mt-0.5"></i>
-                <div>เครื่องเดิม <strong>${esc(data.AirCode)}</strong> จะถูกเปลี่ยนสถานะเป็น "รื้อถอน/ปลดระวาง" และสร้างเครื่องใหม่ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) แทนที่โดยอัตโนมัติ</div>
+              <!-- รหัสเครื่องคือชื่อของตำแหน่ง ไม่ใช่ชื่อของตัวเครื่อง จึงไม่มีช่องให้ตั้งรหัสใหม่
+                   กรอกเฉพาะข้อมูลของตัวเครื่องที่เปลี่ยน ใต้ช่องบอกค่าเดิมไว้ให้เทียบ -->
+              <div class="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-amber-800 flex items-start gap-2">
+                <i class="ph-fill ph-info text-lg flex-shrink-0 mt-0.5"></i>
+                <div>
+                  ตำแหน่ง <strong>${esc(data.AirCode)}</strong> ที่ Node "${esc(data.NodeName)}" (${esc(data.SiteCode)}) <strong>คงเดิมทั้งหมด</strong>
+                  เปลี่ยนเฉพาะข้อมูลของตัวเครื่อง และสถานะจะกลับเป็น "ใช้งานปกติ"
+                  <div class="text-[12px] mt-1 text-amber-700">สเปกของเครื่องเดิมถูกเก็บไว้ในประวัติ ประวัติการล้าง/ซ่อมก่อนวันนี้จะถูกกำกับว่าเป็นของเครื่องตัวเก่า</div>
+                </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องใหม่ (AirCode) <span class="text-red-500">*</span></label>
-                <input id="r_AirCode" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N คอยล์เย็น (ในอาคาร) <span class="text-red-500">*</span></label>
+                <input id="r_IndoorSN" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none">${wasHint(data.IndoorSN)}</div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N คอยล์ร้อน (นอกอาคาร)</label>
+                <input id="r_OutdoorSN" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none">${wasHint(data.OutdoorSN)}</div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ทะเบียนทรัพย์สิน คอยล์เย็น</label>
+                <input id="r_IndoorAsset" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none">${wasHint(data.IndoorAsset)}</div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ทะเบียนทรัพย์สิน คอยล์ร้อน</label>
+                <input id="r_OutdoorAsset" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none">${wasHint(data.OutdoorAsset)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ</label>
-                <select id="r_Brand" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Brand)}</select></div>
+                <select id="r_Brand" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Brand, data.Brand)}</select>${wasHint(data.Brand)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">BTU</label>
                 <input id="r_BTU" type="number" value="${esc(data.BTU)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">รุ่นคอยล์เย็น</label>
+                <input id="r_ModelIndoor" value="${esc(data.ModelIndoor)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">รุ่นคอยล์ร้อน</label>
+                <input id="r_ModelOutdoor" value="${esc(data.ModelOutdoor)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้งเครื่องใหม่</label>
-                ${dateField('r_InstallDate', today, 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none')}</div>
+                ${dateField('r_InstallDate', today, 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none')}${wasHint(data.InstallDate ? fmtDate(data.InstallDate) : '')}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label>
                 ${dateField('r_WarrantyExpire', '', 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none')}</div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N Indoor</label>
-                <input id="r_IndoorSN" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">S/N Outdoor</label>
-                <input id="r_OutdoorSN" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ราคาล้าง/รอบ (฿)</label>
                 <input type="number" id="r_CleaningPricePerRound" value="${esc(data.CleaningPricePerRound)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายเปลี่ยนเครื่อง (฿)</label>
@@ -3213,10 +3267,15 @@
     }
 
     async function replaceAir(oldRow, oldCode) {
-      const fields = ['AirCode','Brand','BTU','InstallDate','WarrantyExpire','IndoorSN','OutdoorSN','CleaningPricePerRound','ReplaceCost','Technician'];
+      // ไม่มี AirCode ในรายการนี้ เพราะรหัสเป็นของตำแหน่ง ไม่ได้เปลี่ยนตามตัวเครื่อง
+      const fields = ['Brand','BTU','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN',
+                      'OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire',
+                      'CleaningPricePerRound','ReplaceCost','Technician'];
       const newUnit = {};
       fields.forEach(f => { const el = document.getElementById('r_' + f); if (el) newUnit[f] = el.value; });
-      if (!newUnit.AirCode) { showToast('กรุณาระบุรหัสเครื่องใหม่', 'error'); return; }
+
+      const hasId = ['IndoorSN','OutdoorSN','IndoorAsset','OutdoorAsset'].some(k => String(newUnit[k] || '').trim());
+      if (!hasId) { showToast('กรุณาระบุ S/N หรือเลขทะเบียนทรัพย์สินของเครื่องใหม่', 'error'); return; }
       try {
         const result = await call('replaceAirUnit', oldRow, newUnit, oldCode);
         currentAirList = result.air;
