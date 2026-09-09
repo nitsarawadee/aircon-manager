@@ -4829,6 +4829,17 @@
     }
 
     /**
+     * ขอบเขตปีที่ยอมรับ
+     *
+     * ต้องเป็นเลข 4 หลัก เพราะตารางแผนล้างแอร์อ้างชีตด้วยรูปแบบ Plan_YYYY
+     * ที่บังคับ 4 หลักตายตัว (ดู PLAN_SHEET ใน db/repository.js)
+     * ช่วง 2000–2100 กว้างพอสำหรับงบล่วงหน้าทุกกรณีที่เป็นไปได้จริง
+     * และแคบพอที่ปีพิมพ์พลาดจะไม่หลุดเข้าไปเป็นแถวงบขยะ
+     */
+    const BUDGET_YEAR_MIN = 2000;
+    const BUDGET_YEAR_MAX = 2100;
+
+    /**
      * ปีที่ตั้งงบได้ = ปีนี้ถึงอีก 5 ปีข้างหน้า บวกปีที่มีข้อมูลอยู่แล้ว
      *
      * หน้านี้มีไว้ "ใส่ข้อมูลงบ" ของปีนี้และปีถัดๆ ไป จึงต้องไปข้างหน้าได้เอง
@@ -4862,9 +4873,20 @@
             </div>
             <div class="p-6 space-y-4">
               <div><label class="block text-sm font-medium text-gray-700 mb-1">ปี (ค.ศ.)</label>
-              <select id="m_bdg_year" onchange="loadBudgetYearIntoModal()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-white font-bold cursor-pointer">
+              <select id="m_bdg_year" onchange="onBudgetYearChange()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-white font-bold cursor-pointer">
                 ${budgetModalYears(y).map(yy => `<option value="${yy}" ${yy === Number(y) ? 'selected' : ''}>${yy}</option>`).join('')}
+                <option value="__custom">+ ระบุปีเอง…</option>
               </select>
+
+              <!-- ช่องกรอกปีเอง สำหรับปีที่ไกลกว่ารายการให้เลือก เช่นตั้งงบล่วงหน้า 10 ปี
+                   ยังตรวจค่าก่อนรับ เพราะปีที่พิมพ์พลาดจะกลายเป็นแถวงบที่ลบออกจากหน้าเว็บไม่ได้ -->
+              <div id="m_bdg_yearCustomBox" class="hidden mt-2 flex gap-2">
+                <input type="number" id="m_bdg_yearCustom" min="${BUDGET_YEAR_MIN}" max="${BUDGET_YEAR_MAX}" step="1"
+                       placeholder="เช่น 2035" onkeydown="if(event.key==='Enter'){event.preventDefault();applyBudgetCustomYear();}"
+                       class="flex-1 rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none font-bold">
+                <button type="button" onclick="applyBudgetCustomYear()"
+                        class="px-3 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] whitespace-nowrap">ใช้ปีนี้</button>
+              </div>
               <p id="m_bdg_hint" class="text-[11px] text-gray-500 mt-1"></p></div>
               
               <div><label class="block text-sm font-medium text-[#1153a1] mb-1"><i class="ph-fill ph-drop"></i> งบประมาณล้างแอร์ (฿)</label>
@@ -4894,6 +4916,62 @@
           : 'ยังไม่เคยตั้งงบของปีนี้';
       }
     }
+
+    /**
+     * เลือกปีในกล่อง — ถ้าเลือก "ระบุปีเอง" ให้เปิดช่องกรอกแทนการยิงเซิร์ฟเวอร์
+     */
+    function onBudgetYearChange() {
+      const sel = document.getElementById('m_bdg_year');
+      const box = document.getElementById('m_bdg_yearCustomBox');
+      if (!sel || !box) return;
+
+      if (sel.value === '__custom') {
+        box.classList.remove('hidden');
+        const input = document.getElementById('m_bdg_yearCustom');
+        if (input) { input.value = ''; input.focus(); }
+        const hint = document.getElementById('m_bdg_hint');
+        if (hint) hint.textContent = 'พิมพ์ปีที่ต้องการ (' + BUDGET_YEAR_MIN + '–' + BUDGET_YEAR_MAX + ') แล้วกดใช้ปีนี้';
+        return;
+      }
+
+      box.classList.add('hidden');
+      loadBudgetYearIntoModal();
+    }
+    window.onBudgetYearChange = onBudgetYearChange;
+
+    /**
+     * รับปีที่พิมพ์เอง แล้วเติมเข้าไปในรายการให้เลือก
+     *
+     * เติมเป็นตัวเลือกจริงในรายการ ไม่ได้เก็บไว้ในช่องกรอกลอยๆ
+     * เพื่อให้ทางเดียวที่ saveBudget อ่านค่าปียังเป็นทางเดิมเสมอ
+     * ไม่ต้องมีสองแหล่งที่อาจไม่ตรงกัน
+     */
+    function applyBudgetCustomYear() {
+      const input = document.getElementById('m_bdg_yearCustom');
+      const sel = document.getElementById('m_bdg_year');
+      if (!input || !sel) return;
+
+      const raw = String(input.value || '').trim();
+      const y = Number(raw);
+      if (!/^\d{4}$/.test(raw) || !Number.isInteger(y) || y < BUDGET_YEAR_MIN || y > BUDGET_YEAR_MAX) {
+        showToast('ปีต้องเป็นเลข 4 หลัก ระหว่าง ' + BUDGET_YEAR_MIN + ' ถึง ' + BUDGET_YEAR_MAX, 'error');
+        input.focus();
+        return;
+      }
+
+      // มีอยู่ในรายการแล้วก็เลือกอันเดิม ไม่ต้องเพิ่มซ้ำ
+      if (![...sel.options].some(o => o.value === String(y))) {
+        const opt = document.createElement('option');
+        opt.value = String(y);
+        opt.textContent = String(y);
+        sel.insertBefore(opt, sel.options[0]);
+      }
+      sel.value = String(y);
+
+      document.getElementById('m_bdg_yearCustomBox').classList.add('hidden');
+      loadBudgetYearIntoModal();
+    }
+    window.applyBudgetCustomYear = applyBudgetCustomYear;
 
     /**
      * ดึงงบของปีที่เลือกในกล่องมาใส่ในช่อง
@@ -4928,6 +5006,14 @@
 
     async function saveBudget() {
       const y = document.getElementById('m_bdg_year').value;
+
+      // ยังค้างที่ "+ ระบุปีเอง" คือยังไม่ได้กดใช้ปีนี้ ต้องไม่ส่งค่านั้นไปบันทึก
+      if (y === '__custom') {
+        showToast('กรุณาพิมพ์ปีแล้วกดใช้ปีนี้ก่อนบันทึก', 'error');
+        const input = document.getElementById('m_bdg_yearCustom');
+        if (input) input.focus();
+        return;
+      }
       const cleanAmt = document.getElementById('m_bdg_clean').value;
       const repairAmt = document.getElementById('m_bdg_repair').value;
       const note = document.getElementById('m_bdg_note').value;
