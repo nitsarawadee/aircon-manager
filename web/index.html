@@ -2603,7 +2603,7 @@
               <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-right">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
               <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
               ${canEdit ? `<td class="px-4 py-3 text-right">
-                <button onclick="deleteHistory(${h._row})" title="ลบรายการนี้"
+                <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" title="ลบรายการนี้"
                         class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
               </td>` : ''}
             </tr>`).join('');
@@ -2950,7 +2950,7 @@
               <button onclick='openMoveModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="ย้ายเครื่อง" class="text-teal-600 hover:text-white hover:bg-teal-500 p-1.5 rounded transition"><i class="ph ph-arrows-left-right text-lg"></i></button>
               <button onclick='openReplaceModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="เปลี่ยนเครื่อง (ชำรุดซ่อมไม่ได้)" class="text-[#f47920] hover:text-white hover:bg-[#f47920] p-1.5 rounded transition"><i class="ph ph-arrows-clockwise text-lg"></i></button>
               <button onclick='openAirModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
-              <button onclick="deleteAir(${a._row})" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+              <button onclick="deleteAir(${a._row}, '${esc(a.AirCode)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
             </td>
           </tr>`;
         }).join('');
@@ -3086,11 +3086,13 @@
       } catch (e) {}
     }
 
-    async function deleteAir(row) {
+    // ส่งรหัสเครื่องไปด้วยทุกคำสั่งที่แก้/ลบ ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นเครื่องตัวเดิม
+    // ลำดับแถวเลื่อนได้ ถ้ามีคนลบเครื่องที่อยู่ก่อนหน้าไประหว่างที่หน้านี้เปิดค้างอยู่
+    async function deleteAir(row, code) {
       const confirmed = await showConfirm('ยืนยันการลบเครื่องปรับอากาศนี้ออกจากระบบ?');
       if (!confirmed) return;
       try {
-        const result = await call('deleteAirUnit', row);
+        const result = await call('deleteAirUnit', row, code);
         currentAirList = result.air;
         currentHistory = result.history;
         renderAirTable(currentAirList);
@@ -3126,7 +3128,7 @@
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">ยกเลิก</button>
-              <button onclick="moveAir(${data._row})" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm"><i class="ph ph-arrows-left-right"></i> ยืนยันการย้าย</button>
+              <button onclick="moveAir(${data._row}, '${esc(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm"><i class="ph ph-arrows-left-right"></i> ยืนยันการย้าย</button>
             </div>
           </div>
         </div>`;
@@ -3141,7 +3143,7 @@
       });
     }
 
-    async function moveAir(row) {
+    async function moveAir(row, code) {
       const dest = {
         NodeName: document.getElementById('m_NodeName').value.trim(),
         SiteCode: document.getElementById('m_SiteCode').value.trim(),
@@ -3150,7 +3152,7 @@
       const note = document.getElementById('m_Note').value.trim();
       if (!dest.NodeName) { showToast('กรุณาระบุ Node ปลายทาง', 'error'); return; }
       try {
-        const result = await call('moveAirUnit', row, dest, note);
+        const result = await call('moveAirUnit', row, dest, note, code);
         currentAirList = result.air;
         currentHistory = result.history;
         renderAirTable(currentAirList);
@@ -3203,20 +3205,20 @@
             </div>
             <div class="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 z-20 rounded-b-2xl">
               <button onclick="closeModal()" class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">ยกเลิก</button>
-              <button onclick="replaceAir(${data._row})" class="px-5 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-arrows-clockwise"></i> ยืนยันเปลี่ยนเครื่อง</button>
+              <button onclick="replaceAir(${data._row}, '${esc(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-arrows-clockwise"></i> ยืนยันเปลี่ยนเครื่อง</button>
             </div>
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
     }
 
-    async function replaceAir(oldRow) {
+    async function replaceAir(oldRow, oldCode) {
       const fields = ['AirCode','Brand','BTU','InstallDate','WarrantyExpire','IndoorSN','OutdoorSN','CleaningPricePerRound','ReplaceCost','Technician'];
       const newUnit = {};
       fields.forEach(f => { const el = document.getElementById('r_' + f); if (el) newUnit[f] = el.value; });
       if (!newUnit.AirCode) { showToast('กรุณาระบุรหัสเครื่องใหม่', 'error'); return; }
       try {
-        const result = await call('replaceAirUnit', oldRow, newUnit);
+        const result = await call('replaceAirUnit', oldRow, newUnit, oldCode);
         currentAirList = result.air;
         currentHistory = result.history;
         renderAirTable(currentAirList);
@@ -4326,7 +4328,7 @@
           <td class="px-4 py-3 text-gray-600">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
           <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
           <td class="px-4 py-3 text-right">
-            <button onclick="deleteHistory(${h._row})" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+            <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
           </td>
         </tr>`).join('');
       renderTablePager('historyPaginationBar', displayHistory.length, historyPage, 'goToHistoryPage');
@@ -4392,11 +4394,11 @@
       } catch (e) {}
     }
 
-    async function deleteHistory(row) {
+    async function deleteHistory(row, id) {
       const confirmed = await showConfirm('ยืนยันการลบประวัตินี้?');
       if (!confirmed) return;
       try {
-        currentHistory = await call('deleteHistoryRecord', row);
+        currentHistory = await call('deleteHistoryRecord', row, id);
         renderHistoryTable();
         if (airDetailCode) renderAirDetail();
         showToast('ลบประวัติสำเร็จ');

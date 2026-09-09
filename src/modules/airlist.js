@@ -112,6 +112,10 @@ export async function saveAirUnit(ctx, unit) {
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
 
     if (unit._row) {
+      // ช่องรหัสเครื่องเป็น readonly ตอนแก้ข้อมูล ค่าที่ส่งมาจึงต้องตรงกับของเดิมเสมอ
+      // ถ้าไม่ตรงแปลว่าลำดับแถวเลื่อนไปแล้ว ไม่ใช่ว่าผู้ใช้ตั้งใจเปลี่ยนรหัส
+      ctx.assertRowIs(SHEETS.AIRLIST, unit._row, 'AirCode', unit.AirCode, 'เครื่องรหัส');
+
       // ตรวจสิทธิ์ทั้งภูมิภาคเดิมและภูมิภาคใหม่ กันไม่ให้ RegionAdmin แก้ข้อมูลนอกเขต
       // หรือย้ายข้อมูลออกนอกเขตตัวเอง
       const oldRegion = ctx.ss.cell(SHEETS.AIRLIST, unit._row, headers.indexOf('Region') + 1);
@@ -161,11 +165,12 @@ export async function saveAirUnit(ctx, unit) {
  * ย้ายเครื่องปรับอากาศจาก Node เดิมไปยัง Node ปลายทาง
  * อัปเดตตำแหน่งใน AirList และบันทึกประวัติ EventType 'ย้าย' ให้อัตโนมัติ
  */
-export async function moveAirUnit(ctx, row, dest, note) {
+export async function moveAirUnit(ctx, row, dest, note, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
     if (!dest || !dest.NodeName) throw new Error('กรุณาระบุ Node ปลายทาง');
     await ctx.ensureBase();
+    ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
     const unit = {};
@@ -207,10 +212,11 @@ export async function moveAirUnit(ctx, row, dest, note) {
  * เครื่องเก่าจะถูกปลดระวาง และสร้างเครื่องใหม่ที่ Node/Site เดิมให้อัตโนมัติ
  * พร้อมบันทึกประวัติทั้ง 'เปลี่ยนเครื่อง' (เครื่องเก่า) และ 'ติดตั้ง' (เครื่องใหม่)
  */
-export async function replaceAirUnit(ctx, oldRow, newUnit) {
+export async function replaceAirUnit(ctx, oldRow, newUnit, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
     await ctx.ensureBase();
+    ctx.assertRowIs(SHEETS.AIRLIST, oldRow, 'AirCode', expectCode, 'เครื่องรหัส');
 
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
     const oldUnit = {};
@@ -256,10 +262,11 @@ export async function replaceAirUnit(ctx, oldRow, newUnit) {
   });
 }
 
-export async function deleteAirUnit(ctx, row) {
+export async function deleteAirUnit(ctx, row, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
     await ctx.ensureBase();
+    ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
     const unit = {};

@@ -157,10 +157,11 @@ export async function addHistoryRecord(ctx, record) {
   });
 }
 
-export async function deleteHistoryRecord(ctx, row) {
+export async function deleteHistoryRecord(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('history');
     await ctx.ensureBase();
+    ctx.assertRowIs(SHEETS.HISTORY, row, 'ID', expectId, 'ประวัติเลขที่');
 
     const headers = ctx.ss.headers(SHEETS.HISTORY);
     const airCode = ctx.ss.cell(SHEETS.HISTORY, row, headers.indexOf('AirCode') + 1);
