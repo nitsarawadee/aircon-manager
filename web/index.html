@@ -505,7 +505,7 @@
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm">
             </div>
-            <button onclick="exportCSV(currentAirList, 'AirList')" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+            <button onclick="exportAirListCSV()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
               <i class="ph ph-download-simple"></i> CSV
             </button>
             <button onclick="openAirModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
@@ -3005,6 +3005,22 @@
       }
     }
     window.exportHistoryCSV = exportHistoryCSV;
+
+    /**
+     * ดาวน์โหลดรายการเครื่องตามที่กรองอยู่ ด้วยเหตุผลเดียวกับหน้าประวัติ
+     *
+     * airLastList เก็บผลหลังผ่านตัวกรองครบทุกตัวแล้ว (ค้นหา · ภูมิภาค ·
+     * สถานะการใช้งาน · อายุ) จึงตรงกับสิ่งที่เห็นบนจอเสมอ
+     */
+    function exportAirListCSV() {
+      const rows = airLastList || [];
+      const filtered = rows.length !== (currentAirList || []).length;
+      exportCSV(rows, 'AirList');
+      if (rows.length && filtered) {
+        showToast('ดาวน์โหลด ' + rows.length.toLocaleString() + ' เครื่องตามที่กรองอยู่');
+      }
+    }
+    window.exportAirListCSV = exportAirListCSV;
     function renderAirTable(list, keepPage) {
       buildNodeLookup();
 
