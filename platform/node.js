@@ -39,8 +39,32 @@ const { backupDatabase, pruneBackups } = await import('./backup.js');
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
 
+/**
+ * ที่เก็บข้อมูลที่ต้องอยู่ถาวร
+ *
+ * บนคลาวด์ส่วนใหญ่ ดิสก์ของแอปหายทุกครั้งที่ deploy ใหม่ ทั้งสามอย่างนี้จึงต้อง
+ * ชี้ไปที่ volume ที่ผูกไว้ถาวร ไม่งั้นข้อมูลแอร์ ไฟล์สำรอง และ session
+ * จะหายทุกครั้งที่ปล่อยเวอร์ชันใหม่
+ *
+ * ตั้งได้ทีเดียวด้วย DATA_DIR หรือแยกทีละอย่างถ้าต้องการ
+ * ค่าเริ่มต้นเป็นโฟลเดอร์ในโปรเจกต์ ซึ่งถูกต้องสำหรับการรันบนเครื่องในออฟฟิศ
+ */
+function dataPaths(env) {
+  const dir = env.DATA_DIR || join(ROOT, 'data');
+  return {
+    db: env.DB_PATH || join(dir, 'aircon.db'),
+    backups: env.BACKUP_DIR || join(dir, 'backups'),
+    // ค่าเริ่มต้นยังเป็นไฟล์เดิมที่ราก เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
+    sessions: env.SESSION_PATH || join(ROOT, '.sessions.json')
+  };
+}
+
 /** ขนาดข้อมูลสูงสุดที่รับได้ต่อ 1 คำสั่ง — เผื่อไว้สำหรับการแนบไฟล์เอกสารเข้ากับ Node */
 const MAX_BODY_BYTES = 50 * 1024 * 1024;
+
+/** สำรองอัตโนมัติทุก 24 ชั่วโมง
+ *  ต้องประกาศไว้เหนือจุดที่ startAutoBackup ถูกเรียก เพราะ const ไม่ถูกยกขึ้นเหมือน function */
+const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
 
 /* ============================ อ่านค่าตั้งค่าจาก .env ============================ */
 
@@ -186,6 +210,7 @@ const fileEnv = await loadEnvFile(join(ROOT, '.env'));
 // ค่าจาก environment ของระบบมาก่อนค่าในไฟล์ .env เสมอ
 // เผื่อตอนขึ้น server บริษัทที่มักตั้งค่าลับผ่าน environment ไม่ใช่ไฟล์
 const env = { ...fileEnv, ...process.env };
+const PATHS = dataPaths(env);
 
 /* ---------------------------- เปิดแหล่งข้อมูล ----------------------------
    src/ ห้ามเปิดไฟล์เอง การเปิดฐานข้อมูลจึงต้องทำที่นี่แล้วส่งเข้าไปให้
@@ -196,7 +221,7 @@ let db = null;
 
 if (useSqlite) {
   const { DatabaseSync } = await import('node:sqlite');
-  const dbPath = resolve(ROOT, env.DB_PATH || join('data', 'aircon.db'));
+  const dbPath = resolve(ROOT, PATHS.db);
 
   if (!existsSync(dbPath)) {
     console.error('\n❌ ไม่พบไฟล์ฐานข้อมูล: ' + dbPath);
@@ -213,7 +238,7 @@ if (useSqlite) {
   db.exec('PRAGMA busy_timeout = 5000');
 
   console.log('แหล่งข้อมูล: SQLite (' + dbPath + ')');
-  startAutoBackup(db, join(ROOT, 'data', 'backups'));
+  startAutoBackup(db, resolve(ROOT, PATHS.backups));
 } else {
   const missing = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'SPREADSHEET_ID']
     .filter(k => !env[k]);
@@ -224,9 +249,6 @@ if (useSqlite) {
   }
   console.log('แหล่งข้อมูล: Google Sheets');
 }
-
-/** สำรองอัตโนมัติทุก 24 ชั่วโมง */
-const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * สำรองฐานข้อมูลอัตโนมัติ — ตอนเปิดเซิร์ฟเวอร์ครั้งหนึ่ง แล้วทุกวัน
@@ -260,7 +282,7 @@ function startAutoBackup(db, dir) {
   if (timer.unref) timer.unref();
 }
 
-const state = new LocalState(join(ROOT, '.sessions.json'));
+const state = new LocalState(resolve(ROOT, PATHS.sessions));
 await state.load();
 
 const PORT = Number(env.PORT) || 8787;

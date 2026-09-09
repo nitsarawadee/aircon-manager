@@ -5,7 +5,7 @@
   "description": "ระบบบริหารจัดการเครื่องปรับอากาศ ITEL - Google Sheets เป็นฐานข้อมูล",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.5.0"
   },
   "scripts": {
     "start": "node platform/node.js",
