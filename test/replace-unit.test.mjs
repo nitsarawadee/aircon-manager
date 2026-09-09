@@ -155,3 +155,24 @@ test('เปลี่ยนเครื่องด้วยลำดับแ�
     /ถูกเปลี่ยนไปแล้ว/
   );
 });
+
+test('หมายเหตุอาการเสียของเครื่องเก่า ต้องถูกล้าง แต่ไม่หายไปเฉยๆ', async () => {
+  // อาการเสียจบไปพร้อมกับเครื่องที่ถูกยกออกไปแล้ว ถ้าค้างไว้หน้าเครื่องจะโชว์
+  // อาการของเครื่องที่ไม่อยู่ที่นั่นอีก — อาการเดียวกับที่เคยแก้ตอนปิดงานซ่อม
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET Note = 'คอมเพรสเซอร์ดัง ซ่อมไม่ได้' WHERE AirCode = 'AYA-BPC-AIR-1'").run();
+
+  await replaceAirUnit(ctxOf(db), (await only(db))._row, NEW, 'AYA-BPC-AIR-1');
+
+  assert.equal((await only(db)).Note, '', 'หมายเหตุต้องว่าง');
+
+  const h = (await getHistory(ctxOf(db)))[0];
+  assert.ok(h.Detail.includes('คอมเพรสเซอร์ดัง ซ่อมไม่ได้'), 'ข้อความเดิมต้องถูกเก็บลงประวัติ');
+});
+
+test('เครื่องที่ไม่มีหมายเหตุอยู่แล้ว ต้องไม่มีข้อความหมายเหตุงอกในประวัติ', async () => {
+  const db = freshDb();
+  await replaceAirUnit(ctxOf(db), (await only(db))._row, NEW, 'AYA-BPC-AIR-1');
+  const h = (await getHistory(ctxOf(db)))[0];
+  assert.ok(!h.Detail.includes('หมายเหตุเดิม'), 'ไม่มีหมายเหตุก็ไม่ต้องเขียนถึง');
+});

@@ -275,8 +275,15 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
     }
 
     // เขียนเฉพาะช่องของตัวเครื่อง ช่องของตำแหน่งไม่ถูกแตะแม้แต่ช่องเดียว
+    //
+    // ล้างหมายเหตุด้วย เพราะหมายเหตุเกือบทั้งหมดคืออาการเสียของเครื่องตัวเก่า
+    // ซึ่งจบไปพร้อมกับเครื่องนั้นแล้ว ถ้าปล่อยค้างไว้ หน้าเครื่องจะยังโชว์อาการเสีย
+    // ของเครื่องที่ถูกยกออกไปแล้ว (อาการเดียวกับที่เคยแก้ตอนปิดงานซ่อม)
+    // ข้อความเดิมไม่หายไปเฉยๆ แต่ถูกเก็บลงประวัติในบรรทัดถัดไป
+    const prevNote = String(oldUnit.Note || '').trim();
     const payload = {
       Status: 'ใช้งานปกติ',
+      Note: '',
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()
     };
@@ -291,7 +298,8 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
       EventType: 'เปลี่ยนเครื่อง',
       Detail: 'เปลี่ยนตัวเครื่องใหม่ที่ตำแหน่งเดิม' +
               ' — เครื่องเดิม: ' + describeMachine(oldUnit) +
-              ' → เครื่องใหม่: ' + describeMachine({ ...oldUnit, ...payload }),
+              ' → เครื่องใหม่: ' + describeMachine({ ...oldUnit, ...payload }) +
+              (prevNote ? ' | หมายเหตุเดิมของเครื่องเก่า: ' + prevNote : ''),
       Cost: newUnit.ReplaceCost || '',
       Technician: newUnit.Technician || ''
     });
