@@ -4828,6 +4828,24 @@
         </tr>`;
     }
 
+    /**
+     * ปีที่ตั้งงบได้ = ปีนี้ถึงอีก 5 ปีข้างหน้า บวกปีที่มีข้อมูลอยู่แล้ว
+     *
+     * หน้านี้มีไว้ "ใส่ข้อมูลงบ" ของปีนี้และปีถัดๆ ไป จึงต้องไปข้างหน้าได้เอง
+     * ไม่ต้องรอให้สร้างแผนล้างแอร์ปีนั้นก่อน
+     *
+     * ใช้รายการปิดไม่ใช่ช่องพิมพ์ ด้วยเหตุผลเดียวกับช่องเลือกปีบนหัวหน้า
+     * คือพิมพ์พลาดเป็น 202 หรือ 20266 แล้วได้แถวงบขยะที่ไม่มีทางลบออกจากหน้าเว็บ
+     * ส่วนปีเก่าที่มีข้อมูลแล้วยังอยู่ในรายการ เพราะต้องแก้งบที่ตั้งผิดย้อนหลังได้
+     */
+    function budgetModalYears(selected) {
+      const now = new Date().getFullYear();
+      const years = new Set([Number(selected) || now]);
+      for (let i = 0; i <= 5; i++) years.add(now + i);
+      for (const y of (currentBudget && currentBudget.availableYears) || []) years.add(Number(y));
+      return [...years].filter(Boolean).sort((a, b) => b - a);
+    }
+
     function openBudgetModal() {
       let y = (currentBudget && currentBudget.year) || new Date().getFullYear();
       let currentClean = currentBudget ? currentBudget.budgetCleaning : 0;
@@ -4844,7 +4862,10 @@
             </div>
             <div class="p-6 space-y-4">
               <div><label class="block text-sm font-medium text-gray-700 mb-1">ปี (ค.ศ.)</label>
-              <input type="number" id="m_bdg_year" value="${y}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-gray-50 font-bold" readonly></div>
+              <select id="m_bdg_year" onchange="loadBudgetYearIntoModal()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none bg-white font-bold cursor-pointer">
+                ${budgetModalYears(y).map(yy => `<option value="${yy}" ${yy === Number(y) ? 'selected' : ''}>${yy}</option>`).join('')}
+              </select>
+              <p id="m_bdg_hint" class="text-[11px] text-gray-500 mt-1"></p></div>
               
               <div><label class="block text-sm font-medium text-[#1153a1] mb-1"><i class="ph-fill ph-drop"></i> งบประมาณล้างแอร์ (฿)</label>
               <input type="number" id="m_bdg_clean" value="${currentClean}" class="w-full rounded-lg border-[#1153a1] border focus:ring-2 focus:ring-[#1153a1] text-lg font-bold px-3 py-2 outline-none text-[#1153a1] bg-blue-50"></div>
@@ -4862,7 +4883,48 @@
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
+
+      // เติมข้อความบอกสถานะของปีที่เปิดมา โดยไม่ต้องยิงเซิร์ฟเวอร์ซ้ำ
+      // เพราะตัวเลขของปีที่กำลังดูอยู่มีอยู่ในมือแล้ว
+      const hint = document.getElementById('m_bdg_hint');
+      if (hint) {
+        const total = (currentBudget && currentBudget.totalBudget) || 0;
+        hint.innerHTML = total > 0
+          ? 'ปีนี้ตั้งงบไว้แล้ว <b>฿' + Number(total).toLocaleString() + '</b> — บันทึกแล้วจะเขียนทับ'
+          : 'ยังไม่เคยตั้งงบของปีนี้';
+      }
     }
+
+    /**
+     * ดึงงบของปีที่เลือกในกล่องมาใส่ในช่อง
+     *
+     * จำเป็น เพราะเดิมช่องปีแก้ไม่ได้ ตัวเลขในช่องจึงเป็นของปีที่กำลังดูอยู่เสมอ
+     * พอเปลี่ยนปีได้แล้ว ถ้าไม่ดึงมาใหม่ จะกลายเป็นเอาตัวเลขของปีหนึ่ง
+     * ไปเขียนทับงบของอีกปีโดยที่คนกดไม่รู้ตัว
+     */
+    async function loadBudgetYearIntoModal() {
+      const sel = document.getElementById('m_bdg_year');
+      const hint = document.getElementById('m_bdg_hint');
+      if (!sel) return;
+
+      let b;
+      try {
+        b = await call('getBudgetSummary', sel.value);
+      } catch (e) { return; }
+
+      document.getElementById('m_bdg_clean').value = b.budgetCleaning || 0;
+      document.getElementById('m_bdg_repair').value = b.budgetRepair || 0;
+      document.getElementById('m_bdg_note').value = b.note || '';
+
+      // บอกให้ชัดว่ากำลังตั้งงบใหม่ หรือกำลังแก้ของที่ตั้งไว้แล้ว
+      // ไม่งั้นคนจะไม่รู้ว่ากดบันทึกแล้วจะทับของเดิมหรือเปล่า
+      if (hint) {
+        hint.innerHTML = b.totalBudget > 0
+          ? 'ปีนี้ตั้งงบไว้แล้ว <b>฿' + Number(b.totalBudget).toLocaleString() + '</b> — บันทึกแล้วจะเขียนทับ'
+          : 'ยังไม่เคยตั้งงบของปีนี้';
+      }
+    }
+    window.loadBudgetYearIntoModal = loadBudgetYearIntoModal;
 
     async function saveBudget() {
       const y = document.getElementById('m_bdg_year').value;
@@ -4873,6 +4935,10 @@
         currentBudget = await call('saveBudgetRecord', y, cleanAmt, repairAmt, note);
         closeModal();
         showToast(`บันทึกงบประมาณปี ${y} สำเร็จ`);
+
+        // ให้หน้าไปอยู่ที่ปีที่เพิ่งบันทึก ไม่ใช่ปีที่ดูอยู่ก่อนกดปุ่ม
+        // ตั้งงบปี 2029 แล้วหน้ายังโชว์ 2026 อยู่ จะดูเหมือนกดแล้วไม่มีอะไรเกิดขึ้น
+        pendingBudgetYear = y;
         loadBudget();
       } catch(e) {}
     }
