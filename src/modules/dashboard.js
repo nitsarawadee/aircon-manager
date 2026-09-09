@@ -84,9 +84,9 @@ export async function getDashboardSummary(ctx, year) {
       const plan = await getCleaningPlan(ctx, py); // กรองตามภูมิภาคมาแล้ว
 
       plan.forEach(p => {
-        // เครื่องที่รื้อถอน/Write off ไปแล้ว ต้องไม่ขึ้นเป็นนัดหมาย
-        // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ถูกรื้อไปแล้ว
-        if (p.Retired) return;
+        // เครื่องที่รื้อถอน/Write off หรือถูกลบออกจากทะเบียนไปแล้ว ต้องไม่ขึ้นเป็นนัดหมาย
+        // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ไม่มีอยู่แล้ว
+        if (p.Retired || p.Removed) return;
 
         [1, 2, 3].forEach(r => {
           if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') return;

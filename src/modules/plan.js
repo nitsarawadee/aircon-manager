@@ -63,6 +63,10 @@ export async function getCleaningPlan(ctx, year) {
     // เครื่องที่รื้อถอน/Write off ไปแล้ว แถวแผนของมันยังอยู่ (ลบทิ้งไม่ได้ เพราะรอบที่ล้างไปแล้ว
     // เป็นเงินที่จ่ายจริง) แต่ต้องบอกทุกที่ที่ใช้แถวนี้ว่าไม่ต้องไปล้างอีกแล้ว
     out.Retired = retiredSet.has(normalizeCode(o.AirCode));
+
+    // เครื่องที่ถูกลบออกจากทะเบียนไปเลย ก็ไม่ต้องไปล้างเหมือนกัน
+    // แถวแผนไม่ได้ถูกลบตามไปด้วย ถ้าไม่ทำเครื่องหมายไว้ มันจะค้างเป็นงานที่ต้องทำตลอดไป
+    out.Removed = !regionOf.has(normalizeCode(o.AirCode));
     return out;
   });
 
@@ -147,7 +151,12 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
   for (const row of planRows || []) {
     // แถวยังอยู่ในตาราง แต่ไม่นับเป็น "เครื่องที่ต้องล้าง" อีกแล้ว
-    const retired = retiredSet.has(normalizeCode(row.AirCode));
+    //
+    // สองกรณีนี้ต่างกันที่เหตุผล แต่ผลเหมือนกันคือไม่มีใครไปล้างมันได้
+    //   รื้อถอน/Write off  ยังอยู่ในทะเบียน แต่เลิกใช้แล้ว
+    //   ถูกลบ              ไม่อยู่ในทะเบียนแล้ว (แถวแผนไม่ได้ถูกลบตามไปด้วย)
+    const code = normalizeCode(row.AirCode);
+    const retired = retiredSet.has(code) || !regionOf.has(code);
 
     const region = regionOf.get(normalizeCode(row.AirCode)) || 'ไม่ระบุ';
     if (!byRegion.has(region)) byRegion.set(region, { region, units: 0, ...blank(), nodes: new Map() });

@@ -314,3 +314,21 @@ test('Write off ก็ต้องได้ผลเหมือนรื้อ�
   assert.equal(s.pending, 0);
   assert.equal(s.units, 0);
 });
+
+test('เครื่องที่ถูกลบออกจากทะเบียนไปแล้ว ต้องไม่ค้างเป็นงานที่ต้องทำ', () => {
+  // ลบเครื่องแล้วแถวในตารางแผนไม่ได้ถูกลบตามไปด้วย
+  // ถ้ายังนับ ตัวเลข "เหลืออีกกี่รอบ" จะสูงเกินจริงตลอดไปโดยไม่มีใครไปล้างได้
+  const s = summarizeCleaning([row('A-A-AIR-1'), row('ถูกลบไปแล้ว-AIR-9')], units, 2026);
+
+  assert.equal(s.units, 1, 'นับเฉพาะเครื่องที่ยังอยู่ในทะเบียน');
+  assert.equal(s.pending, 3);
+  assert.equal(s.planned, 3);
+  assert.equal(s.neverCleaned, 1);
+});
+
+test('รอบที่ล้างไปแล้วของเครื่องที่ถูกลบ ยังต้องอยู่ในสรุปค่าใช้จ่าย', () => {
+  const s = summarizeCleaning([row('ถูกลบไปแล้ว-AIR-9', { R1_Status: 'ล้างเสร็จสิ้น', R1_Price: 600 })], units, 2026);
+  assert.equal(s.done, 1);
+  assert.equal(s.cost, 600);
+  assert.equal(s.pending, 0);
+});

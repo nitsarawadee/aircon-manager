@@ -3866,14 +3866,16 @@
         const airObj = currentAirList.find(a => a.AirCode === p.AirCode) || {};
         const brand = airObj.Brand || '-';
         
-        // แถวของเครื่องที่ถูกรื้อถอนไปแล้วยังอยู่ เพราะรอบที่ล้างไปแล้วเป็นเงินที่จ่ายจริง
+        // แถวของเครื่องที่เลิกใช้แล้วยังอยู่ เพราะรอบที่ล้างไปแล้วเป็นเงินที่จ่ายจริง
         // แต่ต้องเห็นชัดว่าไม่ต้องไปล้างอีก ไม่งั้นจะมีคนลงนัดให้เครื่องที่ไม่มีอยู่แล้ว
-        const retiredTag = p.Retired
-          ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 align-middle">รื้อถอนแล้ว</span>'
+        // แยกสองคำ เพราะคนอ่านต้องรู้ว่าต้องไปทำอะไรต่อ — ถูกลบคือทะเบียนหาย ต้องเพิ่มกลับ
+        const gone = p.Removed ? 'ถูกลบแล้ว' : (p.Retired ? 'รื้อถอนแล้ว' : '');
+        const retiredTag = gone
+          ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 align-middle">${gone}</span>`
           : '';
 
         return `
-        <tr class="hover:bg-gray-50 transition-colors group cursor-pointer ${p.Retired ? 'opacity-60' : ''}">
+        <tr class="hover:bg-gray-50 transition-colors group cursor-pointer ${gone ? 'opacity-60' : ''}">
           <td class="px-3 py-2 font-medium text-gray-900 border-r border-gray-100 bg-white group-hover:bg-gray-50 sticky left-0 z-10 min-w-[100px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
             ${airCodeBtn(p.AirCode)}${retiredTag}
           </td>
