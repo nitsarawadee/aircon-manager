@@ -3217,10 +3217,97 @@
       } catch (e) {}
     }
 
+    /**
+     * กล่องยืนยันก่อนลบเครื่อง — ต้องพิมพ์รหัสเครื่องให้ตรงถึงจะกดลบได้
+     *
+     * ปุ่มลบอยู่ติดปุ่มแก้ไขและเล็กมาก กดพลาดได้ง่ายโดยเฉพาะบนมือถือ
+     * กล่องยืนยันแบบกดปุ่มเดียวจึงไม่พอ เพราะการกดพลาดสองครั้งติดกันเกิดขึ้นได้จริง
+     * ต้องพิมพ์รหัสเอง ซึ่งทำโดยบังเอิญไม่ได้
+     *
+     * กล่องนี้บอกด้วยว่าจะกระทบอะไรบ้าง — ประวัติกี่ใบ และอยู่ในแผนล้างปีไหน
+     * เพราะข้อมูลพวกนั้นไม่ได้ถูกลบตามไปด้วย แต่จะกลายเป็นรายการลอยที่ไม่มีเครื่องรองรับ
+     */
+    function confirmDeleteAir(unit) {
+      return new Promise(resolve => {
+        const code = String(unit.AirCode || '');
+        const histCount = (currentHistory || []).filter(h => sameCode(h.AirCode, code)).length;
+        const inPlan = (currentPlan || []).some(pl => sameCode(pl.AirCode, code));
+
+        const impact = [
+          histCount ? `ประวัติ ${histCount} รายการจะยังอยู่ แต่จะไม่มีเครื่องรองรับ` : '',
+          inPlan ? 'แถวในแผนล้างแอร์จะค้างอยู่และถูกทำเครื่องหมายว่าถูกลบแล้ว' : ''
+        ].filter(Boolean);
+
+        document.getElementById('modalRoot').innerHTML = `
+          <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+              <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                  <i class="ph-fill ph-trash text-lg"></i>
+                </span>
+                <h3 class="text-lg font-bold text-gray-800">ลบเครื่องออกจากระบบ</h3>
+              </div>
+
+              <div class="p-6 space-y-4">
+                <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                  <div class="font-mono font-bold text-gray-800">${esc(code)}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">
+                    ${esc(unit.NodeName) || '-'}${unit.SiteCode ? ' · ' + esc(unit.SiteCode) : ''}${unit.Region ? ' · ' + esc(regionLabel(unit.Region)) : ''}
+                  </div>
+                </div>
+
+                <div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3">
+                  <p class="font-medium">ลบแล้วกู้คืนจากหน้าเว็บไม่ได้</p>
+                  ${impact.length ? `<ul class="list-disc list-inside mt-1.5 text-[13px] space-y-0.5">${impact.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+                  <p class="text-[13px] mt-1.5">ถ้าเครื่องเลิกใช้งานแล้ว ควรใช้ "เปลี่ยนเครื่อง" หรือตั้งสถานะเป็นรื้อถอน/ปลดระวางแทน ข้อมูลจะยังอยู่ครบ</p>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">พิมพ์รหัสเครื่องเพื่อยืนยัน</label>
+                  <input id="delConfirmInput" autocomplete="off" placeholder="${esc(code)}"
+                         class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm font-mono">
+                </div>
+              </div>
+
+              <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+                <button id="delConfirmNo" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+                <button id="delConfirmYes" disabled
+                        class="px-4 py-2 text-sm font-medium text-white bg-rose-300 rounded-lg cursor-not-allowed">ลบออกจากระบบ</button>
+              </div>
+            </div>
+          </div>`;
+
+        const input = document.getElementById('delConfirmInput');
+        const yes = document.getElementById('delConfirmYes');
+        const no = document.getElementById('delConfirmNo');
+
+        // ปุ่มลบเปิดใช้ได้ต่อเมื่อรหัสตรง เทียบแบบไม่สนตัวพิมพ์เล็กใหญ่และช่องว่างหน้าหลัง
+        // เหมือนที่ระบบเทียบรหัสที่อื่น คนพิมพ์ถูกแต่ติดช่องว่างไม่ควรถูกปฏิเสธ
+        const sync = () => {
+          const ok = sameCode(input.value, code);
+          yes.disabled = !ok;
+          yes.className = ok
+            ? 'px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 shadow-sm'
+            : 'px-4 py-2 text-sm font-medium text-white bg-rose-300 rounded-lg cursor-not-allowed';
+        };
+        input.addEventListener('input', sync);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter' && !yes.disabled) yes.click(); });
+        input.focus();
+
+        const done = v => { closeModal(); resolve(v); };
+        yes.addEventListener('click', () => { if (!yes.disabled) done(true); });
+        no.addEventListener('click', () => done(false));
+      });
+    }
+
     // ส่งรหัสเครื่องไปด้วยทุกคำสั่งที่แก้/ลบ ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นเครื่องตัวเดิม
     // ลำดับแถวเลื่อนได้ ถ้ามีคนลบเครื่องที่อยู่ก่อนหน้าไประหว่างที่หน้านี้เปิดค้างอยู่
     async function deleteAir(row, code) {
-      const confirmed = await showConfirm('ยืนยันการลบเครื่องปรับอากาศนี้ออกจากระบบ?');
+      const unit = (currentAirList || []).find(a => sameCode(a.AirCode, code));
+      if (!unit) { showToast('ไม่พบเครื่องรหัส ' + code + ' กรุณารีเฟรชหน้าจอ', 'error'); return; }
+
+      const confirmed = await confirmDeleteAir(unit);
       if (!confirmed) return;
       try {
         const result = await call('deleteAirUnit', row, code);
