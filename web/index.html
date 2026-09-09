@@ -4671,10 +4671,22 @@
            </div>`
         : `<div>
              <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องที่แจ้ง <span class="text-red-500">*</span></label>
-             <select id="rr_air" onchange="rrSyncHint()" class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm">
-               <option value="">-- เลือกเครื่อง --</option>
-               ${pick.map(a => `<option value="${esc(a.AirCode)}">${esc(a.AirCode)}${a.NodeName ? ' (' + esc(a.NodeName) + ')' : ''}</option>`).join('')}
-             </select>
+
+             <!-- ช่องพิมพ์ค้นหา ไม่ใช่รายการเลื่อนหา เพราะมีเครื่องหลายร้อยตัว
+                  เลื่อนหาทีละตัวบนมือถือแทบเป็นไปไม่ได้
+                  ใช้ datalist ของเบราว์เซอร์เอง ไม่ต้องเขียนตัวกรองเอง และใช้ได้บนมือถือ
+
+                  ตัวเลือกเก็บ "รหัส · ชื่อ Node" ไว้ในค่า ไม่ใช่แค่รหัส เพราะเบราว์เซอร์
+                  กรองจากค่าเป็นหลัก ถ้าเก็บแค่รหัสจะพิมพ์ชื่อสถานที่ค้นไม่ได้
+                  ตอนส่งค่อยตัดเอาเฉพาะรหัสข้างหน้า -->
+             <input id="rr_air" list="rr_air_list" autocomplete="off"
+                    placeholder="พิมพ์รหัสเครื่อง หรือชื่อ Node เพื่อค้นหา"
+                    oninput="rrSyncHint()"
+                    class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm">
+             <datalist id="rr_air_list">
+               ${pick.map(a => `<option value="${esc(rrAirOption(a))}"></option>`).join('')}
+             </datalist>
+             <p class="text-[11px] text-gray-400 mt-1">มีเครื่องที่ใช้งานอยู่ ${pick.length.toLocaleString()} ตัว</p>
            </div>`;
 
       document.getElementById('modalRoot').innerHTML = `
@@ -4726,12 +4738,37 @@
      * แจ้งซ้ำได้ (ถือว่าอัปเดตอาการ) แต่อาการเดิมจะถูกเขียนทับ
      * ต้องบอกก่อนกด ไม่ใช่ให้รู้ตอนที่ของเดิมหายไปแล้ว
      */
+    /**
+     * ข้อความที่โชว์ในรายการค้นหา — "รหัส · ชื่อ Node"
+     *
+     * ต้องเป็นค่าของตัวเลือกเลย ไม่ใช่ label เพราะเบราว์เซอร์แต่ละตัวกรองจาก label
+     * ไม่เหมือนกัน แต่กรองจากค่าเหมือนกันหมด พิมพ์ชื่อ Node จึงค้นเจอทุกเบราว์เซอร์
+     */
+    function rrAirOption(a) {
+      return a.NodeName ? a.AirCode + ' · ' + a.NodeName : String(a.AirCode);
+    }
+
+    /**
+     * ตัดเอาเฉพาะรหัสเครื่องออกจากข้อความที่พิมพ์
+     *
+     * รับได้ทั้งที่เลือกจากรายการ ("AYA-BPC-AIR-1 · สถานีรถไฟบ้านภาชี")
+     * และที่พิมพ์เองแค่รหัส คืน '' ถ้าหาเครื่องที่ตรงไม่เจอ ผู้เรียกจะได้รู้ว่าใช้ไม่ได้
+     */
+    function rrAirCode(text) {
+      const raw = String(text == null ? '' : text).trim();
+      if (!raw) return '';
+      const head = raw.split('·')[0].trim();
+      const unit = (currentAirList || []).find(a => sameCode(a.AirCode, head));
+      return unit ? unit.AirCode : '';
+    }
+
     function rrSyncHint(code) {
       const box = document.getElementById('rr_hint');
       if (!box) return;
 
       const el = document.getElementById('rr_air');
-      const value = code !== undefined ? code : (el ? el.value : '');
+      const raw = code !== undefined ? code : (el ? el.value : '');
+      const value = rrAirCode(raw);
       const unit = value ? (currentAirList || []).find(a => sameCode(a.AirCode, value)) : null;
 
       if (!unit || String(unit.Status || '') !== 'รอซ่อม') { box.innerHTML = ''; return; }
@@ -4746,12 +4783,21 @@
     window.rrSyncHint = rrSyncHint;
 
     async function submitReportRepair() {
+      const airInput = document.getElementById('rr_air');
+      const typed = String(airInput.value || '').trim();
+
       const record = {
-        AirCode: document.getElementById('rr_air').value,
+        // ช่องนี้พิมพ์เองได้ จึงต้องแปลงกลับเป็นรหัสจริงและตรวจว่ามีเครื่องนั้นอยู่
+        // ไม่งั้นข้อความที่พิมพ์ผิดจะถูกส่งไปเป็นรหัสเครื่องตรงๆ
+        AirCode: rrAirCode(typed),
         Detail: document.getElementById('rr_detail').value.trim(),
         Date: document.getElementById('rr_date').value
       };
-      if (!record.AirCode) { showToast('กรุณาเลือกเครื่องที่ต้องการแจ้งซ่อม', 'error'); return; }
+      if (!record.AirCode) {
+        showToast(typed ? `ไม่พบเครื่องรหัส "${typed}" กรุณาเลือกจากรายการ` : 'กรุณาเลือกเครื่องที่ต้องการแจ้งซ่อม', 'error');
+        airInput.focus();
+        return;
+      }
       if (!record.Detail) { showToast('กรุณาระบุอาการเสีย', 'error'); return; }
       if (!record.Date) { showToast('กรุณาระบุวันที่แจ้ง', 'error'); return; }
 
