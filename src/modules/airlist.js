@@ -107,6 +107,33 @@ async function insertAirUnitRaw(ctx, unit) {
   ctx.ss.appendRow(SHEETS.AIRLIST, row);
 }
 
+/**
+ * สถานะที่เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่ตั้งได้
+ *
+ * "รอซ่อม" ไม่ใช่แค่คำบอกสถานะ แต่แปลว่า "ค่าใช้จ่ายได้รับอนุมัติแล้ว"
+ * ซึ่งเป็นการตัดสินใจของผู้ดูแลระบบ ไม่ใช่งานหน้างาน
+ * RegionAdmin ยังแจ้งชำรุด แจ้งซ่อมไม่ได้ และปิดงานซ่อมได้ตามปกติทุกอย่าง
+ *
+ * ตรวจที่นี่ที่เดียวจึงคุมได้ทุกทาง เพราะทั้งปุ่มลัดในหน้างานซ่อมและฟอร์มแก้ไข
+ * เครื่อง เข้ามาที่ saveAirUnit เหมือนกัน — การซ่อนปุ่มในหน้าเว็บอย่างเดียวไม่พอ
+ * เพราะคนที่รู้วิธีก็ยิงคำสั่งตรงเข้ามาได้โดยไม่ผ่านหน้าเว็บเลย
+ */
+const ADMIN_ONLY_STATUS = new Set(['รอซ่อม']);
+
+/** ตรวจว่าผู้ใช้คนนี้ตั้งสถานะนี้ได้หรือไม่ */
+async function assertCanSetStatus(ctx, status) {
+  const s = String(status || '').trim();
+  if (!ADMIN_ONLY_STATUS.has(s)) return;
+
+  const info = await ctx.userInfo();
+  if (info.role !== 'Admin') {
+    throw new Error(
+      'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่เปลี่ยนสถานะเป็น "' + s + '" ได้ ' +
+      'เพราะเป็นการยืนยันว่าอนุมัติค่าใช้จ่ายแล้ว'
+    );
+  }
+}
+
 export async function saveAirUnit(ctx, unit) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
@@ -128,6 +155,10 @@ export async function saveAirUnit(ctx, unit) {
       // เก็บสถานะเดิมไว้ก่อนเขียนทับ เพื่อเทียบว่าสถานะเปลี่ยนไปหรือไม่
       const oldStatus = ctx.ss.cell(SHEETS.AIRLIST, unit._row, headers.indexOf('Status') + 1);
 
+      // ตรวจสิทธิ์ก่อนเขียนอะไรทั้งสิ้น จะได้ไม่มีอะไรค้างอยู่ครึ่งทางตอนถูกปฏิเสธ
+      const statusChanged = !!unit.Status && String(unit.Status) !== String(oldStatus || '');
+      if (statusChanged) await assertCanSetStatus(ctx, unit.Status);
+
       const payload = { ...unit, UpdatedAt: ymdhms(new Date()), UpdatedBy: await ctx.currentUser() };
       delete payload._row;
       ctx.ss.writeByHeaders(SHEETS.AIRLIST, unit._row, payload);
@@ -138,7 +169,7 @@ export async function saveAirUnit(ctx, unit) {
       // การเปลี่ยนสถานะที่นี่กับการกดปุ่มในหน้างานซ่อม ต้องให้ผลเหมือนกันทุกอย่าง
       // เพราะมันคือการกระทำเดียวกัน แค่เข้าคนละทาง ถ้าทางนี้ไม่ผูกเลขเคส
       // การแก้สถานะจากฟอร์มจะทำให้ใบนั้นหลุดออกจากเคส แล้วเรื่องเดียวจะเล่าไม่ครบ
-      if (unit.Status && String(unit.Status) !== String(oldStatus || '')) {
+      if (statusChanged) {
         const rows = ctx.ss.objects(SHEETS.HISTORY);
         const open = openCaseOf(rows, unit.AirCode);
 

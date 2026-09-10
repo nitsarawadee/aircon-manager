@@ -3180,7 +3180,7 @@
                 <input id="f_AirCode" value="${esc(data.AirCode)}" ${isEdit ? 'readonly class="w-full rounded-lg border-gray-200 bg-gray-50 text-gray-500 text-sm px-3 py-2 outline-none"' : 'class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"'}></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ</label><select id="f_Brand" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Brand, data.Brand)}</select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">BTU</label><input id="f_BTU" type="number" value="${esc(data.BTU)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label><select id="f_Status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(currentConfig.Status, data.Status)}</select></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label><select id="f_Status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${opt(statusChoices(data.Status), data.Status)}</select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label>${dateField('f_InstallDate', data.InstallDate)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label>${dateField('f_WarrantyExpire', data.WarrantyExpire)}</div>
 
@@ -3235,6 +3235,22 @@
      * ถ้าแยกกันเขียน วันหนึ่งจะมีช่องหลุดไปทางใดทางหนึ่งแล้วข้อมูลหายเงียบๆ
      */
     const AIR_FIELDS = ['AirCode','Region','Province','NodeName','SiteCode','LocationType','BTU','Brand','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN','OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire','CleaningPricePerRound','Status','Address','Note'];
+
+    /**
+     * ตัวเลือกสถานะที่ผู้ใช้คนนี้ตั้งได้ในฟอร์มแก้ไขเครื่อง
+     *
+     * ตัดตัวเลือกที่เซิร์ฟเวอร์จะปฏิเสธอยู่ดีออก จะได้ไม่ต้องกดแล้วเจอ error
+     * แต่ยังเก็บค่าเดิมของเครื่องไว้เสมอ ถึงจะเป็นค่าที่ตัวเองตั้งไม่ได้ก็ตาม
+     * ไม่งั้นการเปิดฟอร์มมาแก้ช่องอื่น จะทำให้สถานะเปลี่ยนไปเองโดยไม่ตั้งใจ
+     *
+     * ย้ำอีกครั้งว่านี่เป็นแค่การซ่อน ไม่ใช่การกันสิทธิ์ — ด่านจริงอยู่ที่เซิร์ฟเวอร์
+     */
+    function statusChoices(current) {
+      const all = currentConfig.Status || [];
+      if (isAdmin()) return all;
+      const now = String(current || '').trim();
+      return all.filter(s => s !== 'รอซ่อม' || s === now);
+    }
 
     async function saveAir(row) {
       const unit = {};
@@ -3295,6 +3311,14 @@
       } catch (e) {}
     }
     window.changeAirStatus = changeAirStatus;
+
+    /**
+     * ผู้ใช้ที่ล็อกอินอยู่เป็นผู้ดูแลระบบหรือไม่
+     *
+     * ใช้ซ่อนสิ่งที่กดไปก็ถูกปฏิเสธอยู่ดี ไม่ใช่ใช้กันสิทธิ์
+     * ด่านจริงอยู่ที่เซิร์ฟเวอร์เสมอ (ADMIN_ONLY_STATUS ใน src/modules/airlist.js)
+     */
+    const isAdmin = () => !!currentUserInfo && currentUserInfo.role === 'Admin';
 
     /** อนุมัติซ่อมแล้ว — ขั้นถัดไปของเคสคือรอช่างเข้าซ่อม */
     function approveRepair(airCode) {
@@ -4923,9 +4947,13 @@
             // (ฝั่งเซิร์ฟเวอร์ก็ตรวจซ้ำ การซ่อนปุ่มกันได้แค่การกดพลาด)
             const actions = [];
             if (status === 'ชำรุด') {
-              actions.push(`<button onclick="approveRepair('${esc(a.AirCode)}')"
-                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`);
+              // การอนุมัติซ่อมเป็นเรื่องของผู้ดูแลระบบ คนอื่นเห็นว่ากำลังรอใครอยู่ก็พอ
+              actions.push(isAdmin()
+                ? `<button onclick="approveRepair('${esc(a.AirCode)}')"
+                    class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                    <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
+                : `<span class="text-slate-400 px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-dashed border-slate-300 rounded-lg">
+                    <i class="ph ph-hourglass"></i> รอผู้ดูแลระบบอนุมัติ</span>`);
             }
             if (status === 'รอซ่อม') {
               actions.push(`<button onclick='openCompleteRepairModal(${JSON.stringify(a).replace(/'/g,"&apos;")})'
