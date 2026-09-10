@@ -145,7 +145,7 @@ export function temporalColumns(table) {
 }
 
 /** แปลงชนิดของเราเป็นชนิดของ SQLite */
-function sqlType(kind) {
+export function sqlType(kind) {
   if (kind === N) return 'REAL';
   if (kind === B) return 'INTEGER';
   return 'TEXT';
