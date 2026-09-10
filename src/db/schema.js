@@ -61,9 +61,12 @@ export const TABLES = {
     sheet: 'History',
     columns: {
       ID: S, AirCode: S, Date: D, EventType: S, Detail: S,
-      Cost: N, Technician: S, Note: S, CreatedAt: DT, RecordedBy: S
+      Cost: N, Technician: S, Note: S, CreatedAt: DT, RecordedBy: S,
+      // เลขเคสงานซ่อม — ทุกใบตั้งแต่เปิดเคสจนปิดเคสถือเลขเดียวกัน
+      // ใบที่ไม่ใช่งานซ่อม (ล้างแอร์ ติดตั้ง ย้าย) เว้นว่างไว้
+      CaseID: S
     },
-    indexes: [['AirCode'], ['Date'], ['EventType']]
+    indexes: [['AirCode'], ['Date'], ['EventType'], ['CaseID']]
   },
 
   /**

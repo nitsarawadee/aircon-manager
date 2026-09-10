@@ -1,5 +1,6 @@
 import { SHEETS } from '../schema.js';
 import { formatDate, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
+import { makeCaseId, openCaseOf } from './repair-case.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -136,7 +137,9 @@ export async function addHistoryRaw(ctx, record) {
     Technician: record.Technician || '',
     Note: record.Note || '',
     CreatedAt: ymdhms(new Date()),
-    RecordedBy: me
+    RecordedBy: me,
+    // ใบที่เป็นส่วนหนึ่งของเคสงานซ่อมจะถือเลขเคสไว้ ใบอื่นเว้นว่าง
+    CaseID: record.CaseID || ''
   };
 
   // เรียงตามหัวตาราง "จริง" ในชีต ไม่ใช่ลำดับใน HISTORY_HEADERS ของโค้ด
@@ -209,17 +212,26 @@ export async function reportRepair(ctx, record) {
                       '" ไม่ได้ใช้งานแล้ว จึงแจ้งซ่อมไม่ได้');
     }
 
+    // เปิดเคสใหม่ เว้นแต่เครื่องนี้มีเคสค้างอยู่แล้ว — แจ้งซ้ำต้องไปต่อในเคสเดิม
+    // ไม่ใช่เปิดเคสใหม่ซ้อน ไม่งั้นเรื่องเดียวจะกลายเป็นสองเคสที่ไม่รู้ว่าอันไหนจริง
+    const rows = ctx.ss.objects(SHEETS.HISTORY);
+    const existing = openCaseOf(rows, found.AirCode);
+    const caseId = existing ? existing.caseId : makeCaseId(rows.map(r => r.CaseID));
+
     await addHistoryRaw(ctx, {
       AirCode: found.AirCode,
       Date: record.Date || ymd(new Date()),
       EventType: 'แจ้งซ่อม',
       Detail: detail,
       Cost: '',
-      Technician: ''
+      Technician: '',
+      CaseID: caseId
     });
 
+    // เปิดเคสแล้วเครื่องเป็น "ชำรุด" ยังไม่ใช่ "รอซ่อม"
+    // รอซ่อมหมายถึงตกลงกันแล้วว่าจะซ่อม ซึ่งเป็นขั้นถัดไปที่กดจากหน้างานซ่อม
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
-      Status: 'รอซ่อม',
+      Status: 'ชำรุด',
       Note: detail,
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser()
@@ -227,6 +239,109 @@ export async function reportRepair(ctx, record) {
 
     await ctx.ss.flush();
 
+    const { getAirList } = await import('./airlist.js');
+    return { air: await getAirList(ctx), history: await getHistory(ctx) };
+  });
+}
+
+/**
+ * หาเครื่องพร้อมตรวจสิทธิ์ — ใช้ร่วมกันทุกขั้นของเคสงานซ่อม
+ *
+ * แยกออกมาเพราะทุกขั้นต้องทำสามอย่างเหมือนกันเป๊ะ คือหาเครื่องให้เจอ
+ * ตรวจว่าคนกดมีสิทธิ์ในภูมิภาคนั้น และต้องมีเคสค้างอยู่จริง
+ * เขียนซ้ำสามรอบแล้วมีโอกาสลืมข้อใดข้อหนึ่งในรอบใดรอบหนึ่ง
+ */
+async function unitWithOpenCase(ctx, airCode, verb) {
+  const list = ctx.ss.objects(SHEETS.AIRLIST);
+  const target = normalizeCode(airCode);
+  const found = list.find(a => normalizeCode(a.AirCode) === target);
+  if (!found) throw new Error('ไม่พบรหัสเครื่อง ' + airCode + ' ในระบบ');
+  await ctx.assertRegionAccess(found.Region);
+
+  const openCase = openCaseOf(ctx.ss.objects(SHEETS.HISTORY), found.AirCode);
+  if (!openCase) {
+    throw new Error('เครื่อง ' + found.AirCode + ' ไม่มีเคสงานซ่อมที่เปิดค้างอยู่ จึง' + verb + 'ไม่ได้');
+  }
+  return { found, openCase };
+}
+
+/**
+ * เริ่มดำเนินการซ่อม — ขั้นที่สองของเคส เปลี่ยนจาก "ชำรุด" เป็น "รอซ่อม"
+ *
+ * อยู่ในหน้างานซ่อมโดยตั้งใจ ไม่ใช่หน้าแก้ไขข้อมูลเครื่อง
+ * คนที่ดูแลงานซ่อมไม่ควรต้องเปิดหน้าจอที่แก้ S/N ได้ เพื่อเลื่อนสถานะช่องเดียว
+ */
+export async function startRepairWork(ctx, record) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('repair');
+    await ctx.ensureBase();
+
+    const { found, openCase } = await unitWithOpenCase(ctx, record.AirCode, 'เริ่มงานซ่อม');
+
+    if (String(found.Status || '').trim() === 'รอซ่อม') {
+      throw new Error('เครื่อง ' + found.AirCode + ' อยู่ในขั้นรอซ่อมอยู่แล้ว');
+    }
+
+    await addHistoryRaw(ctx, {
+      CaseID: openCase.caseId,
+      AirCode: found.AirCode,
+      Date: record.Date || ymd(new Date()),
+      EventType: 'เริ่มซ่อม',
+      Detail: String(record.Detail || '').trim() || 'เริ่มดำเนินการซ่อม',
+      Cost: '',
+      Technician: record.Technician || ''
+    });
+
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
+      Status: 'รอซ่อม',
+      UpdatedAt: ymdhms(new Date()),
+      UpdatedBy: await ctx.currentUser()
+    });
+
+    await ctx.ss.flush();
+    const { getAirList } = await import('./airlist.js');
+    return { air: await getAirList(ctx), history: await getHistory(ctx) };
+  });
+}
+
+/**
+ * ซ่อมไม่ได้ — เครื่องถูกรื้อถอน/ปลดระวาง แต่เคสยังไม่ปิด
+ *
+ * เคสค้างไว้เพราะตำแหน่งนั้นยังไม่มีแอร์ใช้งาน ต้องรอเครื่องใหม่มาแทน
+ * ซึ่งมักมาทีหลังหลายวัน ถ้าปิดเคสตรงนี้จะไม่เหลืออะไรเตือนว่ายังค้างอยู่
+ * เคสจะปิดเมื่อกดเปลี่ยนเครื่องเสร็จ
+ *
+ * บังคับให้ระบุเหตุผล เพราะการปลดระวางเครื่องเป็นการตัดทรัพย์สินออกจากระบบ
+ * ต้องตอบได้ว่าทำไม ไม่ใช่แค่เปลี่ยนสถานะเงียบๆ
+ */
+export async function markCannotRepair(ctx, record) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('repair');
+    await ctx.ensureBase();
+
+    const reason = String(record.Reason || '').trim();
+    if (!reason) throw new Error('กรุณาระบุเหตุผลที่ซ่อมไม่ได้');
+
+    const { found, openCase } = await unitWithOpenCase(ctx, record.AirCode, 'ปิดงานแบบซ่อมไม่ได้');
+
+    await addHistoryRaw(ctx, {
+      CaseID: openCase.caseId,
+      AirCode: found.AirCode,
+      Date: record.Date || ymd(new Date()),
+      EventType: 'รื้อถอน/ปลดระวาง',
+      Detail: 'ซ่อมไม่ได้ — ' + reason,
+      Cost: record.Cost || '',
+      Technician: record.Technician || ''
+    });
+
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
+      Status: 'รื้อถอน/ปลดระวาง',
+      Note: 'รอเครื่องใหม่มาแทน — ' + reason,
+      UpdatedAt: ymdhms(new Date()),
+      UpdatedBy: await ctx.currentUser()
+    });
+
+    await ctx.ss.flush();
     const { getAirList } = await import('./airlist.js');
     return { air: await getAirList(ctx), history: await getHistory(ctx) };
   });
@@ -248,6 +363,21 @@ export async function completeRepairRecord(ctx, record) {
     }
     await ctx.assertRegionAccess(found.Region);
 
+    // ปิดงานได้เฉพาะตอนที่เคสเดินมาถึงขั้น "รอซ่อม" แล้วเท่านั้น
+    //
+    // ขั้น "ชำรุด" คือเพิ่งเปิดเคส ยังเคลียร์เรื่องเบื้องหลังไม่เสร็จ ยังไม่มีใครลงมือซ่อม
+    // ปิดงานตอนนั้นจะได้ประวัติที่บอกว่าซ่อมเสร็จทั้งที่ยังไม่ได้เริ่ม
+    //
+    // ตรวจที่ฝั่งเซิร์ฟเวอร์ด้วย ไม่ใช่แค่ซ่อนปุ่มในหน้าเว็บ เพราะการซ่อนปุ่มกันได้แค่
+    // การกดพลาด กันไม่ได้ถ้าหน้าเว็บค้างอยู่ในสถานะเก่าแล้วกดตามที่เห็น
+    const status = String(found.Status || '').trim();
+    if (status !== 'รอซ่อม') {
+      throw new Error(
+        'เครื่อง ' + found.AirCode + ' อยู่ในสถานะ "' + (status || '-') + '" ยังปิดงานซ่อมไม่ได้ — ' +
+        'ต้องกดเริ่มดำเนินการซ่อมให้เป็น "รอซ่อม" ก่อน'
+      );
+    }
+
     // เก็บอาการเสียที่แจ้งไว้ลงประวัติก่อน แล้วค่อยล้างออกจากข้อมูลเครื่อง
     // ไม่พึ่งข้อความที่หน้าเว็บเติมมาให้ เพราะคนกรอกลบทิ้งได้
     // ถ้าไม่ดักตรงนี้ อาการเสียจะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
@@ -257,7 +387,10 @@ export async function completeRepairRecord(ctx, record) {
       detail = 'อาการที่แจ้งไว้: ' + reported + (detail ? ' — ' + detail : '');
     }
 
+    const openCase = openCaseOf(ctx.ss.objects(SHEETS.HISTORY), record.AirCode);
+
     await addHistoryRaw(ctx, {
+      CaseID: openCase ? openCase.caseId : '',
       AirCode: record.AirCode,
       Date: record.Date,
       EventType: 'ซ่อมแล้ว',

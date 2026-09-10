@@ -1,6 +1,7 @@
 import { SHEETS } from '../schema.js';
 import { formatDate, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
+import { openCaseOf } from './repair-case.js';
 
 /**
  * รายการเครื่องปรับอากาศ (Master Data)
@@ -310,7 +311,12 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
     }
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, row, payload);
 
+    // เปลี่ยนเครื่องหลังจากที่ซ่อมไม่ได้ = ขั้นสุดท้ายของเคสงานซ่อมที่ค้างอยู่
+    // ใบนี้จึงต้องถือเลขเคสเดิม เพื่อให้เรื่องทั้งเรื่องอ่านต่อกันได้ และเคสถึงจะปิด
+    const openCase = openCaseOf(ctx.ss.objects(SHEETS.HISTORY), oldUnit.AirCode);
+
     await addHistoryRaw(ctx, {
+      CaseID: openCase ? openCase.caseId : '',
       AirCode: oldUnit.AirCode,
       Date: newUnit.InstallDate || ymd(new Date()),
       EventType: 'เปลี่ยนเครื่อง',
