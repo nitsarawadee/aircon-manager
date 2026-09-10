@@ -1,7 +1,7 @@
 import { SHEETS } from '../schema.js';
 import { formatDate, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
-import { openCaseOf } from './repair-case.js';
+import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
 /**
  * รายการเครื่องปรับอากาศ (Master Data)
@@ -31,7 +31,9 @@ import { openCaseOf } from './repair-case.js';
 export function statusChangeEvent(status) {
   const now = String(status || '').trim();
 
-  if (now === 'รอซ่อม') return 'แจ้งซ่อม';
+  // รอซ่อม = เริ่มลงมือซ่อมแล้ว ใช้ชื่อเดียวกับปุ่มในหน้างานซ่อม
+  // ไม่ใช่ "แจ้งซ่อม" เพราะการแจ้งเกิดตอนที่เครื่องกลายเป็นชำรุด ไม่ใช่ตอนนี้
+  if (now === 'รอซ่อม') return 'เริ่มซ่อม';
 
   // เช็คขายออกก่อนรื้อถอน เพราะเป็นคนละขั้นของวงจรเดียวกัน
   // ถ้าเช็คกลับกัน การขายออกจะถูกบันทึกเป็นการรื้อถอนซ้ำอีกใบ
@@ -132,8 +134,22 @@ export async function saveAirUnit(ctx, unit) {
 
       // บันทึกประวัติอัตโนมัติทุกครั้งที่สถานะของเครื่องเปลี่ยน (เช่น แจ้งซ่อม/ปลดระวาง)
       // เพื่อให้หน้าประวัติ/งานซ่อมเห็นเหตุการณ์นี้โดยผู้ใช้ไม่ต้องกดบันทึกเพิ่มอีกขั้น
+      //
+      // การเปลี่ยนสถานะที่นี่กับการกดปุ่มในหน้างานซ่อม ต้องให้ผลเหมือนกันทุกอย่าง
+      // เพราะมันคือการกระทำเดียวกัน แค่เข้าคนละทาง ถ้าทางนี้ไม่ผูกเลขเคส
+      // การแก้สถานะจากฟอร์มจะทำให้ใบนั้นหลุดออกจากเคส แล้วเรื่องเดียวจะเล่าไม่ครบ
       if (unit.Status && String(unit.Status) !== String(oldStatus || '')) {
+        const rows = ctx.ss.objects(SHEETS.HISTORY);
+        const open = openCaseOf(rows, unit.AirCode);
+
+        // เข้าสู่ขั้นของงานซ่อม = อยู่ในเคส (เคสเดิมถ้ามี ไม่มีก็เปิดใหม่)
+        // ออกจากงานซ่อมกลับมาใช้งานปกติ = ปิดเคสที่ค้างอยู่ ถ้าไม่มีเคสค้างก็ไม่ต้องผูก
+        let caseId = '';
+        if (isRepairStatus(unit.Status)) caseId = ensureCaseId(rows, unit.AirCode);
+        else if (open) caseId = open.caseId;
+
         await addHistoryRaw(ctx, {
+          CaseID: caseId,
           AirCode: unit.AirCode,
           Date: ymd(new Date()),
           EventType: statusChangeEvent(unit.Status),

@@ -4,7 +4,7 @@ import { getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, delete
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
   getHistory, addHistoryRecord, deleteHistoryRecord,
-  reportRepair, startRepairWork, markCannotRepair, completeRepairRecord
+  reportRepair, markCannotRepair, completeRepairRecord
 } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
 import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
@@ -60,7 +60,6 @@ const API_FUNCTIONS = {
   deleteHistoryRecord,
   // ขั้นของเคสงานซ่อม เรียงตามลำดับที่เกิดจริง
   reportRepair,
-  startRepairWork,
   markCannotRepair,
   completeRepairRecord,
 

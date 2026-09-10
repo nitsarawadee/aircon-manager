@@ -2690,7 +2690,7 @@
 
             return head + `
             <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : ''}">
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700 align-top" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700 align-top" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 align-top">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 align-top">${eventTypeBadge(h.EventType)}</td>
               ${detailCell}
@@ -4573,7 +4573,7 @@
       historyPage = clampPage(historyPage, displayHistory.length);
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
             ${airCodeBtn(h.AirCode)}
@@ -4718,27 +4718,24 @@
      * หาจากใบล่าสุดที่มีเลขเคส เพราะทุกใบของเคสถือเลขเดียวกัน และเคสที่ยังไม่ปิด
      * ย่อมเป็นเคสล่าสุดของเครื่องเสมอ (ระบบกันไม่ให้เปิดเคสซ้อนอยู่แล้ว)
      */
+    /**
+     * เลขที่ที่แสดงให้คนเห็นในทุกหน้า
+     *
+     * ใบที่อยู่ในเคสงานซ่อมแสดง "เลขเคส" เพราะทุกใบตั้งแต่เปิดจนปิดเป็นเรื่องเดียวกัน
+     * ควรอ่านได้ด้วยเลขเดียว ไม่ใช่สามเลขที่ไม่มีอะไรบอกว่าเกี่ยวกัน
+     *
+     * เลขที่รายใบยังมีอยู่ในฐานข้อมูลตามเดิม เพราะระบบใช้อ้างถึงใบทีละใบ
+     * ตอนลบหรือแก้ ถ้าเปลี่ยนให้ซ้ำกันจริง ตัวกันลบผิดใบจะอ่อนลงทันที
+     */
+    function displayDocId(h) {
+      const caseId = String(h.CaseID == null ? '' : h.CaseID).trim();
+      return caseId || String(h.ID == null ? '' : h.ID).trim();
+    }
+
     function openCaseIdOf(airCode) {
       const rows = (currentHistory || []).filter(h => sameCode(h.AirCode, airCode) && String(h.CaseID || '').trim());
       return rows.length ? String(rows[0].CaseID).trim() : '';
     }
-
-    /** เริ่มดำเนินการซ่อม — ขั้นที่สองของเคส */
-    async function startRepair(airCode) {
-      const ok = await showConfirm('เริ่มดำเนินการซ่อมเครื่อง ' + airCode + ' ใช่หรือไม่?\n\nสถานะจะเปลี่ยนเป็น "รอซ่อม" และจะกดปิดงานได้เมื่อซ่อมเสร็จ', 'เริ่มดำเนินการซ่อม');
-      if (!ok) return;
-      try {
-        const result = await call('startRepairWork', { AirCode: airCode });
-        currentAirList = result.air;
-        currentHistory = result.history;
-        refreshAirTable();
-        renderHistoryTable();
-        if (airDetailCode) renderAirDetail();
-        showToast('เริ่มดำเนินการซ่อมแล้ว — สถานะเป็นรอซ่อม');
-        loadDashboard();
-      } catch (e) {}
-    }
-    window.startRepair = startRepair;
 
     /** ซ่อมไม่ได้ — ต้องระบุเหตุผล เคสยังเปิดค้างไว้รอเครื่องใหม่ */
     function openCannotRepairModal(airCode) {
@@ -4802,7 +4799,7 @@
           'ชำรุด': {
             order: 1, label: 'ชำรุด — รอเคลียร์เรื่อง',
             cls: 'bg-rose-100 text-rose-800',
-            hint: 'ยังไม่ได้เริ่มซ่อม กดเริ่มดำเนินการเมื่อเคลียร์เรื่องเบื้องหลังเรียบร้อย'
+            hint: 'เคลียร์เรื่องเบื้องหลังเรียบร้อยแล้ว เปลี่ยนสถานะเป็น "รอซ่อม" ที่หน้ารายการเครื่อง'
           },
           'รอซ่อม': {
             order: 2, label: 'รอซ่อม — กำลังดำเนินการ',
@@ -4839,11 +4836,6 @@
             // ปิดงานเปิดเฉพาะขั้นรอซ่อม เพราะขั้นชำรุดยังไม่มีใครลงมือซ่อม
             // (ฝั่งเซิร์ฟเวอร์ก็ตรวจซ้ำ การซ่อนปุ่มกันได้แค่การกดพลาด)
             const actions = [];
-            if (status === 'ชำรุด') {
-              actions.push(`<button onclick="startRepair('${esc(a.AirCode)}')"
-                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                <i class="ph ph-play"></i> เริ่มดำเนินการซ่อม</button>`);
-            }
             if (status === 'รอซ่อม') {
               actions.push(`<button onclick='openCompleteRepairModal(${JSON.stringify(a).replace(/'/g,"&apos;")})'
                 class="text-emerald-700 hover:text-white hover:bg-emerald-600 px-3 py-1.5 rounded-lg transition shadow-sm border border-emerald-600 bg-white text-xs font-medium inline-flex items-center gap-1">
@@ -4907,7 +4899,7 @@
         } else {
           historyTb.innerHTML = repairHist.slice(0, 50).map(h => `
             <tr class="hover:bg-gray-50 transition-colors">
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="เลขที่เอกสาร">${esc(h.ID) || '-'}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 font-medium text-gray-900">
                 ${airCodeBtn(h.AirCode)}

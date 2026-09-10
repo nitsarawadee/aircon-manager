@@ -15,9 +15,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
-import { getAirList, replaceAirUnit } from '../src/modules/airlist.js';
+import { getAirList, replaceAirUnit, saveAirUnit } from '../src/modules/airlist.js';
 import {
-  getHistory, reportRepair, startRepairWork, markCannotRepair, completeRepairRecord
+  getHistory, reportRepair, markCannotRepair, completeRepairRecord
 } from '../src/modules/history.js';
 import { buildCases, openCaseOf, makeCaseId } from '../src/modules/repair-case.js';
 
@@ -36,6 +36,17 @@ const state = { async acquireLock() { return true; }, async releaseLock() {} };
 const ctxOf = db => { const c = new Ctx({}, state, db); c.username = 'tester'; return c; };
 const unit = async db => (await getAirList(ctxOf(db)))[0];
 const hist = db => getHistory(ctxOf(db));
+
+/**
+ * เปลี่ยนสถานะผ่านหน้าแก้ไขข้อมูลเครื่อง — ทางเดียวที่ผู้ใช้เลื่อนขั้นเคสจริง
+ *
+ * ไม่มีปุ่มลัดในหน้างานซ่อมแล้ว การเลื่อนจาก "ชำรุด" ไป "รอซ่อม" ทำที่ฟอร์มนี้
+ * เทสต์จึงต้องเดินทางเดียวกับผู้ใช้ ไม่ใช่เรียกฟังก์ชันลัดที่ไม่มีใครใช้
+ */
+const setStatus = async (db, status) => {
+  const u = await unit(db);
+  return saveAirUnit(ctxOf(db), { ...u, Status: status });
+};
 
 /* ==================== การออกเลขเคส ==================== */
 
@@ -70,7 +81,7 @@ test('เริ่มซ่อมต้องอยู่ในเคสเด�
   await reportRepair(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'คอมเพรสเซอร์ดัง' });
   const caseId = (await hist(db))[0].CaseID;
 
-  await startRepairWork(ctxOf(db), { AirCode: 'A-AIR-1' });
+  await setStatus(db, 'รอซ่อม');
 
   assert.equal((await unit(db)).Status, 'รอซ่อม');
   const rows = await hist(db);
@@ -81,7 +92,7 @@ test('เริ่มซ่อมต้องอยู่ในเคสเด�
 test('ปิดงานซ่อมต้องอยู่ในเคสเดิม เครื่องกลับมาใช้งานปกติ และเคสปิด', async () => {
   const db = freshDb();
   await reportRepair(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'คอมเพรสเซอร์ดัง' });
-  await startRepairWork(ctxOf(db), { AirCode: 'A-AIR-1' });
+  await setStatus(db, 'รอซ่อม');
   await completeRepairRecord(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'เปลี่ยนคอม', Cost: 3200 });
 
   assert.equal((await unit(db)).Status, 'ใช้งานปกติ');
@@ -152,7 +163,7 @@ test('แจ้งซ่อมซ้ำตอนที่ยังมีเค�
 test('เสียรอบใหม่หลังปิดเคสแล้ว ต้องเป็นเคสใหม่', async () => {
   const db = freshDb();
   await reportRepair(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'รอบแรก' });
-  await startRepairWork(ctxOf(db), { AirCode: 'A-AIR-1' });
+  await setStatus(db, 'รอซ่อม');
   await completeRepairRecord(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'ซ่อมเสร็จ', Cost: 500 });
   await reportRepair(ctxOf(db), { AirCode: 'A-AIR-1', Detail: 'รอบสอง' });
 
@@ -161,11 +172,20 @@ test('เสียรอบใหม่หลังปิดเคสแล้�
   assert.equal(cases.filter(c => !c.closed).length, 1, 'เปิดค้างอยู่เคสเดียว');
 });
 
-test('ยังไม่มีเคสค้าง จะเริ่มซ่อมหรือปิดแบบซ่อมไม่ได้ไม่ได้', async () => {
+test('เครื่องที่ค้างสถานะซ่อมมาแต่ไม่มีเลขเคส ต้องเดินต่อได้ ไม่ใช่ติดค้างถาวร', async () => {
+  // เกิดกับข้อมูลที่มีอยู่ก่อนระบบเคส ประวัติเดิมไม่มีเลขเคสสักใบ
+  // ถ้าปฏิเสธเพราะ "หาเคสไม่เจอ" เครื่องพวกนี้จะกดปุ่มไหนก็ไม่ได้ ต้องไปแก้ฐานข้อมูลเอง
   const db = freshDb();
-  await assert.rejects(() => startRepairWork(ctxOf(db), { AirCode: 'A-AIR-1' }), /ไม่มีเคส/);
-  await assert.rejects(
-    () => markCannotRepair(ctxOf(db), { AirCode: 'A-AIR-1', Reason: 'x' }), /ไม่มีเคส/);
+  db.prepare("UPDATE air_units SET Status = 'ชำรุด' WHERE AirCode = 'A-AIR-1'").run();
+  db.prepare(`INSERT INTO history (ID, AirCode, Date, EventType, Detail)
+              VALUES ('CM2608-01','A-AIR-1','2026-08-01','แจ้งซ่อม','ของเก่าไม่มีเลขเคส')`).run();
+
+  await setStatus(db, 'รอซ่อม');
+
+  assert.equal((await unit(db)).Status, 'รอซ่อม');
+  const withCase = (await hist(db)).filter(h => String(h.CaseID || '').trim());
+  assert.equal(withCase.length, 1, 'ใบใหม่ต้องได้เลขเคส');
+  assert.ok(/^RC\d{4}-\d+$/.test(withCase[0].CaseID));
 });
 
 test('openCaseOf ต้องคืนเฉพาะเคสที่ยังเปิดของเครื่องตัวนั้น', async () => {

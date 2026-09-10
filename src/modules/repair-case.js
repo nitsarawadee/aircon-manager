@@ -127,6 +127,30 @@ export function casesFromCtx(ctx) {
   return buildCases(ctx.ss.objects(SHEETS.HISTORY));
 }
 
+/** สถานะที่แปลว่าเครื่องอยู่ระหว่างเคสงานซ่อม */
+const IN_CASE_STATUS = new Set(['ชำรุด', 'รอซ่อม', 'รื้อถอน/ปลดระวาง']);
+
+export function isRepairStatus(status) {
+  return IN_CASE_STATUS.has(String(status == null ? '' : status).trim());
+}
+
+/**
+ * หาเคสที่เปิดอยู่ ถ้าไม่มีก็ออกเลขใหม่ให้
+ *
+ * "ไม่มี" เกิดได้สองแบบ และทั้งสองแบบต้องเดินต่อได้ ไม่ใช่ปฏิเสธ
+ *
+ *   1. เครื่องเสียรอบใหม่ — เป็นเคสใหม่ตามปกติ
+ *   2. เครื่องค้างสถานะซ่อมมาตั้งแต่ก่อนมีระบบเคส — ประวัติเดิมไม่มีเลขเคส
+ *      ถ้าปฏิเสธ เครื่องพวกนี้จะติดค้างถาวร กดปุ่มไหนก็ไม่ได้ ต้องไปแก้ฐานข้อมูลเอง
+ *
+ * กรณีที่สองคือเหตุผลหลักที่ต้องมีตัวนี้ แทนที่จะโยน error เมื่อหาเคสไม่เจอ
+ */
+export function ensureCaseId(historyRows, airCode) {
+  const open = openCaseOf(historyRows, airCode);
+  if (open) return open.caseId;
+  return makeCaseId((historyRows || []).map(r => r.CaseID));
+}
+
 /** วันที่ล่าสุดของเคส ใช้เรียงลำดับในหน้าเว็บ */
 export function caseLastDate(c) {
   const last = c.events[c.events.length - 1];
