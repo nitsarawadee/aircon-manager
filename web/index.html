@@ -3227,10 +3227,18 @@
       }
     }
 
+    /**
+     * ช่องข้อมูลของเครื่องที่ส่งขึ้นเซิร์ฟเวอร์ตอนบันทึก
+     *
+     * แยกออกมาเป็นค่าคงที่เพราะมีสองทางที่บันทึกเครื่อง คือฟอร์มแก้ไขข้อมูล
+     * กับปุ่มลัดเปลี่ยนสถานะในหน้างานซ่อม ทั้งสองทางต้องส่งชุดเดียวกันเป๊ะ
+     * ถ้าแยกกันเขียน วันหนึ่งจะมีช่องหลุดไปทางใดทางหนึ่งแล้วข้อมูลหายเงียบๆ
+     */
+    const AIR_FIELDS = ['AirCode','Region','Province','NodeName','SiteCode','LocationType','BTU','Brand','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN','OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire','CleaningPricePerRound','Status','Address','Note'];
+
     async function saveAir(row) {
-      const fields = ['AirCode','Region','Province','NodeName','SiteCode','LocationType','BTU','Brand','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN','OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire','CleaningPricePerRound','Status','Address','Note'];
       const unit = {};
-      fields.forEach(f => { const el = document.getElementById('f_' + f); if(el) unit[f] = el.value; });
+      AIR_FIELDS.forEach(f => { const el = document.getElementById('f_' + f); if(el) unit[f] = el.value; });
       if (row) unit._row = row;
       if (!unit.AirCode) { showToast('กรุณาระบุรหัสเครื่อง', 'error'); return; }
       try {
@@ -3245,6 +3253,56 @@
         loadDashboard();
       } catch (e) {}
     }
+
+    /**
+     * เปลี่ยนสถานะเครื่องจากหน้าอื่น โดยไม่ต้องเปิดฟอร์มแก้ไขทั้งใบ
+     *
+     * เรียก saveAirUnit ตัวเดียวกับที่ฟอร์มแก้ไขเรียก และประกอบข้อมูลจาก AIR_FIELDS
+     * ชุดเดียวกัน จึงไม่ใช่ทางที่สองของการเปลี่ยนสถานะ แต่เป็นทางลัดเข้าสู่ทางเดิม
+     * ผลที่ได้จึงเหมือนกันทุกอย่าง ทั้งประวัติที่บันทึก เลขเคสที่ผูก และการตรวจสิทธิ์
+     *
+     * เคยมีฟังก์ชันแยกสำหรับเรื่องนี้ (startRepairWork) แล้วถอดออกไป เพราะมันมี
+     * ตรรกะของตัวเอง ซึ่งเป็นจุดที่สองหน้าจะค่อยๆ ทำงานไม่เหมือนกันโดยไม่มีใครรู้
+     *
+     * ส่งทุกช่องขึ้นไปเหมือนฟอร์ม ไม่ได้ส่งแค่ช่องสถานะ เพราะเซิร์ฟเวอร์เขียนทั้งแถว
+     * ถ้าส่งไม่ครบ ช่องที่ไม่ได้ส่งจะถูกล้างทิ้ง — และ assertRowIs ฝั่งเซิร์ฟเวอร์
+     * ยังกันการเขียนผิดแถวไว้อีกชั้นถ้าลำดับแถวเลื่อนไปแล้ว
+     */
+    async function changeAirStatus(airCode, newStatus, message) {
+      const unit = (currentAirList || []).find(a => sameCode(a.AirCode, airCode));
+      if (!unit) { showToast('ไม่พบเครื่องรหัสนี้ ลองรีเฟรชหน้าอีกครั้ง', 'error'); return; }
+      if (String(unit.Status || '').trim() === newStatus) {
+        showToast('เครื่องนี้อยู่ในสถานะ "' + newStatus + '" อยู่แล้ว', 'error');
+        return;
+      }
+
+      const ok = await showConfirm(message, 'เปลี่ยนสถานะเป็น "' + newStatus + '"');
+      if (!ok) return;
+
+      const payload = { _row: unit._row };
+      AIR_FIELDS.forEach(f => { payload[f] = unit[f] == null ? '' : unit[f]; });
+      payload.Status = newStatus;
+
+      try {
+        const result = await call('saveAirUnit', payload);
+        currentAirList = result.air;
+        currentHistory = result.history;
+        refreshAirTable();          // วาดตารางเครื่องและหน้างานซ่อมใหม่ทั้งคู่
+        renderHistoryTable();
+        if (airDetailCode) renderAirDetail();
+        showToast('เปลี่ยนสถานะเป็น "' + newStatus + '" แล้ว', 'success');
+        loadDashboard();
+      } catch (e) {}
+    }
+    window.changeAirStatus = changeAirStatus;
+
+    /** อนุมัติซ่อมแล้ว — ขั้นถัดไปของเคสคือรอช่างเข้าซ่อม */
+    function approveRepair(airCode) {
+      return changeAirStatus(airCode, 'รอซ่อม',
+        'เครื่อง ' + airCode + ' ได้รับอนุมัติให้ซ่อมแล้วใช่หรือไม่?\n\n' +
+        'สถานะจะเปลี่ยนเป็น "รอซ่อม" และจะกดปิดงานได้เมื่อซ่อมเสร็จ');
+    }
+    window.approveRepair = approveRepair;
 
     /**
      * กล่องยืนยันก่อนลบเครื่อง — ต้องพิมพ์รหัสเครื่องให้ตรงถึงจะกดลบได้
@@ -4827,7 +4885,7 @@
           'ชำรุด': {
             order: 1, label: 'ชำรุด — รออนุมัติซ่อม',
             cls: 'bg-rose-100 text-rose-800',
-            hint: 'ขออนุมัติค่าใช้จ่าย · รอการอนุมัติซ่อม — อนุมัติแล้วเปลี่ยนสถานะเป็น "รอซ่อม" ที่หน้ารายการเครื่อง'
+            hint: 'ขออนุมัติค่าใช้จ่าย · รอการอนุมัติซ่อม — อนุมัติแล้วกดปุ่มข้างขวา หรือเปลี่ยนสถานะที่หน้ารายการเครื่องก็ได้ ผลเหมือนกัน'
           },
           'รอซ่อม': {
             order: 2, label: 'รอซ่อม — กำลังดำเนินการ',
@@ -4864,6 +4922,11 @@
             // ปิดงานเปิดเฉพาะขั้นรอซ่อม เพราะขั้นชำรุดยังไม่มีใครลงมือซ่อม
             // (ฝั่งเซิร์ฟเวอร์ก็ตรวจซ้ำ การซ่อนปุ่มกันได้แค่การกดพลาด)
             const actions = [];
+            if (status === 'ชำรุด') {
+              actions.push(`<button onclick="approveRepair('${esc(a.AirCode)}')"
+                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`);
+            }
             if (status === 'รอซ่อม') {
               actions.push(`<button onclick='openCompleteRepairModal(${JSON.stringify(a).replace(/'/g,"&apos;")})'
                 class="text-emerald-700 hover:text-white hover:bg-emerald-600 px-3 py-1.5 rounded-lg transition shadow-sm border border-emerald-600 bg-white text-xs font-medium inline-flex items-center gap-1">
