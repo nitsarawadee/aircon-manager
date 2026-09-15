@@ -5708,13 +5708,43 @@ const CLEANING_CHECKLIST_ITEMS = [
               ? '<span class="text-xs text-gray-400">ไม่มีไฟล์</span>'
               : `<button onclick="regeneratePdf(${f._row})" class="text-[#f47920] hover:underline flex items-center gap-1 text-xs"><i class="ph ph-arrow-clockwise"></i> สร้าง PDF</button>`}
         </td>
-        <td class="px-4 py-3 text-right">
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          ${f.Source === 'attach' ? '' : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
+            class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
+            <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`}
           <button onclick="deleteCleaningFormRow(${f._row})" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
         </td>
       </tr>
     `).join('');
     renderTablePager('cleaningFormPaginationBar', cleaningFormLastList.length, cleaningFormPage, 'goToCleaningFormPage');
   }
+
+  /**
+   * เปิดหน้าเอกสารของใบที่เลือก เพื่อดูหรือสั่งปริ้น
+   *
+   * เปิดแท็บใหม่แล้วเขียนหน้าเอกสารลงไป ไม่ได้ดาวน์โหลดไฟล์
+   * แท็บที่เปิดจากหน้าเรามี origin เดียวกัน ลิงก์ฟอนต์แบบ /vendor/... จึงหาไฟล์เจอ
+   *
+   * เปิดแท็บ "ก่อน" เรียกเซิร์ฟเวอร์เสมอ เพราะถ้าเปิดหลังจาก await
+   * เบราว์เซอร์จะถือว่าไม่ได้เกิดจากการกดปุ่ม แล้วบล็อกป๊อปอัปทิ้ง
+   */
+  async function openCleaningDoc(row) {
+    const win = window.open('', '_blank');
+    if (!win) { showToast('เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กรุณาอนุญาตป๊อปอัปของเว็บนี้', 'error'); return; }
+    win.document.write('<!doctype html><meta charset="utf-8"><title>กำลังเปิดเอกสาร…</title>' +
+                       '<p style="font-family:sans-serif;padding:24px">กำลังเปิดเอกสาร…</p>');
+
+    try {
+      const html = await call('getCleaningDocHtml', row);
+      if (!html) throw new Error('ไม่ได้รับข้อมูลเอกสารกลับมา');
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (e) {
+      win.close();
+    }
+  }
+  window.openCleaningDoc = openCleaningDoc;
 
   /** สร้าง PDF ย้อนหลังให้รายการที่บันทึกไว้แล้วแต่ยังไม่มีไฟล์ (ไม่ต้องกรอกฟอร์มใหม่) */
   async function regeneratePdf(row) {

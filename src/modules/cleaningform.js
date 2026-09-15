@@ -548,6 +548,35 @@ export async function regenerateCleaningFormPdf(ctx, row) {
   });
 }
 
+/**
+ * หน้าเอกสารของใบที่บันทึกไว้ สำหรับเปิดดูและสั่งปริ้น
+ *
+ * คืนค่าเป็นข้อความ HTML ไม่ใช่ไฟล์ — ชั้น platform เป็นคนตัดสินว่าจะส่งให้
+ * เบราว์เซอร์แสดงเลย หรือเอาไปแปลงเป็นไฟล์ PDF ต่อ
+ *
+ * ไม่ต้องถือล็อกเพราะเป็นการอ่านอย่างเดียว
+ */
+export async function getCleaningDocHtml(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) {
+    throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  }
+  await ctx.ensureBase();
+
+  const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+
+  await ctx.assertRegionAccess(form.Region);
+
+  if (plainText(form.Source) === 'attach') {
+    throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ — เปิดดูไฟล์ที่แนบไว้ได้จากลิงก์ในตาราง');
+  }
+
+  const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
+  // ฟอนต์ไทยเสิร์ฟจากเครื่องเราเอง ไม่ได้ดึงจากอินเทอร์เน็ต
+  return buildCleaningDocHtml(form, { fontHref: '/vendor/fonts.css' });
+}
+
 export async function deleteCleaningForm(ctx, row) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
