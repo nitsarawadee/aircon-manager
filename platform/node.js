@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
 
 import { savePhoto, removePhoto, removeDocPhotos, readDocPhotos } from './photos.js';
+import { renderPdf, findBrowser } from './pdf-render.js';
 import { webcrypto } from 'node:crypto';
 
 // Node รุ่นเก่ากว่า 20 ยังไม่มี crypto เป็นตัวแปรกลาง แต่โค้ดส่วนกลางใช้ crypto.subtle
@@ -279,6 +280,26 @@ const photos = {
 };
 
 /**
+ * ตัวแปลงหน้าเอกสารเป็นไฟล์ PDF ที่ส่งเข้าไปให้ src/ ใช้
+ *
+ * เหตุผลเดียวกับที่เก็บรูป — src/ ห้ามสั่งโปรแกรมอื่นหรือแตะไฟล์ชั่วคราวเอง
+ * ไม่มีเบราว์เซอร์ในเครื่อง = ไม่ส่งตัวนี้เข้าไป ระบบยังใช้ได้ครบ
+ * แค่ต้องกดเปิดเอกสารแล้วสั่งปริ้นเองแทน
+ */
+const browserPath = findBrowser(env);
+const pdf = browserPath ? {
+  // คืนเป็น base64 เลย เพราะ src/ ใช้ Buffer ของ Node ไม่ได้ (ต้องรันบน Cloudflare ได้ด้วย)
+  render: async html => (await renderPdf(html, env)).toString('base64'),
+  // เบราว์เซอร์เปิดหน้าเอกสารจากไฟล์ชั่วคราว ที่อยู่แบบ /vendor/... จึงหาไฟล์ไม่เจอ
+  // ต้องบอกที่อยู่เต็มของเซิร์ฟเวอร์ตัวเองให้ไปดึงฟอนต์และโลโก้
+  baseUrl: 'http://127.0.0.1:' + (Number(env.PORT) || 8787)
+} : null;
+
+console.log(browserPath
+  ? 'แปลงเป็นไฟล์ PDF ได้ (ใช้ ' + browserPath.split(/[\/]/).pop() + ')'
+  : 'ไม่พบเบราว์เซอร์ในเครื่อง — เปิดเอกสารแล้วสั่งปริ้นเองได้ แต่กดบันทึกเป็นไฟล์ PDF ไม่ได้');
+
+/**
  * สำรองฐานข้อมูลอัตโนมัติ — ตอนเปิดเซิร์ฟเวอร์ครั้งหนึ่ง แล้วทุกวัน
  *
  * ก่อนหน้านี้สำรองเฉพาะตอนรันสคริปต์บำรุงรักษา ซึ่งนานๆ ครั้ง
@@ -330,7 +351,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };

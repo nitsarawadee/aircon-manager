@@ -39,11 +39,12 @@ export class Ctx {
    *   ด้วยเหตุผลเดียวกับ db คือ src/ ห้ามแตะระบบไฟล์เอง
    *   ไม่ส่งมา (เช่นตอนรันบน Cloudflare) = ระบบยังทำงานได้ แค่แนบรูปไม่ได้
    */
-  constructor(env, state, db, photos) {
+  constructor(env, state, db, photos, pdf) {
     this.env = env;
     this.state = state;
     this.db = db || null;
     this.photos = photos || null;
+    this.pdf = pdf || null;      // ตัวแปลงเอกสารเป็นไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้)
     this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite หรือ Google Sheets)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ

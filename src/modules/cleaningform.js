@@ -629,6 +629,57 @@ export async function getCleaningPhotoIndex(ctx, row) {
   return photoIndexOf(ctx.photos, docNo);
 }
 
+/**
+ * แปลงเอกสารเป็นไฟล์ PDF ให้ดาวน์โหลด
+ *
+ * ประกอบหน้าเอกสารตัวเดียวกับที่ใช้เปิดดู แล้วให้ชั้น platform สั่งเบราว์เซอร์
+ * ในเครื่องแปลงเป็นไฟล์ ระบบจึงไม่ต้องมีตัวสร้าง PDF ของตัวเอง
+ *
+ * ไม่ได้เก็บไฟล์ไว้ที่ไหน — สร้างแล้วส่งกลับเลย เพราะรูปต้นฉบับยังอยู่ครบ
+ * การเก็บ PDF ไว้ด้วยจะกินพื้นที่เป็นสองเท่าโดยไม่ได้อะไรเพิ่ม (วัดแล้ว
+ * ไฟล์ PDF มีขนาดเท่ากับรูปต้นฉบับรวมกันพอดี เพราะเบราว์เซอร์ฝัง JPEG เดิมลงไปตรงๆ)
+ *
+ * @returns {Object} { fileName, mime, base64 }
+ */
+export async function getCleaningDocPdf(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) {
+    throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  }
+  if (!ctx.pdf) {
+    throw new Error(
+      'เครื่องที่รันระบบอยู่ไม่มีเบราว์เซอร์สำหรับแปลงเป็นไฟล์ PDF — ' +
+      'กด "เปิดเอกสาร" แล้วสั่งปริ้นเองได้ผลเหมือนกัน'
+    );
+  }
+
+  await ctx.ensureBase();
+  const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+  await ctx.assertRegionAccess(form.Region);
+
+  if (plainText(form.Source) === 'attach') {
+    throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ');
+  }
+
+  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const base = ctx.pdf.baseUrl || '';
+
+  const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
+  const html = buildCleaningDocHtml(form, {
+    // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
+    fontHref: base + DOC_ASSETS.fontHref,
+    logoHref: base + DOC_ASSETS.logoHref,
+    photos: ctx.photos ? ctx.photos.readAll(docNo) : {}
+  });
+
+  return {
+    fileName: docNo + '.pdf',
+    mime: 'application/pdf',
+    base64: await ctx.pdf.render(html)
+  };
+}
+
 export async function deleteCleaningForm(ctx, row) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
