@@ -20,6 +20,14 @@ import { uploadNodeDocs } from '../pdf-bridge.js';
  * ทั้งสองทางรองรับการล้าง 1 หรือ 2 เครื่องในครั้งเดียว โดยกรอกราคาแยกรายเครื่อง
  */
 
+/**
+ * ที่อยู่ของฟอนต์และโลโก้ที่ใช้ในเอกสาร
+ *
+ * ทั้งสองไฟล์เสิร์ฟจากเครื่องเราเอง เอกสารจึงไม่ดึงอะไรจากอินเทอร์เน็ตเลย
+ * โลโก้เป็นไฟล์เดียวกับที่อยู่ในแบบฟอร์ม Excel ตัวจริง
+ */
+const DOC_ASSETS = { fontHref: '/vendor/fonts.css', logoHref: '/assets/form-logo.png' };
+
 /* ==================== เลขที่เอกสาร ==================== */
 
 /**
@@ -506,7 +514,7 @@ export async function getCleaningBlankDocHtml(ctx, record) {
   payload.ChecklistJSON = JSON.stringify(payload.Checklist || []);
 
   const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
-  return buildCleaningDocHtml(payload, { fontHref: '/vendor/fonts.css' });
+  return buildCleaningDocHtml(payload, DOC_ASSETS);
 }
 
 /**
@@ -534,8 +542,8 @@ export async function getCleaningDocHtml(ctx, row) {
   }
 
   const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
-  // ฟอนต์ไทยเสิร์ฟจากเครื่องเราเอง ไม่ได้ดึงจากอินเทอร์เน็ต
-  return buildCleaningDocHtml(form, { fontHref: '/vendor/fonts.css' });
+  // ฟอนต์และโลโก้เสิร์ฟจากเครื่องเราเอง ไม่ได้ดึงจากอินเทอร์เน็ต
+  return buildCleaningDocHtml(form, DOC_ASSETS);
 }
 
 export async function deleteCleaningForm(ctx, row) {

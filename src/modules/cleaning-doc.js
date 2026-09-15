@@ -48,8 +48,15 @@ const esc = v => plainText(v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-/** ช่องว่างในกระดาษ ปล่อยว่างไว้จริงๆ เหมือนแบบฟอร์มที่ยังไม่ได้กรอก */
-const val = v => esc(v);
+/**
+ * ค่าที่กรอกลงในแบบฟอร์ม — แสดงเป็นสีน้ำเงินตามที่ไฟล์ Excel ตั้งไว้
+ * เพื่อให้แยกออกจากข้อความที่พิมพ์มากับฟอร์มตั้งแต่แรก
+ * ช่องที่ยังไม่ได้กรอก ปล่อยว่างไว้จริงๆ เหมือนแบบฟอร์มเปล่า
+ */
+const val = v => {
+  const t = esc(v);
+  return t ? `<span class="v">${t}</span>` : '';
+};
 
 /* ==================== ตัวช่วยอ่านข้อมูลจากใบ ==================== */
 
@@ -130,7 +137,7 @@ function sectionUnits(units) {
 
   const head = '<tr>' +
     '<th colspan="5">รายการ / Item</th>' +
-    unitCells(u => `เครื่องที่ ${u.slot} (Unit ${u.slot})<div class="code">${esc(u.code)}</div>`, 'ctr hd') +
+    unitCells(u => `เครื่องที่ ${u.slot} (Unit ${u.slot})<div class="code">${val(u.code)}</div>`, 'ctr hd') +
     '<td></td></tr>';
 
   const lines = [
@@ -165,7 +172,7 @@ function sectionChecklist(form, units) {
     '<tr>' +
     `<td class="ctr">${item.no}</td>` +
     `<td colspan="3">${esc(item.label)}</td>` +
-    `<td class="ctr">${esc(item.criteria)}</td>` +
+    `<td class="ctr unit">${esc(item.criteria)}</td>` +
     unitCells(u => val(item['val' + u.slot])) +
     `<td>${val(item.note)}</td>` +
     '</tr>'
@@ -233,6 +240,10 @@ export function buildCleaningDocHtml(form, opts = {}) {
   const total = COL_WIDTHS.reduce((a, b) => a + b, 0);
   const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
 
+  const logo = opts.logoHref
+    ? `<img class="logo" src="${esc(opts.logoHref)}" alt="INTERLINK Telecom">`
+    : '';
+
   return `<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
 <title>${esc(docNo)} — บันทึกผลการล้างเครื่องปรับอากาศ</title>
@@ -240,7 +251,7 @@ ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
 </head><body>
 <div class="sheet"><table><colgroup>${cols}</colgroup><tbody>
-  <tr class="title"><td colspan="8">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)
+  <tr class="title"><td colspan="8">${logo}บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)
     <span class="docno">เลขที่ ${esc(docNo)}</span></td></tr>
 
   ${sectionRow('ส่วนที่ 1 : ข้อมูล Node')}
@@ -271,6 +282,13 @@ ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 /**
  * รูปแบบหน้ากระดาษ
  *
+ * สีทั้งหมดดึงมาจากไฟล์ Excel ตัวจริง ไม่ได้เลือกเอง:
+ *   แถบหัวข้อส่วน    #D9D9D9   (ขาว เข้มขึ้น 15% ตามที่ตั้งไว้ในไฟล์)
+ *   คอลัมน์หน่วย/เกณฑ์ #F2F2F2 ตัวอักษร #808080
+ *   ป้ายลงนามและแถวอ้างอิง #F2F2F2
+ *   ค่าที่กรอกลงไป    ตัวอักษรสีน้ำเงิน #0000FF ← จุดเด่นของแบบฟอร์มนี้
+ *   ที่เหลือพื้นขาว เส้นตารางดำ
+ *
  * คุมให้จบใน 1 หน้า A4 เหมือนแบบฟอร์มกระดาษ ซึ่งเป็นข้อกำหนดของเอกสารชุดนี้
  * ใช้ @page ตั้งขอบกระดาษเอง แทนการพึ่งค่าเริ่มต้นของเบราว์เซอร์ซึ่งต่างกันไป
  */
@@ -281,18 +299,31 @@ body { margin: 0; font-family: 'Sarabun', 'Tahoma', sans-serif; color: #000; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 td, th { border: 0.5pt solid #000; padding: 0.7mm 1.5mm; font-size: 8pt;
          vertical-align: middle; text-align: left; word-wrap: break-word; }
-th { font-weight: 600; background: #f2f4f7; }
+th { font-weight: 700; background: #fff; }
 .ctr, td.ctr, th.ctr { text-align: center; }
-tr.title td { border: none; text-align: center; font-size: 13pt; font-weight: 700;
-              padding-bottom: 2mm; }
-tr.title .docno { display: block; font-size: 8.5pt; font-weight: 400; margin-top: 0.5mm; }
-tr.sec td { background: #dce6f1; font-weight: 700; font-size: 8.5pt; padding: 1mm 1.5mm; }
-th.hd, td.hd { font-weight: 600; background: #f2f4f7; }
-.code { font-size: 6.8pt; font-weight: 400; }
+
+/* ค่าที่กรอกลงในแบบฟอร์มเป็นสีน้ำเงิน แยกจากข้อความที่พิมพ์มากับฟอร์ม */
+.v { color: #0000FF; }
+
+/* โลโก้อยู่บรรทัดบนชิดซ้าย ชื่อเอกสารอยู่บรรทัดถัดมากึ่งกลาง
+   ไม่ซ้อนกันเหมือนในไฟล์ Excel ที่รูปลอยทับช่องชื่อเรื่อง */
+tr.title td { border: none; text-align: center; font-size: 14pt; font-weight: 700;
+              padding: 0 0 2mm; }
+/* ขนาดและการครอบตัดเท่ากับที่วางไว้ในไฟล์ Excel (กว้าง 54 มม. สูง 15.2 มม.
+   โดยตัดขอบบนล่างของรูปออก เหลือเฉพาะตัวโลโก้) */
+tr.title .logo { display: block; width: 54mm; height: 15.2mm;
+                 object-fit: cover; object-position: center; margin-bottom: 1mm; }
+tr.title .docno { display: block; font-size: 9pt; font-weight: 400; margin-top: 1mm; }
+
+tr.sec td { background: #D9D9D9; font-weight: 700; font-size: 8.5pt; padding: 1mm 1.5mm; }
+td.unit, th.unit { background: #F2F2F2; color: #808080; }
+.code { font-size: 6.8pt; font-weight: 400; color: #000; }
 tr.note td { height: 13mm; vertical-align: top; white-space: pre-wrap; }
+tr.sign th { background: #F2F2F2; }
 tr.sign td { height: 12mm; vertical-align: bottom; }
 tr.sign .who { margin-bottom: 3.5mm; }
-tr.ref td { border: none; font-size: 6.5pt; padding-top: 1.5mm; }
+tr.ref td { background: #F2F2F2; font-size: 6.5pt; }
+
 @media screen {
   body { background: #e9edf2; padding: 6mm 0; }
   .sheet { width: 210mm; margin: 0 auto; background: #fff; padding: 7mm;

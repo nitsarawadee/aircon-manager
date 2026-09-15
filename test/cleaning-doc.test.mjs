@@ -143,3 +143,46 @@ test('ไม่ระบุฟอนต์ ต้องยังสร้าง�
 test('สั่งพิมพ์เป็นกระดาษ A4 แนวตั้ง', () => {
   assert.ok(buildCleaningDocHtml(baseForm()).includes('size: A4 portrait'));
 });
+
+/* ==================== หน้าตาต้องตรงกับแบบฟอร์มจริง ==================== */
+
+test('ใช้สีเดียวกับที่ตั้งไว้ในไฟล์ Excel', () => {
+  // สีพวกนี้อ่านมาจาก styles.xml ของไฟล์ฟอร์มจริง ไม่ได้เลือกเอง
+  const html = buildCleaningDocHtml(baseForm());
+  assert.ok(html.includes('#D9D9D9'), 'แถบหัวข้อส่วนต้องเป็นเทา #D9D9D9');
+  assert.ok(html.includes('#F2F2F2'), 'คอลัมน์หน่วย/เกณฑ์และป้ายลงนามต้องเป็น #F2F2F2');
+  assert.ok(html.includes('#0000FF'), 'ค่าที่กรอกต้องเป็นตัวอักษรสีน้ำเงิน');
+});
+
+test('ค่าที่กรอกถูกทำเครื่องหมายแยกจากข้อความที่พิมพ์มากับฟอร์ม', () => {
+  const html = buildCleaningDocHtml(baseForm());
+  assert.ok(html.includes('<span class="v">ช่างสมชาย</span>') ||
+            html.includes('<span class="v">หจก. ทดสอบ</span>'),
+    'ค่าที่กรอกต้องอยู่ใน span ที่ทำให้เป็นสีน้ำเงิน');
+  assert.ok(html.includes('>Indoor Serial No.<'), 'ข้อความของฟอร์มต้องไม่ถูกทำเป็นค่าที่กรอก');
+});
+
+test('ช่องที่ยังไม่ได้กรอก ต้องว่างจริง ไม่ใช่ขีด', () => {
+  // ฟอร์มเปล่าที่ปริ้นไปเขียนมือ ต้องมีที่ให้เขียน ไม่ใช่มีขีดขวางอยู่
+  const html = buildCleaningDocHtml(baseForm({ AdditionalNote: '', CompanyName: '' }));
+  assert.ok(!html.includes('<span class="v">–</span>'));
+});
+
+test('มีโลโก้เมื่อระบุที่อยู่รูปมาให้ และไม่ดึงจากอินเทอร์เน็ต', () => {
+  const html = buildCleaningDocHtml(baseForm(), { logoHref: '/assets/form-logo.png' });
+  assert.ok(html.includes('src="/assets/form-logo.png"'));
+  assert.ok(html.includes('class="logo"'));
+
+  // ไม่ระบุก็ต้องยังสร้างเอกสารได้ ไม่ใช่พัง
+  assert.ok(!buildCleaningDocHtml(baseForm()).includes('<img'));
+});
+
+test('ความกว้างคอลัมน์ตรงตามสัดส่วนในไฟล์ Excel', () => {
+  // A 4.6 / B 16.6 / C 17.6 / D 10 / E 11 / F 16.6 / G 16.6 / H 28.1
+  const html = buildCleaningDocHtml(baseForm());
+  const widths = [...html.matchAll(/<col style="width:([\d.]+)%">/g)].map(m => Number(m[1]));
+  assert.equal(widths.length, 8, 'ต้องมี 8 คอลัมน์เท่าแบบฟอร์ม');
+  assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - 100) < 0.5, 'รวมกันต้องได้ 100%');
+  assert.ok(widths[0] < widths[1], 'คอลัมน์เลขข้อต้องแคบที่สุด');
+  assert.ok(widths[7] > widths[6], 'คอลัมน์หมายเหตุต้องกว้างที่สุด');
+});
