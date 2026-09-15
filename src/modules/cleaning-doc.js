@@ -10,27 +10,34 @@ import { formatDate, formatTime, plainText } from '../values.js';
  * ของเดิมสร้าง PDF ด้วยการส่งข้อมูลไป Apps Script ให้วาดลงชีตแม่แบบแล้วสั่ง
  * Google export ซึ่งต้องออกเน็ต ใช้เวลา 7-8 วินาทีต่อใบ และคิวตันถ้ามีคนใช้พร้อมกัน
  *
- * หน้า HTML ทำให้:
- *   - เปิดดูและสั่งปริ้นได้ทันที ไม่ต้องออกเน็ต ไม่ต้องรอคิว
- *   - เบราว์เซอร์จัดฟอนต์ไทยให้เอง ซึ่งเป็นส่วนที่เขียนเองยากที่สุด
- *   - ชั้น platform เอาหน้านี้ไปสั่งเบราว์เซอร์แปลงเป็นไฟล์ PDF ต่อได้
- *     โดยไฟล์นี้ไม่ต้องรู้เลยว่าปลายทางจะเป็นกระดาษ จอ หรือไฟล์
+ * หน้า HTML ทำให้เปิดดูและสั่งปริ้นได้ทันทีโดยไม่ต้องออกเน็ต และเบราว์เซอร์
+ * จัดฟอนต์ไทยให้เอง ซึ่งเป็นส่วนที่เขียนเองยากที่สุด
  *
  * ไฟล์นี้อยู่ใน src/ จึงห้ามแตะระบบไฟล์หรือสั่งโปรแกรมอื่น — คืนค่าเป็นข้อความล้วน
+ * ชั้น platform จะเอาไปแสดงบนจอ สั่งปริ้น หรือแปลงเป็นไฟล์ต่อก็ได้
+ *
+ * ============================================================================
+ * วางตามกริดของแบบฟอร์มจริง
+ * ============================================================================
+ * ดึงโครงมาจากไฟล์ ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ_Rev2026.xlsx โดยตรง
+ * คือตาราง 8 คอลัมน์ (A–H) ความกว้างตามที่ตั้งไว้ในไฟล์ และการผสานช่องตรงกัน
+ * ทุกแถว เอกสารที่ออกมาจึงหน้าตาเหมือนกระดาษที่ใช้กันอยู่
  *
  * ============================================================================
  * หนึ่งหรือสองคอลัมน์
  * ============================================================================
- * ใบที่ล้างสองเครื่องออกมาเป็นสองคอลัมน์ ใบที่ล้างเครื่องเดียวออกมาคอลัมน์เดียว
- * และหัวคอลัมน์บอกเลขเครื่องจริงเสมอ — ล้างเฉพาะเครื่องที่ 2 หัวคอลัมน์ต้องขึ้นว่า
- * "เครื่องที่ 2" ไม่ใช่เลื่อนมาเป็นคอลัมน์แรกแล้วขึ้นว่าเครื่องที่ 1
+ * ล้างสองเครื่องออกมาสองคอลัมน์ (F และ G ตามแบบฟอร์ม)
+ * ล้างเครื่องเดียวรวม F กับ G เป็นช่องเดียว และหัวคอลัมน์บอกเลขเครื่องจริงเสมอ —
+ * ล้างเฉพาะเครื่องที่ 2 ต้องขึ้นว่า "เครื่องที่ 2" ไม่ใช่เลื่อนมาเป็นคอลัมน์แรก
+ * ความกว้างรวมของตารางจึงเท่าเดิม ไม่ว่าจะล้างกี่เครื่อง
  */
 
+/** ความกว้างคอลัมน์ A–H ตามที่ตั้งไว้ในไฟล์ Excel (หน่วยของ Excel) */
+const COL_WIDTHS = [4.6, 16.6, 17.6, 10.0, 11.0, 16.6, 16.6, 28.1];
+
 /**
- * หน่วยและเกณฑ์ของแต่ละข้อ ตามคอลัมน์ "หน่วย/เกณฑ์" ในแบบฟอร์ม Rev2026
- *
- * แยกไว้ที่นี่ ไม่ปนกับ CLEANING_CHECKLIST_ITEMS เพราะเป็นเรื่องของการแสดงผล
- * บนกระดาษ ส่วนตัวรายการเป็นเรื่องของข้อมูล ข้อไหนไม่ได้ระบุไว้ถือว่าไม่มีเกณฑ์
+ * หน่วยและเกณฑ์ของแต่ละข้อ ตามคอลัมน์ E "หน่วย/เกณฑ์" ในแบบฟอร์ม
+ * ข้อที่เป็นการตรวจเช็คเฉยๆ ไม่มีหน่วย ในแบบฟอร์มใส่ขีดไว้
  */
 const CRITERIA = {
   10: '°C (24–26)', 11: '°C (24–28)', 12: 'Type', 13: 'PSI',
@@ -41,13 +48,12 @@ const esc = v => plainText(v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-/** ค่าที่ว่างให้เป็นขีด เพื่อให้เห็นว่าเป็นช่องที่ตั้งใจเว้น ไม่ใช่ลืมพิมพ์ */
-const dash = v => esc(v) || '–';
+/** ช่องว่างในกระดาษ ปล่อยว่างไว้จริงๆ เหมือนแบบฟอร์มที่ยังไม่ได้กรอก */
+const val = v => esc(v);
 
-/**
- * เครื่องที่มีข้อมูลอยู่ในใบนี้ เรียงตามเลขเครื่อง
- * @returns {Array<{slot: number, code: string, brand: string, btu: string, ...}>}
- */
+/* ==================== ตัวช่วยอ่านข้อมูลจากใบ ==================== */
+
+/** เครื่องที่มีข้อมูลอยู่ในใบนี้ เรียงตามเลขเครื่อง */
 function unitsOf(form) {
   const out = [];
   for (const slot of [1, 2]) {
@@ -60,8 +66,7 @@ function unitsOf(form) {
       inSn: form['Unit' + slot + '_IndoorSerial'],
       inAsset: form['Unit' + slot + '_IndoorAsset'],
       outSn: form['Unit' + slot + '_OutdoorSerial'],
-      outAsset: form['Unit' + slot + '_OutdoorAsset'],
-      price: form['Price' + slot]
+      outAsset: form['Unit' + slot + '_OutdoorAsset']
     });
   }
   return out;
@@ -85,106 +90,130 @@ function checklistOf(form) {
   });
 }
 
-/* ==================== ส่วนต่างๆ ของเอกสาร ==================== */
+/* ==================== แถวต่างๆ ตามกริดของแบบฟอร์ม ==================== */
 
+/** แถวหัวข้อส่วน กินทั้งแถว A:H */
+const sectionRow = title => `<tr class="sec"><td colspan="8">${esc(title)}</td></tr>`;
+
+/**
+ * ส่วนที่ 1 — ข้อมูล Node
+ * กริด: [A:B ป้าย] [C:E ค่า] [F ป้าย] [G:H ค่า]
+ */
 function sectionNode(form, units) {
   const first = units[0] || {};
   const timeRange = [formatTime(form.TimeStart), formatTime(form.TimeEnd)].filter(Boolean).join(' – ');
 
   const pairs = [
-    ['Node / รหัส Node', [plainText(form.NodeName), plainText(form.SiteCode)].filter(Boolean).join(' / ')],
-    ['ประเภท Node', form.LocationType],
-    ['จังหวัด / Province', form.Province],
-    ['Brand / ยี่ห้อแอร์', first.brand],
-    ['วันที่ (DD/MM/YYYY)', formatDate(form.Date)],
-    ['BTU / ขนาดทำความเย็น', first.btu],
-    ['เวลาเริ่ม–สิ้นสุด', timeRange],
-    ['รวมเวลา (ชม.)', formatTime(form.TotalTime)]
+    ['Node / รหัส Node', [plainText(form.NodeName), plainText(form.SiteCode)].filter(Boolean).join(' / '),
+     'ประเภท Node', form.LocationType],
+    ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
+    ['วันที่ (DD/MM/YYYY)', formatDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
+    ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
   ];
 
-  const rows = [];
-  for (let i = 0; i < pairs.length; i += 2) {
-    rows.push(
-      '<tr>' +
-      `<th>${esc(pairs[i][0])}</th><td>${dash(pairs[i][1])}</td>` +
-      `<th>${esc(pairs[i + 1][0])}</th><td>${dash(pairs[i + 1][1])}</td>` +
-      '</tr>'
-    );
-  }
-  return '<table class="grid">' + rows.join('') + '</table>';
-}
-
-function sectionUnits(units) {
-  const head = '<tr><th class="item">รายการ / Item</th>' +
-    units.map(u => `<th>เครื่องที่ ${u.slot} (Unit ${u.slot})<div class="code">${esc(u.code)}</div></th>`).join('') +
-    '</tr>';
-
-  const lines = [
-    ['Indoor Serial No.', u => u.inSn],
-    ['Indoor Asset No.', u => u.inAsset],
-    ['Outdoor Serial No.', u => u.outSn],
-    ['Outdoor Asset No.', u => u.outAsset]
-  ];
-
-  const body = lines.map(([label, pick]) =>
-    `<tr><th class="item">${esc(label)}</th>` +
-    units.map(u => `<td>${dash(pick(u))}</td>`).join('') +
+  return pairs.map(([l1, v1, l2, v2]) =>
+    '<tr>' +
+    `<th colspan="2">${esc(l1)}</th><td colspan="3">${val(v1)}</td>` +
+    `<th>${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
     '</tr>'
   ).join('');
-
-  return '<table class="grid units">' + head + body + '</table>';
 }
 
+/**
+ * ส่วนที่ 2 — ข้อมูลเครื่อง
+ * กริด: [A:E ป้าย] [F เครื่องที่ 1] [G เครื่องที่ 2] [H ว่าง]
+ */
+function sectionUnits(units) {
+  const unitCells = (pick, cls) => units.length === 2
+    ? units.map(u => `<td class="${cls}">${pick(u)}</td>`).join('')
+    : `<td class="${cls}" colspan="2">${pick(units[0])}</td>`;
+
+  const head = '<tr>' +
+    '<th colspan="5">รายการ / Item</th>' +
+    unitCells(u => `เครื่องที่ ${u.slot} (Unit ${u.slot})<div class="code">${esc(u.code)}</div>`, 'ctr hd') +
+    '<td></td></tr>';
+
+  const lines = [
+    ['Indoor Serial No.', u => val(u.inSn)],
+    ['Indoor Asset No.', u => val(u.inAsset)],
+    ['Outdoor Serial No.', u => val(u.outSn)],
+    ['Outdoor Asset No.', u => val(u.outAsset)]
+  ];
+
+  return head + lines.map(([label, pick]) =>
+    `<tr><th colspan="5">${esc(label)}</th>` + unitCells(pick, 'ctr') + '<td></td></tr>'
+  ).join('');
+}
+
+/**
+ * ส่วนที่ 3 — รายการบำรุงรักษาและตรวจสอบ
+ * กริด: [A ข้อ] [B:D รายการ] [E หน่วย/เกณฑ์] [F เครื่อง 1] [G เครื่อง 2] [H หมายเหตุ]
+ */
 function sectionChecklist(form, units) {
-  const head = '<tr><th class="no">ข้อ</th><th class="label">รายการตรวจสอบ</th><th class="unit">หน่วย/เกณฑ์</th>' +
-    units.map(u => `<th class="val">เครื่องที่ ${u.slot}</th>`).join('') +
-    '<th class="note">หมายเหตุ</th></tr>';
+  const unitCells = pick => units.length === 2
+    ? units.map(u => `<td class="ctr">${pick(u)}</td>`).join('')
+    : `<td class="ctr" colspan="2">${pick(units[0])}</td>`;
+
+  const head = '<tr>' +
+    '<th class="ctr">ข้อ</th><th colspan="3">รายการตรวจสอบ</th><th class="ctr">หน่วย/เกณฑ์</th>' +
+    (units.length === 2
+      ? units.map(u => `<th class="ctr">เครื่องที่ ${u.slot}</th>`).join('')
+      : `<th class="ctr" colspan="2">เครื่องที่ ${units[0].slot}</th>`) +
+    '<th>หมายเหตุ</th></tr>';
 
   const body = checklistOf(form).map(item =>
     '<tr>' +
-    `<td class="no">${item.no}</td>` +
-    `<td class="label">${esc(item.label)}</td>` +
-    `<td class="unit">${esc(item.criteria)}</td>` +
-    units.map(u => `<td class="val">${dash(item['val' + u.slot])}</td>`).join('') +
-    `<td class="note">${esc(item.note)}</td>` +
+    `<td class="ctr">${item.no}</td>` +
+    `<td colspan="3">${esc(item.label)}</td>` +
+    `<td class="ctr">${esc(item.criteria)}</td>` +
+    unitCells(u => val(item['val' + u.slot])) +
+    `<td>${val(item.note)}</td>` +
     '</tr>'
   ).join('');
 
-  return '<table class="grid check">' + head + body + '</table>';
+  return head + body;
 }
 
+/**
+ * ส่วนที่ 4 — สรุปผล
+ * กริด: [A:C ป้าย] [D เครื่องที่ N] [E:F ผลประเมิน] [G:H ว่างไว้ให้เขียน]
+ *
+ * แบบฟอร์มไม่มีช่องค่าใช้จ่าย จึงไม่ใส่ลงกระดาษ — ราคายังเก็บอยู่ในระบบตามเดิม
+ */
 function sectionSummary(form, units) {
-  const rows = units.map(u =>
+  return units.map(u =>
     '<tr>' +
-    `<th class="item">เครื่องที่ ${u.slot} — ${esc(u.code)}</th>` +
-    `<td>${dash(form.EquipmentCondition)}</td>` +
-    `<td class="price">${u.price ? esc(Number(u.price).toLocaleString()) + ' บาท' : '–'}</td>` +
+    '<th colspan="3">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
+    `<td class="ctr">เครื่องที่ ${u.slot}</td>` +
+    `<td colspan="2">${val(form.EquipmentCondition)}</td>` +
+    '<td colspan="2"></td>' +
     '</tr>'
   ).join('');
-
-  return '<table class="grid">' + rows + '</table>';
 }
 
+/**
+ * ส่วนที่ 6 — การลงนาม
+ * กริด: [A:E ช่องซ้าย] [F:H ช่องขวา] สองแถวต่อหนึ่งคู่ (ชื่อตำแหน่ง แล้วบรรทัดเซ็น)
+ */
 function sectionSign(form) {
-  // สี่ช่องตามแบบฟอร์ม Rev2026 — ช่องที่ระบบยังไม่ได้เก็บชื่อไว้ เว้นให้เซ็นด้วยมือ
-  const blocks = [
-    ['ผู้ดำเนินการล้างแอร์ (บ./หจก.)', form.CompanyName],
-    ['ผู้ควบคุมงาน (Interlink)', ''],
-    ['ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', form.SupervisorName],
-    ['Approve (Infra)', '']
+  const pairs = [
+    [['ผู้ดำเนินการล้างแอร์ (บ./หจก.)', form.CompanyName],
+     ['ผู้ควบคุมงาน (Interlink)', '']],
+    [['ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', form.SupervisorName],
+     ['Approve (Infra)', '']]
   ];
 
-  return '<table class="grid sign">' +
-    '<tr>' + blocks.slice(0, 2).map(b => `<th>${esc(b[0])}</th>`).join('') + '</tr>' +
-    '<tr>' + blocks.slice(0, 2).map(b => `<td>${signCell(b[1])}</td>`).join('') + '</tr>' +
-    '<tr>' + blocks.slice(2).map(b => `<th>${esc(b[0])}</th>`).join('') + '</tr>' +
-    '<tr>' + blocks.slice(2).map(b => `<td>${signCell(b[1])}</td>`).join('') + '</tr>' +
-    '</table>';
-}
+  const LINE = 'ลงชื่อ ……………………………… วันที่ …../…../……..';
 
-const signCell = name =>
-  `<div class="name">${dash(name)}</div>` +
-  '<div class="line">ลงชื่อ ……………………………… วันที่ …../…../……..</div>';
+  return pairs.map(([left, right]) =>
+    '<tr>' +
+    `<th colspan="5">${esc(left[0])}</th><th colspan="3">${esc(right[0])}</th>` +
+    '</tr><tr class="sign">' +
+    `<td colspan="5"><div class="who">${val(left[1])}</div><div>${LINE}</div></td>` +
+    `<td colspan="3"><div class="who">${val(right[1])}</div><div>${LINE}</div></td>` +
+    '</tr>'
+  ).join('');
+}
 
 /* ==================== ตัวเอกสาร ==================== */
 
@@ -201,84 +230,72 @@ export function buildCleaningDocHtml(form, opts = {}) {
   if (!units.length) throw new Error('เอกสารใบนี้ยังไม่มีข้อมูลเครื่องปรับอากาศ');
 
   const docNo = plainText(form.DocNo) || plainText(form.ID);
-  const fontLink = opts.fontHref
-    ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">`
-    : '';
+  const total = COL_WIDTHS.reduce((a, b) => a + b, 0);
+  const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
 
   return `<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
 <title>${esc(docNo)} — บันทึกผลการล้างเครื่องปรับอากาศ</title>
-${fontLink}
+${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
 </head><body>
-<div class="sheet">
-  <header>
-    <h1>บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)</h1>
-    <div class="docno">เลขที่เอกสาร <strong>${esc(docNo)}</strong></div>
-  </header>
+<div class="sheet"><table><colgroup>${cols}</colgroup><tbody>
+  <tr class="title"><td colspan="8">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)
+    <span class="docno">เลขที่ ${esc(docNo)}</span></td></tr>
 
-  <h2>ส่วนที่ 1 : ข้อมูล Node</h2>
+  ${sectionRow('ส่วนที่ 1 : ข้อมูล Node')}
   ${sectionNode(form, units)}
 
-  <h2>ส่วนที่ 2 : ข้อมูลเครื่อง</h2>
+  ${sectionRow('ส่วนที่ 2 : ข้อมูลเครื่อง')}
   ${sectionUnits(units)}
 
-  <h2>ส่วนที่ 3 : รายการบำรุงรักษาและตรวจสอบ</h2>
+  ${sectionRow('ส่วนที่ 3 : รายการบำรุงรักษาและตรวจสอบ')}
   ${sectionChecklist(form, units)}
 
-  <h2>ส่วนที่ 4 : สรุปผล</h2>
+  ${sectionRow('ส่วนที่ 4 : สรุปผล')}
   ${sectionSummary(form, units)}
 
-  <h2>ส่วนที่ 5 : บันทึกเพิ่มเติม</h2>
-  <div class="note-box">${esc(form.AdditionalNote)}</div>
+  ${sectionRow('ส่วนที่ 5 : บันทึกเพิ่มเติม')}
+  <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
 
-  <h2>ส่วนที่ 6 : การลงนาม</h2>
+  ${sectionRow('ส่วนที่ 6 : การลงนาม')}
   ${sectionSign(form)}
 
-  <footer>อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI /
-  R410A ≈ 120–140 PSI | ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</footer>
-</div>
+  <tr class="ref"><td colspan="8">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) /
+    R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI | ค่าจริงขึ้นกับปริมาณน้ำยา
+    ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</td></tr>
+</tbody></table></div>
 </body></html>`;
 }
 
 /**
  * รูปแบบหน้ากระดาษ
  *
- * คุมให้จบใน 1 หน้า A4 ด้วยขนาดตัวอักษรและระยะขอบที่วัดจากของจริง
- * ใช้ @page ตั้งขอบกระดาษ แทนการพึ่งค่าเริ่มต้นของเบราว์เซอร์ซึ่งต่างกันไป
+ * คุมให้จบใน 1 หน้า A4 เหมือนแบบฟอร์มกระดาษ ซึ่งเป็นข้อกำหนดของเอกสารชุดนี้
+ * ใช้ @page ตั้งขอบกระดาษเอง แทนการพึ่งค่าเริ่มต้นของเบราว์เซอร์ซึ่งต่างกันไป
  */
 const STYLE = `
-@page { size: A4 portrait; margin: 8mm 8mm 6mm; }
+@page { size: A4 portrait; margin: 7mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Sarabun', 'Tahoma', sans-serif; color: #000; }
-.sheet { padding: 4mm; }
-header { text-align: center; margin-bottom: 3mm; }
-h1 { font-size: 13pt; margin: 0 0 1mm; }
-.docno { font-size: 9pt; }
-h2 { font-size: 9.5pt; margin: 2.5mm 0 1mm; padding: 0.8mm 2mm;
-     background: #e8eef6; border-left: 3px solid #1153a1; }
-table.grid { width: 100%; border-collapse: collapse; }
-table.grid th, table.grid td { border: 0.4pt solid #444; padding: 0.8mm 1.5mm;
-     font-size: 8pt; vertical-align: middle; }
-table.grid th { background: #f4f6f9; font-weight: 600; text-align: left; }
-table.units th, table.units td { text-align: center; }
-table.units th.item, table.units td.item { text-align: left; width: 38%; }
-table.units .code { font-size: 7pt; font-weight: 400; color: #333; }
-table.check td.no, table.check th.no { width: 6%; text-align: center; }
-table.check th.label { width: 42%; }
-table.check th.unit, table.check td.unit { width: 13%; text-align: center; }
-table.check th.val, table.check td.val { text-align: center; }
-table.check th.note, table.check td.note { width: 14%; }
-table.grid td.price { text-align: right; white-space: nowrap; }
-.note-box { border: 0.4pt solid #444; min-height: 11mm; padding: 1.5mm; font-size: 8pt;
-     white-space: pre-wrap; }
-table.sign td { height: 13mm; vertical-align: bottom; }
-table.sign .name { font-size: 8pt; margin-bottom: 4mm; }
-table.sign .line { font-size: 8pt; }
-footer { margin-top: 2mm; font-size: 6.5pt; color: #333; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+td, th { border: 0.5pt solid #000; padding: 0.7mm 1.5mm; font-size: 8pt;
+         vertical-align: middle; text-align: left; word-wrap: break-word; }
+th { font-weight: 600; background: #f2f4f7; }
+.ctr, td.ctr, th.ctr { text-align: center; }
+tr.title td { border: none; text-align: center; font-size: 13pt; font-weight: 700;
+              padding-bottom: 2mm; }
+tr.title .docno { display: block; font-size: 8.5pt; font-weight: 400; margin-top: 0.5mm; }
+tr.sec td { background: #dce6f1; font-weight: 700; font-size: 8.5pt; padding: 1mm 1.5mm; }
+th.hd, td.hd { font-weight: 600; background: #f2f4f7; }
+.code { font-size: 6.8pt; font-weight: 400; }
+tr.note td { height: 13mm; vertical-align: top; white-space: pre-wrap; }
+tr.sign td { height: 12mm; vertical-align: bottom; }
+tr.sign .who { margin-bottom: 3.5mm; }
+tr.ref td { border: none; font-size: 6.5pt; padding-top: 1.5mm; }
 @media screen {
   body { background: #e9edf2; padding: 6mm 0; }
-  .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff;
-           box-shadow: 0 1px 6px rgba(0,0,0,.2); padding: 8mm; }
+  .sheet { width: 210mm; margin: 0 auto; background: #fff; padding: 7mm;
+           box-shadow: 0 1px 6px rgba(0,0,0,.2); }
 }
 `;
