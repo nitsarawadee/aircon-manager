@@ -3,7 +3,7 @@ import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd 
 import { addHistoryRaw, getHistory, makeHistoryId, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
 import { closePlanRound } from './plan.js';
-import { buildCleaningPdf, uploadNodeDocs } from '../pdf-bridge.js';
+import { uploadNodeDocs } from '../pdf-bridge.js';
 
 /**
  * ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ
@@ -11,7 +11,7 @@ import { buildCleaningPdf, uploadNodeDocs } from '../pdf-bridge.js';
  * มี 2 ทางที่บันทึกผลล้างได้ และทั้งสองทางปิดงานในแผนได้เหมือนกัน:
  *
  *   1. กรอกฟอร์มในระบบ (saveCleaningForm)
- *      ระบบสร้าง PDF ให้เอง เหมาะกับคนที่กรอกหน้าจอสะดวก
+ *      ระบบประกอบเอกสารให้ดูและปริ้นได้ทุกเมื่อ ไม่ต้องสร้างไฟล์ค้างไว้
  *
  *   2. แนบเอกสารที่เขียนด้วยมือ (uploadNodeDocuments)
  *      ปริ้นฟอร์มเปล่าไปเขียนหน้างาน ถ่ายรูปแล้วแนบกลับ
@@ -416,21 +416,18 @@ export async function saveCleaningForm(ctx, record) {
   // ส่วนการคิดงบจริงใช้ราคารายเครื่องที่ลงในประวัติ
   record.Price = units.reduce((sum, u) => sum + (hasPrice(u.price) ? Number(u.price) : 0), 0) || '';
 
-  // ---------- สร้าง PDF (รอเน็ตได้นาน จึงต้องอยู่นอกล็อก) ----------
-  // พลาดก็ยังบันทึกข้อมูลต่อ ไม่ให้งานทั้งหมดล้มเพราะบริการ PDF ล่ม
-  // แต่ต้องส่งข้อความ error กลับไปบอกผู้ใช้ด้วย ไม่ใช่เงียบหายไป
-  let pdfUrl = '';
-  let pdfFileId = '';
-  let pdfError = '';
-  try {
-    const pdf = await buildCleaningPdf(ctx.env, record);
-    pdfUrl = pdf.url || '';
-    pdfFileId = pdf.fileId || '';
-  } catch (e) {
-    pdfError = String((e && e.message) || e);
-  }
-  record.PdfUrl = pdfUrl;
-  record.PdfFileId = pdfFileId;
+  // ---------- ไม่สร้างไฟล์ตอนบันทึกอีกแล้ว ----------
+  //
+  // เดิมตรงนี้ส่งข้อมูลไป Apps Script ให้ Google สร้าง PDF ซึ่งต้องออกเน็ต
+  // ใช้เวลา 7-8 วินาทีต่อใบ และคิวตันเมื่อมีคนกดบันทึกพร้อมกัน
+  //
+  // ตอนนี้ระบบประกอบเอกสารจากข้อมูลที่บันทึกไว้ได้ทุกเมื่อ (getCleaningDocHtml)
+  // จึงไม่มีเหตุผลต้องสร้างไฟล์ค้างไว้ตั้งแต่ตอนบันทึก การบันทึกเลยเหลือแค่
+  // งานฐานข้อมูล ซึ่งเสร็จในหลักมิลลิวินาที และทำงานได้แม้เน็ตล่ม
+  //
+  // ใบเก่าที่มีลิงก์ Google อยู่แล้ว ไม่ถูกแตะ ยังเปิดได้ตามเดิม
+  record.PdfUrl = '';
+  record.PdfFileId = '';
 
   // ---------- เขียนฐานข้อมูล (ต้องถือล็อก แต่ใช้เวลาสั้นมาก) ----------
   return ctx.withLock(async () => {
@@ -467,7 +464,8 @@ export async function saveCleaningForm(ctx, record) {
       planRound: record.PlanRound,
       date: record.Date,
       technician: record.TechnicianName,
-      docUrl: pdfUrl
+      // ไม่มีไฟล์ค้างไว้แล้ว เอกสารเปิดดูได้จากหน้าแบบฟอร์มเอกสารทุกเมื่อ
+      docUrl: ''
     });
 
     await writeCleaningHistory(ctx, units, {
@@ -475,7 +473,7 @@ export async function saveCleaningForm(ctx, record) {
       technician: record.TechnicianName,
       nodeName: record.NodeName,
       condition: record.EquipmentCondition,
-      docUrl: pdfUrl,
+      docUrl: '',
       planYear: record.PlanYear,
       planRound: record.PlanRound,
       source: 'form'
@@ -484,10 +482,7 @@ export async function saveCleaningForm(ctx, record) {
     await ctx.ss.flush();
 
     return {
-      // รวมเข้าใบเดิมแล้ว ไฟล์ที่เพิ่งสร้างจึงมีข้อมูลแค่เครื่องที่เพิ่งกรอก
-      // ไม่ส่ง url กลับไป เพื่อไม่ให้ผู้ใช้เปิดไฟล์ที่ข้อมูลไม่ครบแล้วเข้าใจผิด
-      pdfUrl: mergedInto ? '' : pdfUrl,
-      pdfError, planClosed, mergedInto,
+      planClosed, mergedInto,
       forms: await getCleaningForms(ctx),
       history: await getHistory(ctx)
     };
@@ -495,57 +490,23 @@ export async function saveCleaningForm(ctx, record) {
 }
 
 /**
- * สร้าง PDF "ตัวอย่าง/ฟอร์มเปล่า" จากข้อมูลที่กรอกอยู่ตอนนี้ (กรอกครบหรือไม่ครบก็ได้)
- * ใช้สำหรับปริ้นฟอร์มไปเขียนด้วยมือหน้างานก่อน แล้วค่อยถ่ายรูปแนบกลับเข้าระบบภายหลัง
- * ไม่บันทึกอะไรลงชีตทั้งสิ้น — สร้างไฟล์แล้วส่ง URL กลับไปเปิด/ปริ้นเท่านั้น
+ * หน้าฟอร์มเปล่าของ Node ที่เลือก สำหรับปริ้นไปเขียนด้วยมือหน้างาน
+ *
+ * เติมข้อมูลเครื่องให้อัตโนมัติ (ชื่อ Node, Serial, Asset, BTU, ยี่ห้อ)
+ * ส่วนช่องที่ต้องวัดหน้างานเว้นว่างไว้ให้เขียนเอง
+ *
+ * ไม่บันทึกอะไรลงฐานข้อมูลทั้งสิ้น และไม่สร้างไฟล์ค้างไว้ที่ไหน
  */
-export async function previewCleaningFormPdf(ctx, record) {
+export async function getCleaningBlankDocHtml(ctx, record) {
   await ctx.requireAccess();
   if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
 
   const payload = { ...(record || {}) };
-  payload.ID = 'ตัวอย่าง' + Date.now();
-  payload.__preview = true; // ให้ไปเก็บในโฟลเดอร์ตัวอย่าง ไม่ปนกับเอกสารจริง
+  payload.DocNo = '(ฟอร์มเปล่า — ยังไม่ได้บันทึก)';
   payload.ChecklistJSON = JSON.stringify(payload.Checklist || []);
 
-  const pdf = await buildCleaningPdf(ctx.env, payload);
-  return { pdfUrl: pdf.url };
-}
-
-/**
- * สร้าง PDF ย้อนหลังให้รายการที่บันทึกไว้แล้วแต่ยังไม่มีไฟล์ PDF
- * (เช่นรายการที่บันทึกตอนบริการ PDF ล่ม) — ไม่ต้องกรอกฟอร์มใหม่
- */
-export async function regenerateCleaningFormPdf(ctx, row) {
-  return ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
-    await ctx.ensureBase();
-
-    const headers = ctx.ss.headers(SHEETS.CLEANFORM);
-    const record = {};
-    headers.forEach((h, i) => {
-      if (!h) return;
-      record[h] = cleanFormValue(ctx.ss.cell(SHEETS.CLEANFORM, row, i + 1), cleanFormColKind(h));
-    });
-    if (!record.ID) throw new Error('ไม่พบข้อมูลของแถวนี้');
-
-    // รายการที่มาจากการแนบเอกสารไม่มีข้อมูลเช็คลิสต์ให้วาด สร้าง PDF ย้อนหลังไม่ได้
-    if (record.Source === 'attach') {
-      throw new Error('รายการนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ จึงสร้าง PDF ใหม่ไม่ได้ — เปิดดูไฟล์ที่แนบไว้ได้จากลิงก์ในตาราง');
-    }
-
-    await ctx.assertRegionAccess(record.Region);
-
-    const pdf = await buildCleaningPdf(ctx.env, record);
-
-    ctx.ss.writeByHeaders(SHEETS.CLEANFORM, row, {
-      PdfUrl: pdf.url || '',
-      PdfFileId: pdf.fileId || ''
-    });
-    await ctx.ss.flush();
-
-    return { pdfUrl: pdf.url, forms: await getCleaningForms(ctx) };
-  });
+  const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
+  return buildCleaningDocHtml(payload, { fontHref: '/vendor/fonts.css' });
 }
 
 /**

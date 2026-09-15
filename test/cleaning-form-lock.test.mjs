@@ -50,16 +50,19 @@ const record = () => ({
   Checklist: []
 });
 
-test('ต้องไม่เรียกบริการ PDF ระหว่างที่ถือล็อกเขียนข้อมูล', async () => {
+test('บันทึกฟอร์มต้องไม่ออกเน็ตเลยสักครั้ง', async () => {
+  // เดิมการบันทึกส่งข้อมูลไปให้ Google สร้าง PDF ซึ่งรอได้นานถึง 2 นาที
+  // และเคยอยู่ในล็อกเขียนข้อมูลด้วย ทำให้ล็อกถูกยกให้คนอื่นกลางคัน
+  // แล้วสองคนเขียนทับกันเงียบๆ
+  //
+  // ตอนนี้ไม่มีการออกเน็ตในเส้นทางนี้แล้ว เพราะเอกสารประกอบจากข้อมูลที่บันทึกไว้
+  // ได้ทุกเมื่อ จึงไม่ต้องสร้างไฟล์ค้างไว้ตั้งแต่ตอนบันทึก
   const db = freshDb();
   const state = trackingState();
 
-  let heldDuringPdf = null;
+  let calls = 0;
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    heldDuringPdf = state.held;             // จุดสำคัญ: ตอนคุยกับเน็ต ถือล็อกอยู่หรือเปล่า
-    throw new Error('จำลองว่าบริการ PDF ล่ม');
-  };
+  globalThis.fetch = async () => { calls++; throw new Error('ห้ามออกเน็ตตอนบันทึกฟอร์ม'); };
 
   try {
     const ctx = new Ctx({ PDF_SERVICE_URL: 'https://example.invalid/pdf' }, state, db);
@@ -69,28 +72,38 @@ test('ต้องไม่เรียกบริการ PDF ระหว่
     globalThis.fetch = realFetch;
   }
 
-  assert.equal(heldDuringPdf, false, 'เรียก PDF ตอนถือล็อกอยู่ — จะทำให้ล็อกถูกยกให้คนอื่นกลางคัน');
-  assert.deepEqual(state.log, ['lock', 'unlock'], 'ต้องถือล็อกรอบเดียว หลังสร้าง PDF เสร็จแล้ว');
+  assert.equal(calls, 0, 'บันทึกฟอร์มไม่ควรคุยกับบริการภายนอกเลย');
+  assert.deepEqual(state.log, ['lock', 'unlock'], 'ต้องถือล็อกรอบเดียวและปล่อยทุกครั้ง');
 });
 
-test('บริการ PDF ล่ม ข้อมูลการล้างต้องยังถูกบันทึกครบ', async () => {
+test('เส้นทางบันทึกฟอร์มต้องไม่ผูกกับบริการ PDF ภายนอกอีก', async () => {
+  // ตรวจที่โครงสร้าง ไม่ใช่แค่ผลลัพธ์ เพื่อกันไม่ให้ใครเผลอต่อกลับเข้าไป
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+  const src = readFileSync(join(ROOT, 'src', 'modules', 'cleaningform.js'), 'utf8');
+  assert.ok(!src.includes('buildCleaningPdf'),
+    'บันทึกฟอร์มต้องไม่เรียก buildCleaningPdf อีก — เอกสารประกอบเองในระบบแล้ว');
+});
+
+test('เน็ตล่มก็ยังบันทึกข้อมูลการล้างได้ครบ', async () => {
   const db = freshDb();
   const state = trackingState();
 
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => { throw new Error('จำลองว่าบริการ PDF ล่ม'); };
+  globalThis.fetch = async () => { throw new Error('จำลองว่าเน็ตล่ม'); };
 
   let result;
   try {
-    const ctx = new Ctx({ PDF_SERVICE_URL: 'https://example.invalid/pdf' }, state, db);
+    const ctx = new Ctx({}, state, db);
     ctx.username = 'tester';
     result = await saveCleaningForm(ctx, record());
   } finally {
     globalThis.fetch = realFetch;
   }
 
-  assert.ok(result.pdfError, 'ต้องส่งข้อความบอกว่า PDF พลาด ไม่ใช่เงียบหายไป');
-  assert.equal(result.pdfUrl, '');
   assert.equal(result.forms.length, 1, 'ใบงานต้องถูกบันทึก');
 
   const ctx2 = new Ctx({}, state, db);

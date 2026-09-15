@@ -757,18 +757,18 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">แบบฟอร์มเอกสาร</h2>
-            <p class="text-sm text-gray-500">กรอกในระบบแล้วให้ระบบสร้าง PDF ให้ หรือปริ้นฟอร์มไปเขียนมือหน้างานแล้วถ่ายรูปแนบกลับก็ได้ — ทั้งสองทางปิดงานในแผนได้เหมือนกัน</p>
+            <p class="text-sm text-gray-500">กรอกในระบบแล้วเปิดเอกสารปริ้นได้เลย หรือปริ้นฟอร์มเปล่าไปเขียนมือหน้างานแล้วถ่ายรูปแนบกลับก็ได้ — ทั้งสองทางปิดงานในแผนได้เหมือนกัน</p>
           </div>
           <div class="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
             <div class="flex flex-wrap gap-2">
-              <button onclick="openPrintFormDialog()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="เลือก Node แล้วได้ไฟล์ PDF ที่เติมชื่อ Node, Serial, Asset, BTU, ยี่ห้อ ให้อัตโนมัติ ส่วนช่องตรวจเช็คเว้นว่างไว้ให้เขียนด้วยมือ">
+              <button onclick="openPrintFormDialog()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="เลือก Node แล้วได้ฟอร์มที่เติมชื่อ Node, Serial, Asset, BTU, ยี่ห้อ ให้อัตโนมัติ ส่วนช่องตรวจเช็คเว้นว่างไว้ให้เขียนด้วยมือ">
                 <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
               </button>
               <button onclick="openAttachDocsDialog(true)" class="bg-white border border-teal-500 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="ถ่ายรูปฟอร์มที่เขียนมือมาแล้ว — แนบไฟล์ เลือกเครื่องที่ล้าง แล้วปิดงานในแผนได้ในขั้นตอนเดียว">
                 <i class="ph ph-paperclip"></i> แนบเอกสาร + ปิดงาน
               </button>
             </div>
-            <button onclick="openCleaningFormModal()" class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end" title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วให้ระบบสร้าง PDF ที่กรอกครบให้">
+            <button onclick="openCleaningFormModal()" class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end" title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
               หรือกรอกฟอร์มในระบบทีละข้อ &rarr;
             </button>
           </div>
@@ -5701,17 +5701,22 @@ const CLEANING_CHECKLIST_ITEMS = [
             return total ? '฿' + total.toLocaleString() : '<span class="text-gray-300">-</span>';
           })()
         }</td>
-        <td class="px-4 py-3">
-          ${f.PdfUrl
-            ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-[#1153a1] hover:underline flex items-center gap-1"><i class="ph ${f.Source === 'attach' ? 'ph-paperclip' : 'ph-file-pdf'}"></i> ${f.Source === 'attach' ? 'เปิดไฟล์ที่แนบ' : 'เปิด PDF'}</a>`
-            : f.Source === 'attach'
-              ? '<span class="text-xs text-gray-400">ไม่มีไฟล์</span>'
-              : `<button onclick="regeneratePdf(${f._row})" class="text-[#f47920] hover:underline flex items-center gap-1 text-xs"><i class="ph ph-arrow-clockwise"></i> สร้าง PDF</button>`}
-        </td>
+        <td class="px-4 py-3 whitespace-nowrap">${
+          // ใบที่กรอกในระบบ ประกอบเอกสารให้ดูได้ทุกเมื่อ จึงไม่ต้องมีไฟล์ค้างไว้
+          // ใบที่แนบเอกสารมา ไม่มีข้อมูลเช็คลิสต์ให้วาด จึงเปิดได้เฉพาะไฟล์ที่แนบ
+          // ใบเก่าที่ยังมีลิงก์ Google ค้างอยู่ ให้เปิดได้ต่อไปควบคู่กัน
+          f.Source === 'attach'
+            ? (f.PdfUrl
+                ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-[#1153a1] hover:underline inline-flex items-center gap-1"><i class="ph ph-paperclip"></i> เปิดไฟล์ที่แนบ</a>`
+                : '<span class="text-xs text-gray-400">ไม่มีไฟล์</span>')
+            : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>` +
+              (f.PdfUrl
+                ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-gray-400 hover:text-[#1153a1] hover:underline text-xs ml-2" title="ไฟล์เดิมที่เคยสร้างไว้บน Google Drive">ไฟล์เดิม</a>`
+                : '')
+        }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
-          ${f.Source === 'attach' ? '' : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
-            class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
-            <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`}
           <button onclick="deleteCleaningFormRow(${f._row})" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
         </td>
       </tr>
@@ -5728,35 +5733,32 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เปิดแท็บ "ก่อน" เรียกเซิร์ฟเวอร์เสมอ เพราะถ้าเปิดหลังจาก await
    * เบราว์เซอร์จะถือว่าไม่ได้เกิดจากการกดปุ่ม แล้วบล็อกป๊อปอัปทิ้ง
    */
-  async function openCleaningDoc(row) {
+  async function openDocWindow(fn, args) {
     const win = window.open('', '_blank');
-    if (!win) { showToast('เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กรุณาอนุญาตป๊อปอัปของเว็บนี้', 'error'); return; }
+    if (!win) { showToast('เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กรุณาอนุญาตป๊อปอัปของเว็บนี้', 'error'); return false; }
     win.document.write('<!doctype html><meta charset="utf-8"><title>กำลังเปิดเอกสาร…</title>' +
                        '<p style="font-family:sans-serif;padding:24px">กำลังเปิดเอกสาร…</p>');
 
     try {
-      const html = await call('getCleaningDocHtml', row);
+      const html = await call(fn, args);
       if (!html) throw new Error('ไม่ได้รับข้อมูลเอกสารกลับมา');
       win.document.open();
       win.document.write(html);
       win.document.close();
+      return true;
     } catch (e) {
-      win.close();
+      win.close();   // call() แสดงข้อความผิดพลาดให้แล้ว ไม่ต้องแจ้งซ้ำ
+      return false;
     }
   }
+
+  /** เปิดเอกสารของใบที่บันทึกไว้แล้ว */
+  const openCleaningDoc = row => openDocWindow('getCleaningDocHtml', row);
   window.openCleaningDoc = openCleaningDoc;
 
-  /** สร้าง PDF ย้อนหลังให้รายการที่บันทึกไว้แล้วแต่ยังไม่มีไฟล์ (ไม่ต้องกรอกฟอร์มใหม่) */
-  async function regeneratePdf(row) {
-    try {
-      const res = await call('regenerateCleaningFormPdf', row);
-      if (!res || !res.pdfUrl) { showToast('สร้าง PDF ไม่สำเร็จ', 'error'); return; }
-      currentCleaningForms = Array.isArray(res.forms) ? res.forms : currentCleaningForms;
-      renderCleaningFormTable();
-      showToast('สร้าง PDF เรียบร้อย');
-      window.open(res.pdfUrl, '_blank');
-    } catch (e) {}
-  }
+  /** เปิดฟอร์มเปล่าของ Node ที่เลือก สำหรับปริ้นไปเขียนด้วยมือ */
+  const openBlankCleaningDoc = record => openDocWindow('getCleaningBlankDocHtml', record);
+  window.openBlankCleaningDoc = openBlankCleaningDoc;
 
   async function deleteCleaningFormRow(row) {
     const confirmed = await showConfirm('ยืนยันการลบบันทึกฟอร์มนี้? (ไฟล์ PDF ใน Drive จะไม่ถูกลบ)');
@@ -5912,7 +5914,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             </div>
             <div class="flex gap-3 justify-end">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-              <button onclick="submitCleaningForm()" id="cf_submitBtn" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm flex items-center gap-2"><i class="ph ph-floppy-disk"></i> ${single ? 'บันทึก ปิดงาน และสร้าง PDF' : 'บันทึกและสร้าง PDF'}</button>
+              <button onclick="submitCleaningForm()" id="cf_submitBtn" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm flex items-center gap-2"><i class="ph ph-floppy-disk"></i> ${single ? 'บันทึกและปิดงาน' : 'บันทึก'}</button>
             </div>
           </div>
         </div>
@@ -6046,7 +6048,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const btn = document.getElementById('cf_submitBtn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง PDF...';
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...';
     try {
       const res = await call('saveCleaningForm', record);
       // ถ้า response ส่งกลับมาเป็น null แปลว่าบันทึกลงชีตไปแล้วแต่ส่งผลลัพธ์กลับไม่ได้
@@ -6061,17 +6063,12 @@ const CLEANING_CHECKLIST_ITEMS = [
       renderCleaningFormTable();
       closeModal();
       const closedMsg = res.planClosed ? ' และปิดงานในแผนแล้ว' : '';
-      if (res.mergedInto) {
-        // รวมเข้ากับใบที่มีอยู่แล้ว เพราะเป็นการไปล้างครั้งเดียวกัน
-        // ไฟล์เดิมถูกล้างไปเพราะมีข้อมูลแค่เครื่องเดียว ต้องบอกให้กดสร้างใหม่
-        showToast('รวมเข้ากับเอกสาร ' + res.mergedInto + ' แล้ว' + closedMsg +
-                  ' — กดปุ่ม "สร้าง PDF" ในตารางเพื่อให้ไฟล์มีครบทั้งสองเครื่อง');
-      } else if (res.pdfUrl) {
-        showToast('บันทึกสำเร็จ' + closedMsg + ' สร้าง PDF เรียบร้อย');
-        window.open(res.pdfUrl, '_blank');
-      } else {
-        showToast('บันทึกข้อมูลสำเร็จ แต่สร้าง PDF ไม่ได้: ' + (res.pdfError || 'ไม่ทราบสาเหตุ') + ' — กดปุ่ม "สร้าง PDF" ในตารางเพื่อลองใหม่ได้', 'error');
-      }
+      // ไม่มีการสร้างไฟล์ตอนบันทึกอีกแล้ว บันทึกจึงเสร็จทันที
+      // เอกสารเปิดดูและปริ้นได้ทุกเมื่อจากปุ่ม "เปิดเอกสาร" ในตาราง
+      showToast(res.mergedInto
+        ? 'รวมเข้ากับเอกสาร ' + res.mergedInto + ' แล้ว' + closedMsg +
+          ' — กด "เปิดเอกสาร" ในตารางเพื่อดูใบที่มีครบทั้งสองเครื่อง'
+        : 'บันทึกสำเร็จ' + closedMsg + ' — กด "เปิดเอกสาร" ในตารางเพื่อดูหรือสั่งปริ้น');
       // ถ้าปิดงานในแผนไปด้วย ให้โหลดแผนกับงบประมาณใหม่ จะได้เห็นผลทันทีโดยไม่ต้องรีเฟรชเอง
       if (res.planClosed) {
         try {
@@ -6086,7 +6083,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     } catch (e) {
       showToast('บันทึกไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
       btn.disabled = false;
-      btn.innerHTML = '<i class="ph ph-floppy-disk"></i> บันทึกและสร้าง PDF';
+      btn.innerHTML = '<i class="ph ph-floppy-disk"></i> บันทึก';
     }
   }
 
@@ -6386,7 +6383,7 @@ const CLEANING_CHECKLIST_ITEMS = [
           <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
             <button onclick="closePrintFormDialog()" class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50">ยกเลิก</button>
             <button onclick="submitPrintForm()" id="pf_btn" class="px-8 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-full hover:bg-[#0e4485] shadow-sm flex items-center gap-2">
-              <i class="ph ph-printer"></i> สร้างไฟล์ PDF
+              <i class="ph ph-printer"></i> เปิดฟอร์มเปล่า
             </button>
           </div>
         </div>
@@ -6548,7 +6545,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (el) el.remove();
   }
 
-  /** สร้าง PDF ฟอร์มเปล่าที่เติมข้อมูลเครื่องให้แล้ว */
+  /** เปิดฟอร์มเปล่าที่เติมข้อมูลเครื่องให้แล้ว สำหรับปริ้นไปเขียนด้วยมือ */
   async function submitPrintForm() {
     const node = cleaningFormNodes.find(n => n.NodeName === pfSelectedNode);
     if (!node) { showToast('กรุณาเลือก Node ก่อน', 'error'); return; }
@@ -6576,27 +6573,16 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const btn = document.getElementById('pf_btn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง...';
-    try {
-      const res = await call('previewCleaningFormPdf', record);
-      if (!res || !res.pdfUrl) throw new Error('สร้าง PDF ไม่สำเร็จ');
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังเปิด...';
 
-      const nodeName = node.NodeName;
+    // เปิดเป็นหน้าเอกสารในแท็บใหม่ ไม่ได้สร้างไฟล์เก็บไว้ที่ไหน
+    // คนใช้กด Ctrl+P ปริ้นลงกระดาษได้เลย หรือจะเลือกบันทึกเป็น PDF ก็ได้
+    const ok = await openBlankCleaningDoc(record);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ph ph-printer"></i> เปิดฟอร์มเปล่า';
+    if (ok) {
       closePrintFormDialog();
-
-      // พยายามเปิดแท็บใหม่ให้เลย แต่ถ้าถูกบล็อกก็ยังมีปุ่มให้กดในหน้าต่างผลลัพธ์
-      window.open(res.pdfUrl, '_blank');
-      showLinkResult({
-        title: 'สร้างฟอร์มเปล่าเรียบร้อย',
-        url: res.pdfUrl,
-        linkText: 'เปิดไฟล์ PDF เพื่อปริ้น',
-        body: 'ไฟล์ของ Node <b>' + esc(nodeName) + '</b> ถูกเก็บไว้ใน Google Drive แล้ว<br>' +
-              'กดปุ่มด้านล่างเพื่อเปิด แล้วกด <b>Ctrl+P</b> เพื่อสั่งปริ้น'
-      });
-    } catch (e) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ph ph-printer"></i> สร้างไฟล์ PDF';
-      showToast('สร้าง PDF ไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
+      showToast('เปิดฟอร์มเปล่าของ Node ' + node.NodeName + ' แล้ว — กด Ctrl+P เพื่อสั่งปริ้น');
     }
   }
 
@@ -7184,20 +7170,11 @@ const CLEANING_CHECKLIST_ITEMS = [
     const btn = document.getElementById('cf_printBtn');
     const oldHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง PDF...';
-    try {
-      const res = await call('previewCleaningFormPdf', record);
-      if (res && res.pdfUrl) {
-        window.open(res.pdfUrl, '_blank');
-      } else {
-        showToast('สร้าง PDF ไม่สำเร็จ', 'error');
-      }
-    } catch (e) {
-      showToast('ปริ้นฟอร์มไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังเปิด...';
+    // ดูตัวอย่างจากสิ่งที่กรอกอยู่ตอนนี้ โดยยังไม่บันทึกอะไรลงระบบ
+    await openBlankCleaningDoc(record);
+    btn.disabled = false;
+    btn.innerHTML = oldHtml;
   }
 
   function computeDuration_(start, end) {

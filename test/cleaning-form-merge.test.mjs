@@ -151,9 +151,8 @@ test('รวมแล้วไฟล์เดิมต้องถูกล้�
   await saveCleaningForm(ctxOf(db), oneUnit(1));
   db.prepare("UPDATE cleaning_forms SET PdfUrl = 'https://example.com/old.pdf'").run();
 
-  const res = await saveCleaningForm(ctxOf(db), oneUnit(2));
+  await saveCleaningForm(ctxOf(db), oneUnit(2));
   assert.equal((await getCleaningForms(ctxOf(db)))[0].PdfUrl, '');
-  assert.equal(res.pdfUrl, '', 'ต้องไม่ส่งลิงก์ไฟล์ที่ข้อมูลไม่ครบกลับไป');
 });
 
 /* ==================== สิ่งที่ต้องไม่รวม ==================== */
