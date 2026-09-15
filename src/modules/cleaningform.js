@@ -150,6 +150,192 @@ function unitsFromRecord(record) {
   });
 }
 
+/* ==================== ช่องเครื่องที่ 1 / 2 ==================== */
+
+/**
+ * เครื่องนี้เป็นเครื่องที่เท่าไหร่ของไซต์ — อ่านจากเลขท้ายรหัส
+ *
+ * ยึดเลขในรหัส ไม่ใช่ลำดับที่เครื่องปรากฏในรายการ เพราะลำดับในรายการมาจาก
+ * ลำดับที่เพิ่มเข้าระบบ ซึ่งไม่รับประกันว่าเรียงตามเลขเครื่อง
+ * (ในข้อมูลจริงมีไซต์หนึ่งคือ BKK-MBI ที่ AIR-2 มาก่อน AIR-1 — ถ้ายึดลำดับ
+ *  ข้อมูลของสองเครื่องนี้จะลงสลับคอลัมน์กันบนเอกสารที่ปริ้นออกมา)
+ *
+ * รหัสที่ไม่ได้ลงท้ายด้วยตัวเลข ให้ถือเป็นเครื่องที่ 1
+ */
+export function unitSlotOf(airCode) {
+  const tail = String(airCode == null ? '' : airCode).trim().split('-').pop();
+  const n = Number(tail);
+  return n === 2 ? 2 : 1;
+}
+
+/** ชื่อคอลัมน์ข้อมูลเครื่องของช่องที่ระบุ */
+const slotCols = slot => ({
+  code: 'AirCode' + slot,
+  price: 'Price' + slot,
+  brand: 'Unit' + slot + '_Brand',
+  btu: 'Unit' + slot + '_BTU',
+  inSn: 'Unit' + slot + '_IndoorSerial',
+  inAsset: 'Unit' + slot + '_IndoorAsset',
+  outSn: 'Unit' + slot + '_OutdoorSerial',
+  outAsset: 'Unit' + slot + '_OutdoorAsset'
+});
+
+/**
+ * ย้ายข้อมูลเครื่องในใบที่ส่งมา ให้ไปอยู่ช่องที่ตรงกับเลขเครื่องจริง
+ *
+ * หน้าเว็บวางเครื่องลงช่องตามลำดับที่มันเห็น ซึ่งส่วนใหญ่ตรงอยู่แล้ว
+ * แต่ฝั่งเซิร์ฟเวอร์ต้องเป็นคนตัดสินอีกชั้น เพื่อให้มีที่ตัดสินใจเรื่องนี้ที่เดียว
+ * ไม่ว่าคำสั่งจะมาจากหน้าไหนก็ได้ผลเหมือนกัน
+ *
+ * คืนค่าเป็น { 1: {...}, 2: {...} } เฉพาะช่องที่มีเครื่องจริง
+ */
+function unitsBySlot(record) {
+  const out = {};
+
+  for (const from of [1, 2]) {
+    const src = slotCols(from);
+    const code = plainText(record[src.code]).trim();
+    if (!code) continue;
+
+    const to = unitSlotOf(code);
+    if (out[to]) {
+      throw new Error('เครื่อง ' + code + ' กับ ' + out[to].code + ' เป็นเครื่องลำดับเดียวกันของไซต์ ' +
+                      'บันทึกในใบเดียวกันไม่ได้');
+    }
+
+    out[to] = {
+      code,
+      price: record[src.price],
+      brand: record[src.brand], btu: record[src.btu],
+      inSn: record[src.inSn], inAsset: record[src.inAsset],
+      outSn: record[src.outSn], outAsset: record[src.outAsset]
+    };
+  }
+
+  return out;
+}
+
+/** ค่าที่จะเขียนลงคอลัมน์ของช่องนั้น */
+function slotPayload(slot, unit) {
+  const c = slotCols(slot);
+  return {
+    [c.code]: unit.code,
+    [c.price]: hasPrice(unit.price) ? Number(unit.price) : '',
+    [c.brand]: plainText(unit.brand), [c.btu]: plainText(unit.btu),
+    [c.inSn]: plainText(unit.inSn), [c.inAsset]: plainText(unit.inAsset),
+    [c.outSn]: plainText(unit.outSn), [c.outAsset]: plainText(unit.outAsset)
+  };
+}
+
+/* ==================== รวมเครื่องที่กรอกทีหลัง เข้าใบเดิม ==================== */
+
+const sameText = (a, b) =>
+  plainText(a).trim().toLowerCase() === plainText(b).trim().toLowerCase();
+
+/**
+ * หาใบของ "การไปล้างครั้งเดียวกัน" ที่บันทึกไว้แล้ว
+ *
+ * ครั้งเดียวกัน = ไซต์เดียวกัน รอบเดียวกัน วันเดียวกัน
+ * ต้องครบทั้งสามอย่าง — ไปล้างคนละวันคือไปคนละครั้ง ซึ่งตามแบบฟอร์มกระดาษ
+ * คือคนละใบ (ใบหนึ่งมีช่องวันที่กับเวลาเข้า-ออกชุดเดียว)
+ *
+ * ไม่รวมกับใบที่มาจากการแนบเอกสาร เพราะใบพวกนั้นไม่มีข้อมูลเช็คลิสต์ให้รวม
+ */
+function findOpenForm(ctx, record) {
+  const year = plainText(record.PlanYear).trim();
+  const round = plainText(record.PlanRound).trim();
+
+  // ใบที่ไม่ได้ผูกกับรอบไหน รวมกันไม่ได้ เพราะไม่มีอะไรบอกว่าเป็นครั้งเดียวกัน
+  if (!year || !round) return null;
+
+  return ctx.ss.objects(SHEETS.CLEANFORM).find(f =>
+    plainText(f.Source) !== 'attach' &&
+    sameText(f.SiteCode, record.SiteCode) &&
+    sameText(f.PlanYear, year) &&
+    sameText(f.PlanRound, round) &&
+    sameText(f.Date, record.Date)
+  ) || null;
+}
+
+/**
+ * เติมเครื่องที่เพิ่งกรอก ลงในใบที่มีอยู่แล้ว
+ *
+ * เขียนเฉพาะช่องที่ยังว่าง ไม่เขียนทับข้อมูลที่กรอกไว้ก่อนหน้า
+ * ถ้าช่องของเครื่องนั้นมีข้อมูลอยู่แล้ว แปลว่ากำลังบันทึกซ้ำ ให้หยุดและบอกเลขใบ
+ * (ในข้อมูลจริงมีใบซ้ำแบบนี้อยู่แล้วหนึ่งคู่ ซึ่งเกิดจากไม่มีด่านนี้)
+ */
+function mergeIntoForm(ctx, existing, record, bySlot) {
+  const row = existing._row;
+  const docNo = plainText(existing.DocNo) || plainText(existing.ID);
+  const payload = {};
+
+  for (const slot of [1, 2]) {
+    const unit = bySlot[slot];
+    if (!unit) continue;
+
+    const taken = plainText(existing[slotCols(slot).code]).trim();
+    if (taken) {
+      throw new Error(
+        'เครื่อง ' + taken + ' ถูกบันทึกไว้ในเอกสาร ' + docNo + ' แล้ว ' +
+        '(ไซต์เดียวกัน รอบเดียวกัน วันเดียวกัน) — ถ้าต้องการแก้ไข ให้ลบใบเดิมก่อน'
+      );
+    }
+    Object.assign(payload, slotPayload(slot, unit));
+  }
+
+  if (!Object.keys(payload).length) return;   // ไม่มีเครื่องใหม่ให้เติม
+
+  // เช็คลิสต์: เอาของเดิมเป็นหลัก แล้วเติมเฉพาะคอลัมน์ของเครื่องที่เพิ่งกรอก
+  payload.ChecklistJSON = JSON.stringify(
+    mergeChecklists(existing.ChecklistJSON, record.Checklist || [], Object.keys(bySlot).map(Number))
+  );
+
+  // ยอดรวมทั้งใบ คิดใหม่จากราคาของทั้งสองช่องหลังรวมแล้ว
+  const p1 = payload.Price1 !== undefined ? payload.Price1 : existing.Price1;
+  const p2 = payload.Price2 !== undefined ? payload.Price2 : existing.Price2;
+  payload.Price = (Number(p1) || 0) + (Number(p2) || 0) || '';
+
+  // ช่องส่วนกลางของใบ เติมให้เฉพาะที่ยังว่างอยู่ ไม่ทับของเดิม
+  for (const col of ['TimeStart', 'TimeEnd', 'TotalTime', 'EquipmentCondition',
+                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
+    if (!plainText(existing[col]).trim() && plainText(record[col]).trim()) {
+      payload[col] = record[col];
+    }
+  }
+
+  // ไฟล์เดิมมีข้อมูลแค่เครื่องเดียว พอรวมแล้วจึงไม่ตรงกับใบอีกต่อไป
+  // ล้างทิ้งแล้วให้กดสร้างใหม่ ดีกว่าเก็บไฟล์ที่ข้อมูลไม่ครบไว้โดยไม่มีใครรู้
+  payload.PdfUrl = '';
+  payload.PdfFileId = '';
+
+  ctx.ss.writeByHeaders(SHEETS.CLEANFORM, row, payload);
+}
+
+/** รวมเช็คลิสต์สองชุด โดยหยิบเฉพาะคอลัมน์ของช่องที่ระบุมาจากชุดใหม่ */
+function mergeChecklists(existingJson, incoming, slots) {
+  let base = [];
+  try { base = JSON.parse(existingJson || '[]'); } catch { base = []; }
+  if (!Array.isArray(base)) base = [];
+
+  const byNo = new Map(base.map(item => [String(item && item.no), { ...item }]));
+
+  for (const item of incoming) {
+    const key = String(item && item.no);
+    const target = byNo.get(key) || { no: item.no, label: item.label, val1: '', val2: '', note: '' };
+
+    for (const slot of slots) {
+      const col = 'val' + slot;
+      if (item[col] !== undefined && item[col] !== '') target[col] = item[col];
+    }
+    // หมายเหตุเป็นของทั้งแถว เติมให้เฉพาะตอนที่ยังว่าง
+    if (!plainText(target.note).trim() && plainText(item.note).trim()) target.note = item.note;
+
+    byNo.set(key, target);
+  }
+
+  return [...byNo.values()];
+}
+
 /* ==================== อ่าน / บันทึกฟอร์ม ==================== */
 
 export async function getCleaningForms(ctx, airCode) {
@@ -211,6 +397,14 @@ export async function saveCleaningForm(ctx, record) {
   if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
   await ctx.assertRegionAccess(record.Region);
 
+  // จัดเครื่องลงช่องตามเลขเครื่องจริง ก่อนทำอย่างอื่นทั้งหมด
+  const bySlot = unitsBySlot(record);
+  for (const slot of [1, 2]) {
+    Object.assign(record, bySlot[slot]
+      ? slotPayload(slot, bySlot[slot])
+      : slotPayload(slot, { code: '', price: '' }));
+  }
+
   const units = unitsFromRecord(record);
 
   record.ID = 'CF' + Date.now();
@@ -242,12 +436,28 @@ export async function saveCleaningForm(ctx, record) {
   return ctx.withLock(async () => {
     await ctx.ensureBase();
 
-    // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
-    record.DocType = 'cleaning';
-    record.DocNo = nextDocNo(ctx, 'ล้างแอร์', record.Date);
+    // ---------- ใบเดิมของไซต์นี้ รอบนี้ วันเดียวกัน มีอยู่แล้วหรือยัง ----------
+    //
+    // เอกสารหนึ่งใบ = การไปล้างหนึ่งครั้ง ซึ่งครอบคลุมเครื่องในไซต์ได้ถึงสองตัว
+    // ช่างกรอกทีละเครื่องได้ แต่ต้องรวมลงใบเดียวกัน ไม่ใช่งอกใบใหม่ทุกครั้งที่กรอก
+    // (ในข้อมูลจริงมีอยู่แล้วหลายคู่ที่ควรเป็นใบเดียวแต่กลายเป็นสองใบ)
+    //
+    // ยึด "วันเดียวกัน" เป็นเงื่อนไขด้วย เพราะถ้าไปล้างคนละวันคือไปคนละครั้ง
+    // ซึ่งตามแบบฟอร์มกระดาษคือคนละใบ (ใบหนึ่งมีช่องวันที่และเวลาเข้า-ออกชุดเดียว)
+    const existing = findOpenForm(ctx, record);
+    let mergedInto = '';
 
-    const headers = ctx.ss.headers(SHEETS.CLEANFORM);
-    ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
+    if (existing) {
+      mergeIntoForm(ctx, existing, record, bySlot);
+      mergedInto = plainText(existing.DocNo) || plainText(existing.ID);
+    } else {
+      // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+      record.DocType = 'cleaning';
+      record.DocNo = nextDocNo(ctx, 'ล้างแอร์', record.Date);
+
+      const headers = ctx.ss.headers(SHEETS.CLEANFORM);
+      ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
+    }
 
     // ---------- ปิดงานในแผนล้างแอร์ (เฉพาะกรณีที่รู้ว่าเป็นรอบไหน) ----------
     // กรอกจากหน้าแผน = รู้ปีและรอบ จึงปิดงานให้ได้เลย ทั้ง 1 และ 2 เครื่อง
@@ -274,7 +484,10 @@ export async function saveCleaningForm(ctx, record) {
     await ctx.ss.flush();
 
     return {
-      pdfUrl, pdfError, planClosed,
+      // รวมเข้าใบเดิมแล้ว ไฟล์ที่เพิ่งสร้างจึงมีข้อมูลแค่เครื่องที่เพิ่งกรอก
+      // ไม่ส่ง url กลับไป เพื่อไม่ให้ผู้ใช้เปิดไฟล์ที่ข้อมูลไม่ครบแล้วเข้าใจผิด
+      pdfUrl: mergedInto ? '' : pdfUrl,
+      pdfError, planClosed, mergedInto,
       forms: await getCleaningForms(ctx),
       history: await getHistory(ctx)
     };

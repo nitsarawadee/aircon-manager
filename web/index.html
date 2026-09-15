@@ -6031,7 +6031,12 @@ const CLEANING_CHECKLIST_ITEMS = [
       renderCleaningFormTable();
       closeModal();
       const closedMsg = res.planClosed ? ' และปิดงานในแผนแล้ว' : '';
-      if (res.pdfUrl) {
+      if (res.mergedInto) {
+        // รวมเข้ากับใบที่มีอยู่แล้ว เพราะเป็นการไปล้างครั้งเดียวกัน
+        // ไฟล์เดิมถูกล้างไปเพราะมีข้อมูลแค่เครื่องเดียว ต้องบอกให้กดสร้างใหม่
+        showToast('รวมเข้ากับเอกสาร ' + res.mergedInto + ' แล้ว' + closedMsg +
+                  ' — กดปุ่ม "สร้าง PDF" ในตารางเพื่อให้ไฟล์มีครบทั้งสองเครื่อง');
+      } else if (res.pdfUrl) {
         showToast('บันทึกสำเร็จ' + closedMsg + ' สร้าง PDF เรียบร้อย');
         window.open(res.pdfUrl, '_blank');
       } else {
