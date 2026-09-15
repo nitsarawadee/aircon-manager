@@ -23,6 +23,8 @@ import { createReadStream, existsSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
+
+import { savePhoto, removePhoto, removeDocPhotos, readDocPhotos } from './photos.js';
 import { webcrypto } from 'node:crypto';
 
 // Node รุ่นเก่ากว่า 20 ยังไม่มี crypto เป็นตัวแปรกลาง แต่โค้ดส่วนกลางใช้ crypto.subtle
@@ -55,6 +57,7 @@ function dataPaths(env) {
   return {
     db: env.DB_PATH || join(dir, 'aircon.db'),
     backups: env.BACKUP_DIR || join(dir, 'backups'),
+    photos: env.PHOTO_DIR || dir,   // รูปถ่ายอยู่ใต้ <dir>/photos อีกชั้น
     // ค่าเริ่มต้นยังเป็นไฟล์เดิมที่ราก เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
     sessions: env.SESSION_PATH || join(ROOT, '.sessions.json')
   };
@@ -259,6 +262,23 @@ if (useSqlite) {
 }
 
 /**
+ * ตัวเก็บรูปถ่ายประกอบเอกสาร ที่ส่งเข้าไปให้ src/ ใช้
+ *
+ * src/ ห้ามแตะระบบไฟล์เอง จึงได้รับเป็นชุดฟังก์ชันแบบนี้แทน
+ * เหมือนที่ฐานข้อมูลถูกเปิดที่นี่แล้วส่งเข้าไป
+ *
+ * ฝั่ง Cloudflare ไม่ส่งตัวนี้เข้าไป ระบบจึงยังทำงานได้ครบ แค่แนบรูปไม่ได้
+ * ซึ่งถูกต้อง เพราะที่นั่นไม่มีดิสก์ให้เขียน
+ */
+const photoRoot = resolve(ROOT, PATHS.photos);
+const photos = {
+  save: (docNo, unitSlot, index, dataUrl) => savePhoto(photoRoot, docNo, unitSlot, index, dataUrl),
+  remove: (docNo, unitSlot, index) => removePhoto(photoRoot, docNo, unitSlot, index),
+  removeAll: docNo => removeDocPhotos(photoRoot, docNo),
+  readAll: docNo => readDocPhotos(photoRoot, docNo)
+};
+
+/**
  * สำรองฐานข้อมูลอัตโนมัติ — ตอนเปิดเซิร์ฟเวอร์ครั้งหนึ่ง แล้วทุกวัน
  *
  * ก่อนหน้านี้สำรองเฉพาะตอนรันสคริปต์บำรุงรักษา ซึ่งนานๆ ครั้ง
@@ -310,7 +330,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state, db }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };

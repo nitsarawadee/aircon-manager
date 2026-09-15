@@ -5717,6 +5717,9 @@ const CLEANING_CHECKLIST_ITEMS = [
                 : '')
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
+          ${f.Source === 'attach' ? '' : `<button onclick="openPhotoModal(${f._row})" title="แนบรูปถ่ายประกอบเอกสาร"
+            class="text-slate-600 hover:text-white hover:bg-slate-600 px-2.5 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
+            <i class="ph ph-camera"></i> รูปถ่าย</button>`}
           <button onclick="deleteCleaningFormRow(${f._row})" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
         </td>
       </tr>
@@ -5751,6 +5754,157 @@ const CLEANING_CHECKLIST_ITEMS = [
       return false;
     }
   }
+
+  /* ==================== รูปถ่ายประกอบเอกสาร ==================== */
+
+  /**
+   * คำบรรยายใต้กรอบรูปทั้ง 9 ช่อง ตรงกับที่พิมพ์อยู่บนเอกสาร
+   * เรียงซ้ายไปขวา บนลงล่าง เหมือนหน้ารูปในแบบฟอร์ม
+   */
+  const PHOTO_CAPTIONS = [
+    'รูปก่อนล้าง', 'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง',
+    'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง', 'รูปหลังดำเนินการล้าง',
+    'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
+  ];
+
+  /** ใบที่กำลังแนบรูปอยู่ และเครื่องที่เลือกดูอยู่ */
+  let photoCtx = null;
+
+  /**
+   * ย่อรูปในเบราว์เซอร์ก่อนส่งขึ้นเซิร์ฟเวอร์
+   *
+   * รูปจากมือถือใบละ 3-6 MB ถ้าส่งดิบๆ 18 รูปต่อเอกสาร พื้นที่จะโตปีละหลายสิบ GB
+   * ย่อเหลือด้านยาว 1600px แล้วได้ราว 200-400 KB ซึ่งยังอ่านค่าที่มิเตอร์ออก
+   *
+   * ย่อที่เครื่องผู้ใช้ ไม่ใช่ที่เซิร์ฟเวอร์ เพราะประหยัดทั้งเน็ตตอนอัปโหลด
+   * และไม่ต้องลงไลบรารีประมวลผลรูปฝั่งเซิร์ฟเวอร์ ซึ่งขัดกับกติกาที่ไม่พึ่ง npm
+   */
+  async function shrinkImage(file, maxEdge = 1600, quality = 0.82) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    bitmap.close && bitmap.close();
+
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
+  async function openPhotoModal(row) {
+    const form = (currentCleaningForms || []).find(f => f._row === row);
+    if (!form) { showToast('ไม่พบเอกสารใบนี้', 'error'); return; }
+
+    const units = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
+    if (!units.length) { showToast('ใบนี้ยังไม่มีข้อมูลเครื่อง', 'error'); return; }
+
+    let have = [];
+    try { have = (await call('getCleaningPhotoIndex', row)) || []; } catch (e) { return; }
+
+    photoCtx = { row, form, units, slot: units[0], have };
+    renderPhotoModal();
+  }
+  window.openPhotoModal = openPhotoModal;
+
+  function renderPhotoModal() {
+    const { form, units, slot, have } = photoCtx;
+    const docNo = displayDocNo(form);
+
+    const tabs = units.map(n => `
+      <button onclick="switchPhotoUnit(${n})" class="px-4 py-2 text-sm font-medium border-b-2 transition ${
+        n === slot ? 'border-[#1153a1] text-[#1153a1]' : 'border-transparent text-gray-400 hover:text-gray-600'}">
+        เครื่องที่ ${n} <span class="text-[11px]">${esc(form['AirCode' + n])}</span>
+      </button>`).join('');
+
+    const cells = PHOTO_CAPTIONS.map((cap, i) => {
+      const idx = i + 1;
+      const filled = have.includes(slot + '-' + idx);
+      return `
+        <div class="border rounded-lg p-2 ${filled ? 'border-emerald-300 bg-emerald-50/40' : 'border-dashed border-gray-300'}">
+          <div class="aspect-[4/3] rounded bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
+            ${filled
+              ? '<i class="ph-fill ph-image text-3xl text-emerald-500"></i>'
+              : '<i class="ph ph-camera text-2xl text-gray-300"></i>'}
+          </div>
+          <div class="text-[11px] text-gray-600 mt-1.5 leading-tight min-h-[2.2em]">${esc(cap)}</div>
+          <div class="flex gap-1 mt-1">
+            <button onclick="pickPhoto(${idx})" class="flex-1 text-[11px] px-2 py-1 rounded border border-[#1153a1] text-[#1153a1] hover:bg-[#1153a1] hover:text-white transition">
+              ${filled ? 'เปลี่ยนรูป' : 'เลือกรูป'}</button>
+            ${filled ? `<button onclick="removePhoto(${idx})" class="text-[11px] px-2 py-1 rounded border border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500 transition">ลบ</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative z-10 max-h-[90vh] flex flex-col">
+          <div class="px-6 py-4 border-b border-gray-100">
+            <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+              <i class="ph ph-camera text-[#1153a1]"></i> รูปถ่ายประกอบเอกสาร ${esc(docNo)}
+            </h3>
+            <p class="text-xs text-gray-500 mt-0.5">${esc(form.NodeName)} — รูปจะไปอยู่ในหน้ารูปภาพของเอกสารเมื่อสั่งปริ้น</p>
+          </div>
+          <div class="px-6 pt-3 border-b border-gray-200 flex gap-1">${tabs}</div>
+          <div class="px-6 py-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
+          <div class="px-6 py-3 border-t border-gray-100 flex justify-between items-center">
+            <span class="text-xs text-gray-500" id="ph_status">แนบแล้ว ${have.filter(k => k.startsWith(slot + '-')).length} จาก 9 ช่อง</span>
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg">ปิด</button>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="ph_file" accept="image/*" class="hidden">`;
+  }
+
+  function switchPhotoUnit(slot) {
+    photoCtx.slot = slot;
+    renderPhotoModal();
+  }
+  window.switchPhotoUnit = switchPhotoUnit;
+
+  /** เลือกไฟล์ ย่อ แล้วอัปโหลดเข้าช่องที่ระบุ */
+  function pickPhoto(index) {
+    const input = document.getElementById('ph_file');
+    input.value = '';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('ph_status');
+      if (status) status.textContent = 'กำลังย่อรูปและอัปโหลด...';
+
+      try {
+        const dataUrl = await shrinkImage(file);
+        const res = await call('saveCleaningPhoto', {
+          row: photoCtx.row, unitSlot: photoCtx.slot, index, dataUrl
+        });
+        photoCtx.have = (res && res.photos) || photoCtx.have;
+        renderPhotoModal();
+        showToast('แนบรูปเรียบร้อย (' + Math.round((res.bytes || 0) / 1024) + ' KB)');
+      } catch (e) {
+        renderPhotoModal();
+      }
+    };
+    input.click();
+  }
+  window.pickPhoto = pickPhoto;
+
+  async function removePhoto(index) {
+    const ok = await showConfirm('ลบรูปในช่อง "' + PHOTO_CAPTIONS[index - 1] + '" ใช่หรือไม่?', 'ลบรูป');
+    if (!ok) return;
+    try {
+      const res = await call('deleteCleaningPhoto', {
+        row: photoCtx.row, unitSlot: photoCtx.slot, index
+      });
+      photoCtx.have = (res && res.photos) || [];
+      renderPhotoModal();
+      showToast('ลบรูปแล้ว');
+    } catch (e) {}
+  }
+  window.removePhoto = removePhoto;
 
   /** เปิดเอกสารของใบที่บันทึกไว้แล้ว */
   const openCleaningDoc = row => openDocWindow('getCleaningDocHtml', row);

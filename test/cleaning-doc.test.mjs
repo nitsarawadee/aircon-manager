@@ -195,3 +195,53 @@ test('ความกว้างคอลัมน์ตรงตามสั�
   assert.ok(widths[0] < widths[1], 'คอลัมน์เลขข้อต้องแคบที่สุด');
   assert.ok(widths[7] > widths[6], 'คอลัมน์หมายเหตุต้องกว้างที่สุด');
 });
+
+/* ==================== หน้ารูปภาพ ==================== */
+
+test('มีหน้ารูปภาพหนึ่งหน้าต่อหนึ่งเครื่อง', () => {
+  const two = buildCleaningDocHtml(baseForm());
+  assert.equal((two.match(/class="sheet photos"/g) || []).length, 2, 'ล้างสองเครื่อง = สองหน้ารูป');
+
+  const one = buildCleaningDocHtml(withoutUnit(1));
+  assert.equal((one.match(/class="sheet photos"/g) || []).length, 1, 'ล้างเครื่องเดียว = หน้ารูปเดียว');
+  assert.ok(one.includes('เครื่องที่ 2 (AIR 2)'), 'หัวหน้ารูปต้องบอกเลขเครื่องจริง');
+});
+
+test('หน้ารูปมี 9 ช่อง พร้อมคำบรรยายตามแบบฟอร์ม', () => {
+  const html = buildCleaningDocHtml(withoutUnit(2));
+  for (const cap of ['รูปก่อนล้าง', 'รูปหลังดำเนินการล้าง',
+                     'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า',
+                     'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)']) {
+    assert.ok(html.includes(cap), 'ขาดคำบรรยาย ' + cap);
+  }
+  assert.equal((html.match(/class="pic"/g) || []).length, 9);
+});
+
+test('ช่องที่ยังไม่มีรูป พิมพ์ออกมาเป็นกรอบเปล่าให้ติดรูปเอง', () => {
+  const html = buildCleaningDocHtml(withoutUnit(2));
+  assert.equal((html.match(/class="empty"/g) || []).length, 9);
+  assert.ok(!html.includes('<img src="data:'));
+});
+
+test('รูปที่แนบไว้ถูกฝังลงในเอกสาร ไม่ใช่ลิงก์ไปที่ไฟล์', () => {
+  // ฝังลงไปเลย จึงไม่มีที่อยู่ให้ใครเปิดดูรูปโดยไม่ผ่านการตรวจสิทธิ์
+  const photos = { '1-1': 'data:image/jpeg;base64,AAAA', '1-9': 'data:image/png;base64,BBBB' };
+  const html = buildCleaningDocHtml(withoutUnit(2), { photos });
+
+  assert.ok(html.includes('src="data:image/jpeg;base64,AAAA"'));
+  assert.ok(html.includes('src="data:image/png;base64,BBBB"'));
+  assert.equal((html.match(/class="empty"/g) || []).length, 7, 'อีก 7 ช่องยังเป็นกรอบเปล่า');
+});
+
+test('รูปของเครื่องหนึ่ง ต้องไม่ไปโผล่ในหน้าของอีกเครื่อง', () => {
+  const photos = { '1-1': 'data:image/jpeg;base64,ONE', '2-1': 'data:image/jpeg;base64,TWO' };
+  const html = buildCleaningDocHtml(baseForm(), { photos });
+
+  const pages = html.split('class="sheet photos"');
+  assert.ok(pages[1].includes('ONE') && !pages[1].includes('TWO'), 'หน้าเครื่องที่ 1 ต้องมีแต่รูปของตัวเอง');
+  assert.ok(pages[2].includes('TWO') && !pages[2].includes('ONE'), 'หน้าเครื่องที่ 2 ต้องมีแต่รูปของตัวเอง');
+});
+
+test('หน้ารูปขึ้นหน้าใหม่เสมอ ไม่ต่อท้ายหน้าแรก', () => {
+  assert.ok(buildCleaningDocHtml(baseForm()).includes('page-break-before: always'));
+});

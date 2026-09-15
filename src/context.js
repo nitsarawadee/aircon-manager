@@ -35,11 +35,15 @@ export class Ctx {
    *   ทั้งสองตัวมีเมธอดชื่อเดียวกัน โค้ดตรงนี้จึงไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
    * @param {Object} [db]  ฐานข้อมูล SQLite ที่เปิดไว้แล้ว ส่งเข้ามาจาก platform/
    *   src/ ห้ามเปิดไฟล์เอง จึงต้องรับเข้ามาแบบนี้
+   * @param {Object} [photos]  ตัวเก็บรูปถ่ายประกอบเอกสาร ส่งเข้ามาจาก platform/
+   *   ด้วยเหตุผลเดียวกับ db คือ src/ ห้ามแตะระบบไฟล์เอง
+   *   ไม่ส่งมา (เช่นตอนรันบน Cloudflare) = ระบบยังทำงานได้ แค่แนบรูปไม่ได้
    */
-  constructor(env, state, db) {
+  constructor(env, state, db, photos) {
     this.env = env;
     this.state = state;
     this.db = db || null;
+    this.photos = photos || null;
     this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite หรือ Google Sheets)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ

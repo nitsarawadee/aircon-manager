@@ -221,6 +221,53 @@ function sectionSign(form) {
   ).join('');
 }
 
+/* ==================== หน้ารูปภาพ ==================== */
+
+/**
+ * คำบรรยายใต้กรอบรูปทั้ง 9 ช่อง เรียงซ้ายไปขวา บนลงล่าง
+ * ตรงตามชีต "รูปภาพ_เครื่องที่ 1" และ "เครื่องที่ 2" ในแบบฟอร์ม
+ */
+const PHOTO_CAPTIONS = [
+  'รูปก่อนล้าง', 'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง',
+  'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง', 'รูปหลังดำเนินการล้าง',
+  'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
+];
+
+/**
+ * หน้ารูปภาพของเครื่องหนึ่งตัว — ตาราง 3x3 คำบรรยายอยู่ใต้กรอบ
+ *
+ * ช่องที่ยังไม่มีรูปพิมพ์ออกมาเป็นกรอบเปล่า เพื่อให้ปริ้นไปติดรูปด้วยมือได้
+ * เหมือนแบบฟอร์มกระดาษ ไม่ใช่หายไปทั้งช่อง
+ *
+ * @param {Object} unit  เครื่องที่จะทำหน้าให้
+ * @param {Object} form
+ * @param {Object} photos  รูปที่มีแล้ว คีย์เป็น "<เครื่อง>-<ช่อง>" ค่าเป็น data URL
+ */
+function photoPage(unit, form, photos) {
+  const cell = i => {
+    const src = photos[unit.slot + '-' + i];
+    return '<td class="pic">' +
+      (src ? `<img src="${src}" alt="">` : '<div class="empty">วางรูปในกรอบนี้</div>') +
+      `<div class="cap">${esc(PHOTO_CAPTIONS[i - 1])}</div></td>`;
+  };
+
+  const rows = [];
+  for (let r = 0; r < 3; r++) {
+    rows.push('<tr>' + [1, 2, 3].map(c => cell(r * 3 + c)).join('') + '</tr>');
+  }
+
+  return `<div class="sheet photos">
+  <table class="head"><tbody><tr>
+    <th>Node / รหัส Node</th>
+    <td>${val([plainText(form.NodeName), plainText(form.SiteCode)].filter(Boolean).join(' / '))}</td>
+    <th>วันที่ (DD/MM/YYYY)</th><td>${val(formatDate(form.Date))}</td>
+  </tr></tbody></table>
+  <h2 class="photo-title">ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ —
+    เครื่องที่ ${unit.slot} (AIR ${unit.slot}) ${val(unit.code)}</h2>
+  <table class="grid3"><tbody>${rows.join('')}</tbody></table>
+</div>`;
+}
+
 /* ==================== ตัวเอกสาร ==================== */
 
 /**
@@ -275,6 +322,7 @@ ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
     R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI | ค่าจริงขึ้นกับปริมาณน้ำยา
     ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</td></tr>
 </tbody></table></div>
+${units.map(u => photoPage(u, form, opts.photos || {})).join('\n')}
 </body></html>`;
 }
 
@@ -328,9 +376,23 @@ tr.sign td { height: 12mm; vertical-align: bottom; }
 tr.sign .who { margin-bottom: 3.5mm; }
 tr.ref td { background: #F2F2F2; font-size: 6.5pt; }
 
+/* ---------- หน้ารูปภาพ หน้าละหนึ่งเครื่อง ---------- */
+.sheet.photos { page-break-before: always; }
+table.head { margin-bottom: 2mm; }
+h2.photo-title { font-size: 11pt; text-align: center; margin: 0 0 2.5mm; }
+table.grid3 { width: 100%; border-collapse: separate; border-spacing: 2mm; table-layout: fixed; }
+table.grid3 td.pic { width: 33.33%; border: none; padding: 0; vertical-align: top; }
+table.grid3 img { display: block; width: 100%; height: 62mm; object-fit: cover;
+                  border: 0.5pt solid #000; }
+table.grid3 .empty { height: 62mm; border: 0.5pt dashed #999; display: flex;
+                     align-items: center; justify-content: center;
+                     color: #aaa; font-size: 8pt; }
+table.grid3 .cap { text-align: center; font-size: 7.5pt; margin-top: 1mm;
+                   min-height: 7mm; }
+
 @media screen {
   body { background: #e9edf2; padding: 6mm 0; }
-  .sheet { width: 210mm; margin: 0 auto; background: #fff; padding: 7mm;
+  .sheet { width: 210mm; margin: 0 auto 6mm; background: #fff; padding: 7mm;
            box-shadow: 0 1px 6px rgba(0,0,0,.2); }
 }
 `;

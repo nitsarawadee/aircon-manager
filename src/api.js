@@ -14,7 +14,8 @@ import {
 } from './modules/users.js';
 import {
   getCleaningFormNodes, getCleaningForms, saveCleaningForm, deleteCleaningForm,
-  uploadNodeDocuments, getCleaningDocHtml, getCleaningBlankDocHtml
+  uploadNodeDocuments, getCleaningDocHtml, getCleaningBlankDocHtml,
+  saveCleaningPhoto, deleteCleaningPhoto, getCleaningPhotoIndex
 } from './modules/cleaningform.js';
 
 /**
@@ -88,6 +89,9 @@ const API_FUNCTIONS = {
   deleteCleaningForm,
   getCleaningDocHtml,
   getCleaningBlankDocHtml,
+  saveCleaningPhoto,
+  deleteCleaningPhoto,
+  getCleaningPhotoIndex,
   uploadNodeDocuments
 };
 
@@ -114,7 +118,7 @@ export function isApiPath(pathname) {
  * @param {Object}  [opts.db]      ฐานข้อมูล SQLite ที่เปิดไว้แล้ว (ฝั่ง Node เท่านั้น)
  * @returns {Promise<{status: number, payload: Object}>}
  */
-export async function handleApi({ pathname, body, env, state, db }) {
+export async function handleApi({ pathname, body, env, state, db, photos }) {
   const isPublic = pathname === '/api/public';
   const fnName = String((body && body.fn) || '');
   const args = Array.isArray(body && body.args) ? body.args : [];
@@ -125,7 +129,7 @@ export async function handleApi({ pathname, body, env, state, db }) {
   }
   const fn = table[fnName];
 
-  const ctx = new Ctx(env, state, db);
+  const ctx = new Ctx(env, state, db, photos);
 
   try {
     if (!isPublic) {

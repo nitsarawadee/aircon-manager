@@ -543,7 +543,90 @@ export async function getCleaningDocHtml(ctx, row) {
 
   const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
   // ฟอนต์และโลโก้เสิร์ฟจากเครื่องเราเอง ไม่ได้ดึงจากอินเทอร์เน็ต
-  return buildCleaningDocHtml(form, DOC_ASSETS);
+  // รูปถ่ายฝังลงไปในหน้าเลย จึงไม่มีที่อยู่ให้ใครเปิดดูโดยไม่ผ่านการตรวจสิทธิ์
+  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const photos = ctx.photos ? ctx.photos.readAll(docNo) : {};
+  return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos });
+}
+
+/* ==================== รูปถ่ายประกอบเอกสาร ==================== */
+
+/** หาใบเอกสารจากเลขแถว พร้อมตรวจสิทธิ์ภูมิภาค */
+async function formForPhotos(ctx, row) {
+  await ctx.ensureBase();
+  const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+  await ctx.assertRegionAccess(form.Region);
+
+  if (plainText(form.Source) === 'attach') {
+    throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ จึงแนบรูปเพิ่มไม่ได้');
+  }
+
+  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  if (!docNo) throw new Error('เอกสารใบนี้ยังไม่มีเลขที่ จึงเก็บรูปไม่ได้');
+
+  // ต้องมีเครื่องอยู่ในช่องนั้นจริง ไม่งั้นรูปจะไปอยู่กับเครื่องที่ไม่ได้ล้าง
+  return { form, docNo };
+}
+
+/** ที่เก็บรูปพร้อมใช้งานหรือไม่ — ฝั่งที่ไม่มีดิสก์ (Cloudflare) จะไม่มี */
+function requirePhotoStore(ctx) {
+  if (!ctx.photos) {
+    throw new Error('ระบบที่รันอยู่ตอนนี้ไม่รองรับการเก็บรูป (ไม่มีที่เก็บไฟล์)');
+  }
+  return ctx.photos;
+}
+
+/**
+ * แนบรูปหนึ่งช่องของเครื่องหนึ่งตัว
+ *
+ * หน้าเว็บย่อรูปให้เล็กลงก่อนส่งมาแล้ว ที่นี่เพียงตรวจว่าช่องที่ระบุมีเครื่องอยู่จริง
+ * แล้วส่งต่อให้ชั้น platform เขียนลงดิสก์
+ *
+ * @param {Object} payload { row, unitSlot, index, dataUrl }
+ */
+export async function saveCleaningPhoto(ctx, payload) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('cleaningform');
+    const store = requirePhotoStore(ctx);
+
+    const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
+    const slot = Number(payload.unitSlot);
+
+    if (!plainText(form['AirCode' + slot]).trim()) {
+      throw new Error('ใบนี้ยังไม่มีข้อมูลเครื่องที่ ' + slot + ' จึงแนบรูปให้เครื่องนั้นไม่ได้');
+    }
+
+    const saved = store.save(docNo, slot, payload.index, payload.dataUrl);
+    return { ok: true, bytes: saved.bytes, photos: photoIndexOf(store, docNo) };
+  });
+}
+
+/** ลบรูปของช่องที่ระบุ */
+export async function deleteCleaningPhoto(ctx, payload) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('cleaningform');
+    const store = requirePhotoStore(ctx);
+
+    const { docNo } = await formForPhotos(ctx, payload && payload.row);
+    store.remove(docNo, Number(payload.unitSlot), Number(payload.index));
+    return { ok: true, photos: photoIndexOf(store, docNo) };
+  });
+}
+
+/** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
+function photoIndexOf(store, docNo) {
+  return Object.keys(store.readAll(docNo));
+}
+
+/** รายชื่อช่องที่มีรูปแล้วของเอกสารใบหนึ่ง (หน้าเว็บใช้แสดงว่าช่องไหนกรอกแล้ว) */
+export async function getCleaningPhotoIndex(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) return [];
+  if (!ctx.photos) return [];
+
+  const { docNo } = await formForPhotos(ctx, row);
+  return photoIndexOf(ctx.photos, docNo);
 }
 
 export async function deleteCleaningForm(ctx, row) {
@@ -555,8 +638,20 @@ export async function deleteCleaningForm(ctx, row) {
     const region = ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('Region') + 1);
     await ctx.assertRegionAccess(region);
 
+    // จำเลขที่ไว้ก่อนลบแถว เพื่อตามไปลบรูปของใบนี้ด้วย
+    // ไม่งั้นรูปจะค้างอยู่ในดิสก์ตลอดไปโดยไม่มีอะไรอ้างถึง
+    const docNo = plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('DocNo') + 1)) ||
+                  plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('ID') + 1));
+
     await ctx.ss.deleteRow(SHEETS.CLEANFORM, row);
     await ctx.ss.flush();
+
+    // ลบรูปหลังลบแถวสำเร็จแล้วเท่านั้น และห้ามให้การลบรูปล้มแล้วทำให้ทั้งคำสั่งพัง
+    // เพราะแถวถูกลบไปแล้ว ถ้าโยน error ออกไป ผู้ใช้จะเข้าใจว่าลบไม่สำเร็จ
+    if (ctx.photos && docNo) {
+      try { ctx.photos.removeAll(docNo); } catch { /* รูปค้างดีกว่าผู้ใช้สับสน */ }
+    }
+
     return getCleaningForms(ctx);
   });
 }
