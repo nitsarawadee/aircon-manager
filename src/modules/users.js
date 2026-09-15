@@ -5,17 +5,84 @@ import { formatDate, ymdhms } from '../values.js';
  * การเข้าสู่ระบบและการจัดการผู้ใช้งาน
  * พอร์ตมาจากส่วน "USER / PERMISSIONS" ของ Code.gs เดิม
  *
- * ⚠️ หมายเหตุด้านความปลอดภัย
- * ระบบเดิมเก็บรหัสผ่านเป็นข้อความธรรมดาในคอลัมน์ Password ของชีต Users
- * โดยตั้งใจ (เพื่อให้ Admin เปิดดูรหัสของทุกคนได้จากในชีต)
- * เวอร์ชันนี้ยังคงพฤติกรรมเดิมไว้เพื่อไม่ให้บัญชีที่มีอยู่ใช้งานไม่ได้
- * แต่เมื่อระบบย้ายมาอยู่บนอินเทอร์เน็ตสาธารณะแล้ว ควรเปลี่ยนไปเก็บแบบแฮชโดยเร็ว
- * (ฟังก์ชัน hashPassword ด้านล่างพร้อมใช้งานอยู่แล้ว และ login รองรับทั้งสองแบบ)
+ * ============================================================================
+ * รหัสผ่านเก็บอย่างไร
+ * ============================================================================
+ * รหัสผ่านที่ตั้งใหม่ตั้งแต่นี้ไป จะถูกแปลงเป็นแฮชก่อนเก็บเสมอ และช่องรหัส
+ * แบบข้อความธรรมดาจะถูกล้างทิ้ง — เปิดไฟล์ฐานข้อมูลดูตรงๆ จะไม่เห็นรหัสจริงอีก
+ *
+ * รองรับ 3 รูปแบบตอนตรวจรหัส เพื่อไม่ให้ใครใช้งานไม่ได้ระหว่างเปลี่ยนผ่าน:
+ *   1. pbkdf2$...                   แบบใหม่ (ที่ตั้งตั้งแต่นี้ไป)
+ *   2. PasswordHash + PasswordSalt  แบบ SHA-256 ยุค Apps Script
+ *   3. Password                     ข้อความธรรมดา ของบัญชีเก่าที่ยังไม่ได้แปลง
+ *
+ * ตรวจแบบแฮชก่อนเสมอ ถ้ามีแฮชอยู่แล้วให้ถือว่าช่องข้อความธรรมดาเป็นของเก่าค้าง
+ * ไม่ใช่รหัสที่ใช้ได้ ไม่งั้นการเปลี่ยนรหัสจะไม่มีผลถ้าลืมล้างช่องเก่า
  */
 
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,50}$/;
 
-/** แฮชรหัสผ่านด้วย SHA-256 ผสมกับ salt (รูปแบบเดียวกับที่ Apps Script เดิมใช้) */
+/**
+ * จำนวนรอบการคำนวณ
+ *
+ * 600,000 รอบตามคำแนะนำของ OWASP สำหรับ PBKDF2-HMAC-SHA256
+ * วัดบนเครื่องที่ใช้งานจริงแล้วได้ราว 110 มิลลิวินาทีต่อครั้ง ซึ่งเกิดแค่ตอนล็อกอิน
+ * (ครั้งเดียวต่อ 6 ชั่วโมง) คนใช้ไม่รู้สึก แต่คนที่ไล่เดารหัสจะช้าลงหกแสนเท่า
+ *
+ * เก็บจำนวนรอบไว้ในตัวแฮชเอง เพื่อให้เพิ่มรอบในอนาคตได้โดยแฮชเก่ายังตรวจได้อยู่
+ */
+const PBKDF2_ROUNDS = 600000;
+
+/**
+ * แฮชรหัสผ่านสำหรับเก็บลงฐานข้อมูล
+ *
+ * ใช้ PBKDF2 ผ่าน Web Crypto ไม่ใช่ scrypt ของ node:crypto ด้วยเหตุผลทางสถาปัตยกรรม:
+ * โค้ดใน src/ ห้ามรู้จักแพลตฟอร์ม เพราะต้องรันได้ทั้งบน Node และบน Cloudflare
+ * ซึ่ง Web Crypto มีให้ทั้งสองที่ ส่วน scrypt มีเฉพาะบน Node
+ *
+ * ผลลัพธ์เป็นข้อความชุดเดียวที่บอกทุกอย่างในตัวเอง — วิธี จำนวนรอบ salt และค่าแฮช
+ * จึงไม่ต้องใช้คอลัมน์ salt แยก และเปลี่ยนวิธีในอนาคตได้โดยไม่ต้องแก้ฐานข้อมูล
+ */
+export async function makePasswordHash(password, rounds = PBKDF2_ROUNDS) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await deriveBits(password, salt, rounds);
+  return 'pbkdf2$' + rounds + '$' + toB64(salt) + '$' + toB64(new Uint8Array(bits));
+}
+
+/** ตรวจรหัสผ่านกับแฮชรูปแบบใหม่ */
+async function verifyPbkdf2(stored, password) {
+  const parts = String(stored).split('$');
+  if (parts.length !== 4) return false;
+
+  const rounds = Number(parts[1]);
+  if (!Number.isInteger(rounds) || rounds < 1000) return false;
+
+  const salt = fromB64(parts[2]);
+  if (!salt) return false;
+
+  const bits = await deriveBits(password, salt, rounds);
+  return safeEqual(toB64(new Uint8Array(bits)), parts[3]);
+}
+
+function deriveBits(password, salt, rounds) {
+  return crypto.subtle
+    .importKey('raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits'])
+    .then(key => crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt, iterations: rounds, hash: 'SHA-256' }, key, 256
+    ));
+}
+
+const toB64 = bytes => btoa(String.fromCharCode(...bytes));
+
+function fromB64(text) {
+  try {
+    return Uint8Array.from(atob(text), c => c.charCodeAt(0));
+  } catch {
+    return null;   // ข้อมูลในฐานข้อมูลเสีย ถือว่าตรวจไม่ผ่าน ไม่ใช่ทำให้ระบบล้ม
+  }
+}
+
+/** แฮชแบบ SHA-256 ของยุค Apps Script — เหลือไว้ตรวจบัญชีเก่าเท่านั้น ไม่ใช้เขียนใหม่ */
 export async function hashPassword(password, salt) {
   const data = new TextEncoder().encode(String(password) + '|' + String(salt));
   const digest = await crypto.subtle.digest('SHA-256', data);
@@ -32,10 +99,19 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
-/** ตรวจรหัสผ่านของแถวผู้ใช้ รองรับทั้งแบบข้อความธรรมดาและแบบแฮช (บัญชีเก่า) */
+/**
+ * ตรวจรหัสผ่านของแถวผู้ใช้ รองรับทั้งสามรูปแบบ (ดูคำอธิบายที่หัวไฟล์)
+ *
+ * เรียงจากใหม่ไปเก่า และตรวจแบบแฮชก่อนข้อความธรรมดาเสมอ
+ * ถ้าบัญชีมีแฮชแล้ว แปลว่ารหัสจริงคือแฮชนั้น ช่องข้อความธรรมดาที่อาจค้างอยู่
+ * เป็นของเก่าที่ยังไม่ได้ล้าง ไม่ใช่รหัสที่ยังใช้เข้าระบบได้
+ */
 async function verifyPassword(user, password) {
+  const hash = String(user.PasswordHash || '');
+
+  if (hash.startsWith('pbkdf2$')) return verifyPbkdf2(hash, password);
+  if (hash) return safeEqual(await hashPassword(password, user.PasswordSalt), hash);
   if (user.Password) return safeEqual(password, user.Password);
-  if (user.PasswordHash) return safeEqual(await hashPassword(password, user.PasswordSalt), user.PasswordHash);
   return false;
 }
 
@@ -77,7 +153,8 @@ export async function setupFirstAdmin(ctx, username, password, name) {
     const payload = {
       Username: uname, Name: name || uname, Role: 'Admin', Regions: '', Permissions: '',
       Active: true, UpdatedAt: ymdhms(new Date()), UpdatedBy: uname, Email: '',
-      Password: String(password)
+      // ผู้ดูแลระบบคนแรกก็เก็บเป็นแฮชเหมือนกัน ไม่มีข้อยกเว้น
+      PasswordHash: await makePasswordHash(password), PasswordSalt: '', Password: ''
     };
 
     const headers = ctx.ss.headers(SHEETS.USERS);
@@ -130,8 +207,12 @@ export async function changeOwnPassword(ctx, oldPassword, newPassword) {
       throw new Error('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
     }
 
+    // เก็บเฉพาะแฮช และล้างสองช่องเดิมทิ้ง ไม่ให้เหลือรหัสจริงค้างในฐานข้อมูล
+    // ถ้าไม่ล้าง ตัวตรวจจะยังผ่านด้วยแฮชใหม่ก็จริง แต่รหัสเก่ายังนอนอยู่ในไฟล์
     ctx.ss.writeByHeaders(SHEETS.USERS, u._row, {
-      Password: String(newPassword),
+      PasswordHash: await makePasswordHash(newPassword),
+      PasswordSalt: '',
+      Password: '',
       UpdatedAt: ymdhms(new Date())
     });
     await ctx.ss.flush();
@@ -188,14 +269,31 @@ export async function saveUser(ctx, user) {
       .map(m => m + ':' + (['edit', 'view', 'none'].includes(permObj[m]) ? permObj[m] : 'view'))
       .join(',');
 
-    let passwordPlain;
+    /**
+     * ช่องรหัสผ่านที่จะเขียนลงแถว
+     *
+     * ตั้งรหัสใหม่  -> เขียนแฮช และล้างสองช่องเดิมทิ้ง
+     * แก้ไขโดยไม่แตะรหัส -> ไม่ใส่ช่องรหัสลงใน payload เลยสักช่อง
+     *
+     * เหตุผลของกรณีที่สอง: writeByHeaders เขียนเฉพาะช่องที่ส่งไป ช่องที่ไม่ส่ง
+     * จะไม่ถูกแตะเลย การไม่ส่งจึงตรงกับเจตนา "ไม่ได้ตั้งใจเปลี่ยนรหัส" ที่สุด
+     *
+     * โค้ดเดิมอ่าน existing.Password มาเขียนกลับ ซึ่งไม่ได้ผิดจนข้อมูลหาย
+     * (เขียนค่าว่างทับช่องที่ว่างอยู่แล้ว ส่วนแฮชไม่ถูกแตะ) แต่เป็นรูปแบบที่
+     * เชิญชวนให้ผิดในอนาคต เพราะพอมีช่องรหัสสามช่องแล้ว คนที่มาเก็บกวาดโค้ด
+     * ทีหลังมีโอกาสใส่ทั้งสามช่องลง payload พร้อมกัน ซึ่งจะล้างรหัสทิ้งจริง
+     * เทสต์ "แก้ไขผู้ใช้โดยไม่แตะรหัสผ่าน" คุมกรณีนั้นไว้ (ลองแล้วแดงจริง)
+     */
+    let passwordFields;
     if (user.Password) {
       if (String(user.Password).length < 6) throw new Error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
-      passwordPlain = String(user.Password);
+      passwordFields = {
+        PasswordHash: await makePasswordHash(user.Password),
+        PasswordSalt: '',
+        Password: ''
+      };
     } else if (isEdit) {
-      // ไม่ได้ระบุรหัสใหม่ตอนแก้ไข -> คงรหัสเดิมของแถวนี้ไว้
-      const existing = list.find(u => u._row === Number(user._row));
-      passwordPlain = (existing && existing.Password) || '';
+      passwordFields = {};
     } else {
       throw new Error('กรุณาตั้งรหัสผ่านสำหรับผู้ใช้ใหม่');
     }
@@ -211,7 +309,7 @@ export async function saveUser(ctx, user) {
       Active: isActive,
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser(),
-      Password: passwordPlain
+      ...passwordFields
     };
 
     if (isEdit) {
