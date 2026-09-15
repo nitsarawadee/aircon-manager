@@ -122,9 +122,34 @@ export function makeHistoryId(eventType, date, existingIds) {
  * จึงถูกต้องแม้เขียนหลายแถวรวดเดียว (เช่นเปลี่ยนเครื่อง = เขียน 2 แถวติดกัน)
  * เพราะแถวที่เพิ่งเขียนไปเข้าคิวแล้วและถูกนับรวมในรอบถัดไปทันที
  */
+/**
+ * เลขทั้งหมดที่ถูกใช้ไปแล้ว ทั้งใบประวัติและเอกสาร
+ *
+ * สองอย่างนี้ใช้ชุดเลขเดียวกัน (PM/CM + ปีเดือน + ลำดับ) เพราะคนที่ถือกระดาษ
+ * อยู่ในมือควรเอาเลขไปค้นแล้วเจอของชิ้นเดียว ไม่ใช่เจอสองชิ้นคนละเรื่อง
+ *
+ * ตัวออกเลขจึงต้องเห็นทั้งสองที่ ถ้าดูแค่ตารางประวัติอย่างเดียว เอกสารที่ออกเลข
+ * ไปแล้วจะถูกมองข้าม แล้วใบประวัติใบถัดไปจะได้เลขเดียวกับเอกสาร
+ * (เคยเกิดจริงตอนเพิ่มเลขเอกสารครั้งแรก เทสต์ doc-number จับได้ก่อนขึ้นระบบ)
+ *
+ * export ไว้ให้โมดูลเอกสารเรียกใช้ตัวเดียวกันนี้ จะได้ไม่มีสองความจริง
+ */
+export function usedDocNumbers(ctx) {
+  const ids = ctx.ss.objects(SHEETS.HISTORY).map(r => r.ID);
+
+  // ตารางเอกสารอาจยังไม่ถูกโหลดในบาง request ที่ไม่ได้ยุ่งกับเอกสารเลย
+  // กรณีนั้นถือว่าไม่มีเลขเอกสารให้หลบ ซึ่งถูกต้อง เพราะไม่มีการออกเลขเอกสารด้วย
+  let docNos = [];
+  try {
+    docNos = ctx.ss.objects(SHEETS.CLEANFORM).map(f => f.DocNo);
+  } catch { /* ยังไม่ได้โหลดตารางเอกสาร */ }
+
+  return [...ids, ...docNos].filter(Boolean);
+}
+
 export async function addHistoryRaw(ctx, record) {
   await ctx.ensureBase();
-  const id = makeHistoryId(record.EventType, record.Date, ctx.ss.objects(SHEETS.HISTORY).map(r => r.ID));
+  const id = makeHistoryId(record.EventType, record.Date, usedDocNumbers(ctx));
   const me = await ctx.currentUser();
 
   const byName = {

@@ -20,6 +20,7 @@ import {
   formatDate, safeParseDate, dateToSerial, partsOf, cleanFormValue
 } from '../src/values.js';
 import { CLEANFORM_HEADERS, cleanFormColKind } from '../src/schema.js';
+import { TABLES } from '../src/db/schema.js';
 
 test('อ่านรหัสวันที่ของ Sheets ได้ตรงกับค่าอ้างอิงที่รู้แน่', () => {
   // 45292 คือ 1 ม.ค. 2024 เป็นค่ามาตรฐานที่ใช้อ้างอิงกันทั่วไป
@@ -72,5 +73,20 @@ test('คอลัมน์ถูกจัดชนิดตรงตามค�
 test('คอลัมน์ที่เพิ่มใหม่ต้องอยู่ท้ายสุดเสมอ', () => {
   // ระบบเติมคอลัมน์ที่ขาดด้วยการต่อท้าย ถ้าในโค้ดวางไว้กลาง
   // ตำแหน่งในโค้ดจะไม่ตรงกับในชีต แล้วข้อมูลจะถูกเขียนลงผิดช่องทั้งแถว
-  assert.deepEqual(CLEANFORM_HEADERS.slice(-3), ['Price1', 'Price2', 'Source']);
+  //
+  // ตรึงท้ายรายการไว้เป็นสัญญาณเตือน: เพิ่มคอลัมน์ใหม่แล้วเทสต์นี้จะแดง
+  // เป็นการบังคับให้คนที่เพิ่มต้องยืนยันว่าวางไว้ท้ายสุดจริง ไม่ใช่แทรกกลาง
+  assert.deepEqual(CLEANFORM_HEADERS.slice(-3), ['Source', 'DocType', 'DocNo']);
+});
+
+test('ลำดับคอลัมน์ในโค้ดกับในฐานข้อมูลต้องเรียงตรงกัน', () => {
+  // อันนี้คือกฎจริงที่เทสต์ข้างบนเป็นแค่สัญญาณเตือน
+  // repository.load() อ่านข้อมูลตามลำดับคอลัมน์ของโค้ด ถ้าสองที่เรียงไม่ตรงกัน
+  // ค่าจะถูกอ่านสลับช่องกันทั้งตาราง โดยไม่มีอะไรฟ้องเลยสักอย่าง
+  //
+  // ฐานข้อมูลมีคอลัมน์ได้มากกว่า (เช่น PhotoUrl ที่ยังไม่ได้ใช้ในฟอร์ม)
+  // แต่คอลัมน์ที่มีทั้งสองที่ ต้องเรียงลำดับเหมือนกันเสมอ
+  const dbCols = Object.keys(TABLES.cleaning_forms.columns);
+  const shared = dbCols.filter(c => CLEANFORM_HEADERS.includes(c));
+  assert.deepEqual(CLEANFORM_HEADERS, shared);
 });

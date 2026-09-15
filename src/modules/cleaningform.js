@@ -1,6 +1,6 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd } from '../values.js';
-import { addHistoryRaw, getHistory } from './history.js';
+import { addHistoryRaw, getHistory, makeHistoryId, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
 import { closePlanRound } from './plan.js';
 import { buildCleaningPdf, uploadNodeDocs } from '../pdf-bridge.js';
@@ -19,6 +19,26 @@ import { buildCleaningPdf, uploadNodeDocs } from '../pdf-bridge.js';
  *
  * ทั้งสองทางรองรับการล้าง 1 หรือ 2 เครื่องในครั้งเดียว โดยกรอกราคาแยกรายเครื่อง
  */
+
+/* ==================== เลขที่เอกสาร ==================== */
+
+/**
+ * ออกเลขที่เอกสาร โดยใช้รูปแบบเดียวกับเลขที่ในหน้าประวัติ
+ *
+ * ระบบมีกติกาอยู่แล้วว่า PM = งานล้างตามแผน, CM = งานซ่อมและอื่นๆ
+ * (ดูหัวข้อ makeHistoryId ใน history.js) จึงไม่ต้องคิดรูปแบบใหม่ขึ้นมาอีกชุด
+ * คนที่ถือกระดาษอยู่ในมือเห็นเลขแล้วรู้ทันทีว่าเป็นงานประเภทไหน
+ *
+ * นับรวมทั้งเลขในประวัติและเลขเอกสารที่ออกไปแล้ว เพราะสองอย่างนี้ใช้ชุดเลข
+ * เดียวกัน ถ้านับแยกกันจะมีวันที่เอกสารกับใบประวัติได้เลขเดียวกันคนละเรื่อง
+ * แล้วการตามหาเอกสารจากเลขที่เห็นในประวัติจะเจอผิดใบ
+ *
+ * ต้องเรียกภายใน withLock หลัง ensureBase แล้วเท่านั้น ไม่งั้นสองคนที่กด
+ * บันทึกพร้อมกันจะได้เลขเดียวกัน
+ */
+function nextDocNo(ctx, eventType, date) {
+  return makeHistoryId(eventType, date, usedDocNumbers(ctx));
+}
 
 /* ==================== Node / Serial สำหรับ dropdown ==================== */
 
@@ -222,6 +242,10 @@ export async function saveCleaningForm(ctx, record) {
   return ctx.withLock(async () => {
     await ctx.ensureBase();
 
+    // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+    record.DocType = 'cleaning';
+    record.DocNo = nextDocNo(ctx, 'ล้างแอร์', record.Date);
+
     const headers = ctx.ss.headers(SHEETS.CLEANFORM);
     ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
 
@@ -424,6 +448,8 @@ export async function uploadNodeDocuments(ctx, payload) {
 
     const record = {
       ID: 'CF' + Date.now(),
+      DocType: 'cleaning',
+      DocNo: nextDocNo(ctx, 'ล้างแอร์', closeout.date),
       Date: closeout.date,
       NodeName: nodeName,
       SiteCode: plainText(first.SiteCode),

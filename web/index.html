@@ -319,7 +319,7 @@
         <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อม</span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="cleaningform">
-        <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>ฟอร์มล้างแอร์</span>
+        <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แบบฟอร์มเอกสาร</span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="budget">
         <i class="ph ph-wallet text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งบประมาณ</span>
@@ -756,7 +756,7 @@
       <section id="view-cleaningform" class="view">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 class="text-2xl font-bold text-gray-800">ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ</h2>
+            <h2 class="text-2xl font-bold text-gray-800">แบบฟอร์มเอกสาร</h2>
             <p class="text-sm text-gray-500">กรอกในระบบแล้วให้ระบบสร้าง PDF ให้ หรือปริ้นฟอร์มไปเขียนมือหน้างานแล้วถ่ายรูปแนบกลับก็ได้ — ทั้งสองทางปิดงานในแผนได้เหมือนกัน</p>
           </div>
           <div class="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
@@ -774,16 +774,35 @@
           </div>
         </div>
 
+        <!-- แถบประเภทเอกสาร — ตอนนี้มีเฉพาะใบล้าง อีกสองประเภทรอฟอร์มจริง -->
+        <div class="flex items-center gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
+          <span class="px-4 py-2 text-sm font-medium border-b-2 border-[#1153a1] text-[#1153a1] whitespace-nowrap">
+            <i class="ph ph-drop"></i> ล้างแอร์
+          </span>
+          <span class="px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent whitespace-nowrap cursor-not-allowed" title="ยังไม่เปิดใช้ — รอแบบฟอร์มจริง">
+            <i class="ph ph-wrench"></i> ซ่อม <span class="text-[10px]">· เร็วๆ นี้</span>
+          </span>
+          <span class="px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent whitespace-nowrap cursor-not-allowed" title="ยังไม่เปิดใช้ — รอแบบฟอร์มจริง">
+            <i class="ph ph-plus-circle"></i> ติดตั้ง <span class="text-[10px]">· เร็วๆ นี้</span>
+          </span>
+          <div class="relative ml-auto w-full sm:w-72 pb-2">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขที่, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
+          </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="cleaningFormTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ผลประเมิน</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ช่าง</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right">ค่าใช้จ่าย</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">PDF</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
                 </tr>
@@ -1963,7 +1982,7 @@
       { key: 'plan', label: 'แผนล้างแอร์' },
       { key: 'history', label: 'ประวัติ' },
       { key: 'repair', label: 'งานซ่อม' },
-      { key: 'cleaningform', label: 'ฟอร์มล้างแอร์' },
+      { key: 'cleaningform', label: 'แบบฟอร์มเอกสาร' },
       { key: 'budget', label: 'งบประมาณ' }
     ];
 
@@ -5564,6 +5583,44 @@
 
     /* ============== ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ (Cleaning Form) ============== */
   let currentCleaningForms = [];
+  /** รายการหลังกรองแล้ว — ใช้ทั้งการแบ่งหน้าและการนับจำนวน */
+  let cleaningFormLastList = [];
+
+  /**
+   * เลขที่เอกสารที่เอาไปแสดง
+   *
+   * ใบที่บันทึกก่อนมีระบบเลขที่ ยังไม่มี DocNo จึงแสดง ID เดิม (CF + เวลา)
+   * ซึ่งอ่านยากก็จริง แต่ตรงกับที่เก็บไว้จริง ดีกว่าเว้นว่างจนตามใบไม่เจอ
+   */
+  function displayDocNo(f) {
+    return String((f && (f.DocNo || f.ID)) || '').trim();
+  }
+
+  /** ค้นหาจากทุกช่องที่คนน่าจะพิมพ์หา */
+  function filterCleaningForms() {
+    const box = document.getElementById('cleaningFormSearch');
+    const q = box ? box.value.trim().toLowerCase() : '';
+    if (!q) return currentCleaningForms || [];
+    return (currentCleaningForms || []).filter(f =>
+      [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2,
+       f.TechnicianName, f.EquipmentCondition, fmtDate(f.Date)]
+        .map(v => String(v == null ? '' : v).toLowerCase())
+        .join(' ')
+        .includes(q)
+    );
+  }
+
+  /** วาดตารางใหม่โดยกลับไปหน้าแรก (ใช้ตอนพิมพ์ค้นหา) */
+  function refreshCleaningFormTable() {
+    cleaningFormPage = 1;
+    renderCleaningFormTable();
+  }
+  window.refreshCleaningFormTable = refreshCleaningFormTable;
+
+  // ผูกช่องค้นหาไว้ครั้งเดียวตอนโหลดหน้า ไม่ผูกซ้ำทุกครั้งที่วาดตาราง
+  // ไม่งั้นพิมพ์หนึ่งตัวอักษรจะวาดตารางหลายรอบซ้อนกัน
+  document.getElementById('cleaningFormSearch')
+    ?.addEventListener('input', () => refreshCleaningFormTable());
   let cleaningFormNodes = [];
 
   /** รายการตรวจเช็ค 21 ข้อ ข้อความตรงกับไฟล์ Excel ต้นฉบับ ต้องตรงกับ CLEANING_CHECKLIST_ITEMS ฝั่ง Code.gs เป๊ะๆ */
@@ -5609,14 +5666,22 @@ const CLEANING_CHECKLIST_ITEMS = [
     const tbody = document.querySelector('#cleaningFormTable tbody');
     if (!tbody) return;
     if (!keepPage) cleaningFormPage = 1;
-    if (currentCleaningForms.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">ยังไม่มีการบันทึกฟอร์ม</td></tr>';
+    cleaningFormLastList = filterCleaningForms();
+
+    if (cleaningFormLastList.length === 0) {
+      // บอกให้ตรงว่าไม่เจอเพราะคำค้น ไม่งั้นจะเข้าใจว่าไม่มีเอกสารในระบบเลย
+      const box = document.getElementById('cleaningFormSearch');
+      const why = (box && box.value.trim())
+        ? 'ไม่พบเอกสารที่ตรงกับคำค้นหา'
+        : 'ยังไม่มีการบันทึกเอกสาร';
+      tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">' + why + '</td></tr>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
     }
-    cleaningFormPage = clampPage(cleaningFormPage, currentCleaningForms.length);
-    tbody.innerHTML = currentCleaningForms.slice((cleaningFormPage - 1) * TABLE_PAGE_SIZE, cleaningFormPage * TABLE_PAGE_SIZE).map(f => `
+    cleaningFormPage = clampPage(cleaningFormPage, cleaningFormLastList.length);
+    tbody.innerHTML = cleaningFormLastList.slice((cleaningFormPage - 1) * TABLE_PAGE_SIZE, cleaningFormPage * TABLE_PAGE_SIZE).map(f => `
       <tr class="hover:bg-slate-50">
+        <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(displayDocNo(f)) || '-'}</td>
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
           ${esc(f.NodeName)}
@@ -5629,6 +5694,13 @@ const CLEANING_CHECKLIST_ITEMS = [
           <span class="px-2 py-1 rounded-full text-xs font-medium ${f.EquipmentCondition === 'สภาพเครื่องสมบูรณ์' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${esc(f.EquipmentCondition || '-')}</span>
         </td>
         <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
+        <td class="px-4 py-3 text-right tabular-nums">${
+          // ใบเก่าบางใบเก็บเฉพาะยอดรวม ใบใหม่เก็บราคาแยกรายเครื่อง รองรับทั้งสองแบบ
+          (() => {
+            const total = Number(f.Price) || (Number(f.Price1) || 0) + (Number(f.Price2) || 0);
+            return total ? '฿' + total.toLocaleString() : '<span class="text-gray-300">-</span>';
+          })()
+        }</td>
         <td class="px-4 py-3">
           ${f.PdfUrl
             ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-[#1153a1] hover:underline flex items-center gap-1"><i class="ph ${f.Source === 'attach' ? 'ph-paperclip' : 'ph-file-pdf'}"></i> ${f.Source === 'attach' ? 'เปิดไฟล์ที่แนบ' : 'เปิด PDF'}</a>`
@@ -5641,7 +5713,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </td>
       </tr>
     `).join('');
-    renderTablePager('cleaningFormPaginationBar', currentCleaningForms.length, cleaningFormPage, 'goToCleaningFormPage');
+    renderTablePager('cleaningFormPaginationBar', cleaningFormLastList.length, cleaningFormPage, 'goToCleaningFormPage');
   }
 
   /** สร้าง PDF ย้อนหลังให้รายการที่บันทึกไว้แล้วแต่ยังไม่มีไฟล์ (ไม่ต้องกรอกฟอร์มใหม่) */
