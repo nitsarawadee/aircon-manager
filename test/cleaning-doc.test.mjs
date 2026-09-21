@@ -50,23 +50,25 @@ function withoutUnit(slot) {
 
 test('ล้างสองเครื่อง ได้สองคอลัมน์ในใบเดียว', () => {
   const html = buildCleaningDocHtml(baseForm());
-  assert.ok(html.includes('เครื่องที่ 1 (Unit 1)'));
-  assert.ok(html.includes('เครื่องที่ 2 (Unit 2)'));
-  assert.ok(html.includes('AYA-WNI-AIR-1') && html.includes('AYA-WNI-AIR-2'));
+  assert.ok(html.includes('เครื่องที่ 1 (AIR 1)'));
+  assert.ok(html.includes('เครื่องที่ 2 (AIR 2)'));
+  // เอกสารควบคุมไม่มีช่องรหัสเครื่อง ระบุตัวเครื่องด้วย Serial/Asset แทน
+  assert.ok(html.includes('IN-111') && html.includes('IN-222'), 'ต้องมี Serial ของทั้งสองเครื่อง');
 });
 
 test('ล้างเฉพาะเครื่องที่ 2 หัวคอลัมน์ต้องบอกว่าเครื่องที่ 2', () => {
   // หัวใจของเรื่องนี้ — ห้ามเลื่อนมาเป็นคอลัมน์แรกแล้วขึ้นว่าเครื่องที่ 1
   const html = buildCleaningDocHtml(withoutUnit(1));
-  assert.ok(html.includes('เครื่องที่ 2 (Unit 2)'), 'ต้องมีหัวคอลัมน์เครื่องที่ 2');
-  assert.ok(!html.includes('เครื่องที่ 1 (Unit 1)'), 'ต้องไม่มีคอลัมน์เครื่องที่ 1');
-  assert.ok(html.includes('AYA-WNI-AIR-2') && !html.includes('AYA-WNI-AIR-1'));
+  assert.ok(html.includes('เครื่องที่ 2 (AIR 2)'), 'ต้องมีหัวคอลัมน์เครื่องที่ 2');
+  assert.ok(!html.includes('เครื่องที่ 1 (AIR 1)'), 'ต้องไม่มีคอลัมน์เครื่องที่ 1');
+  assert.ok(html.includes('IN-222'), 'ต้องมี Serial ของเครื่องที่ 2');
+  assert.ok(!html.includes('IN-111'), 'ต้องไม่มีข้อมูลของเครื่องที่ 1 หลุดมา');
 });
 
 test('ล้างเฉพาะเครื่องที่ 1 ได้คอลัมน์เดียวเหมือนกัน', () => {
   const html = buildCleaningDocHtml(withoutUnit(2));
-  assert.ok(html.includes('เครื่องที่ 1 (Unit 1)'));
-  assert.ok(!html.includes('เครื่องที่ 2 (Unit 2)'));
+  assert.ok(html.includes('เครื่องที่ 1 (AIR 1)'));
+  assert.ok(!html.includes('เครื่องที่ 2 (AIR 2)'));
 });
 
 test('ใบที่ไม่มีเครื่องเลย ต้องบอกให้รู้ ไม่ใช่ออกใบเปล่า', () => {
@@ -146,11 +148,11 @@ test('สั่งพิมพ์เป็นกระดาษ A4 แนวต�
 
 /* ==================== หน้าตาต้องตรงกับแบบฟอร์มจริง ==================== */
 
-test('ใช้สีพื้นเดียวกับที่ตั้งไว้ในไฟล์ Excel', () => {
+test('ใช้สีเดียวกับเอกสารควบคุมตัวจริง', () => {
   // สีพวกนี้อ่านมาจาก styles.xml ของไฟล์ฟอร์มจริง ไม่ได้เลือกเอง
   const html = buildCleaningDocHtml(baseForm());
-  assert.ok(html.includes('#D9D9D9'), 'แถบหัวข้อส่วนต้องเป็นเทา #D9D9D9');
-  assert.ok(html.includes('#F2F2F2'), 'คอลัมน์หน่วย/เกณฑ์และป้ายลงนามต้องเป็น #F2F2F2');
+  assert.ok(html.includes('#ECECEC'), 'แถบหัวข้อส่วนและป้ายต้องเป็นเทา #ECECEC');
+  assert.ok(html.includes('#7F7F7F'), 'ตัวอักษรคอลัมน์หน่วย/เกณฑ์ต้องเป็นเทา #7F7F7F');
 });
 
 test('ตัวหนังสือในเอกสารเป็นสีดำทั้งหมด', () => {
@@ -200,16 +202,17 @@ test('ความกว้างคอลัมน์ตรงตามสั�
 
 test('มีหน้ารูปภาพหนึ่งหน้าต่อหนึ่งเครื่อง', () => {
   const two = buildCleaningDocHtml(baseForm());
-  assert.equal((two.match(/class="sheet photos"/g) || []).length, 2, 'ล้างสองเครื่อง = สองหน้ารูป');
+  assert.equal((two.match(/ภาพถ่ายประกอบการล้าง/g) || []).length, 2, 'ล้างสองเครื่อง = สองหน้ารูป');
 
   const one = buildCleaningDocHtml(withoutUnit(1));
-  assert.equal((one.match(/class="sheet photos"/g) || []).length, 1, 'ล้างเครื่องเดียว = หน้ารูปเดียว');
-  assert.ok(one.includes('เครื่องที่ 2 (AIR 2)'), 'หัวหน้ารูปต้องบอกเลขเครื่องจริง');
+  assert.equal((one.match(/ภาพถ่ายประกอบการล้าง/g) || []).length, 1, 'ล้างเครื่องเดียว = หน้ารูปเดียว');
+  assert.ok(one.includes('ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ 2 (AIR 2)'),
+    'หัวหน้ารูปต้องบอกเลขเครื่องจริง');
 });
 
 test('หน้ารูปมี 9 ช่อง พร้อมคำบรรยายตามแบบฟอร์ม', () => {
   const html = buildCleaningDocHtml(withoutUnit(2));
-  for (const cap of ['รูปก่อนล้าง', 'รูปหลังดำเนินการล้าง',
+  for (const cap of ['รูปก่อนดำเนินล้าง', 'รูปหลังดำเนินการล้าง',
                      'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า',
                      'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)']) {
     assert.ok(html.includes(cap), 'ขาดคำบรรยาย ' + cap);
@@ -219,7 +222,7 @@ test('หน้ารูปมี 9 ช่อง พร้อมคำบรร�
 
 test('ช่องที่ยังไม่มีรูป พิมพ์ออกมาเป็นกรอบเปล่าให้ติดรูปเอง', () => {
   const html = buildCleaningDocHtml(withoutUnit(2));
-  assert.equal((html.match(/class="empty"/g) || []).length, 9);
+  assert.equal((html.match(/class="ph"/g) || []).length, 9);
   assert.ok(!html.includes('<img src="data:'));
 });
 
@@ -230,18 +233,18 @@ test('รูปที่แนบไว้ถูกฝังลงในเอ�
 
   assert.ok(html.includes('src="data:image/jpeg;base64,AAAA"'));
   assert.ok(html.includes('src="data:image/png;base64,BBBB"'));
-  assert.equal((html.match(/class="empty"/g) || []).length, 7, 'อีก 7 ช่องยังเป็นกรอบเปล่า');
+  assert.equal((html.match(/class="ph"/g) || []).length, 7, 'อีก 7 ช่องยังเป็นกรอบเปล่า');
 });
 
 test('รูปของเครื่องหนึ่ง ต้องไม่ไปโผล่ในหน้าของอีกเครื่อง', () => {
   const photos = { '1-1': 'data:image/jpeg;base64,ONE', '2-1': 'data:image/jpeg;base64,TWO' };
   const html = buildCleaningDocHtml(baseForm(), { photos });
 
-  const pages = html.split('class="sheet photos"');
+  const pages = html.split('ภาพถ่ายประกอบการล้าง');
   assert.ok(pages[1].includes('ONE') && !pages[1].includes('TWO'), 'หน้าเครื่องที่ 1 ต้องมีแต่รูปของตัวเอง');
   assert.ok(pages[2].includes('TWO') && !pages[2].includes('ONE'), 'หน้าเครื่องที่ 2 ต้องมีแต่รูปของตัวเอง');
 });
 
 test('หน้ารูปขึ้นหน้าใหม่เสมอ ไม่ต่อท้ายหน้าแรก', () => {
-  assert.ok(buildCleaningDocHtml(baseForm()).includes('page-break-before: always'));
+  assert.ok(buildCleaningDocHtml(baseForm()).includes('page-break-after: always'));
 });

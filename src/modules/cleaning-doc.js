@@ -10,39 +10,48 @@ import { formatDate, formatTime, plainText } from '../values.js';
  * ของเดิมสร้าง PDF ด้วยการส่งข้อมูลไป Apps Script ให้วาดลงชีตแม่แบบแล้วสั่ง
  * Google export ซึ่งต้องออกเน็ต ใช้เวลา 7-8 วินาทีต่อใบ และคิวตันถ้ามีคนใช้พร้อมกัน
  *
- * หน้า HTML ทำให้เปิดดูและสั่งปริ้นได้ทันทีโดยไม่ต้องออกเน็ต และเบราว์เซอร์
- * จัดฟอนต์ไทยให้เอง ซึ่งเป็นส่วนที่เขียนเองยากที่สุด
+ * หน้า HTML เปิดดูและสั่งปริ้นได้ทันทีโดยไม่ต้องออกเน็ต และเบราว์เซอร์จัดฟอนต์ไทย
+ * ให้เอง ซึ่งเป็นส่วนที่เขียนเองยากที่สุด ชั้น platform เอาหน้านี้ไปสั่งเบราว์เซอร์
+ * แปลงเป็นไฟล์ PDF ต่อได้ โดยไฟล์นี้ไม่ต้องรู้ว่าปลายทางเป็นจอ กระดาษ หรือไฟล์
  *
  * ไฟล์นี้อยู่ใน src/ จึงห้ามแตะระบบไฟล์หรือสั่งโปรแกรมอื่น — คืนค่าเป็นข้อความล้วน
- * ชั้น platform จะเอาไปแสดงบนจอ สั่งปริ้น หรือแปลงเป็นไฟล์ต่อก็ได้
  *
  * ============================================================================
- * วางตามกริดของแบบฟอร์มจริง
+ * วางตามแบบฟอร์มควบคุมของบริษัท
  * ============================================================================
- * ดึงโครงมาจากไฟล์ ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ_Rev2026.xlsx โดยตรง
- * คือตาราง 8 คอลัมน์ (A–H) ความกว้างตามที่ตั้งไว้ในไฟล์ และการผสานช่องตรงกัน
- * ทุกแถว เอกสารที่ออกมาจึงหน้าตาเหมือนกระดาษที่ใช้กันอยู่
+ * ยึดตามไฟล์ ITEL-FM-NE-004 บันทึกผลการล้างเครื่องปรับอากาศ (ฉบับ PDF)
+ * ทั้งถ้อยคำ เส้นตาราง สีพื้น และการจัดวาง เอกสารที่ระบบออกให้จึงหน้าตาเหมือน
+ * กระดาษที่ใช้เซ็นกันอยู่ ไม่ใช่แค่มีข้อมูลครบ
+ *
+ * ทั้งสามหน้าใช้ตารางกริดเดียวกัน 8 คอลัมน์ ความกว้างวัดจากเอกสารตัวจริง
  *
  * ============================================================================
- * หนึ่งหรือสองคอลัมน์
+ * หนึ่งหรือสองเครื่อง
  * ============================================================================
- * ล้างสองเครื่องออกมาสองคอลัมน์ (F และ G ตามแบบฟอร์ม)
- * ล้างเครื่องเดียวรวม F กับ G เป็นช่องเดียว และหัวคอลัมน์บอกเลขเครื่องจริงเสมอ —
- * ล้างเฉพาะเครื่องที่ 2 ต้องขึ้นว่า "เครื่องที่ 2" ไม่ใช่เลื่อนมาเป็นคอลัมน์แรก
- * ความกว้างรวมของตารางจึงเท่าเดิม ไม่ว่าจะล้างกี่เครื่อง
+ * ล้างสองเครื่องออกมาสองคอลัมน์และหน้ารูปสองหน้า
+ * ล้างเครื่องเดียวรวมสองคอลัมน์นั้นเป็นช่องเดียวและมีหน้ารูปหน้าเดียว
+ * หัวคอลัมน์บอกเลขเครื่องจริงเสมอ — ล้างเฉพาะเครื่องที่ 2 ต้องขึ้นว่า
+ * "เครื่องที่ 2 (AIR 2)" ไม่ใช่เลื่อนมาเป็นคอลัมน์แรก
  */
 
-/** ความกว้างคอลัมน์ A–H ตามที่ตั้งไว้ในไฟล์ Excel (หน่วยของ Excel) */
-const COL_WIDTHS = [4.6, 16.6, 17.6, 10.0, 11.0, 16.6, 16.6, 28.1];
+/** รหัสแบบฟอร์มควบคุม พิมพ์มุมขวาล่างของทุกหน้า */
+const FORM_CODE = 'ITEL-FM-NE-004';
 
 /**
- * หน่วยและเกณฑ์ของแต่ละข้อ ตามคอลัมน์ E "หน่วย/เกณฑ์" ในแบบฟอร์ม
- * ข้อที่เป็นการตรวจเช็คเฉยๆ ไม่มีหน่วย ในแบบฟอร์มใส่ขีดไว้
+ * ความกว้าง 8 คอลัมน์ วัดจากเอกสารตัวจริง
+ * ทุกส่วนของเอกสารใช้ขอบคอลัมน์ชุดนี้ร่วมกัน จึงรวมเป็นตารางเดียวได้
  */
-const CRITERIA = {
-  10: '°C (24–26)', 11: '°C (24–28)', 12: 'Type', 13: 'PSI',
-  14: 'A', 15: 'A', 16: 'V (220–240)', 18: '°C (33–35)', 19: 'ชม. (4–6)'
-};
+const COL_WIDTHS = [50, 180, 190, 95, 130, 176, 176, 301];
+
+/** ผลประเมินสองตัวเลือกในส่วนที่ 4 ตามที่พิมพ์ไว้บนแบบฟอร์ม */
+const CONDITIONS = ['สภาพเครื่องสมบูรณ์', 'สภาพเครื่องควรปรับปรุง'];
+
+/** คำบรรยายใต้กรอบรูปทั้ง 9 ช่อง เรียงซ้ายไปขวา บนลงล่าง */
+const PHOTO_CAPTIONS = [
+  'รูปก่อนดำเนินล้าง', 'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง',
+  'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง', 'รูปหลังดำเนินการล้าง',
+  'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
+];
 
 const esc = v => plainText(v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -50,14 +59,14 @@ const esc = v => plainText(v)
 
 /**
  * ค่าที่กรอกลงในแบบฟอร์ม
- * ช่องที่ยังไม่ได้กรอก ปล่อยว่างไว้จริงๆ เหมือนแบบฟอร์มเปล่า
+ * ช่องที่ยังไม่ได้กรอกปล่อยว่างจริงๆ เหมือนแบบฟอร์มเปล่าที่ปริ้นไปเขียนมือ
  */
 const val = v => {
   const t = esc(v);
   return t ? `<span class="v">${t}</span>` : '';
 };
 
-/* ==================== ตัวช่วยอ่านข้อมูลจากใบ ==================== */
+/* ==================== อ่านข้อมูลจากใบ ==================== */
 
 /** เครื่องที่มีข้อมูลอยู่ในใบนี้ เรียงตามเลขเครื่อง */
 function unitsOf(form) {
@@ -90,53 +99,51 @@ function checklistOf(form) {
     return {
       no: item.no,
       label: item.label,
-      criteria: CRITERIA[item.no] || '-',
+      unit: item.unit || '-',
       val1: got.val1, val2: got.val2, note: got.note
     };
   });
 }
 
-/* ==================== แถวต่างๆ ตามกริดของแบบฟอร์ม ==================== */
+/* ==================== ชิ้นส่วนที่ใช้ซ้ำ ==================== */
 
-/** แถวหัวข้อส่วน กินทั้งแถว A:H */
+/** แถบหัวข้อส่วน กินทั้งแถว */
 const sectionRow = title => `<tr class="sec"><td colspan="8">${esc(title)}</td></tr>`;
 
 /**
- * ส่วนที่ 1 — ข้อมูล Node
- * กริด: [A:B ป้าย] [C:E ค่า] [F ป้าย] [G:H ค่า]
+ * ช่องของเครื่อง — สองเครื่องได้สองช่อง เครื่องเดียวรวมเป็นช่องเดียว
+ * ความกว้างรวมเท่ากันทั้งสองกรณี ตารางจึงไม่เบี้ยว
  */
+function unitCells(units, render, cls = 'ctr') {
+  return units.length === 2
+    ? units.map(u => `<td class="${cls}">${render(u)}</td>`).join('')
+    : `<td class="${cls}" colspan="2">${render(units[0])}</td>`;
+}
+
+/* ==================== หน้าที่ 1 — ใบบันทึกผล ==================== */
+
+/** ส่วนที่ 1 : ข้อมูล Node — [1-2 ป้าย] [3-5 ค่า] [6 ป้าย] [7-8 ค่า] */
 function sectionNode(form, units) {
   const first = units[0] || {};
   const timeRange = [formatTime(form.TimeStart), formatTime(form.TimeEnd)].filter(Boolean).join(' – ');
 
-  const pairs = [
-    ['Node / รหัส Node', [plainText(form.NodeName), plainText(form.SiteCode)].filter(Boolean).join(' / '),
-     'ประเภท Node', form.LocationType],
+  return [
+    ['Node Nane', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
-    ['วันที่ (DD/MM/YYYY)', formatDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
+    ['วันที่', formatDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
-  ];
-
-  return pairs.map(([l1, v1, l2, v2]) =>
+  ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
     `<th colspan="2">${esc(l1)}</th><td colspan="3">${val(v1)}</td>` +
-    `<th>${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
+    `<th class="tight">${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
     '</tr>'
   ).join('');
 }
 
-/**
- * ส่วนที่ 2 — ข้อมูลเครื่อง
- * กริด: [A:E ป้าย] [F เครื่องที่ 1] [G เครื่องที่ 2] [H ว่าง]
- */
+/** ส่วนที่ 2 : ข้อมูลเครื่อง — [1-5 ป้าย] [6 เครื่อง 1] [7 เครื่อง 2] [8 ว่าง] */
 function sectionUnits(units) {
-  const unitCells = (pick, cls) => units.length === 2
-    ? units.map(u => `<td class="${cls}">${pick(u)}</td>`).join('')
-    : `<td class="${cls}" colspan="2">${pick(units[0])}</td>`;
-
-  const head = '<tr>' +
-    '<th colspan="5">รายการ / Item</th>' +
-    unitCells(u => `เครื่องที่ ${u.slot} (Unit ${u.slot})<div class="code">${val(u.code)}</div>`, 'ctr hd') +
+  const head = '<tr><th colspan="5">รายการ / Item</th>' +
+    unitCells(units, u => `เครื่องที่ ${u.slot} (AIR ${u.slot})`, 'ctr hd') +
     '<td></td></tr>';
 
   const lines = [
@@ -147,32 +154,25 @@ function sectionUnits(units) {
   ];
 
   return head + lines.map(([label, pick]) =>
-    `<tr><th colspan="5">${esc(label)}</th>` + unitCells(pick, 'ctr') + '<td></td></tr>'
+    `<tr><th colspan="5" class="lbl">${esc(label)}</th>` + unitCells(units, pick) + '<td></td></tr>'
   ).join('');
 }
 
-/**
- * ส่วนที่ 3 — รายการบำรุงรักษาและตรวจสอบ
- * กริด: [A ข้อ] [B:D รายการ] [E หน่วย/เกณฑ์] [F เครื่อง 1] [G เครื่อง 2] [H หมายเหตุ]
- */
+/** ส่วนที่ 3 : รายการบำรุงรักษา — [1 ข้อ] [2-4 รายการ] [5 หน่วย] [6-7 เครื่อง] [8 หมายเหตุ] */
 function sectionChecklist(form, units) {
-  const unitCells = pick => units.length === 2
-    ? units.map(u => `<td class="ctr">${pick(u)}</td>`).join('')
-    : `<td class="ctr" colspan="2">${pick(units[0])}</td>`;
-
   const head = '<tr>' +
-    '<th class="ctr">ข้อ</th><th colspan="3">รายการตรวจสอบ</th><th class="ctr">หน่วย/เกณฑ์</th>' +
+    '<th class="ctr">ข้อ</th><th colspan="3" class="ctr">รายการตรวจสอบ</th><th class="ctr">หน่วย/เกณฑ์</th>' +
     (units.length === 2
       ? units.map(u => `<th class="ctr">เครื่องที่ ${u.slot}</th>`).join('')
       : `<th class="ctr" colspan="2">เครื่องที่ ${units[0].slot}</th>`) +
-    '<th>หมายเหตุ</th></tr>';
+    '<th class="ctr">หมายเหตุ</th></tr>';
 
   const body = checklistOf(form).map(item =>
     '<tr>' +
     `<td class="ctr">${item.no}</td>` +
-    `<td colspan="3">${esc(item.label)}</td>` +
-    `<td class="ctr unit">${esc(item.criteria)}</td>` +
-    unitCells(u => val(item['val' + u.slot])) +
+    `<td colspan="3" class="lbl">${esc(item.label)}</td>` +
+    `<td class="ctr unit">${esc(item.unit)}</td>` +
+    unitCells(units, u => val(item['val' + u.slot])) +
     `<td>${val(item.note)}</td>` +
     '</tr>'
   ).join('');
@@ -181,74 +181,65 @@ function sectionChecklist(form, units) {
 }
 
 /**
- * ส่วนที่ 4 — สรุปผล
- * กริด: [A:C ป้าย] [D เครื่องที่ N] [E:F ผลประเมิน] [G:H ว่างไว้ให้เขียน]
+ * ส่วนที่ 4 : สรุปผล — [1-3 ป้าย] [4 เครื่องที่ N] [5-8 ช่องติ๊ก]
  *
- * แบบฟอร์มไม่มีช่องค่าใช้จ่าย จึงไม่ใส่ลงกระดาษ — ราคายังเก็บอยู่ในระบบตามเดิม
+ * แบบฟอร์มให้ติ๊กเลือกสองตัวเลือกต่อเครื่อง
+ * ระบบเก็บผลประเมินไว้ค่าเดียวต่อใบ ทั้งสองแถวจึงติ๊กตรงกัน
+ * ถ้าวันหลังต้องแยกผลรายเครื่อง ต้องเพิ่มคอลัมน์ในฐานข้อมูลก่อน
  */
 function sectionSummary(form, units) {
+  const picked = plainText(form.EquipmentCondition).trim();
+
   return units.map(u =>
     '<tr>' +
-    '<th colspan="3">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
-    `<td class="ctr">เครื่องที่ ${u.slot}</td>` +
-    `<td colspan="2">${val(form.EquipmentCondition)}</td>` +
-    '<td colspan="2"></td>' +
-    '</tr>'
+    '<th colspan="3" class="lbl">ผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
+    `<td class="ctr tight">เครื่องที่ ${u.slot}</td>` +
+    '<td colspan="4" class="choices">' +
+    CONDITIONS.map(c =>
+      `<span class="box">${picked === c ? '☑' : '☐'}</span> ${esc(c)}`
+    ).join('<span class="gap"></span>') +
+    '</td></tr>'
   ).join('');
 }
 
-/**
- * ส่วนที่ 6 — การลงนาม
- * กริด: [A:E ช่องซ้าย] [F:H ช่องขวา] สองแถวต่อหนึ่งคู่ (ชื่อตำแหน่ง แล้วบรรทัดเซ็น)
- */
+/** ส่วนที่ 6 : การลงนาม — สองช่องต่อแถว ป้ายอยู่กึ่งกลาง บรรทัดเซ็นอยู่กึ่งกลาง */
 function sectionSign(form) {
-  const pairs = [
+  const LINE = 'ลงชื่อ ……………………………… วันที่ …../…../……..';
+
+  return [
     [['ผู้ดำเนินการล้างแอร์ (บ./หจก.)', form.CompanyName],
      ['ผู้ควบคุมงาน (Interlink)', '']],
     [['ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', form.SupervisorName],
      ['Approve (Infra)', '']]
-  ];
-
-  const LINE = 'ลงชื่อ ……………………………… วันที่ …../…../……..';
-
-  return pairs.map(([left, right]) =>
+  ].map(([left, right]) =>
     '<tr>' +
-    `<th colspan="5">${esc(left[0])}</th><th colspan="3">${esc(right[0])}</th>` +
+    `<th colspan="5" class="ctr">${esc(left[0])}</th><th colspan="3" class="ctr">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
-    `<td colspan="5"><div class="who">${val(left[1])}</div><div>${LINE}</div></td>` +
-    `<td colspan="3"><div class="who">${val(right[1])}</div><div>${LINE}</div></td>` +
+    `<td colspan="5" class="ctr">${signCell(left[1], LINE)}</td>` +
+    `<td colspan="3" class="ctr">${signCell(right[1], LINE)}</td>` +
     '</tr>'
   ).join('');
 }
 
+const signCell = (name, line) =>
+  (name ? `<div class="who">${val(name)}</div>` : '') + `<div>${line}</div>`;
+
 /* ==================== หน้ารูปภาพ ==================== */
 
 /**
- * คำบรรยายใต้กรอบรูปทั้ง 9 ช่อง เรียงซ้ายไปขวา บนลงล่าง
- * ตรงตามชีต "รูปภาพ_เครื่องที่ 1" และ "เครื่องที่ 2" ในแบบฟอร์ม
- */
-const PHOTO_CAPTIONS = [
-  'รูปก่อนล้าง', 'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง',
-  'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง', 'รูปหลังดำเนินการล้าง',
-  'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
-];
-
-/**
- * หน้ารูปภาพของเครื่องหนึ่งตัว — ตาราง 3x3 คำบรรยายอยู่ใต้กรอบ
+ * หน้ารูปของเครื่องหนึ่งตัว — ตาราง 3x3 คำบรรยายอยู่ในกรอบใต้รูป
  *
- * ช่องที่ยังไม่มีรูปพิมพ์ออกมาเป็นกรอบเปล่า เพื่อให้ปริ้นไปติดรูปด้วยมือได้
- * เหมือนแบบฟอร์มกระดาษ ไม่ใช่หายไปทั้งช่อง
- *
- * @param {Object} unit  เครื่องที่จะทำหน้าให้
- * @param {Object} form
- * @param {Object} photos  รูปที่มีแล้ว คีย์เป็น "<เครื่อง>-<ช่อง>" ค่าเป็น data URL
+ * ช่องที่ยังไม่มีรูปพิมพ์เป็นกรอบเปล่าพร้อมข้อความ "วางรูปในกรอบด้านล่าง (Picture)"
+ * เหมือนแบบฟอร์มกระดาษ เพื่อให้ปริ้นไปติดรูปด้วยมือได้
  */
-function photoPage(unit, form, photos) {
+function photoPage(unit, form, photos, opts) {
   const cell = i => {
     const src = photos[unit.slot + '-' + i];
-    return '<td class="pic">' +
-      (src ? `<img src="${src}" alt="">` : '<div class="empty">วางรูปในกรอบนี้</div>') +
-      `<div class="cap">${esc(PHOTO_CAPTIONS[i - 1])}</div></td>`;
+    return '<td class="pic"><div class="box">' +
+      (src
+        ? `<img src="${src}" alt="">`
+        : '<div class="ph">วางรูปในกรอบด้านล่าง&nbsp;<i>(Picture)</i></div>') +
+      `<div class="cap">${esc(PHOTO_CAPTIONS[i - 1])}</div></div></td>`;
   };
 
   const rows = [];
@@ -256,143 +247,156 @@ function photoPage(unit, form, photos) {
     rows.push('<tr>' + [1, 2, 3].map(c => cell(r * 3 + c)).join('') + '</tr>');
   }
 
-  return `<div class="sheet photos">
-  <table class="head"><tbody><tr>
-    <th>Node / รหัส Node</th>
-    <td>${val([plainText(form.NodeName), plainText(form.SiteCode)].filter(Boolean).join(' / '))}</td>
-    <th>วันที่ (DD/MM/YYYY)</th><td>${val(formatDate(form.Date))}</td>
+  return `<div class="sheet"><div class="frame">
+  ${pageHeader('ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + unit.slot +
+               ' (AIR ' + unit.slot + ')', opts)}
+  <table class="info"><tbody><tr>
+    <th>Node Nane</th><td>${val(plainText(form.NodeName))}</td>
+    <th>วันที่</th><td>${val(formatDate(form.Date))}</td>
   </tr></tbody></table>
-  <h2 class="photo-title">ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ —
-    เครื่องที่ ${unit.slot} (AIR ${unit.slot}) ${val(unit.code)}</h2>
-  <table class="grid3"><tbody>${rows.join('')}</tbody></table>
-</div>`;
+  <table class="pics"><tbody>${rows.join('')}</tbody></table>
+</div><div class="code">${FORM_CODE}</div></div>`;
 }
 
 /* ==================== ตัวเอกสาร ==================== */
 
+/** แถบหัวกระดาษ — โลโก้ซ้าย ชื่อเอกสารกึ่งกลาง อยู่ในกรอบเดียวกัน */
+const pageHeader = (title, opts) =>
+  '<table class="hdr"><tbody><tr>' +
+  '<td class="logo">' +
+  (opts.logoHref ? `<img src="${esc(opts.logoHref)}" alt="INTERLINK Telecom">` : '') +
+  `</td><td class="name">${esc(title)}</td>` +
+  '</tr></tbody></table>';
+
 /**
- * สร้างหน้า HTML ของเอกสารหนึ่งใบ
+ * สร้างหน้า HTML ของเอกสารหนึ่งใบ (ใบบันทึกผล + หน้ารูปเครื่องละหนึ่งหน้า)
  *
  * @param {Object} form แถวจากตารางเอกสาร (รวม ChecklistJSON)
  * @param {Object} [opts]
- * @param {string} [opts.fontHref] ที่อยู่ไฟล์ฟอนต์ ถ้าเว้นไว้จะใช้ฟอนต์ของเครื่อง
+ * @param {string} [opts.fontHref] ที่อยู่ไฟล์ฟอนต์ เว้นไว้จะใช้ฟอนต์ของเครื่อง
+ * @param {string} [opts.logoHref] ที่อยู่ไฟล์โลโก้ เว้นไว้จะไม่มีโลโก้
+ * @param {Object} [opts.photos]   รูปที่แนบไว้ คีย์ "<เครื่อง>-<ช่อง>" ค่าเป็น data URL
  * @returns {string} หน้า HTML เต็มใบ พร้อมเปิดดูหรือสั่งปริ้น
  */
 export function buildCleaningDocHtml(form, opts = {}) {
   const units = unitsOf(form);
   if (!units.length) throw new Error('เอกสารใบนี้ยังไม่มีข้อมูลเครื่องปรับอากาศ');
 
-  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const photos = opts.photos || {};
   const total = COL_WIDTHS.reduce((a, b) => a + b, 0);
   const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
 
-  const logo = opts.logoHref
-    ? `<img class="logo" src="${esc(opts.logoHref)}" alt="INTERLINK Telecom">`
-    : '';
-
   return `<!doctype html>
 <html lang="th"><head><meta charset="utf-8">
-<title>${esc(docNo)} — บันทึกผลการล้างเครื่องปรับอากาศ</title>
+<title>${esc(plainText(form.DocNo) || plainText(form.ID))} — บันทึกผลการล้างเครื่องปรับอากาศ</title>
 ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
 </head><body>
-<div class="sheet"><table><colgroup>${cols}</colgroup><tbody>
-  <tr class="title"><td colspan="8">${logo}บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)
-    <span class="docno">เลขที่ ${esc(docNo)}</span></td></tr>
 
-  ${sectionRow('ส่วนที่ 1 : ข้อมูล Node')}
-  ${sectionNode(form, units)}
+<div class="sheet"><div class="frame">
+  ${pageHeader('บันทึกผลการล้างเครื่องปรับอากาศ', opts)}
 
-  ${sectionRow('ส่วนที่ 2 : ข้อมูลเครื่อง')}
-  ${sectionUnits(units)}
+  <table class="main"><colgroup>${cols}</colgroup><tbody>
+    ${sectionRow('ส่วนที่ 1 : ข้อมูล Node')}
+    ${sectionNode(form, units)}
 
-  ${sectionRow('ส่วนที่ 3 : รายการบำรุงรักษาและตรวจสอบ')}
-  ${sectionChecklist(form, units)}
+    ${sectionRow('ส่วนที่ 2 : ข้อมูลเครื่อง')}
+    ${sectionUnits(units)}
 
-  ${sectionRow('ส่วนที่ 4 : สรุปผล')}
-  ${sectionSummary(form, units)}
+    ${sectionRow('ส่วนที่ 3 : รายการบำรุงรักษาและตรวจสอบ')}
+    ${sectionChecklist(form, units)}
 
-  ${sectionRow('ส่วนที่ 5 : บันทึกเพิ่มเติม')}
-  <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
+    ${sectionRow('ส่วนที่ 4 : สรุปผล')}
+    ${sectionSummary(form, units)}
 
-  ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-  ${sectionSign(form)}
+    ${sectionRow('ส่วนที่ 5 : บันทึกเพิ่มเติม')}
+    <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
 
-  <tr class="ref"><td colspan="8">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) /
-    R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI | ค่าจริงขึ้นกับปริมาณน้ำยา
-    ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</td></tr>
-</tbody></table></div>
-${units.map(u => photoPage(u, form, opts.photos || {})).join('\n')}
+    ${sectionRow('ส่วนที่ 6 : การลงนาม')}
+    ${sectionSign(form)}
+  </tbody></table>
+
+  <div class="ref">อ้างอิงแรงดันน้ำยา <i>(Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI /
+    R410A ≈ 120–140 PSI</i> | ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์
+    ความยาวท่อ และอุณหภูมิห้อง</div>
+</div><div class="code">${FORM_CODE}</div></div>
+
+${units.map(u => photoPage(u, form, photos, opts)).join('\n')}
 </body></html>`;
 }
 
 /**
  * รูปแบบหน้ากระดาษ
  *
- * สีทั้งหมดดึงมาจากไฟล์ Excel ตัวจริง ไม่ได้เลือกเอง:
- *   แถบหัวข้อส่วน    #D9D9D9   (ขาว เข้มขึ้น 15% ตามที่ตั้งไว้ในไฟล์)
- *   คอลัมน์หน่วย/เกณฑ์ #F2F2F2 ตัวอักษร #808080
- *   ป้ายลงนามและแถวอ้างอิง #F2F2F2
- *   ที่เหลือพื้นขาว เส้นตารางดำ
+ * สีและเส้นทั้งหมดยึดตามเอกสารควบคุมตัวจริง:
+ *   แถบหัวข้อส่วน / ป้ายในหน้ารูป / คำบรรยายใต้รูป  พื้นเทา #ECECEC
+ *   คอลัมน์หน่วย/เกณฑ์  ตัวอักษรเทา #7F7F7F
+ *   ที่เหลือพื้นขาว เส้นดำบาง ตัวหนังสือดำ
  *
- * ยกเว้นอย่างเดียว: ไฟล์ Excel ตั้งค่าที่กรอกไว้เป็นสีน้ำเงิน แต่ผู้ใช้เลือกใช้
- * สีดำทั้งหมด จึงไม่ได้ทำตามจุดนั้น (ดูคลาส .v ด้านล่าง)
- *
- * คุมให้จบใน 1 หน้า A4 เหมือนแบบฟอร์มกระดาษ ซึ่งเป็นข้อกำหนดของเอกสารชุดนี้
- * ใช้ @page ตั้งขอบกระดาษเอง แทนการพึ่งค่าเริ่มต้นของเบราว์เซอร์ซึ่งต่างกันไป
+ * ทุกหน้าอยู่ในกรอบนอก และมีรหัสแบบฟอร์มที่มุมขวาล่าง
  */
 const STYLE = `
-@page { size: A4 portrait; margin: 7mm; }
+@page { size: A4 portrait; margin: 8mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Sarabun', 'Tahoma', sans-serif; color: #000; }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-td, th { border: 0.5pt solid #000; padding: 0.7mm 1.5mm; font-size: 8pt;
-         vertical-align: middle; text-align: left; word-wrap: break-word; }
-th { font-weight: 700; background: #fff; }
-.ctr, td.ctr, th.ctr { text-align: center; }
 
-/* ค่าที่กรอกลงในแบบฟอร์ม
-   ไฟล์ Excel ตั้งไว้เป็นสีน้ำเงิน แต่เลือกใช้สีดำตามที่ผู้ใช้ต้องการ
-   คลาสนี้เก็บไว้เพื่อให้ยังแยกออกว่าช่องไหนคือค่าที่กรอก
-   เผื่อวันหลังอยากเปลี่ยนสีกลับ แก้ที่บรรทัดเดียวจบ */
+.sheet { page-break-after: always; }
+.sheet:last-child { page-break-after: auto; }
+.frame { border: 1pt solid #000; }
+.code { text-align: right; font-size: 7.5pt; margin-top: 1.5mm; }
+
+/* ---------- หัวกระดาษ ---------- */
+table.hdr { width: 100%; border-collapse: collapse; }
+table.hdr td { border: none; border-bottom: 1pt solid #000; padding: 1.5mm 3mm; vertical-align: middle; }
+table.hdr td.logo { width: 52mm; }
+table.hdr td.logo img { display: block; width: 44mm; height: 11.5mm;
+                        object-fit: cover; object-position: center; }
+table.hdr td.name { text-align: center; font-size: 12.5pt; font-weight: 700;
+                    padding-right: 14mm; white-space: nowrap; }
+
+/* ---------- ตารางหลัก ---------- */
+table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.main td, table.main th { border: 0.5pt solid #000; padding: 0.5mm 1.2mm;
+                               font-size: 7.3pt; line-height: 1.25; vertical-align: middle;
+                               text-align: left; word-wrap: break-word; font-weight: 400; }
+table.main th { font-weight: 400; }
+table.main th.hd { font-weight: 700; }
+.ctr { text-align: center !important; }
+.lbl { padding-left: 2.5mm !important; }
 .v { color: #000; }
+td.unit { color: #7F7F7F; }
+.tight { font-size: 6.6pt !important; white-space: nowrap; }
 
-/* โลโก้อยู่บรรทัดบนชิดซ้าย ชื่อเอกสารอยู่บรรทัดถัดมากึ่งกลาง
-   ไม่ซ้อนกันเหมือนในไฟล์ Excel ที่รูปลอยทับช่องชื่อเรื่อง */
-tr.title td { border: none; text-align: center; font-size: 14pt; font-weight: 700;
-              padding: 0 0 2mm; }
-/* ขนาดและการครอบตัดเท่ากับที่วางไว้ในไฟล์ Excel (กว้าง 54 มม. สูง 15.2 มม.
-   โดยตัดขอบบนล่างของรูปออก เหลือเฉพาะตัวโลโก้) */
-tr.title .logo { display: block; width: 54mm; height: 15.2mm;
-                 object-fit: cover; object-position: center; margin-bottom: 1mm; }
-tr.title .docno { display: block; font-size: 9pt; font-weight: 400; margin-top: 1mm; }
+tr.sec td { background: #ECECEC; font-weight: 700; font-size: 8pt;
+            padding: 0.9mm 2mm !important; border-left: none; border-right: none; }
 
-tr.sec td { background: #D9D9D9; font-weight: 700; font-size: 8.5pt; padding: 1mm 1.5mm; }
-td.unit, th.unit { background: #F2F2F2; color: #808080; }
-.code { font-size: 6.8pt; font-weight: 400; color: #000; }
-tr.note td { height: 13mm; vertical-align: top; white-space: pre-wrap; }
-tr.sign th { background: #F2F2F2; }
-tr.sign td { height: 12mm; vertical-align: bottom; }
-tr.sign .who { margin-bottom: 3.5mm; }
-tr.ref td { background: #F2F2F2; font-size: 6.5pt; }
+td.choices .box { font-size: 10pt; line-height: 1; }
+td.choices .gap { display: inline-block; width: 14mm; }
 
-/* ---------- หน้ารูปภาพ หน้าละหนึ่งเครื่อง ---------- */
-.sheet.photos { page-break-before: always; }
-table.head { margin-bottom: 2mm; }
-h2.photo-title { font-size: 11pt; text-align: center; margin: 0 0 2.5mm; }
-table.grid3 { width: 100%; border-collapse: separate; border-spacing: 2mm; table-layout: fixed; }
-table.grid3 td.pic { width: 33.33%; border: none; padding: 0; vertical-align: top; }
-table.grid3 img { display: block; width: 100%; height: 62mm; object-fit: cover;
-                  border: 0.5pt solid #000; }
-table.grid3 .empty { height: 62mm; border: 0.5pt dashed #999; display: flex;
-                     align-items: center; justify-content: center;
-                     color: #aaa; font-size: 8pt; }
-table.grid3 .cap { text-align: center; font-size: 7.5pt; margin-top: 1mm;
-                   min-height: 7mm; }
+tr.note td { height: 15mm; vertical-align: top; white-space: pre-wrap; }
+tr.sign td { height: 11mm; vertical-align: bottom; padding-bottom: 2mm !important; }
+tr.sign .who { margin-bottom: 2mm; }
+
+.ref { text-align: center; font-size: 6.6pt; padding: 1.5mm 4mm; }
+
+/* ---------- หน้ารูปภาพ ---------- */
+table.info { width: 100%; border-collapse: collapse; }
+table.info th, table.info td { border: 0.5pt solid #000; padding: 1.5mm 3mm; font-size: 9pt; }
+table.info th { background: #ECECEC; font-weight: 700; text-align: center; width: 18%; }
+table.info td { width: 32%; text-align: center; }
+
+table.pics { width: 100%; border-collapse: separate; border-spacing: 3mm; table-layout: fixed; }
+table.pics td.pic { width: 33.33%; border: none; padding: 0; vertical-align: top; }
+table.pics .box { border: 0.75pt solid #000; }
+table.pics img { display: block; width: 100%; height: 62mm; object-fit: cover; }
+table.pics .ph { height: 62mm; display: flex; align-items: center; justify-content: center;
+                 color: #7F7F7F; font-size: 8pt; text-align: center; padding: 2mm; }
+table.pics .cap { border-top: 0.75pt solid #000; background: #ECECEC; text-align: center;
+                  font-size: 8pt; padding: 1mm 1mm; min-height: 7mm; }
 
 @media screen {
   body { background: #e9edf2; padding: 6mm 0; }
-  .sheet { width: 210mm; margin: 0 auto 6mm; background: #fff; padding: 7mm;
+  .sheet { width: 210mm; margin: 0 auto 8mm; background: #fff; padding: 8mm;
            box-shadow: 0 1px 6px rgba(0,0,0,.2); }
 }
 `;
