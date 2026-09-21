@@ -65,10 +65,46 @@ test('ล้างเฉพาะเครื่องที่ 2 หัวค�
   assert.ok(!html.includes('IN-111'), 'ต้องไม่มีข้อมูลของเครื่องที่ 1 หลุดมา');
 });
 
-test('ล้างเฉพาะเครื่องที่ 1 ได้คอลัมน์เดียวเหมือนกัน', () => {
+test('ล้างเฉพาะเครื่องที่ 1 ต้องไม่มีคอลัมน์ของเครื่องที่ 2 โผล่มา', () => {
   const html = buildCleaningDocHtml(withoutUnit(2));
   assert.ok(html.includes('เครื่องที่ 1 (AIR 1)'));
   assert.ok(!html.includes('เครื่องที่ 2 (AIR 2)'));
+});
+
+/**
+ * ช่องของเครื่องทั้งสองช่องในแถวที่มีป้ายที่ระบุ
+ * ทั้งส่วนที่ 2 และส่วนที่ 3 วางช่องเครื่องไว้ก่อนคอลัมน์สุดท้ายเสมอ จึงนับจากท้ายแถว
+ */
+function unitCellsOf(html, label) {
+  const row = html.split('<tr').find(r => r.includes(label));
+  assert.ok(row, 'ไม่พบแถว ' + label);
+  return row.split('<td').slice(1).map(c => c.split('</td>')[0]).slice(-3, -1);
+}
+
+test('ล้างตัวเดียว ข้อมูลต้องอยู่คอลัมน์ของตัวเอง ไม่เลื่อนมาคอลัมน์แรก', () => {
+  // คนอ่านเอกสารดูจากตำแหน่งคอลัมน์ว่าเป็นแอร์ตัวไหนของ Node
+  // ล้างตัวที่ 2 ตัวเดียวแล้วข้อมูลไปโผล่คอลัมน์ซ้าย คือบอกผิดว่าล้างตัวที่ 1
+  const [c1, c2] = unitCellsOf(buildCleaningDocHtml(withoutUnit(1)), 'Indoor Serial No.');
+  assert.ok(!c1.includes('IN-'), 'คอลัมน์ของเครื่องที่ 1 ต้องว่าง');
+  assert.ok(c2.includes('IN-222'), 'ข้อมูลต้องอยู่คอลัมน์ของเครื่องที่ 2');
+
+  const [d1, d2] = unitCellsOf(buildCleaningDocHtml(withoutUnit(2)), 'Indoor Serial No.');
+  assert.ok(d1.includes('IN-111'), 'ข้อมูลต้องอยู่คอลัมน์ของเครื่องที่ 1');
+  assert.ok(!d2.includes('IN-'), 'คอลัมน์ของเครื่องที่ 2 ต้องว่าง');
+});
+
+test('ล้างตัวเดียว ต้องไม่ยุบสองคอลัมน์รวมเป็นช่องเดียว', () => {
+  const html = buildCleaningDocHtml(withoutUnit(1));
+  for (const cell of unitCellsOf(html, 'Outdoor Asset No.')) {
+    assert.ok(!cell.includes('colspan'), 'ช่องของเครื่องต้องกว้างหนึ่งคอลัมน์เสมอ');
+  }
+});
+
+test('ล้างตัวเดียว ค่าที่วัด 21 ข้อ ก็ต้องอยู่คอลัมน์ของตัวเอง', () => {
+  // ข้อ 13 ของใบตัวอย่างบันทึกไว้ 68 (เครื่อง 1) และ 70 (เครื่อง 2)
+  const [c1, c2] = unitCellsOf(buildCleaningDocHtml(withoutUnit(1)), 'Low/Suction');
+  assert.ok(!c1.includes('68'), 'คอลัมน์ของเครื่องที่ 1 ต้องว่าง');
+  assert.ok(c2.includes('70'), 'ค่าของเครื่องที่ 2 ต้องอยู่คอลัมน์ที่ 2');
 });
 
 test('ใบที่ไม่มีเครื่องเลย ต้องบอกให้รู้ ไม่ใช่ออกใบเปล่า', () => {

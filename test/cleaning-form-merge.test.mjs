@@ -268,6 +268,41 @@ test('กรอกสองเครื่องในครั้งเดี�
   assert.match(detailOf('AYA-WNI-AIR-2'), /ผลประเมิน: สภาพเครื่องควรปรับปรุง/);
 });
 
+/** ตั้งแผนปี 2026 รอบ 2 ให้ทั้งสองเครื่อง เพื่อดูว่าปิดงานถูกแถว */
+function addPlans(db) {
+  const add = db.prepare(
+    'INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)'
+  );
+  add.run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
+  add.run(2026, 'AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
+}
+
+// node:sqlite คืนแถวเป็นอ็อบเจกต์ไร้ต้นแบบ ซึ่ง deepEqual ถือว่าไม่เท่ากับอ็อบเจกต์ธรรมดา
+const planRound2 = db => db.prepare(
+  'SELECT AirCode, R2_Status, R2_Price FROM plans WHERE Year = 2026 ORDER BY AirCode'
+).all().map(r => ({ AirCode: r.AirCode, R2_Status: r.R2_Status, R2_Price: r.R2_Price }));
+
+test('เอกสารรวมเป็นใบเดียว แต่งานในแผนต้องปิดแยกทีละเครื่อง', async () => {
+  // เอกสารเป็นของ "การไปล้างครั้งนั้น" แต่แผนเป็นของ "เครื่อง"
+  // กรอกเครื่องที่ 1 แล้วเครื่องที่ 2 ถูกปิดตามไปด้วย = แผนบอกว่าล้างแล้วทั้งที่ยังไม่ได้ล้าง
+  const db = freshDb();
+  addPlans(db);
+
+  const first = await saveCleaningForm(ctxOf(db), oneUnit(1));
+  assert.equal(first.planClosed, 1, 'ปิดได้ครั้งละหนึ่งเครื่อง');
+  assert.deepEqual(planRound2(db), [
+    { AirCode: 'AYA-WNI-AIR-1', R2_Status: 'ล้างเสร็จสิ้น', R2_Price: 450 },
+    { AirCode: 'AYA-WNI-AIR-2', R2_Status: 'รอดำเนินการ', R2_Price: null }
+  ]);
+
+  const second = await saveCleaningForm(ctxOf(db), oneUnit(2));
+  assert.equal(second.planClosed, 1);
+  assert.deepEqual(planRound2(db), [
+    { AirCode: 'AYA-WNI-AIR-1', R2_Status: 'ล้างเสร็จสิ้น', R2_Price: 450 },
+    { AirCode: 'AYA-WNI-AIR-2', R2_Status: 'ล้างเสร็จสิ้น', R2_Price: 450 }
+  ], 'ราคาต้องลงแถวของเครื่องตัวเอง ไม่ใช่ยอดรวมทั้งใบ');
+});
+
 test('กรอกเครื่องเดียว ประวัติต้องมีใบเดียว ไม่ลงให้เครื่องที่ยังไม่ได้ล้าง', async () => {
   const db = freshDb();
   await saveCleaningForm(ctxOf(db), oneUnit(1));
