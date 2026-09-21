@@ -128,7 +128,7 @@ function sectionNode(form, units) {
   const timeRange = [formatTime(form.TimeStart), formatTime(form.TimeEnd)].filter(Boolean).join(' – ');
 
   return [
-    ['Node Nane', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
+    ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
     ['วันที่', formatDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
@@ -251,7 +251,7 @@ function photoPage(unit, form, photos, opts) {
   ${pageHeader('ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + unit.slot +
                ' (AIR ' + unit.slot + ')', opts)}
   <table class="info"><tbody><tr>
-    <th>Node Nane</th><td>${val(plainText(form.NodeName))}</td>
+    <th>Node Name</th><td>${val(plainText(form.NodeName))}</td>
     <th>วันที่</th><td>${val(formatDate(form.Date))}</td>
   </tr></tbody></table>
   <table class="pics"><tbody>${rows.join('')}</tbody></table>
