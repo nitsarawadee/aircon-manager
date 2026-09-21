@@ -3,7 +3,6 @@ import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd 
 import { addHistoryRaw, getHistory, makeHistoryId, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
 import { closePlanRound } from './plan.js';
-import { uploadNodeDocs } from '../pdf-bridge.js';
 
 /**
  * ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ
@@ -787,6 +786,9 @@ export async function deleteCleaningForm(ctx, row) {
     if (ctx.docs && docNo) {
       try { ctx.docs.remove(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
+    if (ctx.attachments && docNo) {
+      try { ctx.attachments.removeAll(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
+    }
 
     return getCleaningForms(ctx);
   });
@@ -800,12 +802,22 @@ const NODE_DOC_MAX_FILES = 10;
  * แนบไฟล์เอกสารเข้ากับ Node และปิดงานล้างในแผนให้ด้วย (ถ้าระบุรอบมา)
  *
  * ใช้กับกรณีที่ช่างปริ้นฟอร์มเปล่าไปเขียนด้วยมือหน้างาน แล้วถ่ายรูปส่งกลับมา
- * ไฟล์จะถูกเก็บที่ CleaningReports/<ปี>/<ชื่อ Node>/เอกสารแนบ/
+ * ไฟล์ถูกเก็บลงดิสก์ของเครื่องที่รันระบบ ที่ data/attachments/<ปี>/<เดือน>/<เลขที่เอกสาร>/
+ *
+ * ============================================================================
+ * ทุกครั้งที่แนบ ต้องได้แถวในตารางเอกสารเสมอ
+ * ============================================================================
+ * เดิมถ้าไม่ได้ติ๊ก "ปิดงานในแผน" ระบบจะเก็บไฟล์อย่างเดียวโดยไม่สร้างแถว
+ * ซึ่งใช้ได้ตอนไฟล์อยู่บน Drive เพราะยังเปิดโฟลเดอร์ไปหาเองได้
+ *
+ * พอย้ายมาเก็บในเครื่อง ไม่มีหน้าจอให้เดินดูโฟลเดอร์แล้ว ไฟล์ที่ไม่มีแถวอ้างถึง
+ * จะกลายเป็นไฟล์ที่ไม่มีใครเปิดได้อีกเลย จึงต้องออกเลขที่เอกสารและสร้างแถวเสมอ
+ * ส่วน "ปิดงานในแผน" เหลือหน้าที่เดียวคือไปปิดรอบกับลงประวัติ
  *
  * @param {Object} payload
  * @param {string} payload.nodeName
  * @param {Array}  payload.files    [{name, mimeType, data(base64)}]
- * @param {Object} [payload.closeout]  ถ้าไม่ส่งมา = แค่เก็บไฟล์ ไม่ไปแตะแผนหรือประวัติ
+ * @param {Object} [payload.closeout]  ไม่ส่งมา = เก็บเป็นเอกสารอย่างเดียว ไม่แตะแผนหรือประวัติ
  * @param {Array}  payload.closeout.units  [{airCode, price}] เครื่องที่ล้าง พร้อมราคารายเครื่อง
  */
 export async function uploadNodeDocuments(ctx, payload) {
@@ -855,40 +867,49 @@ export async function uploadNodeDocuments(ctx, payload) {
       });
     }
 
-    // ---------- อัปโหลดไฟล์ขึ้น Drive ----------
-    const today = ymd(new Date());
-    const uploaded = await uploadNodeDocs(ctx.env, { nodeName, date: today, files });
-
-    // ลิงก์ที่จะผูกไว้ในแผน: ใช้ไฟล์แรกถ้ามี ไม่งั้นใช้ลิงก์โฟลเดอร์
-    const docUrl = (uploaded.files && uploaded.files[0] && uploaded.files[0].url) || uploaded.folderUrl || '';
-
-    if (!closeout) {
-      return { ...uploaded, planClosed: 0 };
+    if (!ctx.attachments) {
+      throw new Error('เครื่องที่รันระบบอยู่เก็บไฟล์แนบไม่ได้ (ไม่มีที่เก็บไฟล์)');
     }
 
-    // ---------- ปิดงานในแผน + บันทึกประวัติ ----------
-    const planClosed = await closeRoundsForUnits(ctx, units, {
+    // ---------- ออกเลขที่เอกสารก่อน เพราะใช้เป็นชื่อโฟลเดอร์ของไฟล์ ----------
+    // ออกเลขในล็อกเสมอ เหมือนตอนบันทึกฟอร์ม เพื่อไม่ให้สองคนได้เลขเดียวกัน
+    const docDate = plainText(closeout && closeout.date) || ymd(new Date());
+    const docNo = nextDocNo(ctx, 'ล้างแอร์', docDate);
+
+    // ---------- เก็บไฟล์ลงดิสก์ ----------
+    const stored = ctx.attachments.save(docNo, docDate, files);
+
+    // ไม่มีลิงก์ให้ผูกในแผนอีกแล้ว ไฟล์เปิดได้จากหน้าแบบฟอร์มเอกสารทุกเมื่อ
+    // (เหมือนกับใบที่กรอกในระบบ ซึ่งเลิกเก็บลิงก์ไปตั้งแต่เลิกใช้ Drive)
+    const docUrl = '';
+
+    // ---------- ปิดงานในแผน + บันทึกประวัติ (เฉพาะตอนที่ระบุรอบมา) ----------
+    const planClosed = closeout ? await closeRoundsForUnits(ctx, units, {
       planYear: closeout.year,
       planRound: closeout.round,
       date: closeout.date,
       technician: closeout.technician,
       docUrl
-    });
+    }) : 0;
 
-    await writeCleaningHistory(ctx, units, {
-      date: closeout.date,
-      technician: closeout.technician,
-      nodeName,
-      docUrl,
-      planYear: closeout.year,
-      planRound: closeout.round,
-      source: 'attach'
-    });
+    if (closeout) {
+      await writeCleaningHistory(ctx, units, {
+        date: closeout.date,
+        technician: closeout.technician,
+        nodeName,
+        docUrl,
+        planYear: closeout.year,
+        planRound: closeout.round,
+        source: 'attach'
+      });
+    }
 
     // ---------- เก็บเป็นรายการหนึ่งในตารางฟอร์มล้างแอร์ ----------
     // เพื่อให้ดูประวัติการล้างทั้งหมดได้จากที่เดียว ไม่ต้องแยกจำว่าใบไหนกรอกในระบบ
     // ใบไหนเขียนมือ — คอลัมน์ Source บอกที่มา และ PdfUrl ชี้ไปที่ไฟล์ที่แนบมา
-    const first = nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(units[0].airCode)) || nodeUnits[0];
+    // ไม่ได้ติ๊กปิดงาน = ไม่มีรายการเครื่อง ให้ยึดเครื่องตัวแรกของ Node ไว้เป็นข้อมูลอ้างอิง
+    const first = (units[0] && nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(units[0].airCode)))
+      || nodeUnits[0];
     const second = units[1]
       ? nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(units[1].airCode))
       : null;
@@ -896,8 +917,8 @@ export async function uploadNodeDocuments(ctx, payload) {
     const record = {
       ID: 'CF' + Date.now(),
       DocType: 'cleaning',
-      DocNo: nextDocNo(ctx, 'ล้างแอร์', closeout.date),
-      Date: closeout.date,
+      DocNo: docNo,
+      Date: docDate,
       NodeName: nodeName,
       SiteCode: plainText(first.SiteCode),
       Region: plainText(first.Region),
@@ -920,15 +941,15 @@ export async function uploadNodeDocuments(ctx, payload) {
       ChecklistJSON: '[]',
       EquipmentCondition: units[0] ? units[0].cond : '',
       EquipmentCondition2: units[1] ? units[1].cond : '',
-      AdditionalNote: closeout.note || '',
-      CompanyName: closeout.companyName || '',
-      TechnicianName: closeout.technician || '',
+      AdditionalNote: (closeout && closeout.note) || '',
+      CompanyName: (closeout && closeout.companyName) || '',
+      TechnicianName: (closeout && closeout.technician) || '',
       PdfUrl: docUrl,
       PdfFileId: '',
       CreatedAt: ymdhms(new Date()),
       RecordedBy: await ctx.currentUser(),
-      PlanYear: closeout.year || '',
-      PlanRound: closeout.round || '',
+      PlanYear: (closeout && closeout.year) || '',
+      PlanRound: (closeout && closeout.round) || '',
       Price1: units[0] ? units[0].price : '',
       Price2: units[1] ? units[1].price : '',
       Source: 'attach'
@@ -941,10 +962,49 @@ export async function uploadNodeDocuments(ctx, payload) {
     await ctx.ss.flush();
 
     return {
-      ...uploaded,
+      docNo,
+      count: stored.length,
+      files: stored,
       planClosed,
       forms: await getCleaningForms(ctx),
       history: await getHistory(ctx)
     };
   });
+}
+
+/* ==================== เปิดไฟล์ที่แนบไว้ ==================== */
+
+/** เลขที่เอกสารของแถวที่ระบุ พร้อมตรวจสิทธิ์ภูมิภาคให้แล้ว */
+async function docNoOfRow(ctx, row) {
+  await ctx.ensureBase();
+  const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+  await ctx.assertRegionAccess(form.Region);
+  return plainText(form.DocNo) || plainText(form.ID);
+}
+
+/** รายชื่อไฟล์ที่แนบไว้กับเอกสารใบหนึ่ง (ส่งแค่ชื่อกับขนาด ไม่ส่งตัวไฟล์) */
+export async function getCleaningAttachments(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!ctx.attachments) return [];
+
+  return ctx.attachments.list(await docNoOfRow(ctx, row));
+}
+
+/**
+ * อ่านไฟล์แนบหนึ่งไฟล์ออกมาให้เปิดหรือดาวน์โหลด
+ *
+ * ส่งชื่อไฟล์มาเป็นตัวระบุ ไม่ใช่เส้นทางไฟล์ — ชั้น platform เป็นคนเทียบกับ
+ * รายการที่มีอยู่จริงก่อนอ่าน ชื่อที่ส่งมาจึงพาไปอ่านไฟล์นอกโฟลเดอร์ไม่ได้
+ */
+export async function getCleaningAttachment(ctx, payload) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!ctx.attachments) throw new Error('เครื่องที่รันระบบอยู่ไม่มีที่เก็บไฟล์แนบ');
+
+  const docNo = await docNoOfRow(ctx, (payload || {}).row);
+  const file = ctx.attachments.read(docNo, (payload || {}).name);
+  if (!file) throw new Error('ไม่พบไฟล์แนบที่ขอ');
+  return file;
 }

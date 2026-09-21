@@ -41,14 +41,17 @@ export class Ctx {
    * @param {Object} [pdf]   ตัวแปลงหน้าเอกสารเป็นไฟล์ PDF
    * @param {Object} [docs]  ที่เก็บไฟล์ PDF บนดิสก์ของเครื่องที่รันระบบ
    *   ไม่ส่งมา = ยังกดดาวน์โหลด PDF ได้ แค่ไม่มีสำเนาเก็บไว้บนเซิร์ฟเวอร์
+   * @param {Object} [attachments]  ที่เก็บไฟล์เอกสารที่ช่างถ่ายส่งกลับมา
+   *   ไม่ส่งมา = แนบไฟล์ไม่ได้ ส่วนที่เหลือใช้ได้ครบ
    */
-  constructor(env, state, db, photos, pdf, docs) {
+  constructor(env, state, db, photos, pdf, docs, attachments) {
     this.env = env;
     this.state = state;
     this.db = db || null;
     this.photos = photos || null;
     this.pdf = pdf || null;      // ตัวแปลงเอกสารเป็นไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้)
     this.docs = docs || null;    // ที่เก็บไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้ แค่ไม่เก็บสำเนา)
+    this.attachments = attachments || null;  // ที่เก็บไฟล์เอกสารแนบ
     this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite หรือ Google Sheets)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ

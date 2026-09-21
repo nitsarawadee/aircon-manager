@@ -26,6 +26,8 @@ import { networkInterfaces } from 'node:os';
 
 import { savePhoto, removePhoto, removeDocPhotos, readDocPhotos } from './photos.js';
 import { saveDocFile, readDocFile, removeDocFile, docsDiskUsage } from './docs.js';
+import { saveAttachments, listAttachments, readAttachment, removeAttachments, attachmentsDiskUsage }
+  from './attachments.js';
 import { renderPdf, findBrowser } from './pdf-render.js';
 import { webcrypto } from 'node:crypto';
 
@@ -61,6 +63,7 @@ function dataPaths(env) {
     backups: env.BACKUP_DIR || join(dir, 'backups'),
     photos: env.PHOTO_DIR || dir,   // รูปถ่ายอยู่ใต้ <dir>/photos อีกชั้น
     docs: env.DOC_DIR || dir,       // ไฟล์ PDF อยู่ใต้ <dir>/docs/<ปี>/<เดือน>
+    attachments: env.ATTACH_DIR || dir,   // ไฟล์แนบอยู่ใต้ <dir>/attachments/<ปี>/<เดือน>
     // ค่าเริ่มต้นยังเป็นไฟล์เดิมที่ราก เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
     sessions: env.SESSION_PATH || join(ROOT, '.sessions.json')
   };
@@ -314,10 +317,26 @@ const docs = {
   remove: docNo => removeDocFile(docRoot, docNo)
 };
 
+/**
+ * ที่เก็บไฟล์เอกสารที่ช่างเขียนมือแล้วถ่ายส่งกลับมา
+ *
+ * เดิมไฟล์ชุดนี้ถูกส่งไป Google Drive ผ่าน Apps Script ซึ่งเป็นสิ่งสุดท้าย
+ * ที่ทำให้ระบบยังต้องออกเน็ต ตอนนี้เก็บลงดิสก์เหมือนรูปถ่ายและไฟล์ PDF
+ */
+const attachRoot = resolve(ROOT, PATHS.attachments);
+const attachments = {
+  save: (docNo, date, files) => saveAttachments(attachRoot, docNo, date, files),
+  list: docNo => listAttachments(attachRoot, docNo),
+  read: (docNo, name) => readAttachment(attachRoot, docNo, name),
+  removeAll: docNo => removeAttachments(attachRoot, docNo)
+};
+
 {
-  const used = docsDiskUsage(docRoot);
-  console.log('เก็บไฟล์ PDF ของเอกสารไว้ที่ ' + join(docRoot, 'docs') +
-              ' (ตอนนี้ ' + used.files + ' ไฟล์ ' + (used.bytes / 1024 / 1024).toFixed(1) + ' MB)');
+  const mb = n => (n / 1024 / 1024).toFixed(1) + ' MB';
+  const d = docsDiskUsage(docRoot);
+  const a = attachmentsDiskUsage(attachRoot);
+  console.log('ไฟล์ PDF ของเอกสาร: ' + join(docRoot, 'docs') + ' (' + d.files + ' ไฟล์ ' + mb(d.bytes) + ')');
+  console.log('ไฟล์เอกสารแนบ:      ' + join(attachRoot, 'attachments') + ' (' + a.files + ' ไฟล์ ' + mb(a.bytes) + ')');
 }
 
 /**
@@ -372,7 +391,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf, docs }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf, docs, attachments }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };

@@ -5723,9 +5723,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           // ใบที่กรอกในระบบ ประกอบเอกสารให้ดูได้ทุกเมื่อ และเซิร์ฟเวอร์เก็บสำเนา PDF ไว้ให้เอง
           // ใบที่แนบเอกสารมา ไม่มีข้อมูลเช็คลิสต์ให้วาด จึงเปิดได้เฉพาะไฟล์ที่แนบ
           f.Source === 'attach'
-            ? (f.PdfUrl
-                ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-[#1153a1] hover:underline inline-flex items-center gap-1"><i class="ph ph-paperclip"></i> เปิดไฟล์ที่แนบ</a>`
-                : '<span class="text-xs text-gray-400">ไม่มีไฟล์</span>')
+            ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
             : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
@@ -5965,6 +5965,86 @@ const CLEANING_CHECKLIST_ITEMS = [
     }
   }
   window.downloadCleaningPdf = downloadCleaningPdf;
+
+
+  /* ---------- ไฟล์ที่ช่างถ่ายส่งมา (เก็บไว้บนเซิร์ฟเวอร์) ---------- */
+
+  /** ขนาดไฟล์แบบอ่านง่าย */
+  const fileSize = n =>
+    n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+
+  /**
+   * แสดงรายชื่อไฟล์ที่แนบไว้กับเอกสารใบนี้
+   *
+   * ไฟล์ไม่มีที่อยู่สาธารณะให้ลิงก์ตรงๆ (เหมือนรูปถ่ายและไฟล์ PDF)
+   * จึงต้องขอผ่านคำสั่งที่ตรวจสิทธิ์แล้ว แล้วค่อยเปิดจากข้อมูลที่ได้กลับมา
+   */
+  async function openAttachmentList(row) {
+    let files;
+    try { files = await call('getCleaningAttachments', row); } catch (e) { return; }
+
+    const rows = (files || []).length
+      ? files.map((f, i) => `
+          <div class="flex items-center justify-between gap-3 py-2 ${i ? 'border-t border-gray-100' : ''}">
+            <div class="min-w-0">
+              <div class="text-sm text-gray-800 truncate">${esc(f.name)}</div>
+              <div class="text-xs text-gray-400">${esc(fileSize(f.bytes))}</div>
+            </div>
+            <button onclick="openAttachmentFile(${row}, '${esc(f.name).replace(/'/g, '&#39;')}', this)"
+              class="flex-shrink-0 text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-arrow-square-out"></i> เปิด</button>
+          </div>`).join('')
+      : '<p class="text-sm text-gray-500 py-4 text-center">ไม่มีไฟล์แนบของเอกสารใบนี้</p>';
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-paperclip text-[#1153a1]"></i> ไฟล์ที่แนบไว้</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="px-6 py-2 max-h-[60vh] overflow-y-auto">${rows}</div>
+          <div class="px-6 py-4 border-t border-gray-100 text-right">
+            <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ปิด</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  window.openAttachmentList = openAttachmentList;
+
+  /** เปิดไฟล์แนบหนึ่งไฟล์ในแท็บใหม่ */
+  async function openAttachmentFile(row, name, btn) {
+    const old = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
+
+    try {
+      const res = await call('getCleaningAttachment', { row, name });
+      if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
+
+      const bin = atob(res.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+      // เปิดเป็นที่อยู่ชั่วคราวในเบราว์เซอร์ของคนกด ไม่ได้เปิดที่อยู่บนเซิร์ฟเวอร์
+      const url = URL.createObjectURL(new Blob([bytes], { type: res.mime || 'application/octet-stream' }));
+      if (!window.open(url, '_blank')) {
+        // ป๊อปอัปถูกบล็อก — ให้ดาวน์โหลดแทน ดีกว่าเงียบไปเฉยๆ
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = res.name || 'file';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      // call() แสดงข้อความผิดพลาดให้แล้ว
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+    }
+  }
+  window.openAttachmentFile = openAttachmentFile;
 
   /** เปิดฟอร์มเปล่าของ Node ที่เลือก สำหรับปริ้นไปเขียนด้วยมือ */
   const openBlankCleaningDoc = record => openDocWindow('getCleaningBlankDocHtml', record);
@@ -6523,7 +6603,6 @@ const CLEANING_CHECKLIST_ITEMS = [
       });
       if (!res || !res.count) throw new Error('อัปโหลดไม่สำเร็จ');
 
-      const folderUrl = res.folderUrl;
       const closed = res.planClosed || 0;
       closeAttachFromPlan();
       closeModal();
@@ -6534,16 +6613,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       loadDashboard();
       loadBudget();
 
-      showToast('ปิดงานรอบที่ ' + round + ' ให้ ' + closed + ' เครื่องเรียบร้อย');
-      if (folderUrl) {
-        showLinkResult({
-          title: 'ปิดงานเรียบร้อย',
-          url: folderUrl,
-          linkText: 'เปิดโฟลเดอร์เอกสารใน Google Drive',
-          body: 'Node <b>' + esc(nodeName) + '</b> รอบที่ <b>' + esc(round) + '</b><br>' +
-                'ปิดงานให้ ' + closed + ' เครื่อง และเก็บเอกสาร ' + res.count + ' ไฟล์ไว้ใน Drive แล้ว'
-        });
-      }
+      showToast('ปิดงานรอบที่ ' + round + ' ให้ ' + closed + ' เครื่องเรียบร้อย — ' +
+                'เก็บไฟล์ ' + res.count + ' ไฟล์ไว้ในเอกสาร ' + res.docNo + ' แล้ว');
     } catch (e) {
       btn.disabled = false;
       btn.textContent = 'ปิดงาน';
@@ -6736,44 +6807,6 @@ const CLEANING_CHECKLIST_ITEMS = [
         </span>
       </label>`;
     }).join('');
-  }
-
-  /**
-   * แสดงผลลัพธ์พร้อมลิงก์ให้กดเอง
-   *
-   * จำเป็นต้องมี เพราะเดิมใช้ window.open() อย่างเดียว ซึ่งเบราว์เซอร์มักบล็อก
-   * เมื่อเรียกหลัง await (ถือว่าไม่ได้เกิดจากการกดของผู้ใช้โดยตรง)
-   * เวลาถูกบล็อกจะเงียบสนิท ผู้ใช้เห็นแค่ข้อความว่าสำเร็จแต่หาไฟล์ไม่เจอ
-   */
-  function showLinkResult(opts) {
-    const old = document.getElementById('linkResultRoot');
-    if (old) old.remove();
-
-    const box = document.createElement('div');
-    box.id = 'linkResultRoot';
-    box.innerHTML = `
-      <div class="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" onclick="closeLinkResult()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 p-6 text-center">
-          <div class="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-            <i class="ph-fill ph-check-circle text-3xl text-emerald-500"></i>
-          </div>
-          <h3 class="text-lg font-bold text-gray-800 mb-1">${esc(opts.title)}</h3>
-          <p class="text-sm text-gray-500 mb-5">${opts.body}</p>
-
-          <a href="${esc(opts.url)}" target="_blank" rel="noopener"
-             class="block w-full bg-[#1153a1] hover:bg-[#0e4485] text-white font-medium py-3 rounded-xl shadow-sm mb-3 flex items-center justify-center gap-2">
-            <i class="ph ph-arrow-square-out text-lg"></i> ${esc(opts.linkText)}
-          </a>
-          <button onclick="closeLinkResult()" class="text-sm text-gray-500 hover:text-gray-700">ปิดหน้าต่างนี้</button>
-        </div>
-      </div>`;
-    document.body.appendChild(box);
-  }
-
-  function closeLinkResult() {
-    const el = document.getElementById('linkResultRoot');
-    if (el) el.remove();
   }
 
   /** เปิดฟอร์มเปล่าที่เติมข้อมูลเครื่องให้แล้ว สำหรับปริ้นไปเขียนด้วยมือ */
@@ -7316,11 +7349,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       const res = await call('uploadNodeDocuments', payload);
       if (!res || !res.count) { throw new Error('อัปโหลดไม่สำเร็จ'); }
 
-      const folderUrl = res.folderUrl;
       closeAttachDocsDialog();
 
       if (res.planClosed) {
-        showToast('แนบไฟล์และปิดงานให้ ' + res.planClosed + ' เครื่องเรียบร้อย');
         // แผนปีนั้นเปลี่ยนไปแล้ว ต้องล้างแคชไม่งั้นเปิดหน้าต่างครั้งหน้าจะเห็นสถานะเก่า
         adPlanCache = {};
         if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
@@ -7330,19 +7361,14 @@ const CLEANING_CHECKLIST_ITEMS = [
         loadDashboard();
         loadBudget();
       } else {
-        showToast('แนบไฟล์สำเร็จ ' + res.count + ' ไฟล์ เข้า Node "' + payload.nodeName + '"');
+        // ไม่ได้ปิดงานในแผน แต่ได้แถวในตารางเอกสารเสมอ ไม่งั้นไฟล์จะไม่มีใครเปิดได้
+        if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
+        if (document.getElementById('view-cleaningform').classList.contains('active')) renderCleaningFormTable();
       }
 
-      if (folderUrl) {
-        window.open(folderUrl, '_blank');
-        showLinkResult({
-          title: res.planClosed ? 'แนบไฟล์และปิดงานเรียบร้อย' : 'แนบไฟล์เรียบร้อย',
-          url: folderUrl,
-          linkText: 'เปิดโฟลเดอร์ใน Google Drive',
-          body: 'ไฟล์ ' + res.count + ' ไฟล์ถูกเก็บไว้ในโฟลเดอร์ของ Node <b>' + esc(payload.nodeName) + '</b> แล้ว' +
-                (res.planClosed ? '<br>และปิดงานในแผนให้ ' + res.planClosed + ' เครื่องเรียบร้อย' : '')
-        });
-      }
+      showToast('แนบไฟล์ ' + res.count + ' ไฟล์เข้าเอกสาร ' + res.docNo + ' แล้ว' +
+                (res.planClosed ? ' และปิดงานในแผนให้ ' + res.planClosed + ' เครื่อง' : '') +
+                ' — กด "ไฟล์ที่แนบ" ในตารางเพื่อเปิดดู');
     } catch (e) {
       btn.disabled = false;
       btn.textContent = 'ยืนยัน';
