@@ -1980,7 +1980,7 @@
           <td class="px-4 py-3">${(u.Active === false || String(u.Active).toUpperCase() === 'FALSE') ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">ปิดใช้งาน</span>' : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">ใช้งานอยู่</span>'}</td>
           <td class="px-4 py-3 text-right space-x-1">
             <button onclick='openUserModal(${JSON.stringify(u).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
-            <button onclick="deleteUserRow(${u._row})" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+            <button onclick="deleteUserRow(${u._row}, '${esc(u.Username)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
           </td>
         </tr>`).join('');
     }
@@ -2039,6 +2039,9 @@
             </div>
             <div class="p-6 space-y-4">
               <input type="hidden" id="u_row" value="${esc(data._row || '')}">
+              <!-- ชื่อผู้ใช้ "ตอนที่เปิดหน้ามา" ส่งไปให้เซิร์ฟเวอร์ตรวจว่ายังเป็นแถวเดิมอยู่
+                   แยกจากช่องกรอกด้านล่าง เพราะการแก้ไขเปลี่ยนชื่อผู้ใช้ได้ -->
+              <input type="hidden" id="u_rowUsername" value="${esc(data.Username || '')}">
               <div><label class="block text-sm font-medium text-gray-700 mb-1">Username (ใช้สำหรับ Login) <span class="text-red-500">*</span></label>
               <input id="u_Username" value="${esc(data.Username)}" ${isEdit ? 'readonly class="w-full rounded-lg border-gray-200 bg-gray-50 text-gray-500 text-sm px-3 py-2 outline-none"' : 'placeholder="เช่น somchai.j" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"'}></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">${isEdit ? 'ตั้งรหัสผ่านใหม่ (เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน)' : 'รหัสผ่าน'} ${!isEdit ? '<span class="text-red-500">*</span>' : ''}</label>
@@ -2090,6 +2093,7 @@
       document.querySelectorAll('.u_perm_select').forEach(sel => { permissions[sel.getAttribute('data-module')] = sel.value; });
       const user = {
         _row: rowVal || undefined,
+        _expectUsername: document.getElementById('u_rowUsername').value,
         Username: username,
         Password: password || undefined,
         Email: document.getElementById('u_Email').value.trim(),
@@ -2107,11 +2111,12 @@
       } catch (e) {}
     }
 
-    async function deleteUserRow(row) {
+    async function deleteUserRow(row, username) {
       const confirmed = await showConfirm('ยืนยันการลบผู้ใช้งานนี้ออกจากระบบ?');
       if (!confirmed) return;
       try {
-        currentUsersList = await call('deleteUser', row);
+        // ส่งชื่อผู้ใช้ไปด้วย ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นคนเดิมอยู่จริง
+        currentUsersList = await call('deleteUser', row, username);
         renderUsersTable();
         showToast('ลบผู้ใช้งานสำเร็จ', 'success');
       } catch (e) {}
@@ -5974,7 +5979,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
-               <button onclick="downloadCleaningPdf(${f._row}, this)" title="บันทึกเป็นไฟล์ PDF"
+               <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
                  class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
                  <i class="ph ph-download-simple"></i> PDF</button>`
         }</td>
@@ -5982,7 +5987,7 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${f.Source === 'attach' ? '' : `<button onclick="openPhotoModal(${f._row})" title="แนบรูปถ่ายประกอบเอกสาร"
             class="text-slate-600 hover:text-white hover:bg-slate-600 px-2.5 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
             <i class="ph ph-camera"></i> รูปถ่าย</button>`}
-          <button onclick="deleteCleaningFormRow(${f._row})" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
+          <button onclick="deleteCleaningFormRow(${f._row}, '${esc(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -6179,12 +6184,13 @@ const CLEANING_CHECKLIST_ITEMS = [
    * แล้วเก็บสำเนาไว้ที่ data/docs/<ปี>/<เดือน>/ ไปด้วยพร้อมกัน
    * ปุ่มนี้จึงได้ทั้งไฟล์ลงเครื่องคนกด และไฟล์ที่ค้างไว้บนเซิร์ฟเวอร์
    */
-  async function downloadCleaningPdf(row, btn) {
+  async function downloadCleaningPdf(row, id, btn) {
     const old = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
 
     try {
-      const res = await call('getCleaningDocPdf', row);
+      // ส่งเลขที่ภายในไปด้วย ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นใบเดิมอยู่จริง
+      const res = await call('getCleaningDocPdf', row, id);
       if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
 
       // แปลง base64 กลับเป็นไฟล์ แล้วสั่งดาวน์โหลด โดยไม่ต้องเปิดแท็บใหม่
@@ -6295,11 +6301,12 @@ const CLEANING_CHECKLIST_ITEMS = [
   const openBlankCleaningDoc = record => openDocWindow('getCleaningBlankDocHtml', record);
   window.openBlankCleaningDoc = openBlankCleaningDoc;
 
-  async function deleteCleaningFormRow(row) {
+  async function deleteCleaningFormRow(row, id) {
     const confirmed = await showConfirm('ยืนยันการลบบันทึกฟอร์มนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย');
     if (!confirmed) return;
     try {
-      currentCleaningForms = await call('deleteCleaningForm', row);
+      // ส่งเลขที่ภายในไปด้วย ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นใบเดิมอยู่จริง
+      currentCleaningForms = await call('deleteCleaningForm', row, id);
       renderCleaningFormTable();
       showToast('ลบบันทึกสำเร็จ');
     } catch (e) {}

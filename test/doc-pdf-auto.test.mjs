@@ -24,7 +24,7 @@ import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
 import {
   saveCleaningForm, getCleaningForms, deleteCleaningForm,
-  saveCleaningPhoto, deleteCleaningPhoto
+  saveCleaningPhoto, deleteCleaningPhoto, settleDocPdfQueue
 } from '../src/modules/cleaningform.js';
 
 function freshDb() {
@@ -125,12 +125,53 @@ test('แนบรูปแล้ว ไฟล์ที่เก็บไว้�
   const before = docs.read(form.DocNo);
 
   await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3, dataUrl: PNG });
+  await settleDocPdfQueue();
   const after = docs.read(form.DocNo);
 
   assert.notEqual(after, before, 'หน้าเอกสารมีรูปเพิ่มแล้ว ไฟล์ต้องไม่เหมือนเดิม');
 
   await deleteCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3 });
+  await settleDocPdfQueue();
   assert.equal(docs.read(form.DocNo), before, 'ลบรูปแล้วต้องกลับไปเหมือนตอนยังไม่มีรูป');
+});
+
+test('แนบรูปรวดเดียวหลายใบ ต้องแปลงไฟล์แค่รอบเดียว ไม่ใช่รอบละรูป', async () => {
+  // แปลงหนึ่งรอบใช้เวลาราว 2 วินาที (จับเวลาจริงด้วย Chrome ในเครื่อง)
+  // ถ้าทำทุกครั้งที่แนบ ช่างจะรอรวมกันเกิน 40 วินาทีต่อเอกสารหนึ่งใบ
+  // ทั้งที่ไฟล์รอบก่อนๆ ถูกทับทิ้งหมดอยู่ดี
+  const db = freshDb();
+  const docs = fakeDocs();
+  const photos = fakePhotos();
+  const parts = { pdf: fakePdf(), docs, photos };
+
+  await saveCleaningForm(ctxOf(db, parts), oneUnit());
+  const [form] = await getCleaningForms(ctxOf(db));
+  docs.calls.length = 0;
+
+  for (let i = 1; i <= 9; i++) {
+    await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: i, dataUrl: PNG });
+  }
+  assert.equal(docs.calls.length, 0, 'ระหว่างแนบต้องยังไม่แปลงไฟล์เลย คนแนบจะได้ไม่ต้องรอ');
+
+  await settleDocPdfQueue();
+  assert.equal(docs.calls.length, 1, 'แนบ 9 รูป ต้องแปลงครั้งเดียว');
+  assert.equal(Object.keys(photos.readAll(form.DocNo)).length, 9, 'และรูปต้องครบทั้ง 9 ช่อง');
+});
+
+test('ลบเอกสารแล้ว ไฟล์ต้องไม่ถูกสร้างกลับมาจากงานที่ค้างอยู่', async () => {
+  const db = freshDb();
+  const docs = fakeDocs();
+  const photos = fakePhotos();
+  const parts = { pdf: fakePdf(), docs, photos };
+
+  await saveCleaningForm(ctxOf(db, parts), oneUnit());
+  const [form] = await getCleaningForms(ctxOf(db));
+
+  await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 1, dataUrl: PNG });
+  await deleteCleaningForm(ctxOf(db, parts), form._row, form.ID);
+  await settleDocPdfQueue();
+
+  assert.equal(docs.read(form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
 });
 
 test('ลบเอกสาร ต้องลบไฟล์ที่เก็บไว้ตามไปด้วย', async () => {
@@ -139,7 +180,7 @@ test('ลบเอกสาร ต้องลบไฟล์ที่เก็�
   await saveCleaningForm(ctxOf(db, { pdf: fakePdf(), docs }), oneUnit());
 
   const [form] = await getCleaningForms(ctxOf(db));
-  await deleteCleaningForm(ctxOf(db, { docs }), form._row);
+  await deleteCleaningForm(ctxOf(db, { docs }), form._row, form.ID);
 
   assert.equal(docs.read(form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
 });

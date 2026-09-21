@@ -643,14 +643,93 @@ export async function deleteCleaningPhoto(ctx, payload) {
 }
 
 /**
- * รอผลของงานที่แก้รูป แล้วสร้างไฟล์ PDF ที่เก็บไว้ใหม่ให้ตรงกับรูปล่าสุด
+ * คิวสร้างไฟล์ PDF ใหม่ — รอให้คนหยุดแก้รูปก่อน แล้วค่อยทำครั้งเดียว
  *
- * ทำนอกล็อกเสมอ เพราะการแปลงไฟล์ต้องรอเบราว์เซอร์ ซึ่งนานเกินกว่าจะถือล็อกไว้
- * และไม่ส่ง docNo กลับไปให้หน้าเว็บ เพราะเป็นเรื่องภายในของฝั่งเซิร์ฟเวอร์
+ * ============================================================================
+ * ทำไมต้องรอ ไม่ทำทันที
+ * ============================================================================
+ * เอกสารหนึ่งใบมีรูปได้ 9 ช่องต่อเครื่อง สองเครื่องคือ 18 รูป และช่างแนบรวดเดียว
+ * การแปลงเอกสารเป็นไฟล์ PDF ใช้เวลาราว 2 วินาทีต่อครั้ง (จับเวลาจริงด้วย
+ * Chrome ในเครื่อง 3 รอบ ได้ 2.1 / 2.0 / 2.1 วินาที)
+ *
+ * รุ่นแรกสร้างไฟล์ใหม่ทุกครั้งที่แนบหรือลบรูป ซึ่งแปลว่าช่างต้องรอรวมกัน
+ * เกิน 40 วินาทีต่อเอกสารหนึ่งใบ ทั้งที่ไฟล์ 17 รอบแรกถูกทับทิ้งทั้งหมดอยู่ดี
+ *
+ * ตอนนี้เลื่อนออกไป DOC_PDF_DELAY_MS หลังการแก้รูปครั้งล่าสุด นับใหม่ทุกครั้ง
+ * ที่มีการแก้เพิ่ม แนบรูปติดๆ กันจึงแปลงแค่รอบเดียว และคนแนบไม่ต้องรอเลย
+ *
+ * ============================================================================
+ * ข้อมูลเก่าใน ctx ที่ค้างไว้ ใช้ได้หรือไม่
+ * ============================================================================
+ * ใช้ได้ เพราะงานที่เลื่อนออกไปอ่านแค่ข้อมูลของ "ใบ" ซึ่งไม่ได้เปลี่ยนระหว่าง
+ * ที่คนแก้รูป ส่วนตัวรูปถูกอ่านสดจากดิสก์ทุกครั้งที่สร้างไฟล์
+ */
+const DOC_PDF_DELAY_MS = 5000;
+
+/** งานที่รออยู่ แยกตามเลขที่เอกสาร — ใบเดียวกันมีได้ครั้งละหนึ่งงานเท่านั้น */
+const pendingDocPdf = new Map();
+
+/**
+ * นัดสร้างไฟล์ PDF ใหม่ ยกเลิกนัดเดิมของใบเดียวกันถ้ามี
+ *
+ * ไม่ await ผลลัพธ์ เพราะคนแนบรูปไม่ควรต้องรอไฟล์สำเนาที่สร้างใหม่ได้เสมอ
+ */
+function scheduleDocPdf(ctx, docNo) {
+  const name = plainText(docNo).trim();
+  if (!ctx.pdf || !ctx.docs || !name) return;
+
+  cancelDocPdf(name);
+
+  let done;
+  const finished = new Promise(resolve => { done = resolve; });
+
+  const timer = setTimeout(async () => {
+    pendingDocPdf.delete(name);
+    await storeDocPdf(ctx, name);
+    done();
+  }, delayOf(ctx));
+
+  // ห้ามให้ตัวจับเวลากันโปรเซสไม่ให้ปิด ไม่งั้นสั่งหยุดเซิร์ฟเวอร์แล้วค้างรอ
+  if (timer.unref) timer.unref();
+
+  pendingDocPdf.set(name, { timer, run: async () => { await storeDocPdf(ctx, name); done(); }, finished });
+}
+
+/** ยกเลิกนัดของใบนั้น ใช้ตอนลบเอกสาร ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว */
+function cancelDocPdf(docNo) {
+  const name = plainText(docNo).trim();
+  const job = pendingDocPdf.get(name);
+  if (!job) return;
+  clearTimeout(job.timer);
+  pendingDocPdf.delete(name);
+}
+
+/** เวลารอ ตั้งทับได้ทาง env เพื่อให้เทสต์ไม่ต้องนั่งรอจริง */
+function delayOf(ctx) {
+  const raw = ctx.env && ctx.env.DOC_PDF_DELAY_MS;
+  return raw === undefined || raw === '' || isNaN(Number(raw)) ? DOC_PDF_DELAY_MS : Number(raw);
+}
+
+/**
+ * ทำงานที่ค้างอยู่ทั้งหมดให้เสร็จเดี๋ยวนี้ แล้วรอจนจบ
+ *
+ * มีไว้ให้เทสต์เรียก เพื่อไม่ต้องพึ่งการนับเวลาจริงซึ่งเปราะและช้า
+ */
+export async function settleDocPdfQueue() {
+  const jobs = [...pendingDocPdf.values()];
+  pendingDocPdf.clear();
+  for (const job of jobs) clearTimeout(job.timer);
+  await Promise.all(jobs.map(job => job.run()));
+}
+
+/**
+ * รอผลของงานที่แก้รูป แล้วนัดสร้างไฟล์ PDF ใหม่ให้ตรงกับรูปล่าสุด
+ *
+ * ไม่ส่ง docNo กลับไปให้หน้าเว็บ เพราะเป็นเรื่องภายในของฝั่งเซิร์ฟเวอร์
  */
 async function withFreshDocPdf(ctx, work) {
   const { docNo, ...out } = await work;
-  await storeDocPdf(ctx, docNo);
+  scheduleDocPdf(ctx, docNo);
   return out;
 }
 
@@ -729,7 +808,7 @@ async function storeDocPdf(ctx, docNo) {
  *
  * @returns {Object} { fileName, mime, base64 }
  */
-export async function getCleaningDocPdf(ctx, row) {
+export async function getCleaningDocPdf(ctx, row, expectId) {
   await ctx.requireAccess();
   if (!(await ctx.canView('cleaningform'))) {
     throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
@@ -742,6 +821,11 @@ export async function getCleaningDocPdf(ctx, row) {
   }
 
   await ctx.ensureBase();
+
+  // ตรวจว่าแถวนั้นยังเป็นใบเดิมอยู่จริง ก่อนสร้างไฟล์
+  // ลำดับแถวเลื่อนได้ ถ้าไม่ตรวจ คนกดจะได้ไฟล์ของเอกสารใบอื่นไปโดยไม่รู้ตัว
+  ctx.assertRowIs(SHEETS.CLEANFORM, row, 'ID', expectId, 'เอกสารเลขที่');
+
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
   await ctx.assertRegionAccess(form.Region);
@@ -761,10 +845,19 @@ export async function getCleaningDocPdf(ctx, row) {
   return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
 }
 
-export async function deleteCleaningForm(ctx, row) {
+export async function deleteCleaningForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
     await ctx.ensureBase();
+
+    // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
+    // ระหว่างที่อีกคนเปิดหน้าค้างไว้ คำสั่งนี้จะไปโดนเอกสารใบถัดไปแทน
+    //
+    // ยิ่งสำคัญตั้งแต่ตอนที่การลบเอกสารตามไปลบรูปถ่าย ไฟล์ PDF และไฟล์ที่ช่าง
+    // ถ่ายส่งมาด้วย เพราะไฟล์แนบไม่มีสำเนาที่อื่นอีกแล้ว ลบผิดใบคือหายจริง
+    //
+    // เทียบด้วย ID ไม่ใช่ DocNo เพราะใบเก่าบางใบยังไม่มีเลขที่เอกสาร
+    ctx.assertRowIs(SHEETS.CLEANFORM, row, 'ID', expectId, 'เอกสารเลขที่');
 
     const headers = ctx.ss.headers(SHEETS.CLEANFORM);
     const region = ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('Region') + 1);
@@ -784,6 +877,8 @@ export async function deleteCleaningForm(ctx, row) {
       try { ctx.photos.removeAll(docNo); } catch { /* รูปค้างดีกว่าผู้ใช้สับสน */ }
     }
     if (ctx.docs && docNo) {
+      // ยกเลิกงานสร้างไฟล์ที่ค้างอยู่ก่อน ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว
+      cancelDocPdf(docNo);
       try { ctx.docs.remove(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
     if (ctx.attachments && docNo) {

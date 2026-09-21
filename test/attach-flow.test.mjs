@@ -189,7 +189,7 @@ test('ลบเอกสาร ต้องลบไฟล์แนบตาม�
   await uploadNodeDocuments(ctxOf(db, { attachments }), payloadOf({ closeout }));
 
   const [form] = await getCleaningForms(ctxOf(db, { attachments }));
-  await deleteCleaningForm(ctxOf(db, { attachments }), form._row);
+  await deleteCleaningForm(ctxOf(db, { attachments }), form._row, form.ID);
 
   assert.deepEqual(attachments.list(form.DocNo), [], 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
 });

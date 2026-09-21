@@ -114,6 +114,7 @@ test('รีเซ็ตรหัสให้ผู้ใช้ รหัสเ�
   const [, row] = db.prepare('SELECT row_id FROM users ORDER BY row_id').all();
   await saveUser(ctxOf(db, 'boss'), {
     _row: 3,   // แถวที่ 3 ในชีต = ข้อมูลแถวที่ 2 (แถวที่ 1 เป็นหัวตาราง)
+    _expectUsername: 'somchai',   // ชื่อที่หน้าเว็บเห็นตอนเปิดหน้ามา
     Username: 'somchai', Name: 'ช่างสมชาย', Role: 'RegionAdmin',
     Regions: ['1'], Permissions: {}, Password: 'ใหม่123456'
   });
@@ -139,7 +140,8 @@ test('แก้ไขผู้ใช้โดยไม่แตะรหัส�
 
   // แก้แค่ชื่อ ไม่ส่งรหัสมาเลย
   await saveUser(ctxOf(db, 'boss'), {
-    _row: 3, Username: 'somchai', Name: 'ช่างสมชาย (แก้ชื่อแล้ว)',
+    _row: 3, _expectUsername: 'somchai',
+    Username: 'somchai', Name: 'ช่างสมชาย (แก้ชื่อแล้ว)',
     Role: 'RegionAdmin', Regions: ['1'], Permissions: {}
   });
 
@@ -160,7 +162,8 @@ test('แก้ไขบัญชีเก่าที่ยังเป็น�
   });
 
   await saveUser(ctxOf(db, 'boss'), {
-    _row: 3, Username: 'tle', Name: 'ทีเล่ (แก้ชื่อ)',
+    _row: 3, _expectUsername: 'tle',
+    Username: 'tle', Name: 'ทีเล่ (แก้ชื่อ)',
     Role: 'RegionAdmin', Regions: ['3'], Permissions: {}
   });
 

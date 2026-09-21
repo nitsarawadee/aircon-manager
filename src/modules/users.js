@@ -255,6 +255,20 @@ export async function saveUser(ctx, user) {
     const list = ctx.ss.objects(SHEETS.USERS);
     const isEdit = !!user._row;
 
+    // ตรวจว่าแถวนั้นยังเป็นผู้ใช้คนเดิมอยู่จริง ก่อนตรวจอย่างอื่นทั้งหมด
+    //
+    // _row คือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบแถวข้างบนไป
+    // ระหว่างที่อีกคนเปิดหน้าค้างไว้ คำสั่งนี้จะไปเขียนทับผู้ใช้คนถัดไปแทน
+    //
+    // เทียบกับชื่อ "ตอนที่เปิดหน้ามา" ไม่ใช่ชื่อใหม่ในฟอร์ม เพราะการแก้ไข
+    // เปลี่ยนชื่อผู้ใช้ได้ด้วย ถ้าเทียบกับชื่อใหม่จะไม่มีวันตรงกันเลย
+    //
+    // ต้องอยู่ก่อนด่านเช็คชื่อซ้ำ ไม่งั้นพอลำดับเลื่อน คนใช้จะได้ข้อความว่า
+    // "มี Username นี้อยู่แล้ว" ซึ่งชี้ไปผิดเรื่องจนหาสาเหตุไม่เจอ
+    if (isEdit) {
+      ctx.assertRowIs(SHEETS.USERS, Number(user._row), 'Username', user._expectUsername, 'ผู้ใช้');
+    }
+
     // เช็ค Username ซ้ำกับผู้ใช้คนอื่น (ยกเว้นแถวของตัวเองตอนแก้ไข)
     const clash = list.some(u =>
       (!isEdit || u._row !== Number(user._row)) &&
@@ -331,10 +345,14 @@ export async function saveUser(ctx, user) {
   });
 }
 
-export async function deleteUser(ctx, row) {
+export async function deleteUser(ctx, row, expectUsername) {
   return ctx.withLock(async () => {
     await ctx.assertAdmin();
     await ctx.ensureBase();
+
+    // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบแถวข้างบนไป
+    // ระหว่างที่อีกคนเปิดหน้าค้างไว้ คำสั่งนี้จะไปโดนผู้ใช้คนถัดไปแทน
+    ctx.assertRowIs(SHEETS.USERS, row, 'Username', expectUsername, 'ผู้ใช้');
 
     const headers = ctx.ss.headers(SHEETS.USERS);
     const rowUsername = String(ctx.ss.cell(SHEETS.USERS, row, headers.indexOf('Username') + 1) || '').trim();
