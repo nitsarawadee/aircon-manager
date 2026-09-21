@@ -82,8 +82,8 @@ const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;
  * อ่านไฟล์ .env แบบง่ายๆ โดยไม่ต้องพึ่งไลบรารีภายนอก
  *
  * รองรับรูปแบบ KEY=VALUE บรรทัดละตัว ใส่เครื่องหมายคำพูดครอบค่าได้
- * ⚠️ ค่า GOOGLE_PRIVATE_KEY ต้องอยู่ในบรรทัดเดียว โดยมี \n เป็นตัวอักษรสองตัวคั่น
- *    (คัดลอกมาจากไฟล์ JSON ของ service account ได้ตรงๆ เลย)
+ *
+ * ทุกค่าไม่ใส่ก็ได้ ระบบมีค่าเริ่มต้นที่ใช้งานได้ครบ และไม่ต้องต่อเน็ตเลย
  */
 async function loadEnvFile(path) {
   let raw;
@@ -222,50 +222,36 @@ const fileEnv = await loadEnvFile(join(ROOT, '.env'));
 const env = { ...fileEnv, ...process.env };
 const PATHS = dataPaths(env);
 
-/* ---------------------------- เปิดแหล่งข้อมูล ----------------------------
+/* ---------------------------- เปิดฐานข้อมูล ----------------------------
    src/ ห้ามเปิดไฟล์เอง การเปิดฐานข้อมูลจึงต้องทำที่นี่แล้วส่งเข้าไปให้
    ------------------------------------------------------------------------ */
 
-const useSqlite = String(env.DATA_SOURCE || 'sqlite').toLowerCase() !== 'sheets';
-let db = null;
+const { DatabaseSync } = await import('node:sqlite');
+const dbPath = resolve(ROOT, PATHS.db);
 
-if (useSqlite) {
-  const { DatabaseSync } = await import('node:sqlite');
-  const dbPath = resolve(ROOT, PATHS.db);
-
-  if (!existsSync(dbPath)) {
-    console.error('\n❌ ไม่พบไฟล์ฐานข้อมูล: ' + dbPath);
-    console.error('   สร้างด้วยคำสั่ง: node scripts/migrate-from-sheets.mjs');
-    console.error('   หรือถ้ายังอยากใช้ Google Sheets ให้ตั้ง DATA_SOURCE=sheets ในไฟล์ .env\n');
-    process.exit(1);
-  }
-
-  db = new DatabaseSync(dbPath);
-  // WAL ให้หลายคนอ่านพร้อมกันได้ขณะที่มีคนเขียนอยู่
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  // ถ้ามีคนเขียนอยู่ ให้รอคิวสูงสุด 5 วินาทีแทนที่จะฟ้องพังทันที
-  db.exec('PRAGMA busy_timeout = 5000');
-
-  console.log('แหล่งข้อมูล: SQLite (' + dbPath + ')');
-
-  // เติมคอลัมน์ที่โค้ดต้องการแต่ฐานข้อมูลยังไม่มี ก่อนเปิดรับคำสั่งใดๆ
-  // ตัวอ่านข้อมูลสร้าง SQL จากรายชื่อคอลัมน์ในโค้ด ถ้าฐานข้อมูลตามไม่ทัน
-  // ทุกหน้าที่อ่านตารางนั้นจะพังทันที การอัปเดตจึงต้องเหลือแค่รีสตาร์ท
-  const addedCols = addMissingColumns(db);
-  if (addedCols.length) console.log('เพิ่มคอลัมน์ใหม่ในฐานข้อมูล: ' + addedCols.join(', '));
-
-  startAutoBackup(db, resolve(ROOT, PATHS.backups));
-} else {
-  const missing = ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'SPREADSHEET_ID']
-    .filter(k => !env[k]);
-  if (missing.length) {
-    console.error('\n❌ ตั้ง DATA_SOURCE=sheets ไว้ แต่ยังตั้งค่าไม่ครบ ขาด: ' + missing.join(', '));
-    console.error('   คัดลอกไฟล์ .env.example เป็น .env แล้วใส่ค่าให้ครบก่อนครับ\n');
-    process.exit(1);
-  }
-  console.log('แหล่งข้อมูล: Google Sheets');
+if (!existsSync(dbPath)) {
+  console.error('\n❌ ไม่พบไฟล์ฐานข้อมูล: ' + dbPath);
+  console.error('   ตรวจว่าตั้ง DATA_DIR หรือ DB_PATH ในไฟล์ .env ไว้ถูกที่หรือยัง');
+  console.error('   ถ้าเป็นการติดตั้งใหม่ ให้คัดลอกไฟล์ฐานข้อมูลจากเครื่องเดิมมาวางไว้ตรงนี้\n');
+  process.exit(1);
 }
+
+const db = new DatabaseSync(dbPath);
+// WAL ให้หลายคนอ่านพร้อมกันได้ขณะที่มีคนเขียนอยู่
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
+// ถ้ามีคนเขียนอยู่ ให้รอคิวสูงสุด 5 วินาทีแทนที่จะฟ้องพังทันที
+db.exec('PRAGMA busy_timeout = 5000');
+
+console.log('ฐานข้อมูล: ' + dbPath);
+
+// เติมคอลัมน์ที่โค้ดต้องการแต่ฐานข้อมูลยังไม่มี ก่อนเปิดรับคำสั่งใดๆ
+// ตัวอ่านข้อมูลสร้าง SQL จากรายชื่อคอลัมน์ในโค้ด ถ้าฐานข้อมูลตามไม่ทัน
+// ทุกหน้าที่อ่านตารางนั้นจะพังทันที การอัปเดตจึงต้องเหลือแค่รีสตาร์ท
+const addedCols = addMissingColumns(db);
+if (addedCols.length) console.log('เพิ่มคอลัมน์ใหม่ในฐานข้อมูล: ' + addedCols.join(', '));
+
+startAutoBackup(db, resolve(ROOT, PATHS.backups));
 
 /**
  * ตัวเก็บรูปถ่ายประกอบเอกสาร ที่ส่งเข้าไปให้ src/ ใช้

@@ -1,7 +1,6 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
 import { formatDate, isRetiredStatus, normalizeCode } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
-import { Ctx } from '../context.js';
 
 /**
  * แผนล้างแอร์ประจำปี
@@ -350,7 +349,6 @@ export async function createCleaningPlan(ctx, year) {
     }
 
     await ctx.ss.ensureSheet(name, PLAN_HEADERS);
-    Ctx.invalidateMeta();
 
     const me = await ctx.currentUser();
     const rows = airList.map(a => [

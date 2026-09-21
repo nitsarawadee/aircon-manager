@@ -1,5 +1,3 @@
-import { Spreadsheet } from './sheets.js';
-import { getAccessToken } from './google-auth.js';
 import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
@@ -18,14 +16,6 @@ import { normalizeCode, normalizeRegion } from './values.js';
  * ข้อมูลผู้ใช้จะรั่วข้ามคนกัน (ผู้ใช้ A อาจเห็นข้อมูลของผู้ใช้ B)
  * จึงต้องเปลี่ยนมาเป็น object ที่ส่งต่อกันไปตามฟังก์ชันแทน
  */
-
-/**
- * แคชโครงสร้างชีตในหน่วยความจำของ Worker
- * โครงสร้างแทบไม่เปลี่ยน แต่ตั้ง TTL ไว้สั้นๆ เผื่อกรณีมีคนสร้างชีตแผนปีใหม่
- * จากอีกเครื่องหนึ่ง จะได้เห็นภายในไม่กี่วินาที
- */
-let metaCache = null;
-const META_TTL_MS = 30000;
 
 export class Ctx {
   /**
@@ -52,7 +42,7 @@ export class Ctx {
     this.pdf = pdf || null;      // ตัวแปลงเอกสารเป็นไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้)
     this.docs = docs || null;    // ที่เก็บไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้ แค่ไม่เก็บสำเนา)
     this.attachments = attachments || null;  // ที่เก็บไฟล์เอกสารแนบ
-    this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite หรือ Google Sheets)
+    this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ
     this._sessionUser = null;  // แถวผู้ใช้จากตาราง Users (false = ไม่พบ)
@@ -63,42 +53,16 @@ export class Ctx {
   /**
    * เชื่อมต่อแหล่งข้อมูล (ทำครั้งเดียวต่อ request)
    *
-   * เลือกจากค่า DATA_SOURCE ใน .env — ทั้งสองตัวมีเมธอดชุดเดียวกัน
-   * โมดูลธุรกิจจึงไม่รู้และไม่ต้องรู้ว่ากำลังอ่านจากไหน สลับได้โดยไม่ต้องแก้โค้ด
+   * ฐานข้อมูลถูกเปิดที่ชั้น platform แล้วส่งเข้ามา เพราะ src/ ห้ามแตะไฟล์เอง
    */
   async connect() {
     if (this.ss) return this.ss;
 
-    if (this.useSqlite) {
-      if (!this.db) {
-        throw new Error('ตั้ง DATA_SOURCE=sqlite ไว้ แต่ไม่ได้ส่งฐานข้อมูลเข้ามา (platform/ ต้องเปิดไฟล์แล้วส่งให้)');
-      }
-      this.ss = new Repository(this.db);
-      return this.ss;
+    if (!this.db) {
+      throw new Error('ไม่ได้ส่งฐานข้อมูลเข้ามา (platform/ ต้องเปิดไฟล์แล้วส่งให้)');
     }
-
-    const token = await getAccessToken(this.env);
-    this.ss = new Spreadsheet(this.env.SPREADSHEET_ID, token);
-
-    if (metaCache && metaCache.at > Date.now() - META_TTL_MS) {
-      this.ss._meta = metaCache.data;
-    }
+    this.ss = new Repository(this.db);
     return this.ss;
-  }
-
-  /** ใช้ SQLite อยู่หรือเปล่า (ค่าเริ่มต้นคือใช้ ต้องระบุ sheets ชัดเจนถึงจะกลับไปใช้ Google) */
-  get useSqlite() {
-    return String(this.env.DATA_SOURCE || 'sqlite').toLowerCase() !== 'sheets';
-  }
-
-  /** จำโครงสร้างชีตล่าสุดไว้ใช้ซ้ำใน request ถัดไป */
-  cacheMeta() {
-    if (this.ss && this.ss._meta) metaCache = { data: this.ss._meta, at: Date.now() };
-  }
-
-  /** ทิ้งแคชโครงสร้าง — เรียกทุกครั้งที่มีการสร้างชีตใหม่ */
-  static invalidateMeta() {
-    metaCache = null;
   }
 
   /* ==================== ตรวจ/ซ่อมโครงสร้างชีตพื้นฐาน ==================== */
@@ -124,11 +88,9 @@ export class Ctx {
       [SHEETS.CLEANFORM, CLEANFORM_HEADERS]
     ];
 
-    let created = false;
     for (const [name, headers] of specs) {
-      if (await ss.ensureSheet(name, headers)) created = true;
+      await ss.ensureSheet(name, headers);
     }
-    if (created) Ctx.invalidateMeta();
 
     await ss.load(specs.map(s => s[0]));
     for (const [name, headers] of specs) {

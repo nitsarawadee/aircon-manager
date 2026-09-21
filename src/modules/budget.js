@@ -1,7 +1,6 @@
 import { SHEETS, BUDGET_HEADERS } from '../schema.js';
 import { partsOf, safeParseDate, ymdhms } from '../values.js';
 import { getPlanYears } from './plan.js';
-import { Ctx } from '../context.js';
 
 /**
  * งบประมาณประจำปี — ภาพรวมทั้งบริษัท ไม่จำกัดตามภูมิภาค
@@ -14,7 +13,7 @@ import { Ctx } from '../context.js';
 
 async function ensureBudgetSheet(ctx) {
   await ctx.connect();
-  if (await ctx.ss.ensureSheet(SHEETS.BUDGET, BUDGET_HEADERS)) Ctx.invalidateMeta();
+  await ctx.ss.ensureSheet(SHEETS.BUDGET, BUDGET_HEADERS);
   await ctx.ss.load(SHEETS.BUDGET);
   await ctx.ss.ensureColumns(SHEETS.BUDGET, BUDGET_HEADERS);
 }

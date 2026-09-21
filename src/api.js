@@ -153,9 +153,6 @@ export async function handleApi({ pathname, body, env, state, db, photos, pdf, d
     // ถ้าไม่ส่งตรงนี้ การซ่อมโครงสร้างชีตจะไม่เกิดขึ้นจริงสักที
     if (ctx.ss && ctx.ss.dirty) await ctx.ss.flush();
 
-    // จำโครงสร้างชีตไว้ใช้ซ้ำในคำสั่งถัดไป ตัดการเรียก Google ออกได้ 1 ครั้ง
-    ctx.cacheMeta();
-
     return { status: 200, payload: { ok: true, result: result === undefined ? null : result } };
   } catch (err) {
     const message = String((err && err.message) || err || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ');
