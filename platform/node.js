@@ -317,6 +317,21 @@ const attachments = {
   removeAll: docNo => removeAttachments(attachRoot, docNo)
 };
 
+/**
+ * สำรองฐานข้อมูลทันทีตามคำสั่ง — ใช้ก่อนงานที่เขียนทีละมากๆ เช่นการนำเข้าไฟล์
+ *
+ * ต่างจากการสำรองอัตโนมัติตรงที่ตัวนี้ "ต้องสำเร็จ" ถึงจะเขียนต่อ
+ * เพราะถ้าสำรองไม่ได้แล้วยังเขียนทับข้อมูล 457 เครื่องต่อไป ก็ไม่มีทางย้อนกลับ
+ */
+const backup = label => {
+  const { name } = backupDatabase(db, resolve(ROOT, PATHS.backups), label);
+  try { pruneBackups(resolve(ROOT, PATHS.backups)); } catch { /* ลบไฟล์เก่าไม่ได้ ไม่ใช่เรื่องคอขาดบาดตาย */ }
+  return name;
+};
+
+/** เครื่องมือทั้งหมดที่ส่งเข้าไปให้ src/ ใช้ */
+const services = { photos, pdf, docs, attachments, backup };
+
 {
   const mb = n => (n / 1024 / 1024).toFixed(1) + ' MB';
   const d = docsDiskUsage(docRoot);
@@ -377,7 +392,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf, docs, attachments }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db, services }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };

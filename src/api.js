@@ -1,6 +1,9 @@
 import { Ctx } from './context.js';
 
-import { getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit } from './modules/airlist.js';
+import {
+  getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
+  getAirUnitImportFile, planAirUnitImport, applyAirUnitImport
+} from './modules/airlist.js';
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
   getHistory, addHistoryRecord, deleteHistoryRecord,
@@ -54,6 +57,9 @@ const API_FUNCTIONS = {
   getConfig,
   saveAirUnit,
   deleteAirUnit,
+  getAirUnitImportFile,
+  planAirUnitImport,
+  applyAirUnitImport,
   moveAirUnit,
   replaceAirUnit,
 
@@ -122,7 +128,7 @@ export function isApiPath(pathname) {
  * @param {Object}  [opts.db]      ฐานข้อมูล SQLite ที่เปิดไว้แล้ว (ฝั่ง Node เท่านั้น)
  * @returns {Promise<{status: number, payload: Object}>}
  */
-export async function handleApi({ pathname, body, env, state, db, photos, pdf, docs, attachments }) {
+export async function handleApi({ pathname, body, env, state, db, services }) {
   const isPublic = pathname === '/api/public';
   const fnName = String((body && body.fn) || '');
   const args = Array.isArray(body && body.args) ? body.args : [];
@@ -133,7 +139,7 @@ export async function handleApi({ pathname, body, env, state, db, photos, pdf, d
   }
   const fn = table[fnName];
 
-  const ctx = new Ctx(env, state, db, photos, pdf, docs, attachments);
+  const ctx = new Ctx(env, state, db, services);
 
   try {
     if (!isPublic) {

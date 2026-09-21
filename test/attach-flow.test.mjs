@@ -36,7 +36,9 @@ function freshDb() {
     'INSERT INTO users (Username, Name, Role, Regions, Permissions, Active, Password) VALUES (?,?,?,?,?,?,?)'
   );
   addUser.run('boss', 'ผู้ดูแลระบบ', 'Admin', '', '', 1, 'x');
-  addUser.run('north', 'ดูแลภาคเหนือ', 'RegionAdmin', '9', JSON.stringify({ cleaningform: 'edit' }), 1, 'x');
+  // รูปแบบสิทธิ์คือ "โมดูล:ระดับ" คั่นด้วยลูกน้ำ — มีสิทธิ์แก้เมนูนี้ครบ แต่คนละภูมิภาค
+  // จึงพิสูจน์ได้จริงว่าด่านที่กันไว้คือ "ภูมิภาค" ไม่ใช่ "ไม่มีสิทธิ์ในเมนู"
+  addUser.run('north', 'ดูแลภาคเหนือ', 'RegionAdmin', '9', 'cleaningform:edit', 1, 'x');
 
   db.prepare(
     'INSERT INTO air_units (AirCode, NodeName, SiteCode, Region, Province, Status, Brand, BTU, IndoorSN, OutdoorSN)' +
@@ -76,7 +78,7 @@ function fakeAttachments() {
 }
 
 const ctxOf = (db, parts = {}) => {
-  const c = new Ctx({}, state, db, null, null, null, parts.attachments || null);
+  const c = new Ctx({}, state, db, { attachments: parts.attachments || null });
   c.username = parts.user || 'boss';
   return c;
 };

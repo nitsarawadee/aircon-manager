@@ -77,7 +77,7 @@ function fakePhotos() {
 }
 
 const ctxOf = (db, parts = {}) => {
-  const c = new Ctx({}, state, db, parts.photos || null, parts.pdf || null, parts.docs || null);
+  const c = new Ctx({}, state, db, parts);
   c.username = 'boss';
   return c;
 };

@@ -505,8 +505,17 @@
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm">
             </div>
-            <button onclick="exportAirListCSV()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+            <button onclick="exportAirListCSV()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดข้อมูลทั้งหมดไปแก้ใน Excel แล้วนำเข้ากลับได้">
               <i class="ph ph-download-simple"></i> CSV
+            </button>
+
+            <button onclick="downloadAirImportFile(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดไฟล์ในรูปแบบที่นำเข้ากลับได้ทันที สำหรับแก้ข้อมูลเป็นชุด">
+              <i class="ph ph-file-arrow-down"></i> ไฟล์สำหรับแก้
+            </button>
+
+            <input type="file" id="fileImportAir" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+            <button onclick="document.getElementById('fileImportAir').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="นำเข้าไฟล์ที่แก้จาก Excel — ดูผลก่อนยืนยันเสมอ">
+              <i class="ph ph-upload-simple"></i> นำเข้า (Excel/CSV)
             </button>
             <button onclick="openAirModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-plus"></i> เพิ่มเครื่องใหม่
@@ -3041,6 +3050,242 @@
       }
     }
     window.exportAirListCSV = exportAirListCSV;
+
+    /* ---------- นำเข้าข้อมูลเครื่องจากไฟล์ Excel/CSV ---------- */
+
+    /**
+     * อ่านไฟล์ CSV เป็นข้อความ โดยเดารหัสภาษาให้เอง
+     *
+     * Excel บน Windows ภาษาไทย ถ้ากด "Save as CSV" เฉยๆ จะบันทึกด้วยรหัส
+     * windows-874 ไม่ใช่ UTF-8 ต้องเลือก "CSV UTF-8" เท่านั้น ซึ่งคนลืมแน่นอน
+     *
+     * ถ้าปล่อยให้ตัวอ่านไฟล์เดาเอง ชื่อ Node กับจังหวัดจะกลายเป็นตัวขยะ
+     * แล้วนำเข้าไปทับข้อมูลจริงโดยไม่มีอะไรฟ้อง เพราะตัวขยะก็ยังเป็นข้อความที่ใช้ได้
+     *
+     * ตรรกะเดียวกับ decodeCsvBytes ใน src/csv.js ที่คำสั่ง command line ใช้
+     */
+    function decodeCsvText(bytes) {
+      // มีเครื่องหมายกำกับไฟล์ UTF-8 อยู่ข้างหน้า = ฟันธงได้เลย
+      if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+      try {
+        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch (e) {
+        // ไม่ใช่ UTF-8 — เกือบทั้งหมดคือไฟล์ที่ Excel ไทยบันทึกให้
+        return new TextDecoder('windows-874').decode(bytes);
+      }
+    }
+
+    /**
+     * โหลดไฟล์ในรูปแบบ "ไฟล์นำเข้า" ไปแก้ใน Excel
+     *
+     * คนละไฟล์กับปุ่ม CSV ข้างๆ — ตัวนั้นคือคอลัมน์ตามที่เห็นบนจอ เอาไว้ทำรายงาน
+     * นำเข้ากลับไม่ได้ เพราะไม่มีคอลัมน์ AirNo ที่ระบบใช้ประกอบรหัสเครื่อง
+     */
+    async function downloadAirImportFile(btn) {
+      const old = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
+      try {
+        const res = await call('getAirUnitImportFile');
+        if (!res || !res.rows || !res.rows.length) throw new Error('ไม่มีข้อมูลให้ดาวน์โหลด');
+
+        const cell = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+        const lines = [res.headers.join(',')]
+          .concat(res.rows.map(r => res.headers.map(h => cell(r[h])).join(',')));
+
+        // นำหน้าด้วย BOM ไม่งั้น Excel เปิดไฟล์ภาษาไทยแล้วเป็นตัวยึกยือ
+        const url = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'AirList_แก้ไข_' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+        showToast('โหลดไฟล์ ' + res.rows.length.toLocaleString() + ' เครื่องแล้ว — แก้ใน Excel เสร็จแล้วกด "นำเข้า" กลับได้เลย');
+      } catch (err) {
+        showToast('โหลดไฟล์ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      }
+    }
+    window.downloadAirImportFile = downloadAirImportFile;
+
+    /**
+     * แถวที่อ่านจากไฟล์ เก็บไว้ระหว่างที่หน้าต่างยืนยันเปิดค้างอยู่
+     *
+     * ต้องส่งแถวชุดเดิมกลับไปตอนยืนยัน ไม่ใช่ส่งแผนที่เซิร์ฟเวอร์คำนวณมาแล้ว
+     * เพราะเซิร์ฟเวอร์จะคำนวณใหม่เองอีกรอบ (ไม่เชื่อสิ่งที่หน้าเว็บส่งมา)
+     */
+    let airImportRows = null;
+
+    document.getElementById('fileImportAir').addEventListener('change', async function (e) {
+      const file = e.target.files[0];
+      e.target.value = '';   // ล้างค่า จะได้เลือกไฟล์เดิมซ้ำได้
+      if (!file) return;
+
+      showLoading(true);
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const isCsv = file.name.toLowerCase().endsWith('.csv');
+
+        // ไฟล์ .xlsx เป็นรูปแบบไบนารี ไม่มีปัญหาเรื่องรหัสภาษา
+        // ส่วน .csv ต้องเดารหัสเอง ไม่งั้นภาษาไทยกลายเป็นตัวขยะแล้วนำเข้าไปเงียบๆ
+        const book = isCsv
+          ? XLSX.read(decodeCsvText(bytes), { type: 'string' })
+          : XLSX.read(bytes, { type: 'array' });
+        const sheet = book.Sheets[book.SheetNames[0]];
+
+        // raw:false = ให้ทุกช่องออกมาเป็นข้อความ ไม่ให้ตัวเลขกับวันที่ถูกแปลงร่าง
+        // defval:'' = ช่องว่างต้องมีอยู่จริงเป็นค่าว่าง ไม่ใช่หายไปจากแถว
+        const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+        if (!rows.length) throw new Error('ไม่พบข้อมูลในไฟล์');
+
+        const missing = ['Region', 'SiteCode', 'AirNo'].filter(h => !(h in rows[0]));
+        if (missing.length) {
+          throw new Error('ไฟล์ไม่มีคอลัมน์ ' + missing.join(', ') +
+                          ' — กดปุ่ม "ไฟล์สำหรับแก้" เพื่อโหลดไฟล์ที่มีคอลัมน์ครบไปแก้');
+        }
+
+        airImportRows = rows;
+        const plan = await call('planAirUnitImport', rows);
+        showLoading(false);
+        if (plan) showAirImportPreview(plan, file.name);
+      } catch (err) {
+        showLoading(false);
+        showToast('อ่านไฟล์ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+      }
+    });
+
+    /** กล่องนับจำนวนหนึ่งช่องในหน้าสรุป */
+    function airImportTile(label, count, tone) {
+      return `
+        <div class="rounded-lg border ${tone} px-3 py-2 text-center">
+          <div class="text-xl font-bold tabular-nums">${count.toLocaleString()}</div>
+          <div class="text-xs">${esc(label)}</div>
+        </div>`;
+    }
+
+    /**
+     * หน้าสรุปว่าจะเกิดอะไรขึ้น ก่อนให้กดยืนยัน
+     *
+     * การนำเข้าแตะข้อมูลหลักของทั้งระบบทีเดียวหลายร้อยแถว พลาดแล้วกระทบทุกหน้า
+     * จึงต้องให้เห็นก่อนเสมอว่าจะเพิ่มอะไร แก้อะไร จากค่าอะไรเป็นค่าอะไร
+     */
+    function showAirImportPreview(plan, fileName) {
+      const c = plan.counts;
+      const blocked = c.errors > 0;
+
+      const changeRows = plan.updates.map(u => `
+        <tr class="border-t border-gray-100">
+          <td class="px-2 py-1.5 font-mono text-[11px] text-slate-600 align-top">${esc(u.airCode)}</td>
+          <td class="px-2 py-1.5">${u.changes.map(ch =>
+            `<div class="text-xs"><span class="text-gray-500">${esc(ch.column)}:</span>
+               <span class="line-through text-gray-400">${esc(ch.from) || '(ว่าง)'}</span>
+               <i class="ph ph-arrow-right text-[10px] text-gray-400"></i>
+               <span class="text-gray-800 font-medium">${esc(ch.to)}</span></div>`).join('')}</td>
+        </tr>`).join('');
+
+      const addRows = plan.adds.map(a => `
+        <tr class="border-t border-gray-100">
+          <td class="px-2 py-1.5 font-mono text-[11px] text-emerald-700">${esc(a.airCode)}</td>
+          <td class="px-2 py-1.5 text-xs text-gray-600">${esc(a.nodeName)}</td>
+        </tr>`).join('');
+
+      const problemRows = list => list.map(p => `
+        <div class="text-xs py-1 border-t border-gray-100">
+          <span class="text-gray-400">บรรทัด ${p.line}</span>
+          <span class="font-medium text-gray-700">${esc(p.column)}</span>
+          — ${esc(p.message)}
+        </div>`).join('');
+
+      const section = (title, count, body) => !count ? '' : `
+        <details class="border border-gray-200 rounded-lg" ${count <= 20 ? 'open' : ''}>
+          <summary class="px-3 py-2 text-sm font-medium text-gray-700 cursor-pointer">${esc(title)} (${count.toLocaleString()})</summary>
+          <div class="px-3 pb-3 max-h-64 overflow-y-auto">${body}</div>
+        </details>`;
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl relative z-10 animate-[fadeIn_0.2s_ease] max-h-[90vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-upload-simple text-emerald-600"></i> ตรวจก่อนนำเข้า</h3>
+                <p class="text-xs text-gray-500 mt-0.5">${esc(fileName)}</p>
+              </div>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+
+            <div class="p-6 space-y-4 overflow-y-auto">
+              <div class="grid grid-cols-4 gap-2">
+                ${airImportTile('เพิ่มใหม่', c.adds, 'border-emerald-200 bg-emerald-50 text-emerald-700')}
+                ${airImportTile('แก้ของเดิม', c.updates, 'border-blue-200 bg-blue-50 text-blue-700')}
+                ${airImportTile('เหมือนเดิม', c.unchanged, 'border-gray-200 bg-gray-50 text-gray-600')}
+                ${airImportTile('ข้อผิดพลาด', c.errors, c.errors ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 bg-gray-50 text-gray-400')}
+              </div>
+
+              ${blocked ? `
+                <div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg p-3 flex gap-2">
+                  <i class="ph ph-warning-circle text-lg shrink-0"></i>
+                  <p>มีข้อผิดพลาดอยู่ ${c.errors.toLocaleString()} จุด — <b>ระบบจะไม่เขียนอะไรเลยจนกว่าจะแก้ให้หมด</b>
+                     แก้ในไฟล์แล้วเลือกไฟล์ใหม่อีกครั้ง</p>
+                </div>` : ''}
+
+              ${section('ข้อผิดพลาด ต้องแก้ก่อน', c.errors, problemRows(plan.errors))}
+              ${section('ข้อควรตรวจสอบ', c.warnings, problemRows(plan.warnings))}
+              ${section('เครื่องที่จะเพิ่มใหม่', c.adds,
+                `<table class="w-full text-sm"><tbody>${addRows}</tbody></table>`)}
+              ${section('เครื่องที่จะถูกแก้', c.updates,
+                `<table class="w-full text-sm"><tbody>${changeRows}</tbody></table>`)}
+
+              <div class="bg-blue-50 text-[#1153a1] text-xs p-3 rounded-lg space-y-1">
+                <p><i class="ph ph-info"></i> เครื่องที่ไม่ได้อยู่ในไฟล์จะไม่ถูกแตะและไม่ถูกลบ</p>
+                <p><i class="ph ph-info"></i> ช่องที่เว้นว่างในไฟล์ = ไม่ยุ่งกับช่องนั้น ไม่ใช่ล้างค่าเดิมทิ้ง</p>
+                <p><i class="ph ph-info"></i> ระบบสำรองฐานข้อมูลให้อัตโนมัติก่อนเขียนทุกครั้ง</p>
+              </div>
+            </div>
+
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
+              <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ยกเลิก</button>
+              <button id="airImportConfirm" onclick="confirmAirImport(${c.adds}, ${c.updates}, this)"
+                ${blocked || (!c.adds && !c.updates) ? 'disabled' : ''}
+                class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium">
+                ยืนยันนำเข้า
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
+    window.showAirImportPreview = showAirImportPreview;
+
+    /** ยืนยันแล้วเขียนจริง โดยส่งตัวเลขที่เห็นไปให้เซิร์ฟเวอร์ตรวจซ้ำ */
+    async function confirmAirImport(adds, updates, btn) {
+      if (!airImportRows) { showToast('กรุณาเลือกไฟล์ใหม่อีกครั้ง', 'error'); return; }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังนำเข้า...';
+      try {
+        const res = await call('applyAirUnitImport', { rows: airImportRows, expect: { adds, updates } });
+        if (!res) throw new Error('ไม่ได้รับผลลัพธ์กลับมา');
+
+        currentAirList = res.air || currentAirList;
+        airImportRows = null;
+        closeModal();
+        refreshAirTable();
+        loadDashboard();
+        showToast('นำเข้าสำเร็จ — เพิ่ม ' + res.added + ' แก้ ' + res.updated +
+                  ' รายการ' + (res.backupName ? ' (สำรองไว้ที่ ' + res.backupName + ')' : ''));
+      } catch (err) {
+        // call() แสดงข้อความผิดพลาดให้แล้ว ปล่อยให้กดยืนยันใหม่ได้
+        btn.disabled = false;
+        btn.innerHTML = 'ยืนยันนำเข้า';
+      }
+    }
+    window.confirmAirImport = confirmAirImport;
+
     /**
      * เรียงรายการเครื่องตามรหัส เพื่อให้เครื่องในโหนดเดียวกันอยู่ติดกันเสมอ
      *

@@ -1,4 +1,6 @@
 import { SHEETS } from '../schema.js';
+import { planImport, applyImport, toExportRows } from '../import.js';
+import { HEADERS as IMPORT_HEADERS } from '../import-spec.js';
 import { formatDate, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
@@ -404,5 +406,177 @@ export async function deleteAirUnit(ctx, row, expectCode) {
     await ctx.ss.deleteRow(SHEETS.AIRLIST, row);
     await ctx.ss.flush();
     return { air: await getAirList(ctx), history: await getHistory(ctx) };
+  });
+}
+
+/* ==================== นำเข้าข้อมูลเครื่องจากไฟล์ ==================== */
+
+/**
+ * จำนวนรายการเปลี่ยนแปลงที่ส่งกลับไปให้หน้าเว็บแสดง
+ *
+ * ไม่ส่งทั้งหมดเพราะนำเข้าทีเดียว 457 เครื่องจะได้ก้อนใหญ่มากโดยไม่มีใครอ่านครบ
+ * ตัวเลขสรุปยังนับจากของจริงทั้งหมดเสมอ ที่ตัดคือรายละเอียดที่เอาไว้ดูตัวอย่าง
+ */
+const IMPORT_PREVIEW_LIMIT = 200;
+
+/** ภูมิภาคนี้อยู่ในความดูแลของผู้ใช้คนนี้หรือไม่ */
+const canTouchRegion = (info, region) =>
+  info.role === 'Admin' || (info.regions || []).includes(normalizeRegion(region));
+
+/**
+ * ติดเลขบรรทัดให้แถวที่หน้าเว็บส่งมา
+ *
+ * ตัวตรวจอ้างเลขบรรทัดในข้อความผิดพลาด คนใช้จะได้เปิดไฟล์ไปแก้ถูกจุด
+ * แถวแรกของข้อมูลคือบรรทัดที่ 2 ของไฟล์ เพราะบรรทัดแรกเป็นหัวตาราง
+ */
+const withLineNumbers = rows =>
+  (Array.isArray(rows) ? rows : []).map((r, i) => ({ ...(r || {}), __line: i + 2 }));
+
+/**
+ * กันไม่ให้นำเข้าข้ามภูมิภาคที่ตัวเองไม่ได้ดูแล
+ *
+ * planImport ไม่รู้เรื่องสิทธิ์เลย เพราะเป็นตรรกะการนำเข้าล้วนๆ ที่คำสั่ง
+ * command line ก็ใช้ตัวเดียวกัน การกันสิทธิ์จึงต้องทำที่ชั้นนี้
+ *
+ * แถวที่ไม่ผ่านถูกย้ายไปเป็น "ข้อผิดพลาด" ไม่ใช่ถูกโยนทิ้งเงียบๆ
+ * เพราะถ้าเงียบ คนนำเข้าจะเห็นตัวเลขน้อยกว่าที่คาดแล้วไม่รู้ว่าทำไม
+ * และเมื่อมีข้อผิดพลาดเหลืออยู่ applyImport จะปฏิเสธทั้งไฟล์อยู่แล้ว
+ *
+ * ตรวจทั้งภูมิภาคเดิมและภูมิภาคใหม่ เพราะการย้ายเครื่องออกจากภูมิภาคที่ตัวเอง
+ * ดูแลไปให้คนอื่น ก็เป็นการแตะข้อมูลของภูมิภาคปลายทางเหมือนกัน
+ */
+function guardImportRegions(info, byCode, plan) {
+  if (info.role === 'Admin') return plan;
+
+  const errors = plan.errors.slice();
+
+  const allowed = (item, regions) => {
+    const bad = regions.filter(r => !canTouchRegion(info, r));
+    if (!bad.length) return true;
+    errors.push({
+      line: item.line,
+      column: 'Region',
+      message: 'เครื่อง ' + item.airCode + ' อยู่ในภูมิภาค "' + (bad[0] || '-') + '" ซึ่งคุณไม่ได้ดูแล'
+    });
+    return false;
+  };
+
+  const adds = plan.adds.filter(a => allowed(a, [a.values.Region]));
+  const updates = plan.updates.filter(u => {
+    const current = byCode.get(u.airCode);
+    const regions = [current ? current.Region : ''];
+    if (u.values.Region !== undefined) regions.push(u.values.Region);
+    return allowed(u, regions);
+  });
+
+  return { ...plan, adds, updates, errors };
+}
+
+/** ย่อแผนให้เหลือเท่าที่หน้าเว็บต้องใช้แสดง */
+function summarizeImport(plan) {
+  return {
+    counts: {
+      adds: plan.adds.length,
+      updates: plan.updates.length,
+      unchanged: plan.unchanged.length,
+      errors: plan.errors.length,
+      warnings: plan.warnings.length
+    },
+    adds: plan.adds.slice(0, IMPORT_PREVIEW_LIMIT).map(a => ({
+      line: a.line, airCode: a.airCode, nodeName: a.values.NodeName || ''
+    })),
+    updates: plan.updates.slice(0, IMPORT_PREVIEW_LIMIT).map(u => ({
+      line: u.line, airCode: u.airCode, changes: u.changes
+    })),
+    errors: plan.errors.slice(0, IMPORT_PREVIEW_LIMIT),
+    warnings: plan.warnings.slice(0, IMPORT_PREVIEW_LIMIT)
+  };
+}
+
+/** คำนวณแผนนำเข้าจากแถวที่ส่งมา พร้อมกันสิทธิ์ภูมิภาคแล้ว */
+async function buildImportPlan(ctx, rows) {
+  await ctx.ensureBase();
+
+  // ต้องใช้ทั้งตาราง ไม่ใช่เฉพาะภูมิภาคของคนนี้ (getAirList กรองให้)
+  // ไม่งั้นเครื่องของภูมิภาคอื่นจะถูกมองว่า "ยังไม่มีในระบบ" แล้วสร้างซ้ำขึ้นมาอีกตัว
+  const existing = ctx.ss.objects(SHEETS.AIRLIST);
+  const byCode = new Map(
+    existing.filter(u => u.AirCode).map(u => [String(u.AirCode).trim(), u])
+  );
+
+  const plan = planImport(existing, withLineNumbers(rows));
+  return guardImportRegions(await ctx.userInfo(), byCode, plan);
+}
+
+/**
+ * ข้อมูลเครื่องในรูปแบบ "ไฟล์นำเข้า" สำหรับโหลดไปแก้ใน Excel แล้วนำเข้ากลับ
+ *
+ * ต่างจากปุ่มดาวน์โหลด CSV ของตารางตรงที่ตัวนั้นเป็นคอลัมน์ตามที่เห็นบนจอ
+ * ซึ่งนำเข้ากลับไม่ได้ (ไม่มีคอลัมน์ AirNo และมี AirCode ที่ระบบสร้างให้เอง)
+ *
+ * ตัวนี้ใช้รูปแบบเดียวกับที่ตัวตรวจไฟล์คาดหวังเป๊ะๆ ไฟล์ที่โหลดไปจึงนำเข้ากลับ
+ * ได้ทันทีโดยไม่ต้องแก้อะไร ซึ่งเป็นวิธีแก้ข้อมูลเป็นชุดที่ปลอดภัยที่สุด
+ * เพราะคนใช้ไม่ต้องพิมพ์รหัสเครื่องเองและไม่มีทางใส่คอลัมน์ผิด
+ *
+ * ได้เฉพาะเครื่องในภูมิภาคที่ตัวเองดูแล ซึ่งตรงกับที่ตัวเองแก้ได้พอดี
+ */
+export async function getAirUnitImportFile(ctx) {
+  await ctx.assertModuleEdit('airlist');
+  return { headers: IMPORT_HEADERS, rows: toExportRows(await getAirList(ctx)) };
+}
+
+/**
+ * ดูว่าถ้านำเข้าไฟล์นี้จะเกิดอะไรขึ้น — ไม่เขียนอะไรทั้งสิ้น
+ *
+ * แยกจากการเขียนจริงคนละคำสั่ง เพื่อให้หน้าเว็บเอาผลไปให้คนยืนยันก่อนได้
+ * ซึ่งจำเป็นมากสำหรับการนำเข้า เพราะมันแตะข้อมูลหลักของทั้งระบบทีเดียวหลายร้อยแถว
+ */
+export async function planAirUnitImport(ctx, rows) {
+  await ctx.assertModuleEdit('airlist');
+  return summarizeImport(await buildImportPlan(ctx, rows));
+}
+
+/**
+ * เขียนผลการนำเข้าลงฐานข้อมูลจริง
+ *
+ * คำนวณแผนใหม่จากแถวชุดเดิมอีกรอบ ไม่ได้เชื่อแผนที่หน้าเว็บส่งกลับมา
+ * เพราะสิ่งที่หน้าเว็บส่งมาคือข้อมูลจากผู้ใช้ จะเชื่อว่าผ่านการตรวจแล้วไม่ได้
+ *
+ * แล้วเทียบกับตัวเลขที่คนกดยืนยันไป ถ้าไม่ตรงแปลว่ามีคนอื่นแก้ข้อมูลคั่นระหว่าง
+ * ที่หน้าต่างยืนยันเปิดค้างอยู่ ต้องหยุดให้ดูใหม่ ไม่ใช่เขียนตามที่คำนวณได้ใหม่
+ * (เหตุผลเดียวกับ assertRowIs — ข้อมูลในมือเก่าไปแล้วก็ต้องยอมเสียเที่ยว)
+ *
+ * @param {Object} payload { rows, expect: { adds, updates } }
+ */
+export async function applyAirUnitImport(ctx, payload) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('airlist');
+
+    const { rows, expect } = payload || {};
+    const plan = await buildImportPlan(ctx, rows);
+
+    if (plan.errors.length) {
+      throw new Error('ไฟล์ยังมีข้อผิดพลาด ' + plan.errors.length + ' จุด ต้องแก้ให้หมดก่อนจึงจะนำเข้าได้');
+    }
+    if (!plan.adds.length && !plan.updates.length) {
+      throw new Error('ไม่มีอะไรต้องเปลี่ยน ข้อมูลในไฟล์ตรงกับในระบบอยู่แล้ว');
+    }
+    if (expect && (Number(expect.adds) !== plan.adds.length || Number(expect.updates) !== plan.updates.length)) {
+      throw new Error(
+        'ข้อมูลในระบบเปลี่ยนไประหว่างที่ดูผลอยู่ ' +
+        '(ตอนนี้จะเพิ่ม ' + plan.adds.length + ' แก้ ' + plan.updates.length + ' รายการ) ' +
+        'กรุณากดดูผลใหม่อีกครั้งก่อนยืนยัน'
+      );
+    }
+
+    // สำรองก่อนเขียนเสมอ — นำเข้าครั้งเดียวแตะข้อมูลได้หลายร้อยแถว
+    // ถ้าสำรองไม่สำเร็จต้องหยุด ไม่ใช่เขียนต่อ เพราะจะไม่มีทางย้อนกลับ
+    // (แพลตฟอร์มที่ไม่มีดิสก์จะไม่ส่งตัวนี้เข้ามา ซึ่งที่นั่นก็เขียนไฟล์ไม่ได้อยู่แล้ว)
+    let backupName = '';
+    if (ctx.backup) backupName = ctx.backup('ก่อนนำเข้าข้อมูลเครื่อง');
+
+    const result = await applyImport(ctx.ss, plan, { user: await ctx.currentUser() });
+
+    return { ...result, backupName, air: await getAirList(ctx) };
   });
 }

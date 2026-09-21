@@ -25,23 +25,29 @@ export class Ctx {
    *   ทั้งสองตัวมีเมธอดชื่อเดียวกัน โค้ดตรงนี้จึงไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
    * @param {Object} [db]  ฐานข้อมูล SQLite ที่เปิดไว้แล้ว ส่งเข้ามาจาก platform/
    *   src/ ห้ามเปิดไฟล์เอง จึงต้องรับเข้ามาแบบนี้
-   * @param {Object} [photos]  ตัวเก็บรูปถ่ายประกอบเอกสาร ส่งเข้ามาจาก platform/
-   *   ด้วยเหตุผลเดียวกับ db คือ src/ ห้ามแตะระบบไฟล์เอง
-   *   ไม่ส่งมา (เช่นตอนรันบน Cloudflare) = ระบบยังทำงานได้ แค่แนบรูปไม่ได้
-   * @param {Object} [pdf]   ตัวแปลงหน้าเอกสารเป็นไฟล์ PDF
-   * @param {Object} [docs]  ที่เก็บไฟล์ PDF บนดิสก์ของเครื่องที่รันระบบ
-   *   ไม่ส่งมา = ยังกดดาวน์โหลด PDF ได้ แค่ไม่มีสำเนาเก็บไว้บนเซิร์ฟเวอร์
-   * @param {Object} [attachments]  ที่เก็บไฟล์เอกสารที่ช่างถ่ายส่งกลับมา
-   *   ไม่ส่งมา = แนบไฟล์ไม่ได้ ส่วนที่เหลือใช้ได้ครบ
+   * @param {Object} [services]  เครื่องมือที่ชั้น platform ส่งเข้ามาให้ใช้
+   *   src/ ห้ามแตะระบบไฟล์หรือสั่งโปรแกรมอื่นเอง จึงรับเข้ามาเป็นชุดฟังก์ชันแบบนี้
+   *   ไม่ส่งมาสักตัวก็ยังทำงานได้ แค่ฟีเจอร์ที่ต้องใช้ตัวนั้นใช้ไม่ได้
+   *   (เช่นตอนรันบน Cloudflare ที่ไม่มีดิสก์ให้เขียน)
+   *
+   *   - `photos`       ที่เก็บรูปถ่ายประกอบเอกสาร
+   *   - `pdf`          ตัวแปลงหน้าเอกสารเป็นไฟล์ PDF
+   *   - `docs`         ที่เก็บไฟล์ PDF บนดิสก์
+   *   - `attachments`  ที่เก็บไฟล์เอกสารที่ช่างถ่ายส่งกลับมา
+   *   - `backup`       สำรองฐานข้อมูลทันที ใช้ก่อนงานที่เขียนทีละมากๆ
+   *
+   *   รับเป็นอ็อบเจกต์เดียวไม่ใช่พารามิเตอร์เรียงกัน เพราะรายการนี้ยาวขึ้นเรื่อยๆ
+   *   และการเรียงผิดตำแหน่งเป็นความผิดพลาดที่ไม่มีอะไรฟ้อง
    */
-  constructor(env, state, db, photos, pdf, docs, attachments) {
+  constructor(env, state, db, services = {}) {
     this.env = env;
     this.state = state;
     this.db = db || null;
-    this.photos = photos || null;
-    this.pdf = pdf || null;      // ตัวแปลงเอกสารเป็นไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้)
-    this.docs = docs || null;    // ที่เก็บไฟล์ PDF (ไม่มีก็ยังใช้ระบบได้ แค่ไม่เก็บสำเนา)
-    this.attachments = attachments || null;  // ที่เก็บไฟล์เอกสารแนบ
+    this.photos = services.photos || null;
+    this.pdf = services.pdf || null;
+    this.docs = services.docs || null;
+    this.attachments = services.attachments || null;
+    this.backup = services.backup || null;
     this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ
