@@ -146,6 +146,32 @@ test('รวมแล้วผลตรวจของทั้งสองเ�
   assert.equal(temp.val2, '26', 'ค่าของเครื่องที่ 2 ต้องถูกเติมเข้ามา');
 });
 
+test('รวมแล้วผลประเมินของแต่ละเครื่องต้องอยู่คนละช่อง ไม่ทับกัน', async () => {
+  // ไปล้างสองตัว เจอตัวหนึ่งไม่สมบูรณ์ — ต้องบันทึกได้ตามจริง
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), oneUnit(1, { EquipmentCondition: 'สภาพเครื่องสมบูรณ์' }));
+  await saveCleaningForm(ctxOf(db), oneUnit(2, { EquipmentCondition2: 'สภาพเครื่องควรปรับปรุง' }));
+
+  const [form] = await getCleaningForms(ctxOf(db));
+  assert.equal(form.EquipmentCondition, 'สภาพเครื่องสมบูรณ์');
+  assert.equal(form.EquipmentCondition2, 'สภาพเครื่องควรปรับปรุง');
+});
+
+test('ผลประเมินต้องย้ายช่องตามเครื่อง เหมือนราคาและข้อมูลเครื่อง', async () => {
+  // หน้าเว็บส่งเครื่องที่ 2 มาในช่องที่ 1 (ไซต์ที่เครื่องเรียงกลับด้าน)
+  // ผลประเมินต้องตามไปช่องที่ 2 ด้วย ไม่ค้างอยู่ช่องเดิม
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), {
+    ...oneUnit(1),
+    AirCode1: 'AYA-WNI-AIR-2',
+    EquipmentCondition: 'สภาพเครื่องควรปรับปรุง'
+  });
+
+  const [form] = await getCleaningForms(ctxOf(db));
+  assert.equal(form.EquipmentCondition, '', 'ช่องของเครื่องที่ 1 ต้องว่าง');
+  assert.equal(form.EquipmentCondition2, 'สภาพเครื่องควรปรับปรุง');
+});
+
 test('รวมแล้วไฟล์เดิมต้องถูกล้าง เพราะมีข้อมูลแค่เครื่องเดียว', async () => {
   const db = freshDb();
   await saveCleaningForm(ctxOf(db), oneUnit(1));
@@ -209,6 +235,37 @@ test('ประวัติลงรายเครื่อง ไม่ซ้�
     ['AYA-WNI-AIR-1', 'AYA-WNI-AIR-2']
   );
   assert.ok(hist.every(h => h.EventType === 'ล้างแอร์'));
+});
+
+test('ประวัติของแต่ละเครื่อง ต้องได้ผลประเมินของตัวเอง', async () => {
+  // ประวัติเป็นของรายเครื่อง ถ้าหยิบผลของใบมาใส่ทุกใบ
+  // เครื่องที่ยังดีอยู่จะมีประวัติว่าควรปรับปรุง ทั้งที่ไม่ใช่
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), oneUnit(1, { EquipmentCondition: 'สภาพเครื่องสมบูรณ์' }));
+  await saveCleaningForm(ctxOf(db), oneUnit(2, { EquipmentCondition2: 'สภาพเครื่องควรปรับปรุง' }));
+
+  const hist = await getHistory(ctxOf(db));
+  const detailOf = code => hist.find(h => h.AirCode === code).Detail;
+
+  assert.match(detailOf('AYA-WNI-AIR-1'), /ผลประเมิน: สภาพเครื่องสมบูรณ์/);
+  assert.match(detailOf('AYA-WNI-AIR-2'), /ผลประเมิน: สภาพเครื่องควรปรับปรุง/);
+});
+
+test('กรอกสองเครื่องในครั้งเดียว ประวัติก็ต้องแยกผลประเมินของแต่ละเครื่อง', async () => {
+  // กรอกจากแท็บฟอร์มโดยตรง ใบเดียวมีสองเครื่องตั้งแต่แรก ไม่ได้ผ่านการรวมใบ
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), {
+    ...oneUnit(1, { EquipmentCondition: 'สภาพเครื่องสมบูรณ์' }),
+    AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier',
+    EquipmentCondition2: 'สภาพเครื่องควรปรับปรุง'
+  });
+
+  const hist = await getHistory(ctxOf(db));
+  const detailOf = code => hist.find(h => h.AirCode === code).Detail;
+
+  assert.equal(hist.length, 2);
+  assert.match(detailOf('AYA-WNI-AIR-1'), /ผลประเมิน: สภาพเครื่องสมบูรณ์/);
+  assert.match(detailOf('AYA-WNI-AIR-2'), /ผลประเมิน: สภาพเครื่องควรปรับปรุง/);
 });
 
 test('กรอกเครื่องเดียว ประวัติต้องมีใบเดียว ไม่ลงให้เครื่องที่ยังไม่ได้ล้าง', async () => {

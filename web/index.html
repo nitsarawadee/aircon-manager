@@ -5596,6 +5596,26 @@
     return String((f && (f.DocNo || f.ID)) || '').trim();
   }
 
+  /**
+   * ป้ายผลประเมินในตาราง — ผลเป็นของรายเครื่อง
+   *
+   * เครื่องเดียว หรือสองเครื่องผลตรงกัน แสดงป้ายเดียวเหมือนเดิม
+   * ผลต่างกันเมื่อไหร่ต้องเห็นทั้งสองอัน ไม่งั้นตารางขึ้นว่า "สมบูรณ์"
+   * ทั้งที่มีเครื่องหนึ่งควรปรับปรุง
+   */
+  function conditionBadges(f) {
+    const txt = v => String(v == null ? '' : v).trim();
+    const c1 = txt(f.EquipmentCondition);
+    const c2 = txt(f.EquipmentCondition2);
+
+    const badge = (c, prefix) =>
+      `<span class="px-2 py-1 rounded-full text-xs font-medium ${c === 'สภาพเครื่องสมบูรณ์' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${esc(prefix + (c || '-'))}</span>`;
+
+    if (!c1) return badge(c2, '');
+    if (!c2 || c1 === c2) return badge(c1, '');
+    return `<div class="flex flex-col gap-1 items-start">${badge(c1, 'ตัวที่ 1: ')}${badge(c2, 'ตัวที่ 2: ')}</div>`;
+  }
+
   /** ค้นหาจากทุกช่องที่คนน่าจะพิมพ์หา */
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
@@ -5603,7 +5623,7 @@
     if (!q) return currentCleaningForms || [];
     return (currentCleaningForms || []).filter(f =>
       [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2,
-       f.TechnicianName, f.EquipmentCondition, fmtDate(f.Date)]
+       f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, fmtDate(f.Date)]
         .map(v => String(v == null ? '' : v).toLowerCase())
         .join(' ')
         .includes(q)
@@ -5690,9 +5710,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             : ''}
         </td>
         <td class="px-4 py-3">${esc(f.AirCode1)}${f.AirCode2 ? ', ' + esc(f.AirCode2) : ''}</td>
-        <td class="px-4 py-3">
-          <span class="px-2 py-1 rounded-full text-xs font-medium ${f.EquipmentCondition === 'สภาพเครื่องสมบูรณ์' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${esc(f.EquipmentCondition || '-')}</span>
-        </td>
+        <td class="px-4 py-3">${conditionBadges(f)}</td>
         <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
         <td class="px-4 py-3 text-right tabular-nums">${
           // ใบเก่าบางใบเก็บเฉพาะยอดรวม ใบใหม่เก็บราคาแยกรายเครื่อง รองรับทั้งสองแบบ
@@ -6078,11 +6096,20 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ผลประเมินสภาพเครื่องปรับอากาศ</label>
-              <div class="flex gap-4">
-                <!-- ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ
-                     ไม่งั้นฟอร์มเปล่าที่ปริ้นออกไปจะมีผลประเมินติดมาแล้ว -->
-                <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องสมบูรณ์"> สภาพเครื่องสมบูรณ์</label>
-                <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องควรปรับปรุง"> สภาพเครื่องควรปรับปรุง</label>
+              <!-- แยกผลรายเครื่อง เพราะไปล้างสองตัวแล้วเจอตัวหนึ่งไม่สมบูรณ์เป็นเรื่องปกติ
+                   ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ
+                   ไม่งั้นฟอร์มเปล่าที่ปริ้นออกไปจะมีผลประเมินติดมาแล้ว -->
+              <div class="space-y-2">
+                <div class="flex items-center gap-4 flex-wrap">
+                  <span class="text-xs text-gray-500 w-14 ${single ? 'hidden' : ''}">ตัวที่ 1</span>
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องสมบูรณ์"> สภาพเครื่องสมบูรณ์</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องควรปรับปรุง"> สภาพเครื่องควรปรับปรุง</label>
+                </div>
+                <div id="cf_cond2Row" class="flex items-center gap-4 flex-wrap hidden">
+                  <span class="text-xs text-gray-500 w-14">ตัวที่ 2</span>
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition2" value="สภาพเครื่องสมบูรณ์"> สภาพเครื่องสมบูรณ์</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition2" value="สภาพเครื่องควรปรับปรุง"> สภาพเครื่องควรปรับปรุง</label>
+                </div>
               </div>
             </div>
 
@@ -6168,6 +6195,11 @@ const CLEANING_CHECKLIST_ITEMS = [
       </div>`;
 
     box.innerHTML = unitCard(node.units[0], 'ตัวที่ 1') + unitCard(node.units[1], 'ตัวที่ 2');
+
+    // แถวผลประเมินของตัวที่ 2 โผล่เฉพาะตอน Node นี้มีเครื่องที่สองจริง
+    const cond2 = document.getElementById('cf_cond2Row');
+    if (cond2) cond2.classList.toggle('hidden', !node.units[1]);
+
     if (node.units.length > 2) {
       box.innerHTML += `<div class="sm:col-span-2 text-xs text-amber-600 flex items-center gap-1"><i class="ph ph-warning"></i> Node นี้มีมากกว่า 2 เครื่อง ระบบจะบันทึกเฉพาะ 2 เครื่องแรกในฟอร์มนี้ (บันทึกฟอร์มแยกสำหรับเครื่องที่เหลือได้)</div>`;
     }
@@ -6221,6 +6253,12 @@ const CLEANING_CHECKLIST_ITEMS = [
       return { no: item.no, label: item.label, val1: val1El ? val1El.value : '', val2: val2El ? val2El.value : '', note };
     });
 
+    // ผลประเมินเป็นของรายเครื่อง เหมือนช่องตรวจเช็ค 21 ข้อ
+    // โหมดแยกใบมีช่องเดียวบนจอ ต้องย้ายไปลงช่องที่ตรงกับตำแหน่งจริงของเครื่อง
+    const pickedCond = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value || '';
+    const cond1 = pickedCond('cf_condition');
+    const cond2 = cfContext ? '' : pickedCond('cf_condition2');
+
     const record = {
       NodeName: node.NodeName, SiteCode: node.SiteCode, Region: node.Region,
       Province: node.Province, LocationType: node.LocationType,
@@ -6235,7 +6273,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       PlanYear: cfContext ? cfContext.year : '',
       PlanRound: cfContext ? cfContext.round : '',
       Price: (document.getElementById('cf_price') || {}).value || '',
-      EquipmentCondition: (document.querySelector('input[name="cf_condition"]:checked') || {}).value || '',
+      EquipmentCondition: (cfContext && cfUnitSlot === 2) ? '' : cond1,
+      EquipmentCondition2: (cfContext && cfUnitSlot === 2) ? cond1 : cond2,
       AdditionalNote: document.getElementById('cf_note').value,
       CompanyName: document.getElementById('cf_company').value,
       TechnicianName: document.getElementById('cf_tech').value,
@@ -6763,7 +6802,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       Unit2_OutdoorSerial: u2 ? u2.OutdoorSerial : '', Unit2_OutdoorAsset: u2 ? u2.OutdoorAsset : '',
       // เว้นว่างทั้งหมดโดยตั้งใจ — นี่คือฟอร์มเปล่าสำหรับเขียนด้วยมือ
       Date: '', TimeStart: '', TimeEnd: '', TotalTime: '',
-      Checklist: [], EquipmentCondition: '', AdditionalNote: '',
+      Checklist: [], EquipmentCondition: '', EquipmentCondition2: '', AdditionalNote: '',
       CompanyName: '', TechnicianName: '', SupervisorName: ''
     };
 
@@ -7357,6 +7396,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       Unit2_OutdoorSerial: u2 ? u2.OutdoorSerial : '', Unit2_OutdoorAsset: u2 ? u2.OutdoorAsset : '',
       Checklist: checklist,
       EquipmentCondition: (document.querySelector('input[name="cf_condition"]:checked') || {}).value || '',
+      EquipmentCondition2: (document.querySelector('input[name="cf_condition2"]:checked') || {}).value || '',
       AdditionalNote: (document.getElementById('cf_note') || {}).value || '',
       CompanyName: (document.getElementById('cf_company') || {}).value || '',
       TechnicianName: (document.getElementById('cf_tech') || {}).value || '',

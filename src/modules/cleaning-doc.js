@@ -81,7 +81,9 @@ function unitsOf(form) {
       inSn: form['Unit' + slot + '_IndoorSerial'],
       inAsset: form['Unit' + slot + '_IndoorAsset'],
       outSn: form['Unit' + slot + '_OutdoorSerial'],
-      outAsset: form['Unit' + slot + '_OutdoorAsset']
+      outAsset: form['Unit' + slot + '_OutdoorAsset'],
+      // ผลประเมินของเครื่องที่ 1 อยู่ในคอลัมน์ชื่อเดิม (เปลี่ยนชื่อคอลัมน์ไม่ได้)
+      cond: plainText(form[slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition'])
     });
   }
   return out;
@@ -183,20 +185,18 @@ function sectionChecklist(form, units) {
 /**
  * ส่วนที่ 4 : สรุปผล — [1-3 ป้าย] [4 เครื่องที่ N] [5-8 ช่องติ๊ก]
  *
- * แบบฟอร์มให้ติ๊กเลือกสองตัวเลือกต่อเครื่อง
- * ระบบเก็บผลประเมินไว้ค่าเดียวต่อใบ ทั้งสองแถวจึงติ๊กตรงกัน
- * ถ้าวันหลังต้องแยกผลรายเครื่อง ต้องเพิ่มคอลัมน์ในฐานข้อมูลก่อน
+ * แบบฟอร์มให้ติ๊กเลือกสองตัวเลือกต่อเครื่อง และแต่ละเครื่องติ๊กคนละอย่างได้จริง
+ * เช่นไปล้างสองตัว ตัวหนึ่งสมบูรณ์ อีกตัวควรปรับปรุง
+ * ห้ามเอาผลของเครื่องหนึ่งไปติ๊กแทนอีกเครื่อง — เอกสารนี้เอาไปเซ็นกัน
  */
 function sectionSummary(form, units) {
-  const picked = plainText(form.EquipmentCondition).trim();
-
   return units.map(u =>
     '<tr>' +
     '<th colspan="3" class="lbl">ผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
     `<td class="ctr tight">เครื่องที่ ${u.slot}</td>` +
     '<td colspan="4" class="choices">' +
     CONDITIONS.map(c =>
-      `<span class="box">${picked === c ? '☑' : '☐'}</span> ${esc(c)}`
+      `<span class="box">${plainText(u.cond).trim() === c ? '☑' : '☐'}</span> ${esc(c)}`
     ).join('<span class="gap"></span>') +
     '</td></tr>'
   ).join('');

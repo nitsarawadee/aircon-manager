@@ -128,12 +128,14 @@ async function writeCleaningHistory(ctx, units, opts) {
   const via = opts.source === 'attach' ? '(เอกสารแนบ)' : '(ฟอร์ม)';
 
   for (const u of units) {
+    // ผลประเมินเป็นของรายเครื่อง ประวัติของแต่ละเครื่องจึงต้องได้ผลของตัวเอง
+    const cond = plainText(u.cond);
     await addHistoryRaw(ctx, {
       AirCode: u.airCode,
       Date: opts.date,
       EventType: 'ล้างแอร์',
       Detail: `ล้างเครื่องปรับอากาศ ${via}${roundTxt} Node "${opts.nodeName}"` +
-              (opts.condition ? ` ผลประเมิน: ${opts.condition}` : '') +
+              (cond ? ` ผลประเมิน: ${cond}` : '') +
               (opts.docUrl ? ` — เอกสาร: ${opts.docUrl}` : ''),
       Cost: hasPrice(u.price) ? Number(u.price) : '',
       Technician: opts.technician || ''
@@ -142,20 +144,25 @@ async function writeCleaningHistory(ctx, units, opts) {
 }
 
 /**
- * รวมรายการเครื่องที่เลือก พร้อมราคารายเครื่อง
+ * รวมรายการเครื่องที่เลือก พร้อมราคาและผลประเมินของเครื่องนั้น
  * รองรับข้อมูลเก่าที่ส่งมาแค่ยอดรวม (Price) โดยไม่มีราคารายเครื่อง
  */
 function unitsFromRecord(record) {
-  const codes = [record.AirCode1, record.AirCode2].filter(Boolean);
-  const prices = [record.Price1, record.Price2];
+  const out = [];
 
-  return codes.map((code, i) => {
-    let price = prices[i];
-    // ข้อมูลรุ่นเก่าส่งมาแค่ยอดรวม — ให้ถือว่าเป็นราคาของเครื่องแรก
-    // เครื่องที่สองปล่อยว่างไว้ (แผนจะคงราคาที่ตั้งไว้เดิมของเครื่องนั้น)
-    if (!hasPrice(price) && i === 0 && hasPrice(record.Price)) price = record.Price;
-    return { airCode: code, price: hasPrice(price) ? Number(price) : '' };
-  });
+  for (const slot of [1, 2]) {
+    const c = slotCols(slot);
+    const code = plainText(record[c.code]).trim();
+    if (!code) continue;
+    out.push({ slot, airCode: code, price: record[c.price], cond: plainText(record[c.cond]) });
+  }
+
+  // ข้อมูลรุ่นเก่าส่งมาแค่ยอดรวม — ให้ถือว่าเป็นราคาของเครื่องแรกที่มีในใบ
+  // เครื่องที่เหลือปล่อยว่างไว้ (แผนจะคงราคาที่ตั้งไว้เดิมของเครื่องนั้น)
+  if (out.length && !hasPrice(out[0].price) && hasPrice(record.Price)) out[0].price = record.Price;
+
+  for (const u of out) u.price = hasPrice(u.price) ? Number(u.price) : '';
+  return out;
 }
 
 /* ==================== ช่องเครื่องที่ 1 / 2 ==================== */
@@ -176,10 +183,16 @@ export function unitSlotOf(airCode) {
   return n === 2 ? 2 : 1;
 }
 
-/** ชื่อคอลัมน์ข้อมูลเครื่องของช่องที่ระบุ */
+/**
+ * ชื่อคอลัมน์ข้อมูลเครื่องของช่องที่ระบุ
+ *
+ * ผลประเมินของช่องที่ 1 ใช้ชื่อคอลัมน์เดิม (EquipmentCondition) ไม่ใช่ EquipmentCondition1
+ * เพราะแก้ฐานข้อมูลได้แค่ "เพิ่มคอลัมน์" เปลี่ยนชื่อของเดิมไม่ได้
+ */
 const slotCols = slot => ({
   code: 'AirCode' + slot,
   price: 'Price' + slot,
+  cond: slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition',
   brand: 'Unit' + slot + '_Brand',
   btu: 'Unit' + slot + '_BTU',
   inSn: 'Unit' + slot + '_IndoorSerial',
@@ -214,6 +227,8 @@ function unitsBySlot(record) {
     out[to] = {
       code,
       price: record[src.price],
+      // ผลประเมินติดไปกับเครื่อง ไม่ใช่ติดกับช่อง — ย้ายช่องแล้วผลต้องตามไปด้วย
+      cond: record[src.cond],
       brand: record[src.brand], btu: record[src.btu],
       inSn: record[src.inSn], inAsset: record[src.inAsset],
       outSn: record[src.outSn], outAsset: record[src.outAsset]
@@ -229,6 +244,7 @@ function slotPayload(slot, unit) {
   return {
     [c.code]: unit.code,
     [c.price]: hasPrice(unit.price) ? Number(unit.price) : '',
+    [c.cond]: plainText(unit.cond),
     [c.brand]: plainText(unit.brand), [c.btu]: plainText(unit.btu),
     [c.inSn]: plainText(unit.inSn), [c.inAsset]: plainText(unit.inAsset),
     [c.outSn]: plainText(unit.outSn), [c.outAsset]: plainText(unit.outAsset)
@@ -304,7 +320,8 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
   payload.Price = (Number(p1) || 0) + (Number(p2) || 0) || '';
 
   // ช่องส่วนกลางของใบ เติมให้เฉพาะที่ยังว่างอยู่ ไม่ทับของเดิม
-  for (const col of ['TimeStart', 'TimeEnd', 'TotalTime', 'EquipmentCondition',
+  // ผลประเมินไม่อยู่ในรายการนี้ เพราะเป็นของรายเครื่อง — slotPayload เขียนให้ตามช่องของมันเอง
+  for (const col of ['TimeStart', 'TimeEnd', 'TotalTime',
                      'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
     if (!plainText(existing[col]).trim() && plainText(record[col]).trim()) {
       payload[col] = record[col];
@@ -480,7 +497,6 @@ export async function saveCleaningForm(ctx, record) {
       date: record.Date,
       technician: record.TechnicianName,
       nodeName: record.NodeName,
-      condition: record.EquipmentCondition,
       docUrl: '',
       planYear: record.PlanYear,
       planRound: record.PlanRound,
@@ -760,7 +776,13 @@ export async function uploadNodeDocuments(ctx, payload) {
         const code = plainText(w.airCode).trim();
         const found = nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(code));
         if (!found) throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
-        return { airCode: plainText(found.AirCode), price: hasPrice(w.price) ? Number(w.price) : '' };
+        // แนบเอกสารเขียนมือ มีผลประเมินให้เลือกช่องเดียวต่อการแนบหนึ่งครั้ง
+        // (ตัวจริงอยู่บนกระดาษที่ถ่ายมา) ทุกเครื่องในครั้งนั้นจึงใช้ผลเดียวกัน
+        return {
+          airCode: plainText(found.AirCode),
+          price: hasPrice(w.price) ? Number(w.price) : '',
+          cond: plainText(closeout.condition)
+        };
       });
     }
 
@@ -788,7 +810,6 @@ export async function uploadNodeDocuments(ctx, payload) {
       date: closeout.date,
       technician: closeout.technician,
       nodeName,
-      condition: closeout.condition,
       docUrl,
       planYear: closeout.year,
       planRound: closeout.round,
@@ -828,7 +849,8 @@ export async function uploadNodeDocuments(ctx, payload) {
       Unit2_OutdoorSerial: second ? plainText(second.OutdoorSN) : '',
       Unit2_OutdoorAsset: second ? plainText(second.OutdoorAsset) : '',
       ChecklistJSON: '[]',
-      EquipmentCondition: closeout.condition || '',
+      EquipmentCondition: units[0] ? units[0].cond : '',
+      EquipmentCondition2: units[1] ? units[1].cond : '',
       AdditionalNote: closeout.note || '',
       CompanyName: closeout.companyName || '',
       TechnicianName: closeout.technician || '',

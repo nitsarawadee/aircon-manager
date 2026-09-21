@@ -104,6 +104,53 @@ test('ค่าที่วัดได้ต้องลงคอลัมน�
   assert.ok(html.includes('วัดตอนเที่ยง'), 'หมายเหตุของข้อนั้นต้องติดมาด้วย');
 });
 
+/* ==================== ผลประเมินรายเครื่อง ==================== */
+
+/** ช่องที่ถูกติ๊กในแถวสรุปผลของเครื่องที่ระบุ */
+function tickedFor(html, slot) {
+  const row = html.split('<tr>')
+    .find(r => r.includes('ผลการล้างและตรวจสอบ') && r.includes('เครื่องที่ ' + slot));
+  assert.ok(row, 'ไม่พบแถวสรุปผลของเครื่องที่ ' + slot);
+
+  const out = [];
+  for (const part of row.split('<span class="box">')) {
+    if (part[0] !== '☑') continue;
+    out.push(part.split('</span>')[1].split('<')[0].trim());
+  }
+  return out;
+}
+
+test('สองเครื่องผลประเมินต่างกัน ต้องติ๊กคนละช่อง', () => {
+  // หัวใจของเรื่องนี้ — ไปล้างสองตัว เจอตัวหนึ่งไม่สมบูรณ์ เป็นเรื่องที่เกิดได้จริง
+  // เอกสารนี้เอาไปเซ็นกัน เอาผลของเครื่องหนึ่งไปติ๊กแทนอีกเครื่องไม่ได้
+  const html = buildCleaningDocHtml(baseForm({
+    EquipmentCondition: 'สภาพเครื่องสมบูรณ์',
+    EquipmentCondition2: 'สภาพเครื่องควรปรับปรุง'
+  }));
+
+  assert.deepEqual(tickedFor(html, 1), ['สภาพเครื่องสมบูรณ์']);
+  assert.deepEqual(tickedFor(html, 2), ['สภาพเครื่องควรปรับปรุง']);
+});
+
+test('ผลประเมินของเครื่องที่ 2 ที่ยังไม่ได้กรอก ต้องเว้นว่าง ไม่ยืมของเครื่องแรกมาติ๊ก', () => {
+  const html = buildCleaningDocHtml(baseForm({
+    EquipmentCondition: 'สภาพเครื่องสมบูรณ์',
+    EquipmentCondition2: ''
+  }));
+
+  assert.deepEqual(tickedFor(html, 1), ['สภาพเครื่องสมบูรณ์']);
+  assert.deepEqual(tickedFor(html, 2), [], 'ยังไม่ได้กรอก ต้องไม่มีช่องไหนถูกติ๊ก');
+});
+
+test('ล้างเฉพาะเครื่องที่ 2 ผลประเมินต้องอ่านจากช่องของเครื่องที่ 2', () => {
+  const f = withoutUnit(1);
+  f.EquipmentCondition = '';
+  f.EquipmentCondition2 = 'สภาพเครื่องควรปรับปรุง';
+
+  const html = buildCleaningDocHtml(f);
+  assert.deepEqual(tickedFor(html, 2), ['สภาพเครื่องควรปรับปรุง']);
+});
+
 test('ช่องลงนามครบ 4 ช่องตาม Rev2026', () => {
   const html = buildCleaningDocHtml(baseForm());
   for (const s of ['ผู้ดำเนินการล้างแอร์', 'ผู้ควบคุมงาน (Interlink)',

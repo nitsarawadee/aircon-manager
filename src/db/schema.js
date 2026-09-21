@@ -100,7 +100,9 @@ export const TABLES = {
       PdfUrl: S, PdfFileId: S, PhotoUrl: S,
       CreatedAt: DT, RecordedBy: S,
       PlanYear: N, PlanRound: N, Price: N, Price1: N, Price2: N, Source: S,
-      DocType: S, DocNo: S
+      DocType: S, DocNo: S,
+      // ผลประเมินของเครื่องที่ 2 — ของเครื่องที่ 1 ยังใช้คอลัมน์ EquipmentCondition เดิม
+      EquipmentCondition2: S
     },
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },
