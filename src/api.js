@@ -119,7 +119,7 @@ export function isApiPath(pathname) {
  * @param {Object}  [opts.db]      ฐานข้อมูล SQLite ที่เปิดไว้แล้ว (ฝั่ง Node เท่านั้น)
  * @returns {Promise<{status: number, payload: Object}>}
  */
-export async function handleApi({ pathname, body, env, state, db, photos, pdf }) {
+export async function handleApi({ pathname, body, env, state, db, photos, pdf, docs }) {
   const isPublic = pathname === '/api/public';
   const fnName = String((body && body.fn) || '');
   const args = Array.isArray(body && body.args) ? body.args : [];
@@ -130,7 +130,7 @@ export async function handleApi({ pathname, body, env, state, db, photos, pdf })
   }
   const fn = table[fnName];
 
-  const ctx = new Ctx(env, state, db, photos, pdf);
+  const ctx = new Ctx(env, state, db, photos, pdf, docs);
 
   try {
     if (!isPublic) {

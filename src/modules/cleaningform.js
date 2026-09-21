@@ -455,7 +455,7 @@ export async function saveCleaningForm(ctx, record) {
   record.PdfFileId = '';
 
   // ---------- เขียนฐานข้อมูล (ต้องถือล็อก แต่ใช้เวลาสั้นมาก) ----------
-  return ctx.withLock(async () => {
+  const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
 
     // ---------- ใบเดิมของไซต์นี้ รอบนี้ วันเดียวกัน มีอยู่แล้วหรือยัง ----------
@@ -507,10 +507,23 @@ export async function saveCleaningForm(ctx, record) {
 
     return {
       planClosed, mergedInto,
+      docNo: mergedInto || plainText(record.DocNo),
       forms: await getCleaningForms(ctx),
       history: await getHistory(ctx)
     };
   });
+
+  // ---------- เก็บสำเนา PDF ไว้บนเซิร์ฟเวอร์ (นอกล็อก) ----------
+  //
+  // อยู่นอกล็อกเพราะต้องรอเบราว์เซอร์แปลงไฟล์ ซึ่งนานกว่างานฐานข้อมูลมาก
+  // ถ้าทำในล็อก ล็อกจะถูกถือไว้จนถูกยกให้คนถัดไป แล้วเกิดการเขียนชนกัน
+  // (เหตุผลเดียวกับที่ย้ายการสร้าง PDF ออกมานอกล็อกตั้งแต่แรก)
+  //
+  // ตอนนี้ยังไม่มีรูปถ่าย เพราะรูปแนบทีหลังจากปุ่ม "รูปถ่าย"
+  // ไฟล์จะถูกสร้างทับใหม่ทุกครั้งที่แนบหรือลบรูป จึงตามทันเสมอ
+  const { docNo, ...out } = saved;
+  await storeDocPdf(ctx, docNo);
+  return out;
 }
 
 /**
@@ -602,7 +615,7 @@ function requirePhotoStore(ctx) {
  * @param {Object} payload { row, unitSlot, index, dataUrl }
  */
 export async function saveCleaningPhoto(ctx, payload) {
-  return ctx.withLock(async () => {
+  return withFreshDocPdf(ctx, ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
     const store = requirePhotoStore(ctx);
 
@@ -614,20 +627,32 @@ export async function saveCleaningPhoto(ctx, payload) {
     }
 
     const saved = store.save(docNo, slot, payload.index, payload.dataUrl);
-    return { ok: true, bytes: saved.bytes, photos: photoIndexOf(store, docNo) };
-  });
+    return { ok: true, docNo, bytes: saved.bytes, photos: photoIndexOf(store, docNo) };
+  }));
 }
 
 /** ลบรูปของช่องที่ระบุ */
 export async function deleteCleaningPhoto(ctx, payload) {
-  return ctx.withLock(async () => {
+  return withFreshDocPdf(ctx, ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
     const store = requirePhotoStore(ctx);
 
     const { docNo } = await formForPhotos(ctx, payload && payload.row);
     store.remove(docNo, Number(payload.unitSlot), Number(payload.index));
-    return { ok: true, photos: photoIndexOf(store, docNo) };
-  });
+    return { ok: true, docNo, photos: photoIndexOf(store, docNo) };
+  }));
+}
+
+/**
+ * รอผลของงานที่แก้รูป แล้วสร้างไฟล์ PDF ที่เก็บไว้ใหม่ให้ตรงกับรูปล่าสุด
+ *
+ * ทำนอกล็อกเสมอ เพราะการแปลงไฟล์ต้องรอเบราว์เซอร์ ซึ่งนานเกินกว่าจะถือล็อกไว้
+ * และไม่ส่ง docNo กลับไปให้หน้าเว็บ เพราะเป็นเรื่องภายในของฝั่งเซิร์ฟเวอร์
+ */
+async function withFreshDocPdf(ctx, work) {
+  const { docNo, ...out } = await work;
+  await storeDocPdf(ctx, docNo);
+  return out;
 }
 
 /** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
@@ -646,14 +671,62 @@ export async function getCleaningPhotoIndex(ctx, row) {
 }
 
 /**
- * แปลงเอกสารเป็นไฟล์ PDF ให้ดาวน์โหลด
+ * แปลงเอกสารใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร)
  *
  * ประกอบหน้าเอกสารตัวเดียวกับที่ใช้เปิดดู แล้วให้ชั้น platform สั่งเบราว์เซอร์
  * ในเครื่องแปลงเป็นไฟล์ ระบบจึงไม่ต้องมีตัวสร้าง PDF ของตัวเอง
+ */
+async function renderDocPdf(ctx, form) {
+  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const base = ctx.pdf.baseUrl || '';
+
+  const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
+  const html = buildCleaningDocHtml(form, {
+    // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
+    fontHref: base + DOC_ASSETS.fontHref,
+    logoHref: base + DOC_ASSETS.logoHref,
+    photos: ctx.photos ? ctx.photos.readAll(docNo) : {}
+  });
+
+  return { docNo, base64: await ctx.pdf.render(html) };
+}
+
+/**
+ * เก็บสำเนา PDF ของเอกสารใบหนึ่งไว้บนเซิร์ฟเวอร์
  *
- * ไม่ได้เก็บไฟล์ไว้ที่ไหน — สร้างแล้วส่งกลับเลย เพราะรูปต้นฉบับยังอยู่ครบ
- * การเก็บ PDF ไว้ด้วยจะกินพื้นที่เป็นสองเท่าโดยไม่ได้อะไรเพิ่ม (วัดแล้ว
- * ไฟล์ PDF มีขนาดเท่ากับรูปต้นฉบับรวมกันพอดี เพราะเบราว์เซอร์ฝัง JPEG เดิมลงไปตรงๆ)
+ * ============================================================================
+ * ทำไมต้อง "ห้ามพัง"
+ * ============================================================================
+ * ตัวจริงของข้อมูลอยู่ในฐานข้อมูล ไฟล์นี้เป็นสำเนาที่สร้างใหม่ได้เสมอ
+ * ถ้าเครื่องไม่มีเบราว์เซอร์ หรือดิสก์เต็ม หรือแปลงไฟล์ไม่ผ่าน ต้องไม่ทำให้
+ * การบันทึกที่ลงฐานข้อมูลไปแล้วกลายเป็น "ล้มเหลว" ในสายตาผู้ใช้
+ * แล้วเขากดบันทึกซ้ำจนข้อมูลซ้ำ
+ *
+ * เรียกซ้ำได้เสมอ — รอบหลังทับไฟล์เดิม เช่นตอนแนบรูปเพิ่มทีหลัง
+ *
+ * @returns {Promise<boolean>} เก็บสำเร็จหรือไม่
+ */
+async function storeDocPdf(ctx, docNo) {
+  const name = plainText(docNo).trim();
+  if (!ctx.pdf || !ctx.docs || !name) return false;
+
+  try {
+    const form = ctx.ss.objects(SHEETS.CLEANFORM)
+      .find(f => (plainText(f.DocNo) || plainText(f.ID)) === name);
+    if (!form || plainText(form.Source) === 'attach') return false;
+
+    const { base64 } = await renderDocPdf(ctx, form);
+    ctx.docs.save(name, plainText(form.Date), base64);
+    return true;
+  } catch (err) {
+    // บอกไว้ใน log ของเซิร์ฟเวอร์พอ ไม่ต้องรบกวนคนที่กำลังกรอกฟอร์ม
+    console.error('[เก็บไฟล์ PDF ' + name + ']', err && err.message ? err.message : err);
+    return false;
+  }
+}
+
+/**
+ * แปลงเอกสารเป็นไฟล์ PDF ให้ดาวน์โหลด และเก็บสำเนาไว้บนเซิร์ฟเวอร์ไปด้วย
  *
  * @returns {Object} { fileName, mime, base64 }
  */
@@ -678,22 +751,15 @@ export async function getCleaningDocPdf(ctx, row) {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ');
   }
 
-  const docNo = plainText(form.DocNo) || plainText(form.ID);
-  const base = ctx.pdf.baseUrl || '';
+  const { docNo, base64 } = await renderDocPdf(ctx, form);
 
-  const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
-  const html = buildCleaningDocHtml(form, {
-    // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
-    fontHref: base + DOC_ASSETS.fontHref,
-    logoHref: base + DOC_ASSETS.logoHref,
-    photos: ctx.photos ? ctx.photos.readAll(docNo) : {}
-  });
+  // เก็บสำเนาไว้ด้วย แต่เก็บไม่ได้ก็ยังต้องได้ไฟล์ดาวน์โหลดตามที่กดมา
+  if (ctx.docs) {
+    try { ctx.docs.save(docNo, plainText(form.Date), base64); }
+    catch (err) { console.error('[เก็บไฟล์ PDF ' + docNo + ']', err && err.message ? err.message : err); }
+  }
 
-  return {
-    fileName: docNo + '.pdf',
-    mime: 'application/pdf',
-    base64: await ctx.pdf.render(html)
-  };
+  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
 }
 
 export async function deleteCleaningForm(ctx, row) {
@@ -717,6 +783,9 @@ export async function deleteCleaningForm(ctx, row) {
     // เพราะแถวถูกลบไปแล้ว ถ้าโยน error ออกไป ผู้ใช้จะเข้าใจว่าลบไม่สำเร็จ
     if (ctx.photos && docNo) {
       try { ctx.photos.removeAll(docNo); } catch { /* รูปค้างดีกว่าผู้ใช้สับสน */ }
+    }
+    if (ctx.docs && docNo) {
+      try { ctx.docs.remove(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
 
     return getCleaningForms(ctx);

@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
 
 import { savePhoto, removePhoto, removeDocPhotos, readDocPhotos } from './photos.js';
+import { saveDocFile, readDocFile, removeDocFile, docsDiskUsage } from './docs.js';
 import { renderPdf, findBrowser } from './pdf-render.js';
 import { webcrypto } from 'node:crypto';
 
@@ -59,6 +60,7 @@ function dataPaths(env) {
     db: env.DB_PATH || join(dir, 'aircon.db'),
     backups: env.BACKUP_DIR || join(dir, 'backups'),
     photos: env.PHOTO_DIR || dir,   // รูปถ่ายอยู่ใต้ <dir>/photos อีกชั้น
+    docs: env.DOC_DIR || dir,       // ไฟล์ PDF อยู่ใต้ <dir>/docs/<ปี>/<เดือน>
     // ค่าเริ่มต้นยังเป็นไฟล์เดิมที่ราก เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
     sessions: env.SESSION_PATH || join(ROOT, '.sessions.json')
   };
@@ -300,6 +302,25 @@ console.log(browserPath
   : 'ไม่พบเบราว์เซอร์ในเครื่อง — เปิดเอกสารแล้วสั่งปริ้นเองได้ แต่กดบันทึกเป็นไฟล์ PDF ไม่ได้');
 
 /**
+ * ที่เก็บไฟล์ PDF ของเอกสาร ที่ส่งเข้าไปให้ src/ ใช้
+ *
+ * เหตุผลเดียวกับที่เก็บรูป — src/ ห้ามแตะระบบไฟล์เอง
+ * ฝั่ง Cloudflare ไม่ส่งตัวนี้เข้าไป ระบบยังใช้ได้ครบ แค่ไม่มีสำเนาเก็บบนเซิร์ฟเวอร์
+ */
+const docRoot = resolve(ROOT, PATHS.docs);
+const docs = {
+  save: (docNo, date, base64) => saveDocFile(docRoot, docNo, date, base64),
+  read: docNo => readDocFile(docRoot, docNo),
+  remove: docNo => removeDocFile(docRoot, docNo)
+};
+
+{
+  const used = docsDiskUsage(docRoot);
+  console.log('เก็บไฟล์ PDF ของเอกสารไว้ที่ ' + join(docRoot, 'docs') +
+              ' (ตอนนี้ ' + used.files + ' ไฟล์ ' + (used.bytes / 1024 / 1024).toFixed(1) + ' MB)');
+}
+
+/**
  * สำรองฐานข้อมูลอัตโนมัติ — ตอนเปิดเซิร์ฟเวอร์ครั้งหนึ่ง แล้วทุกวัน
  *
  * ก่อนหน้านี้สำรองเฉพาะตอนรันสคริปต์บำรุงรักษา ซึ่งนานๆ ครั้ง
@@ -351,7 +372,7 @@ const server = createServer(async (req, res) => {
   let status;
   try {
     const body = JSON.parse(await readBody(req));
-    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf }));
+    ({ status, payload } = await handleApi({ pathname, body, env, state, db, photos, pdf, docs }));
   } catch (err) {
     status = 400;
     payload = { ok: false, error: String((err && err.message) || 'ข้อมูลที่ส่งมาไม่ถูกต้อง') };

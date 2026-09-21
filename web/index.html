@@ -5720,9 +5720,8 @@ const CLEANING_CHECKLIST_ITEMS = [
           })()
         }</td>
         <td class="px-4 py-3 whitespace-nowrap">${
-          // ใบที่กรอกในระบบ ประกอบเอกสารให้ดูได้ทุกเมื่อ จึงไม่ต้องมีไฟล์ค้างไว้
+          // ใบที่กรอกในระบบ ประกอบเอกสารให้ดูได้ทุกเมื่อ และเซิร์ฟเวอร์เก็บสำเนา PDF ไว้ให้เอง
           // ใบที่แนบเอกสารมา ไม่มีข้อมูลเช็คลิสต์ให้วาด จึงเปิดได้เฉพาะไฟล์ที่แนบ
-          // ใบเก่าที่ยังมีลิงก์ Google ค้างอยู่ ให้เปิดได้ต่อไปควบคู่กัน
           f.Source === 'attach'
             ? (f.PdfUrl
                 ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-[#1153a1] hover:underline inline-flex items-center gap-1"><i class="ph ph-paperclip"></i> เปิดไฟล์ที่แนบ</a>`
@@ -5732,10 +5731,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
                <button onclick="downloadCleaningPdf(${f._row}, this)" title="บันทึกเป็นไฟล์ PDF"
                  class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-download-simple"></i> PDF</button>` +
-              (f.PdfUrl
-                ? `<a href="${esc(f.PdfUrl)}" target="_blank" class="text-gray-400 hover:text-[#1153a1] hover:underline text-xs ml-2" title="ไฟล์เดิมที่เคยสร้างไว้บน Google Drive">ไฟล์เดิม</a>`
-                : '')
+                 <i class="ph ph-download-simple"></i> PDF</button>`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${f.Source === 'attach' ? '' : `<button onclick="openPhotoModal(${f._row})" title="แนบรูปถ่ายประกอบเอกสาร"
@@ -5935,8 +5931,8 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ดาวน์โหลดเอกสารเป็นไฟล์ PDF
    *
    * เซิร์ฟเวอร์เป็นคนแปลงให้ โดยใช้เบราว์เซอร์ที่ติดตั้งอยู่ในเครื่องที่รันระบบ
-   * ไม่ได้เก็บไฟล์ไว้ที่ไหน — สร้างแล้วส่งมาให้ดาวน์โหลดเลย
-   * เพราะรูปต้นฉบับยังอยู่ครบ การเก็บ PDF ไว้ด้วยจะกินพื้นที่สองเท่าโดยเปล่าประโยชน์
+   * แล้วเก็บสำเนาไว้ที่ data/docs/<ปี>/<เดือน>/ ไปด้วยพร้อมกัน
+   * ปุ่มนี้จึงได้ทั้งไฟล์ลงเครื่องคนกด และไฟล์ที่ค้างไว้บนเซิร์ฟเวอร์
    */
   async function downloadCleaningPdf(row, btn) {
     const old = btn ? btn.innerHTML : '';
@@ -5961,7 +5957,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       // คืนหน่วยความจำหลังเบราว์เซอร์เริ่มดาวน์โหลดแล้ว
       setTimeout(() => URL.revokeObjectURL(url), 10000);
 
-      showToast('บันทึกไฟล์ ' + (res.fileName || 'PDF') + ' แล้ว');
+      showToast('บันทึกไฟล์ ' + (res.fileName || 'PDF') + ' แล้ว (เก็บสำเนาไว้บนเซิร์ฟเวอร์ด้วย)');
     } catch (e) {
       // call() แสดงข้อความผิดพลาดให้แล้ว ไม่ต้องแจ้งซ้ำ
     } finally {
@@ -5975,7 +5971,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.openBlankCleaningDoc = openBlankCleaningDoc;
 
   async function deleteCleaningFormRow(row) {
-    const confirmed = await showConfirm('ยืนยันการลบบันทึกฟอร์มนี้? (ไฟล์ PDF ใน Drive จะไม่ถูกลบ)');
+    const confirmed = await showConfirm('ยืนยันการลบบันทึกฟอร์มนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย');
     if (!confirmed) return;
     try {
       currentCleaningForms = await call('deleteCleaningForm', row);
