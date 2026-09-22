@@ -62,6 +62,22 @@ const esc = v => plainText(v)
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /**
+ * วันที่ทุกจุดบนเอกสาร — 22/09/2026
+ *
+ * ระบบเก็บเป็น 2026-09-22 ซึ่งดีสำหรับการเรียงลำดับ แต่ไม่ใช่รูปแบบที่คนอ่าน
+ * และไม่ตรงกับช่อง "…../…../…….." บนแบบฟอร์มกระดาษที่แบ่งเป็น วัน/เดือน/ปี
+ *
+ * ใช้ตัวนี้ทุกที่ที่วันที่ปรากฏบนเอกสาร ทั้งส่วนที่ 1 หัวหน้ารูป และส่วนลงนาม
+ * จะได้ไม่มีหน้าไหนขึ้นคนละแบบกัน
+ *
+ * ค่าที่แปลงไม่ได้ให้คืนตามเดิม ดีกว่าทำให้ช่องว่างเปล่าโดยไม่มีอะไรฟ้อง
+ */
+function thaiDate(v) {
+  const m = String(formatDate(v)).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : formatDate(v);
+}
+
+/**
  * ค่าที่กรอกลงในแบบฟอร์ม
  * ช่องที่ยังไม่ได้กรอกปล่อยว่างจริงๆ เหมือนแบบฟอร์มเปล่าที่ปริ้นไปเขียนมือ
  */
@@ -139,7 +155,7 @@ function sectionNode(form, units) {
   return [
     ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
-    ['วันที่', formatDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
+    ['วันที่', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
   ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
@@ -254,17 +270,6 @@ function sectionSign(form) {
   ).join('');
 }
 
-/**
- * วันที่แบบที่คนไทยอ่าน — 22/09/2026
- *
- * ระบบเก็บเป็น 2026-09-22 ซึ่งดีสำหรับการเรียงลำดับ แต่ไม่ใช่รูปแบบที่ช่องบน
- * แบบฟอร์มกระดาษรองรับ ค่าที่แปลงไม่ได้ให้คืนตามเดิม ดีกว่าทำให้ช่องว่างเปล่า
- */
-function thaiDate(v) {
-  const m = String(formatDate(v)).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : formatDate(v);
-}
-
 /** ช่องว่างแบบเส้นประ ใส่ค่าลงไปถ้ามี ไม่มีก็เป็นเส้นให้เขียนเองเหมือนแบบฟอร์มกระดาษ */
 const blank = (value, dots, cls) => {
   const t = plainText(value).trim();
@@ -304,7 +309,7 @@ function photoPage(unit, form, photos, opts) {
                ' (AIR ' + unit.slot + ')', opts)}
   <table class="info"><tbody><tr>
     <th>Node Name</th><td>${val(plainText(form.NodeName))}</td>
-    <th>วันที่</th><td>${val(formatDate(form.Date))}</td>
+    <th>วันที่</th><td>${val(thaiDate(form.Date))}</td>
   </tr></tbody></table>
   <table class="pics"><tbody>${rows.join('')}</tbody></table>
 </div><div class="code">${FORM_CODE}</div></div>`;
