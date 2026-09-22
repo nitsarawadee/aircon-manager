@@ -913,7 +913,8 @@ const NODE_DOC_MAX_FILES = 10;
  * @param {string} payload.nodeName
  * @param {Array}  payload.files    [{name, mimeType, data(base64)}]
  * @param {Object} [payload.closeout]  ไม่ส่งมา = เก็บเป็นเอกสารอย่างเดียว ไม่แตะแผนหรือประวัติ
- * @param {Array}  payload.closeout.units  [{airCode, price}] เครื่องที่ล้าง พร้อมราคารายเครื่อง
+ * @param {Array}  payload.closeout.units  [{airCode, price, condition}] เครื่องที่ล้าง
+ *   พร้อมราคาและผลประเมินของเครื่องตัวนั้น
  */
 export async function uploadNodeDocuments(ctx, payload) {
   return ctx.withLock(async () => {
@@ -952,12 +953,16 @@ export async function uploadNodeDocuments(ctx, payload) {
         const code = plainText(w.airCode).trim();
         const found = nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(code));
         if (!found) throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
-        // แนบเอกสารเขียนมือ มีผลประเมินให้เลือกช่องเดียวต่อการแนบหนึ่งครั้ง
-        // (ตัวจริงอยู่บนกระดาษที่ถ่ายมา) ทุกเครื่องในครั้งนั้นจึงใช้ผลเดียวกัน
+        // ผลประเมินเป็นของรายเครื่อง หน้าเว็บจึงส่งมาให้ทีละเครื่อง
+        // แนบไฟล์เดียวแต่ล้างสองตัว ก็ยังบอกได้ว่าตัวไหนสมบูรณ์ ตัวไหนควรปรับปรุง
+        //
+        // ยังรับค่าเดียวทั้งใบ (closeout.condition) ไว้ด้วย เผื่อหน้าจออื่นที่ยัง
+        // ไม่มีช่องรายเครื่อง เช่นหน้าปิดงานจากหน้าแผน
+        const own = plainText(w.condition);
         return {
           airCode: plainText(found.AirCode),
           price: hasPrice(w.price) ? Number(w.price) : '',
-          cond: plainText(closeout.condition)
+          cond: own || plainText(closeout.condition)
         };
       });
     }

@@ -45,6 +45,11 @@ function freshDb() {
     ' VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).run('AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '1', 'อยุธยา', 'ใช้งานปกติ', 'Daikin', 18000, 'IN-1', 'OUT-1');
 
+  db.prepare(
+    'INSERT INTO air_units (AirCode, NodeName, SiteCode, Region, Province, Status, Brand, BTU, IndoorSN, OutdoorSN)' +
+    ' VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).run('AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '1', 'อยุธยา', 'ใช้งานปกติ', 'Carrier', 24000, 'IN-2', 'OUT-2');
+
   db.prepare('INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)')
     .run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
   return db;
@@ -179,6 +184,67 @@ test('คนที่ไม่มีสิทธิ์ในภูมิภา�
   const outsider = ctxOf(db, { attachments, user: 'north' });
   await assert.rejects(() => getCleaningAttachment(outsider, { row: form._row, name: '1-ใบงาน.jpg' }));
   await assert.rejects(() => getCleaningAttachments(outsider, form._row));
+});
+
+/* ==================== ผลประเมินรายเครื่อง ==================== */
+
+test('แนบไฟล์เดียวแต่ล้างสองตัว ต้องบอกผลประเมินแยกรายเครื่องได้', async () => {
+  // ไฟล์ที่ช่างถ่ายมาใบเดียว ไม่ได้แปลว่าสองเครื่องสภาพเหมือนกัน
+  const db = freshDb();
+  const attachments = fakeAttachments();
+
+  await uploadNodeDocuments(ctxOf(db, { attachments }), payloadOf({
+    closeout: {
+      ...closeout,
+      units: [
+        { airCode: 'AYA-WNI-AIR-1', price: 450, condition: 'สภาพเครื่องสมบูรณ์' },
+        { airCode: 'AYA-WNI-AIR-2', price: 500, condition: 'สภาพเครื่องควรปรับปรุง' }
+      ]
+    }
+  }));
+
+  const [form] = await getCleaningForms(ctxOf(db, { attachments }));
+  assert.equal(form.EquipmentCondition, 'สภาพเครื่องสมบูรณ์');
+  assert.equal(form.EquipmentCondition2, 'สภาพเครื่องควรปรับปรุง');
+});
+
+test('ประวัติของแต่ละเครื่องต้องได้ผลประเมินของตัวเอง', async () => {
+  const db = freshDb();
+  await uploadNodeDocuments(ctxOf(db, { attachments: fakeAttachments() }), payloadOf({
+    closeout: {
+      ...closeout,
+      units: [
+        { airCode: 'AYA-WNI-AIR-1', price: 450, condition: 'สภาพเครื่องสมบูรณ์' },
+        { airCode: 'AYA-WNI-AIR-2', price: 500, condition: 'สภาพเครื่องควรปรับปรุง' }
+      ]
+    }
+  }));
+
+  const hist = await getHistory(ctxOf(db));
+  const detailOf = code => hist.find(h => h.AirCode === code).Detail;
+  assert.match(detailOf('AYA-WNI-AIR-1'), /ผลประเมิน: สภาพเครื่องสมบูรณ์/);
+  assert.match(detailOf('AYA-WNI-AIR-2'), /ผลประเมิน: สภาพเครื่องควรปรับปรุง/);
+});
+
+test('หน้าจอที่ยังส่งผลประเมินค่าเดียวมาทั้งใบ ต้องยังใช้ได้เหมือนเดิม', async () => {
+  // หน้าปิดงานจากหน้าแผนยังไม่มีช่องรายเครื่อง ต้องไม่พังเพราะการเปลี่ยนนี้
+  const db = freshDb();
+  const attachments = fakeAttachments();
+
+  await uploadNodeDocuments(ctxOf(db, { attachments }), payloadOf({
+    closeout: {
+      ...closeout,
+      condition: 'สภาพเครื่องสมบูรณ์',
+      units: [
+        { airCode: 'AYA-WNI-AIR-1', price: 450 },
+        { airCode: 'AYA-WNI-AIR-2', price: 500 }
+      ]
+    }
+  }));
+
+  const [form] = await getCleaningForms(ctxOf(db, { attachments }));
+  assert.equal(form.EquipmentCondition, 'สภาพเครื่องสมบูรณ์');
+  assert.equal(form.EquipmentCondition2, 'สภาพเครื่องสมบูรณ์');
 });
 
 /* ==================== ลบ ==================== */

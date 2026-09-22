@@ -5847,26 +5847,62 @@
   }
 
   /**
-   * ป้ายผลประเมินในตาราง — ผลเป็นของรายเครื่อง
+   * ป้ายผลประเมินหนึ่งช่อง
    *
-   * เครื่องเดียว หรือสองเครื่องผลตรงกัน แสดงป้ายเดียวเหมือนเดิม
-   * ผลต่างกันเมื่อไหร่ต้องเห็นทั้งสองอัน ไม่งั้นตารางขึ้นว่า "สมบูรณ์"
-   * ทั้งที่มีเครื่องหนึ่งควรปรับปรุง
+   * ตารางแยกแถวละเครื่องอยู่แล้ว แต่ละแถวจึงมีผลประเมินค่าเดียวเสมอ
    */
-  function conditionBadges(f) {
-    const txt = v => String(v == null ? '' : v).trim();
-    const c1 = txt(f.EquipmentCondition);
-    const c2 = txt(f.EquipmentCondition2);
-
-    const badge = (c, prefix) =>
-      `<span class="px-2 py-1 rounded-full text-xs font-medium ${c === 'สภาพเครื่องสมบูรณ์' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${esc(prefix + (c || '-'))}</span>`;
-
-    if (!c1) return badge(c2, '');
-    if (!c2 || c1 === c2) return badge(c1, '');
-    return `<div class="flex flex-col gap-1 items-start">${badge(c1, 'ตัวที่ 1: ')}${badge(c2, 'ตัวที่ 2: ')}</div>`;
+  function conditionBadge(cond) {
+    const c = String(cond == null ? '' : cond).trim();
+    const tone = c === 'สภาพเครื่องสมบูรณ์' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${tone}">${esc(c || '-')}</span>`;
   }
 
-  /** ค้นหาจากทุกช่องที่คนน่าจะพิมพ์หา */
+  /**
+   * กางเอกสารหนึ่งใบออกเป็น "แถวละเครื่อง"
+   *
+   * ============================================================================
+   * ทำไมตารางแยกแถว ทั้งที่เอกสารรวมสองเครื่องไว้ในใบเดียว
+   * ============================================================================
+   * ตัวเอกสารที่ปริ้นต้องรวมสองเครื่องไว้ในใบเดียว เพราะแบบฟอร์มกระดาษ
+   * ITEL-FM-NE-004 ออกแบบมาแบบนั้น (หนึ่งใบมีสองคอลัมน์)
+   *
+   * แต่เวลาคนเปิดตารางนี้ดู หน่วยที่เขาตามงานจริงคือ "การล้างของเครื่องแต่ละตัว"
+   * ไม่ใช่ "การไปหนึ่งครั้ง" — เครื่องตัวไหนล้างวันไหน ผลเป็นยังไง ค่าเท่าไหร่
+   * ตารางจึงแยกให้เห็นทีละเครื่อง ส่วนตัวเอกสารยังเป็นใบเดียวเหมือนเดิม
+   *
+   * เลขที่เอกสารเป็นเลขเดียวกันทั้งสองแถว ไม่ได้ออกเลขใหม่ให้เครื่องที่สอง
+   * เพราะมันคือเอกสารใบเดียวกันจริงๆ แถวที่สองขึ้นลูกศรนำหน้าให้เห็นว่าต่อกัน
+   */
+  function cleaningFormUnitRows(form) {
+    const slots = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
+    const list = slots.length ? slots : [1];   // ใบที่ยังไม่มีข้อมูลเครื่อง ก็ยังต้องเห็นในตาราง
+
+    return list.map((slot, i) => ({
+      form,
+      slot,
+      first: i === 0,
+      airCode: String(form['AirCode' + slot] || '').trim(),
+      cond: String(form[slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition'] || '').trim(),
+      price: unitPriceOf(form, slot, i === 0)
+    }));
+  }
+
+  /**
+   * ค่าใช้จ่ายของเครื่องตัวนั้น
+   *
+   * ใบเก่าบางใบเก็บแค่ยอดรวมทั้งใบ ไม่มีราคาแยกรายเครื่อง กรณีนั้นยกยอดรวม
+   * ไปไว้ที่แถวแรกแถวเดียว ไม่ใช่โชว์ทั้งสองแถว ไม่งั้นคนบวกเลขจากตารางจะได้สองเท่า
+   */
+  function unitPriceOf(form, slot, isFirst) {
+    const own = Number(form['Price' + slot]);
+    if (own) return own;
+
+    const hasSplit = Number(form.Price1) || Number(form.Price2);
+    if (hasSplit) return 0;
+
+    return isFirst ? (Number(form.Price) || 0) : 0;
+  }
+
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
@@ -5949,48 +5985,69 @@ const CLEANING_CHECKLIST_ITEMS = [
       return;
     }
     cleaningFormPage = clampPage(cleaningFormPage, cleaningFormLastList.length);
-    tbody.innerHTML = cleaningFormLastList.slice((cleaningFormPage - 1) * TABLE_PAGE_SIZE, cleaningFormPage * TABLE_PAGE_SIZE).map(f => `
-      <tr class="hover:bg-slate-50">
-        <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(displayDocNo(f)) || '-'}</td>
+
+    // แบ่งหน้าตาม "เอกสาร" ไม่ใช่ตามแถว เพื่อไม่ให้สองแถวของใบเดียวกันถูกหั่นคนละหน้า
+    const page = cleaningFormLastList.slice(
+      (cleaningFormPage - 1) * TABLE_PAGE_SIZE,
+      cleaningFormPage * TABLE_PAGE_SIZE
+    );
+
+    tbody.innerHTML = page.flatMap(cleaningFormUnitRows).map(r => {
+      const f = r.form;
+      const isAttach = f.Source === 'attach';
+
+      return `
+      <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
+        <td class="px-4 py-3 font-mono text-[12px] ${r.first ? 'text-slate-600' : 'text-slate-400'}">
+          ${r.first ? '' : '<span class="mr-1">&#8627;</span>'}${esc(displayDocNo(f)) || '-'}
+        </td>
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
           ${esc(f.NodeName)}
-          ${f.Source === 'attach'
+          ${isAttach
             ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">เอกสารแนบ</span>'
             : ''}
         </td>
-        <td class="px-4 py-3">${esc(f.AirCode1)}${f.AirCode2 ? ', ' + esc(f.AirCode2) : ''}</td>
-        <td class="px-4 py-3">${conditionBadges(f)}</td>
+        <td class="px-4 py-3">
+          ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
+          <span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot}</span>
+        </td>
+        <td class="px-4 py-3">${conditionBadge(r.cond)}</td>
         <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
         <td class="px-4 py-3 text-right tabular-nums">${
-          // ใบเก่าบางใบเก็บเฉพาะยอดรวม ใบใหม่เก็บราคาแยกรายเครื่อง รองรับทั้งสองแบบ
-          (() => {
-            const total = Number(f.Price) || (Number(f.Price1) || 0) + (Number(f.Price2) || 0);
-            return total ? '฿' + total.toLocaleString() : '<span class="text-gray-300">-</span>';
-          })()
+          r.price ? '฿' + r.price.toLocaleString() : '<span class="text-gray-300">-</span>'
         }</td>
         <td class="px-4 py-3 whitespace-nowrap">${
-          // ใบที่กรอกในระบบ ประกอบเอกสารให้ดูได้ทุกเมื่อ และเซิร์ฟเวอร์เก็บสำเนา PDF ไว้ให้เอง
-          // ใบที่แนบเอกสารมา ไม่มีข้อมูลเช็คลิสต์ให้วาด จึงเปิดได้เฉพาะไฟล์ที่แนบ
-          f.Source === 'attach'
-            ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
-                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
-            : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
-                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
-               <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
-                 class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-download-simple"></i> PDF</button>`
+          // ปุ่มเอกสารขึ้นเฉพาะแถวแรกของใบ เพราะทั้งสองแถวเปิดเอกสารใบเดียวกัน
+          // ถ้าขึ้นทั้งสองแถวจะดูเหมือนมีเอกสารสองใบ ซึ่งไม่จริง
+          !r.first
+            ? '<span class="text-xs text-gray-400">อยู่ในเอกสารใบเดียวกัน</span>'
+            : isAttach
+              ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
+                   class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                   <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
+              : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
+                   class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                   <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+                 <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
+                   class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
+                   <i class="ph ph-download-simple"></i> PDF</button>`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
-          ${f.Source === 'attach' ? '' : `<button onclick="openPhotoModal(${f._row})" title="แนบรูปถ่ายประกอบเอกสาร"
+          ${isAttach ? '' : `<button onclick="openPhotoModal(${f._row}, ${r.slot})" title="แนบรูปถ่ายของเครื่องตัวที่ ${r.slot}"
             class="text-slate-600 hover:text-white hover:bg-slate-600 px-2.5 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
             <i class="ph ph-camera"></i> รูปถ่าย</button>`}
-          <button onclick="deleteCleaningFormRow(${f._row}, '${esc(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบ"><i class="ph ph-trash"></i></button>
+          ${
+            // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
+            // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
+            r.first
+              ? `<button onclick="deleteCleaningFormRow(${f._row}, '${esc(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
+              : ''
+          }
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
+
     renderTablePager('cleaningFormPaginationBar', cleaningFormLastList.length, cleaningFormPage, 'goToCleaningFormPage');
   }
 
@@ -6061,7 +6118,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     return canvas.toDataURL('image/jpeg', quality);
   }
 
-  async function openPhotoModal(row) {
+  async function openPhotoModal(row, startSlot) {
     const form = (currentCleaningForms || []).find(f => f._row === row);
     if (!form) { showToast('ไม่พบเอกสารใบนี้', 'error'); return; }
 
@@ -6071,7 +6128,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     let have = [];
     try { have = (await call('getCleaningPhotoIndex', row)) || []; } catch (e) { return; }
 
-    photoCtx = { row, form, units, slot: units[0], have };
+    // ตารางแยกแถวละเครื่อง กดจากแถวไหนก็ควรเปิดมาที่แท็บของเครื่องตัวนั้นเลย
+    const slot = units.includes(Number(startSlot)) ? Number(startSlot) : units[0];
+    photoCtx = { row, form, units, slot, have };
     renderPhotoModal();
   }
   window.openPhotoModal = openPhotoModal;
@@ -6662,7 +6721,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   let adFiles = [];         // ไฟล์ที่เลือกไว้ [{name, size, mimeType, data}]
   let adSelectedNode = '';
   let adUnits = [];         // เครื่องใน Node ที่เลือก [{AirCode, Brand, BTU, CleaningPrice, ...}]
-  let adPicked = {};        // AirCode -> { on: boolean, price: string }
+  let adPicked = {};        // AirCode -> { on: boolean, price: string, cond: string }
   let adCloseEnabled = true;// ปิดงานในแผนด้วยหรือแค่แนบไฟล์เฉยๆ
   let adYears = [];         // รายชื่อชีตแผน เช่น ['Plan_2569','Plan_2568']
   let adPlanCache = {};     // ปี -> ข้อมูลแผนของปีนั้น (กันโหลดซ้ำ)
@@ -7283,7 +7342,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     adPicked = {};
 
     // Node ที่มีเครื่องเดียว ติ๊กให้เลยไม่ต้องให้กดเอง
-    if (adUnits.length === 1) adPicked[adUnits[0].AirCode] = { on: true, price: '' };
+    if (adUnits.length === 1) adPicked[adUnits[0].AirCode] = { on: true, price: '', cond: '' };
 
     renderAttachNodeList();
     await adLoadPlan();
@@ -7325,7 +7384,11 @@ const CLEANING_CHECKLIST_ITEMS = [
         renderAttachUnitList();
         return;
       }
-      adPicked[airCode] = { on: true, price: (adPicked[airCode] || {}).price || '' };
+      adPicked[airCode] = {
+        on: true,
+        price: (adPicked[airCode] || {}).price || '',
+        cond: (adPicked[airCode] || {}).cond || ''
+      };
     } else if (adPicked[airCode]) {
       adPicked[airCode].on = false;
     }
@@ -7393,8 +7456,14 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   /** เก็บราคาที่พิมพ์ โดยไม่วาดใหม่ ไม่งั้นเคอร์เซอร์จะเด้งออกจากช่องทุกตัวอักษร */
   function adSetPrice(airCode, v) {
-    if (!adPicked[airCode]) adPicked[airCode] = { on: true, price: '' };
+    if (!adPicked[airCode]) adPicked[airCode] = { on: true, price: '', cond: '' };
     adPicked[airCode].price = v;
+  }
+
+  /** จำผลประเมินของเครื่องตัวนั้นไว้ ไม่วาดใหม่ เพราะจะทำให้ช่องที่กำลังกรอกเด้ง */
+  function adSetCond(airCode, v) {
+    if (!adPicked[airCode]) adPicked[airCode] = { on: true, price: '', cond: '' };
+    adPicked[airCode].cond = v;
   }
 
   function renderAttachCloseout() {
@@ -7445,20 +7514,46 @@ const CLEANING_CHECKLIST_ITEMS = [
         ถ้าบันทึกต่อ ระบบจะเขียนทับข้อมูลเดิมของรอบนี้</span>
       </div>` : '';
 
-    const priceRows = picked.map(u => {
+    /**
+     * ช่องกรอกของเครื่องแต่ละตัวที่เลือกไว้ — ค่าล้างกับผลประเมิน
+     *
+     * ผลประเมินต้องแยกรายเครื่อง ไม่ใช่ช่องเดียวทั้งใบ เพราะแนบไฟล์เดียวแต่
+     * ล้างสองตัวเป็นเรื่องปกติ และสองตัวนั้นสภาพไม่จำเป็นต้องเหมือนกัน
+     * (เหตุผลเดียวกับที่หน้ากรอกฟอร์มในระบบแยกผลประเมินรายเครื่องไปแล้ว)
+     */
+    const unitRows = picked.map(u => {
       const row = adPlanRowOf(u.AirCode);
       const cur = adPicked[u.AirCode].price;
       // ยังไม่เคยพิมพ์ราคา -> เติมจากราคาในแผน ถ้าไม่มีก็ใช้ราคาต่อรอบของเครื่องนั้น
       const fallback = (row && row['R' + adSelectedRound + '_Price']) || u.CleaningPrice || '';
       const val = cur !== '' && cur !== undefined ? cur : fallback;
       if (cur === '' || cur === undefined) adPicked[u.AirCode].price = String(val || '');
+
+      const cond = adPicked[u.AirCode].cond || '';
+      const opt = (v, label) =>
+        `<option value="${esc(v)}" ${cond === v ? 'selected' : ''}>${esc(label)}</option>`;
+
       return `
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-600 w-28 flex-shrink-0 truncate" title="${esc(u.AirCode)}">${esc(u.AirCode)}</span>
-          <input type="number" min="0" step="1" value="${esc(val)}" placeholder="0"
-            oninput="adSetPrice('${esc(u.AirCode)}', this.value)"
-            class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]">
-          <span class="text-xs text-gray-500 flex-shrink-0">บาท</span>
+        <div class="border border-gray-200 rounded-lg px-3 py-2.5 mb-2 bg-slate-50/50">
+          <div class="text-xs font-semibold text-gray-700 mb-2">${esc(u.AirCode)}</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 w-14 flex-shrink-0">ค่าล้าง</span>
+              <input type="number" min="0" step="1" value="${esc(val)}" placeholder="0"
+                oninput="adSetPrice('${esc(u.AirCode)}', this.value)"
+                class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]">
+              <span class="text-xs text-gray-500 flex-shrink-0">บาท</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 w-14 flex-shrink-0">ผลประเมิน</span>
+              <select onchange="adSetCond('${esc(u.AirCode)}', this.value)"
+                class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#1153a1]">
+                ${opt('', '— ไม่ระบุ —')}
+                ${opt('สภาพเครื่องสมบูรณ์', 'สภาพเครื่องสมบูรณ์')}
+                ${opt('สภาพเครื่องควรปรับปรุง', 'สภาพเครื่องควรปรับปรุง')}
+              </select>
+            </div>
+          </div>
         </div>`;
     }).join('');
 
@@ -7483,19 +7578,11 @@ const CLEANING_CHECKLIST_ITEMS = [
         </div>
       </div>
 
-      <div class="mb-3">
-        <label class="block text-xs font-medium text-gray-600 mb-1">ผลประเมินสภาพเครื่อง</label>
-        <select id="ad_cond" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]">
-          <option value="">— ไม่ระบุ —</option>
-          <option value="สภาพเครื่องสมบูรณ์">สภาพเครื่องสมบูรณ์</option>
-          <option value="สภาพเครื่องควรปรับปรุง">สภาพเครื่องควรปรับปรุง</option>
-        </select>
-      </div>
-
-      <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
-        <div class="text-xs font-semibold text-gray-700 mb-2">ค่าล้างแยกรายเครื่อง</div>
-        <div class="space-y-2">${priceRows}</div>
-        <p class="text-[11px] text-gray-500 mt-2">กรอกราคาของแต่ละเครื่องแยกกัน ไม่ใช่ยอดรวม เพื่อไม่ให้งบประมาณถูกนับซ้ำ</p>
+      <div class="bg-white border border-slate-200 rounded-lg p-3">
+        <div class="text-xs font-semibold text-gray-700 mb-2">ผลการล้างแยกรายเครื่อง</div>
+        ${unitRows}
+        <p class="text-[11px] text-gray-500">กรอกราคาของแต่ละเครื่องแยกกัน ไม่ใช่ยอดรวม เพื่อไม่ให้งบประมาณถูกนับซ้ำ<br>
+          ผลประเมินก็แยกรายเครื่อง แนบไฟล์เดียวแต่ล้างสองตัว ก็บอกได้ว่าตัวไหนสมบูรณ์ ตัวไหนควรปรับปรุง</p>
       </div>`;
   }
 
@@ -7589,8 +7676,12 @@ const CLEANING_CHECKLIST_ITEMS = [
         round: adSelectedRound || '1',
         date: date,
         technician: (document.getElementById('ad_tech') || {}).value || '',
-        condition: (document.getElementById('ad_cond') || {}).value || '',
-        units: picked.map(u => ({ airCode: u.AirCode, price: adPicked[u.AirCode].price }))
+        // ผลประเมินไปกับเครื่องแต่ละตัว ไม่ใช่ค่าเดียวทั้งใบ
+        units: picked.map(u => ({
+          airCode: u.AirCode,
+          price: adPicked[u.AirCode].price,
+          condition: adPicked[u.AirCode].cond || ''
+        }))
       };
     }
 
