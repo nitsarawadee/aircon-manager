@@ -803,12 +803,11 @@
           </div>
         </div>
 
-        <!-- แถบประเภทเอกสาร — กรองตารางด้านล่าง ยังไม่มีเอกสารติดตั้งจึงยังปิดอยู่ -->
+        <!-- แถบประเภทเอกสาร — กรองตารางด้านล่าง ยังไม่มีเอกสารติดตั้งจึงยังปิดอยู่
+             ไม่มีแท็บ "ทั้งหมด" เพราะสองแบบนี้มีคอลัมน์คนละความหมาย
+             (ใบล้างมีผลประเมิน ใบซ่อมมีอาการเสีย) เอามารวมกันหัวตารางจะตรงแค่ครึ่งเดียว
+             ส่วนการดูรวมทุกเหตุการณ์ของเครื่องหนึ่ง หน้าประวัติทำอยู่แล้วและครบกว่า -->
         <div class="flex items-center gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
-          <button id="docTab_all" onclick="setDocTypeFilter('all')"
-            class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
-            <i class="ph ph-files"></i> ทั้งหมด
-          </button>
           <button id="docTab_cleaning" onclick="setDocTypeFilter('cleaning')"
             class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
             <i class="ph ph-drop"></i> ล้างแอร์
@@ -6184,8 +6183,14 @@
     });
   }
 
-  /** แท็บประเภทเอกสารที่เลือกอยู่ — 'all' | 'cleaning' | 'repair' */
-  let docTypeFilter = 'all';
+  /**
+   * แท็บประเภทเอกสารที่เลือกอยู่ — 'cleaning' | 'repair'
+   *
+   * ไม่มีตัวเลือก 'ทั้งหมด' เพราะสองแบบมีคอลัมน์คนละความหมาย เอามารวมกัน
+   * หัวตารางจะตรงแค่ครึ่งเดียว (ดูคอมเมนต์ที่แถบแท็บใน HTML)
+   * เริ่มที่ใบล้างเพราะเป็นงานที่ออกเอกสารบ่อยที่สุด
+   */
+  let docTypeFilter = 'cleaning';
 
   function setDocTypeFilter(kind) {
     docTypeFilter = kind;
@@ -6202,7 +6207,7 @@
    * กดไปก็ได้ฟอร์มผิดแบบ ซึ่งเสียเวลาคนใช้เปล่าๆ
    */
   function paintDocTabs() {
-    for (const kind of ['all', 'cleaning', 'repair']) {
+    for (const kind of ['cleaning', 'repair']) {
       const el = document.getElementById('docTab_' + kind);
       if (!el) continue;
 
@@ -6215,12 +6220,13 @@
     }
 
     // ปุ่มไหนควรอยู่บนแท็บไหน
+    const repair = docTypeFilter === 'repair';
     const show = {
-      docBtn_printClean: docTypeFilter !== 'repair',
-      docBtn_attach: docTypeFilter !== 'repair',
-      docBtn_cleanForm: docTypeFilter !== 'repair',
-      docBtn_printRepair: docTypeFilter === 'repair',
-      docBtn_repairForm: docTypeFilter !== 'cleaning'
+      docBtn_printClean: !repair,
+      docBtn_attach: !repair,
+      docBtn_cleanForm: !repair,
+      docBtn_printRepair: repair,
+      docBtn_repairForm: repair
     };
     for (const [id, on] of Object.entries(show)) {
       const el = document.getElementById(id);
@@ -6235,8 +6241,7 @@
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
-    let all = allDocForms();
-    if (docTypeFilter !== 'all') all = all.filter(f => f.kind === docTypeFilter);
+    const all = allDocForms().filter(f => f.kind === docTypeFilter);
     if (!q) return all;
 
     return all.filter(f =>
@@ -6325,7 +6330,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (cleaningFormLastList.length === 0) {
       // บอกให้ตรงว่าไม่เจอเพราะคำค้น ไม่งั้นจะเข้าใจว่าไม่มีเอกสารในระบบเลย
       const box = document.getElementById('cleaningFormSearch');
-      const ofKind = { cleaning: 'เอกสารล้างแอร์', repair: 'เอกสารซ่อม' }[docTypeFilter] || 'เอกสาร';
+      const ofKind = docTypeFilter === 'repair' ? 'เอกสารซ่อม' : 'เอกสารล้างแอร์';
       const why = (box && box.value.trim())
         ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
         : 'ยังไม่มีการบันทึก' + ofKind;
