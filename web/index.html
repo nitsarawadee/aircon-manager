@@ -770,20 +770,34 @@
             <h2 class="text-2xl font-bold text-gray-800">แบบฟอร์มเอกสาร</h2>
             <p class="text-sm text-gray-500">กรอกในระบบแล้วเปิดเอกสารปริ้นได้เลย หรือปริ้นฟอร์มเปล่าไปเขียนมือหน้างานแล้วถ่ายรูปแนบกลับก็ได้ — ทั้งสองทางปิดงานในแผนได้เหมือนกัน</p>
           </div>
+          <!-- ปุ่มของแต่ละประเภทเอกสาร — ซ่อน/แสดงตามแท็บที่เลือก (ดู paintDocTabs)
+               ไม่งั้นแท็บซ่อมจะมีปุ่มของงานล้างปนอยู่ ซึ่งกดไปก็ได้ฟอร์มผิดแบบ -->
           <div class="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
-            <div class="flex flex-wrap gap-2">
-              <button onclick="openPrintFormDialog()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="เลือก Node แล้วได้ฟอร์มที่เติมชื่อ Node, Serial, Asset, BTU, ยี่ห้อ ให้อัตโนมัติ ส่วนช่องตรวจเช็คเว้นว่างไว้ให้เขียนด้วยมือ">
+            <div class="flex flex-wrap gap-2 justify-end">
+              <button id="docBtn_printClean" onclick="openPrintFormDialog()"
+                class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="เลือก Node แล้วได้ฟอร์มล้างที่เติมชื่อ Node, Serial, Asset, BTU, ยี่ห้อ ให้อัตโนมัติ ส่วนช่องตรวจเช็คเว้นว่างไว้ให้เขียนด้วยมือ">
                 <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
               </button>
-              <button onclick="openAttachDocsDialog(true)" class="bg-white border border-teal-500 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="ถ่ายรูปฟอร์มที่เขียนมือมาแล้ว — แนบไฟล์ เลือกเครื่องที่ล้าง แล้วปิดงานในแผนได้ในขั้นตอนเดียว">
+              <button id="docBtn_printRepair" onclick="openPrintRepairFormDialog()"
+                class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="ปริ้นฟอร์มซ่อมเปล่า (ITEL-FM-NE-005) ของเครื่องที่แจ้งซ่อมไว้ ไปเขียนด้วยมือหน้างาน">
+                <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
+              </button>
+              <button id="docBtn_attach" onclick="openAttachDocsDialog(true)"
+                class="bg-white border border-teal-500 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="ถ่ายรูปฟอร์มล้างที่เขียนมือมาแล้ว — แนบไฟล์ เลือกเครื่องที่ล้าง แล้วปิดงานในแผนได้ในขั้นตอนเดียว">
                 <i class="ph ph-paperclip"></i> แนบเอกสาร + ปิดงาน
               </button>
-            </div>
-              <button onclick="openRepairFormPicker()" class="bg-white border border-[#f47920] text-[#f47920] hover:bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
+              <button id="docBtn_repairForm" onclick="openRepairFormPicker()"
+                class="bg-white border border-[#f47920] text-[#f47920] hover:bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
                 <i class="ph ph-wrench"></i> กรอกฟอร์มซ่อม
               </button>
             </div>
-            <button onclick="openCleaningFormModal()" class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end" title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
+            <button id="docBtn_cleanForm" onclick="openCleaningFormModal()"
+              class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end"
+              title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
               หรือกรอกฟอร์มล้างในระบบทีละข้อ &rarr;
             </button>
           </div>
@@ -821,7 +835,7 @@
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
-                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ผลประเมิน</th>
+                  <th id="docCol_cond" class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ผลประเมิน</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ช่าง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right">ค่าใช้จ่าย</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">PDF</th>
@@ -6181,7 +6195,12 @@
   }
   window.setDocTypeFilter = setDocTypeFilter;
 
-  /** ระบายสีแท็บที่เลือกอยู่ — ทำแยกเพราะต้องเรียกตอนโหลดหน้าด้วย */
+  /**
+   * ระบายสีแท็บที่เลือก แล้วซ่อนปุ่มกับคอลัมน์ที่ไม่ใช่ของประเภทนั้น
+   *
+   * ต้องซ่อนของจริง ไม่ใช่แค่จางลง เพราะปุ่มของงานล้างที่ค้างอยู่บนแท็บซ่อม
+   * กดไปก็ได้ฟอร์มผิดแบบ ซึ่งเสียเวลาคนใช้เปล่าๆ
+   */
   function paintDocTabs() {
     for (const kind of ['all', 'cleaning', 'repair']) {
       const el = document.getElementById('docTab_' + kind);
@@ -6194,6 +6213,23 @@
       el.classList.toggle('text-gray-500', !on);
       el.classList.toggle('hover:text-gray-700', !on);
     }
+
+    // ปุ่มไหนควรอยู่บนแท็บไหน
+    const show = {
+      docBtn_printClean: docTypeFilter !== 'repair',
+      docBtn_attach: docTypeFilter !== 'repair',
+      docBtn_cleanForm: docTypeFilter !== 'repair',
+      docBtn_printRepair: docTypeFilter === 'repair',
+      docBtn_repairForm: docTypeFilter !== 'cleaning'
+    };
+    for (const [id, on] of Object.entries(show)) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', !on);
+    }
+
+    // ใบซ่อมไม่มีผลประเมิน ช่องนั้นใช้แสดงอาการเสียแทน หัวตารางจึงต้องเปลี่ยนตาม
+    const th = document.getElementById('docCol_cond');
+    if (th) th.textContent = docTypeFilter === 'repair' ? 'อาการเสีย' : 'ผลประเมิน';
   }
 
   function filterCleaningForms() {
@@ -8121,13 +8157,101 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!code) { showToast('กรุณาเลือกเครื่อง', 'error'); return; }
 
     // อาการเสียจากตอนแจ้งซ่อม (ถ้ามี) เอามาเติมให้ จะได้ไม่ต้องพิมพ์ซ้ำ
+    openRepairForm(code, lastSymptomOf(code));
+  }
+  window.startRepairFormFromPicker = startRepairFormFromPicker;
+
+  /**
+   * เครื่องที่มีงานซ่อมค้างอยู่ — ใช้กับทั้งฟอร์มเปล่าและฟอร์มกรอก
+   *
+   * "แจ้งซ่อมไว้แล้ว" คือสถานะ ชำรุด (รออนุมัติ) หรือ รอซ่อม (อนุมัติแล้ว)
+   * สองสถานะนี้คือเคสที่เปิดค้างอยู่จริง ตรงกับที่หน้างานซ่อมแสดง
+   */
+  const unitsWithOpenRepair = () =>
+    (currentAirList || [])
+      .filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด')
+      .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode)));
+
+  /** อาการเสียจากใบแจ้งซ่อมล่าสุดของเครื่องนั้น */
+  const lastSymptomOf = code => {
     const open = (currentHistory || [])
       .filter(h => String(h.AirCode) === String(code) && String(h.EventType) === 'แจ้งซ่อม')
       .sort((a, b) => String(b.Date || '').localeCompare(String(a.Date || '')))[0];
+    return open ? String(open.Detail || '') : '';
+  };
 
-    openRepairForm(code, open ? String(open.Detail || '') : '');
+  /**
+   * ปริ้นฟอร์มซ่อมเปล่า
+   *
+   * ต่างจากฟอร์มล้างตรงที่เลือกได้เฉพาะเครื่องที่แจ้งซ่อมไว้แล้ว ไม่ใช่ทุก Node
+   * เพราะการซ่อมเริ่มจากมีคนแจ้งเสมอ ไม่ได้ไปตามรอบเหมือนการล้าง
+   * ถ้าให้เลือกทั้ง 457 เครื่อง คนจะต้องไล่หาในรายการยาวๆ โดยไม่จำเป็น
+   */
+  function openPrintRepairFormDialog() {
+    const list = unitsWithOpenRepair();
+
+    if (!list.length) {
+      showToast('ยังไม่มีเครื่องที่แจ้งซ่อมไว้ — ฟอร์มซ่อมเปล่าออกให้เฉพาะเครื่องที่มีงานซ่อมค้างอยู่ ' +
+                'ถ้าต้องการซ่อมเครื่องที่ยังไม่ได้แจ้ง ให้ไปแจ้งซ่อมที่หน้างานซ่อมก่อน', 'error');
+      return;
+    }
+
+    const options = list.map(a =>
+      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)} — ${esc(a.Status)}</option>`
+    ).join('');
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-bold text-[#f47920] flex items-center gap-2"><i class="ph ph-printer"></i> ปริ้นฟอร์มซ่อมเปล่า</h3>
+              <p class="text-xs text-gray-500 mt-0.5">ระบบเติมข้อมูลเครื่องกับอาการเสียให้ ส่วนที่เหลือเว้นว่างไว้เขียนหน้างาน</p>
+            </div>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องที่แจ้งซ่อมไว้ <span class="text-red-500">*</span></label>
+              <select id="prf_air" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
+                ${options}
+              </select>
+              <p class="text-xs text-gray-500 mt-1.5">มี ${list.length} เครื่องที่มีงานซ่อมค้างอยู่</p>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+            <button onclick="printBlankRepairForm()" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm">
+              <i class="ph ph-printer"></i> เปิดฟอร์มเปล่า
+            </button>
+          </div>
+        </div>
+      </div>`;
   }
-  window.startRepairFormFromPicker = startRepairFormFromPicker;
+  window.openPrintRepairFormDialog = openPrintRepairFormDialog;
+
+  async function printBlankRepairForm() {
+    const code = (document.getElementById('prf_air') || {}).value;
+    const unit = (currentAirList || []).find(a => String(a.AirCode) === String(code));
+    if (!unit) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return; }
+
+    // เติมเท่าที่ระบบรู้ ส่วนผลตรวจกับอะไหล่เว้นว่างไว้ให้เขียนหน้างาน
+    const record = {
+      Date: new Date().toISOString().slice(0, 10),
+      NodeName: unit.NodeName, SiteCode: unit.SiteCode, Province: unit.Province,
+      LocationType: unit.LocationType,
+      AirCode: unit.AirCode, Brand: unit.Brand, BTU: unit.BTU,
+      IndoorSerial: unit.IndoorSN, IndoorAsset: unit.IndoorAsset,
+      OutdoorSerial: unit.OutdoorSN, OutdoorAsset: unit.OutdoorAsset,
+      Symptom: lastSymptomOf(code),
+      Checklist: [], Parts: []
+    };
+
+    const win = await openDocWindow('getRepairBlankDocHtml', record);
+    if (win) closeModal();
+  }
+  window.printBlankRepairForm = printBlankRepairForm;
 
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
   function onCleaningFormNodeChange() {
