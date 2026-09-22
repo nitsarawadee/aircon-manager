@@ -4607,64 +4607,84 @@
       `;
     }
 
+    /**
+     * หน้าต่างตั้งแผนของรอบหนึ่ง
+     *
+     * ============================================================================
+     * ทำไมตรงนี้ "ตั้งแผน" ไม่ใช่ "บันทึกผล"
+     * ============================================================================
+     * เดิมกล่องนี้ทำสองงานที่ไม่เกี่ยวกัน — ตั้งแผน (วันที่ ราคา ผู้รับเหมา PR)
+     * กับบันทึกผล (วันที่ล้างจริง เปลี่ยนสถานะเป็นเสร็จ)
+     *
+     * ตั้งแต่มีกฎว่าปิดงานต้องมีเอกสารรองรับ ครึ่งหลังทำจากตรงนี้ไม่ได้อีกแล้ว
+     * ถ้ายังเปิดช่องไว้ก็เป็นแค่กับดักที่กดแล้วได้ error กลับไป
+     *
+     * ตอนนี้เหลืองานเดียวคือตั้งแผน ส่วนการบันทึกผลไปอยู่ที่ปุ่มสองปุ่มข้างล่าง
+     * ซึ่งปิดงานให้เองพร้อมลงวันที่ ราคา ช่าง และประวัติครบ
+     */
     function openRoundModal(i, r) {
       const p = currentPlan[i];
+      const status = String(p['R' + r + '_Status'] || '').trim();
+      const actual = p['R' + r + '_ActualDate'];
+
       // จำไว้ว่ารอบนี้ปิดไปแล้วหรือยัง ใช้ตัดสินว่าจะเตือนเรื่องเอกสารหรือไม่
-      roundWasDone = String(p['R' + r + '_Status'] || '').trim() === 'ล้างเสร็จสิ้น';
+      roundWasDone = status === 'ล้างเสร็จสิ้น';
+
+      // "ล้างเสร็จสิ้น" มีให้เลือกเฉพาะรอบที่ปิดไปแล้ว เพื่อให้คงค่าเดิมไว้ได้
+      // ไม่ใช่เพื่อให้เลือกใหม่ — รอบที่ยังไม่ปิด ต้องปิดผ่านฟอร์มหรือเอกสารเท่านั้น
+      const statusOptions = ['รอดำเนินการ', 'นัดหมายแล้ว', 'ยกเลิก']
+        .concat(roundWasDone ? ['ล้างเสร็จสิ้น'] : [])
+        .map(s => `<option ${status === s ? 'selected' : ''}>${s}</option>`)
+        .join('');
+
+      const doneNote = roundWasDone ? `
+        <div class="flex items-start gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+          <i class="ph-fill ph-check-circle text-base flex-shrink-0 mt-0.5"></i>
+          <span>รอบนี้ปิดงานแล้วเมื่อ <b>${esc(fmtDate(actual)) || '-'}</b> — แก้ราคาและผู้รับเหมาได้ตามปกติ</span>
+        </div>` : '';
+
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease] overflow-hidden">
             <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <div>
-                <h3 class="text-lg font-bold text-gray-800">อัปเดตผลรอบที่ ${r}</h3>
+                <h3 class="text-lg font-bold text-gray-800">ตั้งแผนรอบที่ ${r}</h3>
                 <p class="text-xs text-gray-500 mt-0.5">เครื่อง: ${esc(p.AirCode)}</p>
               </div>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="p-6 space-y-4">
+              ${doneNote}
               <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-xs font-medium text-gray-500 mb-1">แผนล้าง</label>${dateField('rp_plan', p['R'+r+'_PlanDate'], 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none')}</div>
-                <div><label class="block text-xs font-medium text-[#1153a1] mb-1">ดำเนินการ</label>${dateField('rp_actual', p['R'+r+'_ActualDate'], 'w-full rounded-lg border-blue-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-blue-50')}</div>
-              </div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
-                <select id="rp_status" onchange="onRoundStatusChange()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">
-                  <option ${p['R'+r+'_Status']==='รอดำเนินการ'?'selected':''}>รอดำเนินการ</option>
-                  <option ${p['R'+r+'_Status']==='นัดหมายแล้ว'?'selected':''}>นัดหมายแล้ว</option>
-                  <option ${p['R'+r+'_Status']==='ล้างเสร็จสิ้น'?'selected':''}>ล้างเสร็จสิ้น</option>
-                  <option ${p['R'+r+'_Status']==='ยกเลิก'?'selected':''}>ยกเลิก</option>
-                </select>
-                <!-- เตือนตั้งแต่ตอนเลือก ดีกว่าปล่อยให้กดบันทึกแล้วค่อยโดนปฏิเสธ
-                     ส่วนด่านจริงอยู่ที่เซิร์ฟเวอร์เสมอ ตรงนี้กันได้แค่การกดพลาด -->
-                <p id="rp_needDoc" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
-                  <i class="ph ph-warning-circle text-base mt-0.5 flex-shrink-0"></i>
-                  <span>ปิดงานจากตรงนี้ไม่ได้ ต้องมีเอกสารก่อน — กด <b>กรอกฟอร์ม</b> หรือ <b>แนบเอกสาร + ปิดงาน</b> ข้างล่าง แล้วระบบจะปิดงานให้เองพร้อมลงประวัติและค่าใช้จ่าย</span>
-                </p>
+                <div><label class="block text-xs font-medium text-gray-500 mb-1">วันที่ตามแผน</label>${dateField('rp_plan', p['R'+r+'_PlanDate'], 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none')}</div>
+                <div><label class="block text-xs font-medium text-gray-500 mb-1">สถานะ</label>
+                  <select id="rp_status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">${statusOptions}</select>
+                </div>
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ราคา (฿)</label><input type="number" id="rp_price" value="${esc(p['R'+r+'_Price'])}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้รับเหมา</label><input id="rp_tech" value="${esc(p['R'+r+'_Technician'])}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">PR</label><textarea id="rp_note" rows="2" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none resize-none">${esc(p['R'+r+'_Note'])}</textarea></div>
-              <p class="text-xs text-gray-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
-                <i class="ph ph-info text-[#1153a1] mt-0.5"></i>
-                <span>เลือกทางใดทางหนึ่งพอ ไม่ต้องกรอกซ้ำ — <b>กรอกฟอร์ม + ปิดงาน</b> จะลงวันที่ ราคา ช่าง และสถานะให้เองจากฟอร์ม ส่วน <b>อัปเดตผล</b> ใช้เมื่อต้องการแก้เฉพาะข้อมูลในตารางนี้</span>
-              </p>
+
+              ${roundWasDone ? '' : `
+              <div class="border-t border-gray-100 pt-4">
+                <p class="text-xs font-semibold text-gray-700 mb-2">ล้างเสร็จแล้วใช่มั้ย — เลือกทางใดทางหนึ่ง</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button onclick="openFormForPlanUnit(${i},${r})" class="px-4 py-3 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm flex items-center justify-center gap-1.5" title="กรอกฟอร์มบันทึกผลการล้างในระบบ แล้วปิดงานรอบนี้ให้อัตโนมัติ">
+                    <i class="ph ph-clipboard-text text-base"></i> กรอกฟอร์ม
+                  </button>
+                  <button onclick="openAttachFromPlan(${i},${r})" class="px-4 py-3 text-sm font-medium text-teal-700 bg-white border border-teal-500 rounded-lg hover:bg-teal-50 shadow-sm flex items-center justify-center gap-1.5" title="ถ่ายรูปฟอร์มที่เขียนด้วยมือมาแนบ แล้วปิดงานรอบนี้ให้อัตโนมัติ">
+                    <i class="ph ph-paperclip text-base"></i> แนบเอกสาร
+                  </button>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-2">ทั้งสองทางจะลงวันที่ ราคา ช่าง สถานะ และประวัติให้เองครบ — ปิดงานจากช่องสถานะข้างบนไม่ได้</p>
+              </div>`}
             </div>
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-center gap-3">
-              <div class="flex items-center gap-2">
-                <button onclick="openAttachFromPlan(${i},${r})" class="px-4 py-2 text-sm font-medium text-teal-700 bg-white border border-teal-500 rounded-lg hover:bg-teal-50 shadow-sm flex items-center justify-center gap-1.5" title="แนบรูปฟอร์มที่เขียนด้วยมือมา แล้วปิดงานรอบนี้ให้อัตโนมัติ — ปิดพร้อมกันหลายเครื่องใน Node เดียวกันได้">
-                  <i class="ph ph-paperclip"></i> แนบเอกสาร + ปิดงาน
-                </button>
-                <button onclick="openFormForPlanUnit(${i},${r})" class="px-4 py-2 text-sm font-medium text-[#f47920] bg-white border border-[#f47920] rounded-lg hover:bg-orange-50 shadow-sm flex items-center justify-center gap-1.5" title="กรอกฟอร์มบันทึกผลการล้างของเครื่องนี้ในระบบ แล้วปิดงานรอบนี้ให้อัตโนมัติ">
-                  <i class="ph ph-clipboard-text"></i> กรอกฟอร์ม
-                </button>
-                ${p['R'+r+'_FormUrl'] ? `<a href="${esc(p['R'+r+'_FormUrl'])}" target="_blank" class="px-3 py-2 text-sm text-[#1153a1] hover:bg-blue-50 rounded-lg flex items-center gap-1.5" title="เปิดฟอร์ม PDF ของรอบนี้"><i class="ph ph-file-pdf"></i> ดูฟอร์ม</a>` : ''}
-              </div>
-              <div class="flex gap-3 justify-end">
-                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-                <button onclick="saveRound(${i},${r})" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-check-circle"></i> อัปเดตผล</button>
-              </div>
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+              <button onclick="saveRound(${i},${r})" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-floppy-disk"></i> บันทึก</button>
             </div>
           </div>
         </div>`;
@@ -4706,22 +4726,16 @@
       });
     }
 
-    /** เตือนทันทีที่เลือก "ล้างเสร็จสิ้น" ในรอบที่ยังไม่เคยปิด */
-    function onRoundStatusChange() {
-      const sel = document.getElementById('rp_status');
-      const hint = document.getElementById('rp_needDoc');
-      if (!sel || !hint) return;
-      hint.classList.toggle('hidden', !(sel.value === 'ล้างเสร็จสิ้น' && !roundWasDone));
-    }
-    window.onRoundStatusChange = onRoundStatusChange;
-
     /** รอบที่กำลังแก้อยู่ ปิดงานไปแล้วหรือยัง (รอบที่ปิดแล้วยังแก้ราคา/ช่างได้ตามปกติ) */
     let roundWasDone = false;
 
     async function saveRound(i, r) {
+      const p = currentPlan[i];
       const data = {
         planDate: document.getElementById('rp_plan').value,
-        actualDate: document.getElementById('rp_actual').value,
+        // วันที่ล้างจริงไม่มีช่องให้แก้แล้ว เพราะมาจากฟอร์มหรือเอกสารเท่านั้น
+        // แต่ต้องส่งค่าเดิมกลับไปด้วย ไม่งั้นการบันทึกจะล้างวันที่ของรอบที่ปิดแล้วทิ้ง
+        actualDate: p['R' + r + '_ActualDate'] || '',
         price: document.getElementById('rp_price').value,
         technician: document.getElementById('rp_tech').value,
         status: document.getElementById('rp_status').value,
