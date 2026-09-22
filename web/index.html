@@ -6209,12 +6209,11 @@ const CLEANING_CHECKLIST_ITEMS = [
             ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
-            : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น (ใบนี้มีทั้งสองเครื่อง)"
+            // ปุ่มดาวน์โหลด PDF ย้ายไปอยู่บนหน้าเอกสารที่เปิดดู ไม่ใช่ตรงนี้
+            // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
+            : `<button onclick="openCleaningDoc(${f._row}, '${esc(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
-               <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
-                 class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-download-simple"></i> PDF</button>
                <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
                  <i class="ph ph-camera"></i> แก้รูป</button>`
@@ -6255,10 +6254,10 @@ const CLEANING_CHECKLIST_ITEMS = [
       win.document.open();
       win.document.write(html);
       win.document.close();
-      return true;
+      return win;
     } catch (e) {
       win.close();   // call() แสดงข้อความผิดพลาดให้แล้ว ไม่ต้องแจ้งซ้ำ
-      return false;
+      return null;
     }
   }
 
@@ -6786,7 +6785,40 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   /** เปิดเอกสารของใบที่บันทึกไว้แล้ว */
-  const openCleaningDoc = row => openDocWindow('getCleaningDocHtml', row);
+  /**
+   * เปิดเอกสารในแท็บใหม่ พร้อมต่อสายปุ่มดาวน์โหลดบนแถบลอยของหน้านั้น
+   *
+   * หน้าเอกสารถูกประกอบที่ฝั่งเซิร์ฟเวอร์ จึงไม่รู้จัก token หรือเลขแถว
+   * ปุ่มบนนั้นเรียก window.__docDownload เฉยๆ แล้วเรามาติดตั้งตัวจริงให้ตรงนี้
+   * ซึ่งใช้ตัวดาวน์โหลดเดิมทั้งดุ้น (ตรวจว่าแถวยังเป็นใบเดิม แปลง base64 เป็นไฟล์)
+   *
+   * ไฟล์ถูกบันทึกลงเครื่องผ่านหน้าเว็บหลัก ไม่ใช่หน้าที่เปิดดู เพราะ Blob URL
+   * ที่สร้างไว้ผูกกับหน้าที่สร้างมัน ถ้าคนปิดแท็บเอกสารระหว่างดาวน์โหลดจะพัง
+   */
+  async function openCleaningDoc(row, id) {
+    const win = await openDocWindow('getCleaningDocHtml', row);
+    if (!win) return false;
+
+    try {
+      win.__docDownload = async btn => {
+        // ข้อความแจ้งเตือนของหน้าเว็บหลักอยู่คนละแท็บ คนที่กดอยู่ตรงนี้จะไม่เห็น
+        // ผลลัพธ์จึงต้องบอกผ่านตัวปุ่มเอง
+        const old = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'กำลังเตรียมไฟล์...'; }
+
+        const ok = await downloadCleaningPdf(row, id, null);
+        if (!btn) return;
+
+        btn.textContent = ok ? 'บันทึกไฟล์แล้ว' : 'ไม่สำเร็จ ลองใหม่อีกครั้ง';
+        setTimeout(() => {
+          try { btn.disabled = false; btn.textContent = old; } catch (e) { /* ปิดแท็บไปแล้ว */ }
+        }, 2500);
+      };
+    } catch (e) {
+      // เบราว์เซอร์บางตัวกันการเขียนข้ามหน้าต่าง — ปุ่มปริ้นยังใช้ได้ตามปกติ
+    }
+    return true;
+  }
   window.openCleaningDoc = openCleaningDoc;
 
   /**
@@ -6821,8 +6853,10 @@ const CLEANING_CHECKLIST_ITEMS = [
       setTimeout(() => URL.revokeObjectURL(url), 10000);
 
       showToast('บันทึกไฟล์ ' + (res.fileName || 'PDF') + ' แล้ว (เก็บสำเนาไว้บนเซิร์ฟเวอร์ด้วย)');
+      return true;
     } catch (e) {
       // call() แสดงข้อความผิดพลาดให้แล้ว ไม่ต้องแจ้งซ้ำ
+      return false;
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = old; }
     }

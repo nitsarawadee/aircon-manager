@@ -619,7 +619,8 @@ export async function getCleaningDocHtml(ctx, row) {
   // รูปถ่ายฝังลงไปในหน้าเลย จึงไม่มีที่อยู่ให้ใครเปิดดูโดยไม่ผ่านการตรวจสิทธิ์
   const docNo = plainText(form.DocNo) || plainText(form.ID);
   const photos = ctx.photos ? ctx.photos.readAll(docNo) : {};
-  return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos });
+  // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่ (ดู renderDocPdf)
+  return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
 }
 
 /* ==================== รูปถ่ายประกอบเอกสาร ==================== */

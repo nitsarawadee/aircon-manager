@@ -283,6 +283,50 @@ const pageHeader = (title, opts) =>
  * @param {Object} [opts.photos]   รูปที่แนบไว้ คีย์ "<เครื่อง>-<ช่อง>" ค่าเป็น data URL
  * @returns {string} หน้า HTML เต็มใบ พร้อมเปิดดูหรือสั่งปริ้น
  */
+/**
+ * แถบปุ่มลอยมุมขวาบน สำหรับตอนเปิดดูบนจอเท่านั้น
+ *
+ * ============================================================================
+ * ทำไมปุ่มอยู่ตรงนี้ ไม่ใช่ในตารางเอกสาร
+ * ============================================================================
+ * เดิมตารางมีปุ่ม "PDF" อยู่ข้างปุ่ม "เปิดเอกสาร" ซึ่งเจ้าของงานว่ารก
+ * และจริงๆ คนส่วนใหญ่กดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
+ * ปุ่มโหลดจึงควรอยู่ตรงที่ตัดสินใจ ไม่ใช่อยู่ก่อนหน้านั้น
+ *
+ * ============================================================================
+ * ทำไมใส่เฉพาะตอน opts.toolbar
+ * ============================================================================
+ * หน้าเอกสารตัวเดียวกันนี้ถูกส่งให้ Chrome แปลงเป็น PDF ด้วย
+ * ถ้าใส่ไว้เสมอแล้วอาศัย @media print ซ่อน ก็ยังเสี่ยงว่าวันหนึ่งจะหลุดไปติดในไฟล์
+ * ตัดปัญหาด้วยการไม่สร้างมันขึ้นมาเลยตอนแปลงเป็นไฟล์ (ยังกัน @media print ไว้ด้วย
+ * เผื่อคนกดปริ้นจากหน้าที่เปิดดูอยู่)
+ *
+ * ปุ่มโหลดเรียกกลับไปที่หน้าเว็บหลักผ่าน window.__docDownload ซึ่งหน้าเว็บ
+ * เป็นคนติดตั้งให้หลังเปิดหน้าต่างเสร็จ เพราะที่นี่ไม่รู้จัก token หรือเลขแถว
+ */
+function toolbar() {
+  return `<style>
+  .bar { position: fixed; top: 12px; right: 12px; z-index: 99; display: flex; gap: 8px;
+         font-family: inherit; }
+  .bar button { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+         border: 1px solid #cbd5e1; background: #fff; color: #334155;
+         border-radius: 8px; padding: 9px 14px; font-size: 13px; font-family: inherit;
+         box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .bar button:hover { background: #f1f5f9; }
+  .bar button.main { background: #1153a1; border-color: #1153a1; color: #fff; }
+  .bar button.main:hover { background: #0e4485; }
+  .bar button[disabled] { opacity: .6; cursor: default; }
+  @media print { .bar { display: none !important; } }
+</style>
+<div class="bar">
+  <button type="button" onclick="window.print()">ปริ้น</button>
+  <button type="button" class="main" id="docDownloadBtn" onclick="
+    if (window.__docDownload) { window.__docDownload(this); }
+    else { alert('หน้าเว็บหลักถูกปิดไปแล้ว กรุณาเปิดเอกสารใหม่อีกครั้ง'); }
+  ">ดาวน์โหลด PDF</button>
+</div>`;
+}
+
 export function buildCleaningDocHtml(form, opts = {}) {
   const units = unitsOf(form);
   if (!units.length) throw new Error('เอกสารใบนี้ยังไม่มีข้อมูลเครื่องปรับอากาศ');
@@ -297,7 +341,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
 ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
 </head><body>
-
+${opts.toolbar ? toolbar() : ''}
 <div class="sheet"><div class="frame">
   ${pageHeader('บันทึกผลการล้างเครื่องปรับอากาศ', opts)}
 

@@ -331,3 +331,34 @@ test('รูปของเครื่องหนึ่ง ต้องไม�
 test('หน้ารูปขึ้นหน้าใหม่เสมอ ไม่ต่อท้ายหน้าแรก', () => {
   assert.ok(buildCleaningDocHtml(baseForm()).includes('page-break-after: always'));
 });
+
+/* ==================== แถบปุ่มลอย (เฉพาะตอนเปิดดูบนจอ) ==================== */
+
+test('ไม่ส่ง toolbar มา ต้องไม่มีแถบปุ่มในหน้าเอกสาร', () => {
+  // ตอนแปลงเป็นไฟล์ PDF ใช้ทางนี้ ถ้ามีปุ่มโผล่ในไฟล์คือเอกสารเสีย
+  const html = buildCleaningDocHtml(baseForm(), {});
+
+  assert.ok(!html.includes('docDownloadBtn'), 'ต้องไม่มีปุ่มดาวน์โหลด');
+  assert.ok(!html.includes('class="bar"'), 'ต้องไม่มีแถบปุ่ม');
+  assert.ok(!html.includes('window.print()'), 'ต้องไม่มีปุ่มปริ้น');
+});
+
+test('ส่ง toolbar มา ถึงจะมีแถบปุ่มให้กด', () => {
+  const html = buildCleaningDocHtml(baseForm(), { toolbar: true });
+
+  assert.ok(html.includes('docDownloadBtn'), 'ต้องมีปุ่มดาวน์โหลด');
+  assert.ok(html.includes('window.print()'), 'ต้องมีปุ่มปริ้น');
+  assert.ok(html.includes('__docDownload'), 'ปุ่มต้องเรียกกลับไปที่หน้าเว็บหลัก');
+});
+
+test('แถบปุ่มต้องถูกซ่อนตอนสั่งปริ้น', () => {
+  // คนเปิดดูแล้วกด Ctrl+P จากหน้านั้นได้ ปุ่มต้องไม่ติดไปบนกระดาษ
+  const html = buildCleaningDocHtml(baseForm(), { toolbar: true });
+  assert.ok(/@media print \{ \.bar \{ display: none/.test(html));
+});
+
+test('แถบปุ่มต้องไม่ไปแทรกกลางเนื้อเอกสาร', () => {
+  // ต้องอยู่ก่อนกระดาษแผ่นแรก ไม่งั้นการจัดหน้าจะเพี้ยน
+  const html = buildCleaningDocHtml(baseForm(), { toolbar: true });
+  assert.ok(html.indexOf('class="bar"') < html.indexOf('<div class="sheet">'));
+});
