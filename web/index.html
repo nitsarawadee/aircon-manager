@@ -1155,6 +1155,34 @@
     }
 
     /**
+     * ค่าที่จะไปอยู่ใน "สตริงของ JavaScript ที่อยู่ใน attribute ของ HTML" อีกที
+     * เช่น  onclick="doThing('${jsStr(ชื่อ)}')"
+     *
+     * ============================================================================
+     * ทำไม esc() อย่างเดียวไม่พอตรงนี้
+     * ============================================================================
+     * ตรงนี้มีสองชั้นซ้อนกัน — ชั้นนอกเป็น attribute ของ HTML ชั้นในเป็นสตริงของ JS
+     *
+     * esc() เปลี่ยน ' เป็น &#39; ซึ่งกัน attribute ชั้นนอกได้ก็จริง
+     * แต่เบราว์เซอร์ถอดรหัส &#39; กลับเป็น ' ก่อน แล้วค่อยเอาไปอ่านเป็นโค้ด
+     * เครื่องหมายคำพูดจึงหลุดเข้าไปปิดสตริงของ JS อยู่ดี แล้วอะไรที่ตามมาก็ทำงาน
+     *
+     * ทดสอบจริงในเบราว์เซอร์แล้ว: ชื่อ Node ที่เป็น  '); alert(1); ('
+     * ทำงานได้ทั้งตอนใส่ดิบๆ และตอนครอบ esc() — ต่างกันแค่ตัวหลังดูเหมือนปลอดภัย
+     *
+     * ตัวนี้จึงหนี ' ด้วย \\' ให้ชั้น JS ก่อน แล้วค่อยส่งต่อให้ esc() จัดการชั้น HTML
+     * (\\ ต้องหนีก่อนเสมอ ไม่งั้นตัวที่เติมเข้าไปทีหลังจะถูกกลืน)
+     *
+     * ถ้าเป็นไปได้ ให้เลี่ยงไปใช้ data-xxx แล้วอ่านด้วย this.dataset แทน
+     * เพราะแบบนั้นค่าไม่ได้อยู่ในโค้ดตั้งแต่แรก จึงไม่มีอะไรให้หลุด
+     */
+    function jsStr(s) {
+      return esc(String(s === undefined || s === null ? '' : s)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'"));
+    }
+
+    /**
      * แปลงวันที่จากรูปแบบที่ระบบเก็บ (2026-09-01) เป็นรูปแบบที่คนไทยอ่าน (01/09/2026)
      *
      * ใช้เฉพาะตอน "แสดงผล" เท่านั้น ข้อมูลที่เก็บและที่ส่งกลับ server ยังเป็น
@@ -2127,7 +2155,7 @@
           <td class="px-4 py-3">${(u.Active === false || String(u.Active).toUpperCase() === 'FALSE') ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">ปิดใช้งาน</span>' : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">ใช้งานอยู่</span>'}</td>
           <td class="px-4 py-3 text-right space-x-1">
             <button onclick='openUserModal(${JSON.stringify(u).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
-            <button onclick="deleteUserRow(${u._row}, '${esc(u.Username)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+            <button onclick="deleteUserRow(${u._row}, '${jsStr(u.Username)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
           </td>
         </tr>`).join('');
     }
@@ -2389,7 +2417,10 @@
             const isToday = pDate.getTime() === todayRaw.getTime();
             
             return `
-            <div onclick="goToPlan('${up.NodeName}', '${up.PlanYear || ''}')" class="border border-gray-200 rounded-xl p-4 hover:border-[#1153a1] hover:shadow-md transition-all cursor-pointer bg-white relative overflow-hidden group">
+            <!-- ค่าอยู่ใน data- ไม่ได้อยู่ในโค้ด จึงไม่มีอะไรให้หลุดออกมาเป็นคำสั่งได้เลย
+                 ปลอดภัยกว่าการหนีอักขระ เพราะไม่ต้องหวังพึ่งว่าหนีครบทุกตัวหรือยัง -->
+            <div data-node="${esc(up.NodeName)}" data-year="${esc(up.PlanYear || '')}"
+                 onclick="goToPlan(this.dataset.node, this.dataset.year)" class="border border-gray-200 rounded-xl p-4 hover:border-[#1153a1] hover:shadow-md transition-all cursor-pointer bg-white relative overflow-hidden group">
                ${isToday ? `<div class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg shadow-sm z-10">วันนี้</div>` : ''}
                <div class="flex items-center gap-3 mb-3">
                   <div class="w-12 h-12 rounded-xl ${isToday ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-blue-50 text-[#1153a1] border border-blue-100'} flex flex-col items-center justify-center flex-shrink-0 shadow-inner">
@@ -2591,7 +2622,7 @@
         return;
       }
       container.innerHTML = watchlist.map(w => `
-        <div onclick="viewAirHistory('${esc(w.AirCode)}')" class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+        <div onclick="viewAirHistory('${jsStr(w.AirCode)}')" class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
           <div class="w-9 h-9 rounded-lg text-rose-600 bg-rose-50 border-rose-100 border flex items-center justify-center flex-shrink-0">
             <i class="ph ph-wrench"></i>
           </div>
@@ -2746,12 +2777,12 @@
             </div>
             <div class="flex flex-wrap gap-2 flex-shrink-0">
               ${moduleLevel('repair') === 'edit' && !isRetiredStatus(u.Status) ? `
-                <button onclick="openReportRepairModal('${esc(u.AirCode)}')"
+                <button onclick="openReportRepairModal('${jsStr(u.AirCode)}')"
                         class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                   <i class="ph ph-wrench"></i> แจ้งซ่อม
                 </button>` : ''}
               ${canEditHist ? `
-                <button onclick="addHistoryForUnit('${esc(u.AirCode)}')"
+                <button onclick="addHistoryForUnit('${jsStr(u.AirCode)}')"
                         class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                   <i class="ph ph-plus"></i> บันทึกประวัติ
                 </button>` : ''}
@@ -2877,7 +2908,7 @@
               <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-right align-top">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
               <td class="px-4 py-3 text-gray-600 text-sm align-top">${esc(h.Technician) || '-'}</td>
               ${canEdit ? `<td class="px-4 py-3 text-right align-top">
-                <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" title="ลบรายการนี้"
+                <button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" title="ลบรายการนี้"
                         class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
               </td>` : ''}
             </tr>` + tail;
@@ -3025,8 +3056,10 @@
      * (เช่นการ์ดนัดหมายบนแดชบอร์ด) กดที่รหัสต้องมาที่หน้าของเครื่อง ไม่ใช่โดนเด้งไปด้วย
      */
     function airCodeBtn(code, cls) {
+      // ค่าเดียวกันแต่ไปอยู่คนละบริบท จึงต้องหนีอักขระคนละแบบ
+      // ในโค้ดของ onclick ใช้ jsStr · ที่เป็นข้อความบนจอใช้ esc
       const c = esc(code);
-      return `<button type="button" onclick="event.stopPropagation(); openAirDetail('${c}')"
+      return `<button type="button" onclick="event.stopPropagation(); openAirDetail('${jsStr(code)}')"
                       title="เปิดหน้าของเครื่อง ${c}"
                       class="${cls || 'text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2 font-medium'}">${c}</button>`;
     }
@@ -3518,12 +3551,12 @@
             <td class="px-4 py-3 whitespace-nowrap">${ageCell(a.InstallDate)}</td>
             <td class="px-4 py-3">${statusBadge(a.Status)}</td>
             <td class="px-4 py-3 text-right space-x-1">
-              <button onclick="openReportRepairModal('${esc(a.AirCode)}')" title="แจ้งซ่อมเครื่องนี้" class="text-rose-500 hover:text-white hover:bg-rose-500 p-1.5 rounded transition"><i class="ph ph-wrench text-lg"></i></button>
-              <button onclick="viewAirHistory('${esc(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
+              <button onclick="openReportRepairModal('${jsStr(a.AirCode)}')" title="แจ้งซ่อมเครื่องนี้" class="text-rose-500 hover:text-white hover:bg-rose-500 p-1.5 rounded transition"><i class="ph ph-wrench text-lg"></i></button>
+              <button onclick="viewAirHistory('${jsStr(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
               <button onclick='openMoveModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="ย้ายเครื่อง" class="text-teal-600 hover:text-white hover:bg-teal-500 p-1.5 rounded transition"><i class="ph ph-arrows-left-right text-lg"></i></button>
               <button onclick='openReplaceModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="เปลี่ยนเครื่อง (ชำรุดซ่อมไม่ได้)" class="text-[#f47920] hover:text-white hover:bg-[#f47920] p-1.5 rounded transition"><i class="ph ph-arrows-clockwise text-lg"></i></button>
               <button onclick='openAirModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
-              <button onclick="deleteAir(${a._row}, '${esc(a.AirCode)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+              <button onclick="deleteAir(${a._row}, '${jsStr(a.AirCode)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
             </td>
           </tr>`;
         }).join('');
@@ -3873,7 +3906,7 @@
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">ยกเลิก</button>
-              <button onclick="moveAir(${data._row}, '${esc(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm"><i class="ph ph-arrows-left-right"></i> ยืนยันการย้าย</button>
+              <button onclick="moveAir(${data._row}, '${jsStr(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm"><i class="ph ph-arrows-left-right"></i> ยืนยันการย้าย</button>
             </div>
           </div>
         </div>`;
@@ -3966,7 +3999,7 @@
             </div>
             <div class="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 z-20 rounded-b-2xl">
               <button onclick="closeModal()" class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">ยกเลิก</button>
-              <button onclick="replaceAir(${data._row}, '${esc(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-arrows-clockwise"></i> ยืนยันเปลี่ยนเครื่อง</button>
+              <button onclick="replaceAir(${data._row}, '${jsStr(data.AirCode)}')" class="px-5 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-arrows-clockwise"></i> ยืนยันเปลี่ยนเครื่อง</button>
             </div>
           </div>
         </div>`;
@@ -4532,7 +4565,7 @@
         <tr class="bg-white hover:bg-slate-50 transition-colors">
           <td class="py-1.5 px-3">
             <div class="flex items-center gap-1">
-              <button type="button" onclick="togglePlanSummaryRegion('${esc(r.region)}')"
+              <button type="button" onclick="togglePlanSummaryRegion('${jsStr(r.region)}')"
                       title="${open ? 'ยุบรายการ Node' : 'ดูราย Node'}"
                       class="flex items-center gap-1.5 font-semibold text-gray-800 hover:text-[#1153a1]">
                 <!-- เขียนชื่อไอคอนเต็มทั้งสองแบบ ไม่ต่อสตริงเอา
@@ -4542,7 +4575,7 @@
                 ${esc(regionLabel(r.region))}
                 <span class="text-[11px] font-normal text-gray-400">${r.nodes.length} Node</span>
               </button>
-              <button type="button" onclick="filterPlanBy('${esc(r.region)}')" title="กรองตารางข้างล่างด้วยภูมิภาคนี้"
+              <button type="button" onclick="filterPlanBy('${jsStr(r.region)}')" title="กรองตารางข้างล่างด้วยภูมิภาคนี้"
                       class="ml-1 text-gray-300 hover:text-[#1153a1] p-0.5"><i class="ph ph-funnel text-xs"></i></button>
             </div>
           </td>
@@ -4569,7 +4602,7 @@
 
         return `
           <tr class="bg-slate-50/60 hover:bg-blue-50/50 transition-colors cursor-pointer"
-              onclick="filterPlanBy('${esc(r.region)}', '${esc(n.node)}')" title="กรองตารางข้างล่างด้วย Node นี้">
+              onclick="filterPlanBy('${jsStr(r.region)}', '${jsStr(n.node)}')" title="กรองตารางข้างล่างด้วย Node นี้">
             <td class="py-1.5 px-3 pl-8">
               <div class="text-gray-800">${esc(n.node)}<span class="text-[11px] text-gray-400"> ${esc(n.siteCode)}</span></div>
               <div class="text-[11px]">${note}</div>
@@ -5143,7 +5176,7 @@
           <td class="px-4 py-3 text-gray-600">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
           <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
           <td class="px-4 py-3 text-right">
-            <button onclick="deleteHistory(${h._row}, '${esc(h.ID)}')" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+            <button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
           </td>
         </tr>`).join('');
       renderTablePager('historyPaginationBar', displayHistory.length, historyPage, 'goToHistoryPage');
@@ -5323,7 +5356,7 @@
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-              <button onclick="submitCannotRepair('${esc(airCode)}')" class="px-4 py-2 text-sm font-medium text-white bg-slate-600 rounded-lg hover:bg-slate-700 shadow-sm">ยืนยันว่าซ่อมไม่ได้</button>
+              <button onclick="submitCannotRepair('${jsStr(airCode)}')" class="px-4 py-2 text-sm font-medium text-white bg-slate-600 rounded-lg hover:bg-slate-700 shadow-sm">ยืนยันว่าซ่อมไม่ได้</button>
             </div>
           </div>
         </div>`;
@@ -5399,7 +5432,7 @@
             if (status === 'ชำรุด') {
               // การอนุมัติซ่อมเป็นเรื่องของผู้ดูแลระบบ คนอื่นเห็นว่ากำลังรอใครอยู่ก็พอ
               actions.push(isAdmin()
-                ? `<button onclick="approveRepair('${esc(a.AirCode)}')"
+                ? `<button onclick="approveRepair('${jsStr(a.AirCode)}')"
                     class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                     <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
                 : `<span class="text-slate-400 px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-dashed border-slate-300 rounded-lg">
@@ -5411,7 +5444,7 @@
                 <i class="ph ph-check-circle"></i> ปิดงานซ่อม</button>`);
             }
             if (status === 'ชำรุด' || status === 'รอซ่อม') {
-              actions.push(`<button onclick="openCannotRepairModal('${esc(a.AirCode)}')"
+              actions.push(`<button onclick="openCannotRepairModal('${jsStr(a.AirCode)}')"
                 class="text-slate-600 hover:text-white hover:bg-slate-600 px-3 py-1.5 rounded-lg transition shadow-sm border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1">
                 <i class="ph ph-x-circle"></i> ซ่อมไม่ได้</button>`);
             }
@@ -5436,7 +5469,7 @@
               <td class="px-4 py-3 text-red-600 text-sm whitespace-normal max-w-xs">${esc(a.Note) || '-'}</td>
               <td class="px-4 py-3 text-right whitespace-nowrap">
                 <div class="inline-flex flex-wrap gap-1.5 justify-end">
-                  <button onclick="viewAirHistory('${esc(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
+                  <button onclick="viewAirHistory('${jsStr(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
                   ${actions.join('')}
                 </div>
               </td>
@@ -6211,7 +6244,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                  <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
             // ปุ่มดาวน์โหลด PDF ย้ายไปอยู่บนหน้าเอกสารที่เปิดดู ไม่ใช่ตรงนี้
             // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
-            : `<button onclick="openCleaningDoc(${f._row}, '${esc(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
+            : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
                <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
@@ -6223,7 +6256,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
             r.first
-              ? `<button onclick="deleteCleaningFormRow(${f._row}, '${esc(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
+              ? `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
               : ''
           }
         </td>
@@ -6887,7 +6920,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <div class="text-sm text-gray-800 truncate">${esc(f.name)}</div>
               <div class="text-xs text-gray-400">${esc(fileSize(f.bytes))}</div>
             </div>
-            <button onclick="openAttachmentFile(${row}, '${esc(f.name).replace(/'/g, '&#39;')}', this)"
+            <button onclick="openAttachmentFile(${row}, '${jsStr(f.name)}', this)"
               class="flex-shrink-0 text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-arrow-square-out"></i> เปิด</button>
           </div>`).join('')
