@@ -561,9 +561,11 @@ export async function saveCleaningForm(ctx, record) {
   //
   // ตอนนี้ยังไม่มีรูปถ่าย เพราะรูปแนบทีหลังจากปุ่ม "รูปถ่าย"
   // ไฟล์จะถูกสร้างทับใหม่ทุกครั้งที่แนบหรือลบรูป จึงตามทันเสมอ
-  const { docNo, ...out } = saved;
-  await storeDocPdf(ctx, docNo);
-  return out;
+  await storeDocPdf(ctx, saved.docNo);
+
+  // ส่ง docNo กลับไปด้วย หน้าเว็บใช้หาแถวของใบที่เพิ่งบันทึก
+  // เพื่อส่งรูปถ่ายที่แนบมากับฟอร์มตามขึ้นไปทันที (รูปผูกกับเอกสาร ไม่ใช่กับการกรอก)
+  return saved;
 }
 
 /**
