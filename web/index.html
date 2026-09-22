@@ -6091,9 +6091,6 @@ const CLEANING_CHECKLIST_ITEMS = [
                  <i class="ph ph-download-simple"></i> PDF</button>`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
-          ${isAttach ? '' : `<button onclick="openPhotoModal(${f._row}, ${r.slot})" title="แนบรูปถ่ายของเครื่องตัวที่ ${r.slot}"
-            class="text-slate-600 hover:text-white hover:bg-slate-600 px-2.5 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1 mr-1">
-            <i class="ph ph-camera"></i> รูปถ่าย</button>`}
           ${
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
@@ -6269,19 +6266,72 @@ const CLEANING_CHECKLIST_ITEMS = [
    */
   async function uploadCfPhotos(row) {
     const keys = Object.keys(cfPhotos);
-    let ok = 0;
+    const done = [];
     const failed = [];
 
     for (const key of keys) {
       const [slot, index] = key.split('-').map(Number);
       try {
         await callQuiet('saveCleaningPhoto', { row, unitSlot: slot, index, dataUrl: cfPhotos[key] });
-        ok++;
+        done.push(key);
       } catch (e) {
-        failed.push('เครื่องที่ ' + slot + ' ช่อง ' + index);
+        failed.push(key);
       }
     }
-    return { total: keys.length, ok, failed };
+    return { total: keys.length, ok: done.length, done, failed };
+  }
+
+  /** ชื่อช่องแบบที่คนอ่านรู้เรื่อง ใช้ในข้อความบอกว่าใบไหนยังไม่ขึ้น */
+  const photoSlotLabel = key => {
+    const [slot, index] = key.split('-');
+    return 'เครื่องที่ ' + slot + ' ช่อง ' + index;
+  };
+
+  /**
+   * แถวของเอกสารที่เพิ่งบันทึกไปแล้ว แต่รูปยังส่งไม่ครบ
+   *
+   * ============================================================================
+   * ทำไมต้องจำไว้
+   * ============================================================================
+   * เอกสารเข้าระบบไปแล้ว กดบันทึกซ้ำไม่ได้ (ระบบจะปฏิเสธว่าเครื่องนี้บันทึกไว้แล้ว)
+   * และตั้งแต่เอาปุ่มรูปถ่ายออกจากตาราง ก็ไม่มีทางอื่นให้แนบรูปย้อนหลังอีก
+   *
+   * ถ้าปิดหน้าไปตอนนี้ รูปที่ส่งไม่ขึ้นจะหายถาวร หน้าจึงค้างไว้ก่อน
+   * แล้วเปลี่ยนปุ่มเป็น "ส่งรูปที่เหลืออีกครั้ง" ซึ่งส่งเฉพาะรูป ไม่บันทึกซ้ำ
+   *
+   * หน้างานเน็ตอ่อนและหลุดได้ เรื่องนี้จึงไม่ใช่กรณีหายาก
+   */
+  let cfSavedRow = null;
+
+  /** เปลี่ยนปุ่มล่างสุดเป็นโหมด "ส่งรูปที่เหลือ" */
+  function showRetryPhotosButton(left) {
+    const btn = document.getElementById('cf_submitBtn');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + left + ' ใบ)';
+    btn.classList.remove('bg-[#1153a1]', 'hover:bg-[#0e4485]');
+    btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+  }
+
+  /** ส่งเฉพาะรูปที่ยังไม่ขึ้น ไม่บันทึกเอกสารซ้ำ */
+  async function retryCfPhotos() {
+    const btn = document.getElementById('cf_submitBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังส่ง...'; }
+
+    const up = await uploadCfPhotos(cfSavedRow);
+    up.done.forEach(k => delete cfPhotos[k]);
+    renderCfPhotos();
+    updateCfProgress();
+
+    if (!up.failed.length) {
+      cfSavedRow = null;
+      clearCfDraft();
+      closeModal();
+      showToast('ส่งรูปครบแล้ว');
+      return;
+    }
+    showRetryPhotosButton(up.failed.length);
+    showToast('ยังส่งไม่ขึ้น ' + up.failed.length + ' ใบ — ลองใหม่อีกครั้งเมื่อสัญญาณดีขึ้น', 'error');
   }
 
   /** หาแถวของเอกสารที่เพิ่งบันทึก จากเลขที่ที่เซิร์ฟเวอร์ส่งกลับมา */
@@ -6303,9 +6353,6 @@ const CLEANING_CHECKLIST_ITEMS = [
     'รูปดำเนินการล้าง', 'รูปดำเนินการล้าง', 'รูปหลังดำเนินการล้าง',
     'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
   ];
-
-  /** ใบที่กำลังแนบรูปอยู่ และเครื่องที่เลือกดูอยู่ */
-  let photoCtx = null;
 
   /**
    * ย่อรูปในเบราว์เซอร์ก่อนส่งขึ้นเซิร์ฟเวอร์
@@ -6330,120 +6377,6 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     return canvas.toDataURL('image/jpeg', quality);
   }
-
-  async function openPhotoModal(row, startSlot) {
-    const form = (currentCleaningForms || []).find(f => f._row === row);
-    if (!form) { showToast('ไม่พบเอกสารใบนี้', 'error'); return; }
-
-    const units = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
-    if (!units.length) { showToast('ใบนี้ยังไม่มีข้อมูลเครื่อง', 'error'); return; }
-
-    let have = [];
-    try { have = (await call('getCleaningPhotoIndex', row)) || []; } catch (e) { return; }
-
-    // ตารางแยกแถวละเครื่อง กดจากแถวไหนก็ควรเปิดมาที่แท็บของเครื่องตัวนั้นเลย
-    const slot = units.includes(Number(startSlot)) ? Number(startSlot) : units[0];
-    photoCtx = { row, form, units, slot, have };
-    renderPhotoModal();
-  }
-  window.openPhotoModal = openPhotoModal;
-
-  function renderPhotoModal() {
-    const { form, units, slot, have } = photoCtx;
-    const docNo = displayDocNo(form);
-
-    const tabs = units.map(n => `
-      <button onclick="switchPhotoUnit(${n})" class="px-4 py-2 text-sm font-medium border-b-2 transition ${
-        n === slot ? 'border-[#1153a1] text-[#1153a1]' : 'border-transparent text-gray-400 hover:text-gray-600'}">
-        เครื่องที่ ${n} <span class="text-[11px]">${esc(form['AirCode' + n])}</span>
-      </button>`).join('');
-
-    const cells = PHOTO_CAPTIONS.map((cap, i) => {
-      const idx = i + 1;
-      const filled = have.includes(slot + '-' + idx);
-      return `
-        <div class="border rounded-lg p-2 ${filled ? 'border-emerald-300 bg-emerald-50/40' : 'border-dashed border-gray-300'}">
-          <div class="aspect-[4/3] rounded bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
-            ${filled
-              ? '<i class="ph-fill ph-image text-3xl text-emerald-500"></i>'
-              : '<i class="ph ph-camera text-2xl text-gray-300"></i>'}
-          </div>
-          <div class="text-[11px] text-gray-600 mt-1.5 leading-tight min-h-[2.2em]">${esc(cap)}</div>
-          <div class="flex gap-1 mt-1">
-            <button onclick="pickPhoto(${idx})" class="flex-1 text-[11px] px-2 py-1 rounded border border-[#1153a1] text-[#1153a1] hover:bg-[#1153a1] hover:text-white transition">
-              ${filled ? 'เปลี่ยนรูป' : 'เลือกรูป'}</button>
-            ${filled ? `<button onclick="removePhoto(${idx})" class="text-[11px] px-2 py-1 rounded border border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500 transition">ลบ</button>` : ''}
-          </div>
-        </div>`;
-    }).join('');
-
-    document.getElementById('modalRoot').innerHTML = `
-      <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative z-10 max-h-[90vh] flex flex-col">
-          <div class="px-6 py-4 border-b border-gray-100">
-            <h3 class="font-semibold text-gray-800 flex items-center gap-2">
-              <i class="ph ph-camera text-[#1153a1]"></i> รูปถ่ายประกอบเอกสาร ${esc(docNo)}
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">${esc(form.NodeName)} — รูปจะไปอยู่ในหน้ารูปภาพของเอกสารเมื่อสั่งปริ้น</p>
-          </div>
-          <div class="px-6 pt-3 border-b border-gray-200 flex gap-1">${tabs}</div>
-          <div class="px-6 py-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
-          <div class="px-6 py-3 border-t border-gray-100 flex justify-between items-center">
-            <span class="text-xs text-gray-500" id="ph_status">แนบแล้ว ${have.filter(k => k.startsWith(slot + '-')).length} จาก 9 ช่อง</span>
-            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg">ปิด</button>
-          </div>
-        </div>
-      </div>
-      <input type="file" id="ph_file" accept="image/*" class="hidden">`;
-  }
-
-  function switchPhotoUnit(slot) {
-    photoCtx.slot = slot;
-    renderPhotoModal();
-  }
-  window.switchPhotoUnit = switchPhotoUnit;
-
-  /** เลือกไฟล์ ย่อ แล้วอัปโหลดเข้าช่องที่ระบุ */
-  function pickPhoto(index) {
-    const input = document.getElementById('ph_file');
-    input.value = '';
-    input.onchange = async () => {
-      const file = input.files && input.files[0];
-      if (!file) return;
-
-      const status = document.getElementById('ph_status');
-      if (status) status.textContent = 'กำลังย่อรูปและอัปโหลด...';
-
-      try {
-        const dataUrl = await shrinkImage(file);
-        const res = await call('saveCleaningPhoto', {
-          row: photoCtx.row, unitSlot: photoCtx.slot, index, dataUrl
-        });
-        photoCtx.have = (res && res.photos) || photoCtx.have;
-        renderPhotoModal();
-        showToast('แนบรูปเรียบร้อย (' + Math.round((res.bytes || 0) / 1024) + ' KB)');
-      } catch (e) {
-        renderPhotoModal();
-      }
-    };
-    input.click();
-  }
-  window.pickPhoto = pickPhoto;
-
-  async function removePhoto(index) {
-    const ok = await showConfirm('ลบรูปในช่อง "' + PHOTO_CAPTIONS[index - 1] + '" ใช่หรือไม่?', 'ลบรูป');
-    if (!ok) return;
-    try {
-      const res = await call('deleteCleaningPhoto', {
-        row: photoCtx.row, unitSlot: photoCtx.slot, index
-      });
-      photoCtx.have = (res && res.photos) || [];
-      renderPhotoModal();
-      showToast('ลบรูปแล้ว');
-    } catch (e) {}
-  }
-  window.removePhoto = removePhoto;
 
   /** เปิดเอกสารของใบที่บันทึกไว้แล้ว */
   const openCleaningDoc = row => openDocWindow('getCleaningDocHtml', row);
@@ -6725,7 +6658,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             ${card(`
               <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h3>
-              <p class="text-xs text-gray-500 mb-2">แนบได้เลยตรงนี้ — เว้นว่างไว้ก่อนก็ได้ แล้วค่อยมาเพิ่มจากปุ่ม "รูปถ่าย" ในตาราง</p>
+              <p class="text-xs text-gray-500 mb-2">⚠️ แนบให้ครบตอนนี้เลย — บันทึกไปแล้วกลับมาเพิ่มรูปทีหลังไม่ได้</p>
               <div id="cf_photoBox"></div>
               <input type="file" id="cf_photoFile" accept="image/*" class="hidden">`)}
 
@@ -6988,6 +6921,22 @@ const CLEANING_CHECKLIST_ITEMS = [
    * และบนมือถือการกดปุ่ม back ของเครื่องก็พาออกจากหน้าไปเหมือนกัน
    */
   async function closeCleaningForm() {
+    // เอกสารบันทึกไปแล้ว แต่รูปยังค้าง — ปิดตอนนี้คือรูปหายถาวร ต้องเตือนให้แรงกว่าปกติ
+    if (cfSavedRow) {
+      const left = Object.keys(cfPhotos).length;
+      const ok = await showConfirm(
+        'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + left + ' ใบที่ส่งไม่ขึ้น' + '\n' +
+        'ปิดหน้านี้แล้วจะแนบรูปพวกนี้ไม่ได้อีก ต้องถ่ายใหม่ทั้งหมด' + '\n\n' +
+        'ยืนยันจะปิดเลยมั้ย?'
+      );
+      if (!ok) return;
+      cfPhotos = {};
+      cfSavedRow = null;
+      clearCfDraft();
+      closeModal();
+      return;
+    }
+
     const f = readCfFields();
     const dirty = Object.keys(f.vals).length || Object.keys(cfPhotos).length ||
                   f.cond1 || f.cond2 || f.note || f.company || f.supervisor;
@@ -6998,6 +6947,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       saveCfDraft();
     }
     cfPhotos = {};
+    cfSavedRow = null;
     closeModal();
   }
   window.closeCleaningForm = closeCleaningForm;
@@ -7042,6 +6992,10 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   async function submitCleaningForm() {
+    // บันทึกเอกสารไปแล้ว เหลือแค่รูปที่ยังส่งไม่ขึ้น — ปุ่มเดิมกลายเป็นปุ่มส่งรูปซ้ำ
+    // ห้ามบันทึกเอกสารอีกรอบ ระบบจะปฏิเสธว่าเครื่องนี้บันทึกไว้แล้ว
+    if (cfSavedRow) return retryCfPhotos();
+
     let node, u1, u2 = null;
     // ตำแหน่งเครื่องใน Node จริงๆ (1 หรือ 2) ใช้เฉพาะโหมดแยกใบต่อเครื่อง (cfContext)
     // เพื่อให้ข้อมูลลง PDF คอลัมน์ "ตัวที่ 1" หรือ "ตัวที่ 2" ตรงกับตำแหน่งจริงของเครื่องใน Node
@@ -7135,21 +7089,35 @@ const CLEANING_CHECKLIST_ITEMS = [
       // ไม่ใช่ขึ้นว่าสำเร็จแล้วปล่อยให้เอกสารปริ้นออกมาโดยมีกรอบรูปว่าง
       let photoMsg = '';
       const savedRow = rowOfSavedDoc(res);
-      if (Object.keys(cfPhotos).length) {
-        if (!savedRow) {
-          photoMsg = ' ⚠️ แต่ยังส่งรูปขึ้นไม่ได้ กรุณากดปุ่ม "รูปถ่าย" ในตารางเพื่อแนบอีกครั้ง';
-        } else {
-          const up = await uploadCfPhotos(savedRow);
-          photoMsg = up.failed.length
-            ? ' ⚠️ รูปขึ้นไม่ครบ (' + up.ok + '/' + up.total + ') ที่ยังขาด: ' + up.failed.join(', ') +
-              ' — กดปุ่ม "รูปถ่าย" ในตารางเพื่อแนบซ้ำ'
-            : ' · แนบรูปแล้ว ' + up.ok + ' ใบ';
 
-          // รายชื่อเอกสารเปลี่ยนไปแล้ว (รูปไม่ได้อยู่ในตาราง แต่เผื่อฝั่งเซิร์ฟเวอร์แก้อย่างอื่น)
+      if (Object.keys(cfPhotos).length) {
+        const up = savedRow ? await uploadCfPhotos(savedRow) : null;
+
+        if (up) {
+          up.done.forEach(k => delete cfPhotos[k]);
           try { currentCleaningForms = (await callQuiet('getCleaningForms')) || currentCleaningForms; } catch (e) {}
         }
+
+        // เอกสารเข้าระบบแล้วแต่รูปยังไม่ครบ — ค้างหน้าไว้ให้ส่งซ้ำ อย่าเพิ่งปิด
+        // ปิดไปตอนนี้ = รูปที่เหลือหายถาวร เพราะกดบันทึกซ้ำไม่ได้แล้ว
+        if (!up || up.failed.length) {
+          cfSavedRow = savedRow;
+          renderCleaningFormTable();
+          renderCfPhotos();
+          updateCfProgress();
+
+          const left = up ? up.failed.map(photoSlotLabel) : Object.keys(cfPhotos).map(photoSlotLabel);
+          showRetryPhotosButton(left.length);
+          showToast('บันทึกเอกสารสำเร็จแล้ว แต่รูปยังส่งไม่ขึ้น ' + left.length + ' ใบ (' +
+                    left.slice(0, 3).join(', ') + (left.length > 3 ? ' ...' : '') + ') — ' +
+                    'อย่าเพิ่งปิดหน้านี้ กดปุ่มด้านล่างเพื่อส่งซ้ำเมื่อสัญญาณดีขึ้น', 'error');
+          return;
+        }
+        photoMsg = ' · แนบรูปแล้ว ' + up.ok + ' ใบ';
       }
+
       cfPhotos = {};
+      cfSavedRow = null;
       clearCfDraft();   // บันทึกเข้าระบบแล้ว ไม่ต้องเก็บร่างไว้อีก
 
       renderCleaningFormTable();
