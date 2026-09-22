@@ -362,3 +362,74 @@ test('แถบปุ่มต้องไม่ไปแทรกกลาง�
   const html = buildCleaningDocHtml(baseForm(), { toolbar: true });
   assert.ok(html.indexOf('class="bar"') < html.indexOf('<div class="sheet">'));
 });
+
+/* ==================== ส่วนที่ 6 : การลงนาม ==================== */
+
+/** เนื้อในช่องลงนามทั้ง 4 ช่อง เรียงตามที่อยู่บนกระดาษ */
+function signCells(html) {
+  const start = html.indexOf('ส่วนที่ 6 : การลงนาม');
+  const tail = html.slice(start);
+  return [...tail.matchAll(/<tr class="sign">([\s\S]*?)<\/tr>/g)]
+    .flatMap(row => [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => c[1]))
+    .map(c => c.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+}
+
+test('ชื่อช่างกับวันที่ ต้องถูกพิมพ์ลงช่องผู้ดำเนินการให้เลย', () => {
+  // เจ้าของงานให้พิมพ์มาพร้อมเอกสาร ไม่ต้องมานั่งเขียนสิ่งที่ระบบรู้อยู่แล้วซ้ำอีกรอบ
+  const [ผู้ดำเนินการ] = signCells(buildCleaningDocHtml(baseForm(), {}));
+
+  assert.ok(ผู้ดำเนินการ.includes('หจก. ทดสอบ'), 'ชื่อบริษัทอยู่บรรทัดบน');
+  assert.ok(ผู้ดำเนินการ.includes('ช่างสมชาย'), 'ชื่อช่างต้องอยู่ตรงลงชื่อ');
+  assert.ok(!ผู้ดำเนินการ.includes('………'), 'ต้องไม่เหลือเส้นประให้เขียนเอง');
+});
+
+test('ผู้ควบคุมงาน Interlink ต้องลงช่องของตัวเอง ไม่ใช่ช่องผู้ตรวจสอบ', () => {
+  // ของเดิมเอา SupervisorName ไปพิมพ์ในช่อง "ผู้ตรวจสอบ" ตามชื่อคอลัมน์
+  // ทั้งที่ช่องในหน้าเว็บที่คนกรอกเขียนว่า "ผู้ควบคุมงาน Interlink"
+  // ช่องผู้ควบคุมงานบนเอกสารจึงว่างเปล่าทั้งที่มีข้อมูลอยู่
+  const [, ผู้ควบคุมงาน, ผู้ตรวจสอบ] = signCells(buildCleaningDocHtml(baseForm(), {}));
+
+  assert.ok(ผู้ควบคุมงาน.includes('หัวหน้าภาค'), 'ต้องอยู่ช่องผู้ควบคุมงาน');
+  assert.ok(!ผู้ตรวจสอบ.includes('หัวหน้าภาค'), 'ต้องไม่ไปโผล่ช่องผู้ตรวจสอบ');
+});
+
+test('วันที่ต้องเป็น วัน/เดือน/ปี ตามรูปแบบช่องบนแบบฟอร์ม', () => {
+  // ช่องบนกระดาษเป็น "…../…../…….." คือสามช่อง ไม่ใช่ 2026-09-15 ที่ระบบเก็บไว้
+  const [ผู้ดำเนินการ] = signCells(buildCleaningDocHtml(baseForm(), {}));
+
+  assert.ok(ผู้ดำเนินการ.includes('15/09/2026'));
+  assert.ok(!ผู้ดำเนินการ.includes('2026-09-15'));
+});
+
+test('ช่องอนุมัติสองช่องล่าง ต้องเว้นไว้ให้เซ็นจริง', () => {
+  // "ผู้ตรวจสอบ" กับ "Approve" เป็นขั้นที่เกิดหลังช่างส่งงาน ระบบยังไม่มีข้อมูล
+  const [, , ผู้ตรวจสอบ, approve] = signCells(buildCleaningDocHtml(baseForm(), {}));
+
+  for (const cell of [ผู้ตรวจสอบ, approve]) {
+    assert.ok(cell.includes('………'), 'ต้องเหลือเส้นประให้เซ็น');
+    assert.ok(cell.includes('…../…../……..'), 'ต้องเหลือช่องวันที่ให้เขียน');
+  }
+});
+
+test('ฟอร์มเปล่าที่ปริ้นไปเขียนมือ ต้องเป็นเส้นประทั้ง 4 ช่องเหมือนเดิม', () => {
+  // ทางนี้ต้องไม่ถูกกระทบ ไม่งั้นจะปริ้นแบบฟอร์มเปล่าไปหน้างานไม่ได้
+  const empty = baseForm({ CompanyName: '', TechnicianName: '', SupervisorName: '', Date: '' });
+
+  for (const cell of signCells(buildCleaningDocHtml(empty, {}))) {
+    assert.ok(cell.includes('………'), 'ต้องเป็นเส้นประให้เขียนชื่อเอง');
+    assert.ok(cell.includes('…../…../……..'), 'ต้องเป็นเส้นประให้เขียนวันที่เอง');
+  }
+});
+
+test('กรอกมาบางช่อง ช่องที่ไม่ได้กรอกต้องยังเป็นเส้นประ', () => {
+  const partial = baseForm({ TechnicianName: 'ช่างสมชาย', SupervisorName: '' });
+  const [ผู้ดำเนินการ, ผู้ควบคุมงาน] = signCells(buildCleaningDocHtml(partial, {}));
+
+  assert.ok(ผู้ดำเนินการ.includes('ช่างสมชาย'));
+  assert.ok(ผู้ควบคุมงาน.includes('………'), 'ช่องที่ไม่มีข้อมูลต้องเว้นให้เขียน');
+});
+
+test('ชื่อที่มีอักขระพิเศษ ต้องไม่หลุดเป็น HTML', () => {
+  const html = buildCleaningDocHtml(baseForm({ TechnicianName: '<b>ช่าง</b>' }), {});
+  assert.ok(!html.includes('<b>ช่าง</b>'));
+});
