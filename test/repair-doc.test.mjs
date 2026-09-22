@@ -230,3 +230,51 @@ test('แถบปุ่มต้องมีเฉพาะตอนเปิ�
   assert.ok(!buildRepairDocHtml(baseForm(), {}).includes('docDownloadBtn'));
   assert.ok(buildRepairDocHtml(baseForm(), { toolbar: true }).includes('docDownloadBtn'));
 });
+
+/* ==================== ฝั่งหน้าเว็บต้องตรงกับฝั่งเซิร์ฟเวอร์ ==================== */
+
+test('รายการบันทึกผล 5 ข้อ ในหน้าเว็บต้องตรงกับของเซิร์ฟเวอร์เป๊ะ', async () => {
+  // มีก็อปปี้สองที่ (หน้าเว็บใช้วาดฟอร์ม เซิร์ฟเวอร์ใช้วาดเอกสาร)
+  // ถ้าหลุดกันเมื่อไหร่ ช่องที่กรอกจะไปโผล่ผิดข้อบนเอกสารโดยไม่มีอะไรฟ้อง
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
+  const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+
+  const src = js.match(/const REPAIR_CHECKLIST_ITEMS = \[[\s\S]*?\n  \];/);
+  assert.ok(src, 'หารายการในหน้าเว็บไม่เจอ');
+
+  const web = new Function('return ' + src[0].replace('const REPAIR_CHECKLIST_ITEMS = ', '').replace(/;$/, ''))();
+  assert.deepEqual(web, REPAIR_CHECKLIST_ITEMS);
+});
+
+test('จำนวนแถวอะไหล่ในหน้าเว็บต้องตรงกับของเซิร์ฟเวอร์', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
+  const m = html.match(/const REPAIR_PART_ROWS = (\d+);/);
+
+  assert.ok(m, 'หาจำนวนแถวอะไหล่ในหน้าเว็บไม่เจอ');
+  assert.equal(Number(m[1]), REPAIR_PART_ROWS);
+});
+
+test('คำบรรยายรูปในหน้าเว็บต้องตรงกับที่พิมพ์บนเอกสาร', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
+  const src = html.match(/const REPAIR_PHOTO_CAPTIONS = \[[\s\S]*?\n  \];/);
+  assert.ok(src, 'หาคำบรรยายในหน้าเว็บไม่เจอ');
+
+  const web = new Function('return ' + src[0].replace('const REPAIR_PHOTO_CAPTIONS = ', '').replace(/;$/, ''))();
+  const doc = buildRepairDocHtml(baseForm(), {});
+  for (const cap of web) assert.ok(doc.includes(cap), 'เอกสารไม่มีคำบรรยาย "' + cap + '"');
+});

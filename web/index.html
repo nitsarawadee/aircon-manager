@@ -5439,9 +5439,14 @@
                     <i class="ph ph-hourglass"></i> รอผู้ดูแลระบบอนุมัติ</span>`);
             }
             if (status === 'รอซ่อม') {
+              // ทางหลักคือออกเอกสารตามแบบฟอร์มควบคุม ซึ่งปิดเคสให้เองอยู่แล้ว
+              // ส่วนปุ่มเดิมเก็บไว้เป็นทางลัดสำหรับงานที่ไม่ต้องออกเอกสาร
+              actions.push(`<button onclick="openRepairForm('${jsStr(a.AirCode)}', '${jsStr(a.Note || '')}')"
+                class="text-white bg-[#f47920] hover:bg-[#d96615] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-file-text"></i> ปิดงาน + ออกเอกสาร</button>`);
               actions.push(`<button onclick='openCompleteRepairModal(${JSON.stringify(a).replace(/'/g,"&apos;")})'
                 class="text-emerald-700 hover:text-white hover:bg-emerald-600 px-3 py-1.5 rounded-lg transition shadow-sm border border-emerald-600 bg-white text-xs font-medium inline-flex items-center gap-1">
-                <i class="ph ph-check-circle"></i> ปิดงานซ่อม</button>`);
+                <i class="ph ph-check-circle"></i> ปิดงานอย่างเดียว</button>`);
             }
             if (status === 'ชำรุด' || status === 'รอซ่อม') {
               actions.push(`<button onclick="openCannotRepairModal('${jsStr(a.AirCode)}')"
@@ -6091,11 +6096,28 @@
    * ใช้เลขของใบไปก่อน ดีกว่าขึ้นช่องว่างจนดูเหมือนข้อมูลหาย
    */
   function cleaningFormUnitRows(form) {
+    // ใบซ่อมมีเครื่องเดียวทั้งใบ จึงไม่ต้องแตกแถวตามช่องเหมือนใบล้าง
+    if (form.kind === 'repair') {
+      return [{
+        form,
+        kind: 'repair',
+        slot: 1,
+        first: true,
+        docNo: displayDocNo(form),
+        airCode: String(form.AirCode || '').trim(),
+        // ช่อง "ผลประเมิน" ของใบล้าง ใบซ่อมใช้แสดงอาการเสียแทน
+        // เป็นสิ่งที่คนเปิดตารางมาหาจริงๆ ว่าใบนี้ซ่อมเรื่องอะไร
+        cond: String(form.Symptom || '').trim(),
+        price: Number(form.Cost) || 0
+      }];
+    }
+
     const slots = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
     const list = slots.length ? slots : [1];   // ใบที่ยังไม่มีข้อมูลเครื่อง ก็ยังต้องเห็นในตาราง
 
     return list.map((slot, i) => ({
       form,
+      kind: 'cleaning',
       slot,
       first: i === 0,
       docNo: (slot === 2 && String(form.DocNo2 || '').trim()) || displayDocNo(form),
@@ -6121,13 +6143,36 @@
     return isFirst ? (Number(form.Price) || 0) : 0;
   }
 
+  /**
+   * เอกสารทั้งสองแบบรวมกัน เรียงใหม่ก่อนเก่า
+   *
+   * ติดป้าย kind ไว้ตั้งแต่ตรงนี้ เพราะสองตารางมีชื่อคอลัมน์ไม่เหมือนกัน
+   * (ใบล้างใช้ AirCode1/AirCode2 · ใบซ่อมใช้ AirCode) ตัววาดแถวจึงต้องรู้ว่ากำลังวาดแบบไหน
+   */
+  function allDocForms() {
+    return [
+      ...(currentCleaningForms || []).map(f => ({ ...f, kind: 'cleaning' })),
+      ...(currentRepairForms || []).map(f => ({ ...f, kind: 'repair' }))
+    ].sort((a, b) => {
+      const x = String(a.CreatedAt || ''), y = String(b.CreatedAt || '');
+      if (x !== y) return x < y ? 1 : -1;
+      return 0;
+    });
+  }
+
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
-    if (!q) return currentCleaningForms || [];
-    return (currentCleaningForms || []).filter(f =>
-      [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2,
-       f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, f.DocNo2, fmtDate(f.Date)]
+    const all = allDocForms();
+    if (!q) return all;
+
+    return all.filter(f =>
+      [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2, f.AirCode,
+       f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, f.DocNo2,
+       // ของใบซ่อม — คนมักค้นจากอาการเสียมากกว่าเลขที่เอกสาร
+       f.Symptom, f.Cause, f.Fix,
+       f.kind === 'repair' ? 'ซ่อม' : 'ล้าง',
+       fmtDate(f.Date)]
         .map(v => String(v == null ? '' : v).toLowerCase())
         .join(' ')
         .includes(q)
@@ -6172,14 +6217,25 @@ const CLEANING_CHECKLIST_ITEMS = [
   { no: 21, label: 'ตรวจสอบการตั้งอุณหภูมิก่อนออกจาก Node', type: 'check' }
 ];
 
+  /**
+   * เอกสารซ่อมที่โหลดมาแล้ว — อยู่คนละตารางกับเอกสารล้าง แต่แสดงในตารางเดียวกัน
+   *
+   * แยกตารางเพราะเป็นคนละแบบฟอร์มควบคุมและช่องแทบไม่ทับกัน (ดู REPAIRFORM_HEADERS)
+   * แต่คนใช้มองว่าเป็น "เอกสาร" เหมือนกัน จึงรวมมาแสดงที่เดียว
+   */
+  let currentRepairForms = [];
+
   /* ---------- โหลดข้อมูล ---------- */
   async function loadCleaningForm() {
     try {
-      const [nodes, forms] = await Promise.all([call('getCleaningFormNodes'), call('getCleaningForms')]);
+      const [nodes, forms, repairs] = await Promise.all([
+        call('getCleaningFormNodes'), call('getCleaningForms'), call('getRepairForms')
+      ]);
       // ป้องกันกรณี response ส่งกลับมาเป็น null (เช่น ข้อมูลในชีตมีค่าที่ส่งกลับไม่ได้)
       // ถ้าไม่ดักไว้ ตารางจะพังเงียบๆ แล้วค้างข้อความเดิมโดยผู้ใช้ไม่รู้ว่าเกิดอะไรขึ้น
       cleaningFormNodes = Array.isArray(nodes) ? nodes : [];
       currentCleaningForms = Array.isArray(forms) ? forms : [];
+      currentRepairForms = Array.isArray(repairs) ? repairs : [];
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
       renderCleaningFormTable();
       lockViewOnlySection('cleaningform');
@@ -6212,7 +6268,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     tbody.innerHTML = page.flatMap(cleaningFormUnitRows).map(r => {
       const f = r.form;
-      const isAttach = f.Source === 'attach';
+      const isRepair = r.kind === 'repair';
+      const isAttach = !isRepair && f.Source === 'attach';
 
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
@@ -6222,15 +6279,23 @@ const CLEANING_CHECKLIST_ITEMS = [
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
           ${esc(f.NodeName)}
+          ${isRepair
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-medium align-middle">ซ่อม</span>'
+            : ''}
           ${isAttach
             ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">เอกสารแนบ</span>'
             : ''}
         </td>
         <td class="px-4 py-3">
           ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
-          <span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot}</span>
+          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot}</span>`}
         </td>
-        <td class="px-4 py-3">${conditionBadge(r.cond)}</td>
+        <td class="px-4 py-3">${
+          // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
+          isRepair
+            ? (esc(r.cond) ? `<span class="text-slate-600" title="${esc(r.cond)}">${esc(r.cond.slice(0, 28))}${r.cond.length > 28 ? '…' : ''}</span>` : '<span class="text-gray-300">-</span>')
+            : conditionBadge(r.cond)
+        }</td>
         <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
         <td class="px-4 py-3 text-right tabular-nums">${
           r.price ? '฿' + r.price.toLocaleString() : '<span class="text-gray-300">-</span>'
@@ -6238,7 +6303,14 @@ const CLEANING_CHECKLIST_ITEMS = [
         <td class="px-4 py-3 whitespace-nowrap">${
           // ทั้งสองแถวเปิดเอกสารได้ เพราะกระดาษใบนั้นมีทั้งสองเครื่องอยู่แล้ว
           // กดจากแถวไหนก็ได้ใบเดียวกัน ซึ่งถูกต้อง ไม่ใช่เอกสารคนละใบ
-          isAttach
+          isRepair
+            ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
+                 class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+               <button onclick="openPhotoEditor(${f._row}, 1, 'repair')" title="เปลี่ยนหรือเพิ่มรูปของใบซ่อมนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
+                 class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
+                 <i class="ph ph-camera"></i> แก้รูป</button>`
+          : isAttach
             ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
@@ -6255,9 +6327,10 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
-            r.first
-              ? `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
-              : ''
+            !r.first ? ''
+              : isRepair
+              ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
+              : `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
           }
         </td>
       </tr>`;
@@ -6546,10 +6619,17 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เปลี่ยนแล้วบันทึกขึ้นทันทีทีละใบ ไม่ต้องกดบันทึกรวม เพราะเอกสารมีอยู่แล้ว
    * ไฟล์ PDF ถูกสร้างใหม่ให้เองหลังหยุดแก้ (ฝั่งเซิร์ฟเวอร์หน่วงไว้ 5 วินาที)
    */
-  let peRow = null, peSlot = 1, pePhotos = {}, peDocNo = '', peChanged = 0;
+  let peRow = null, peSlot = 1, pePhotos = {}, peDocNo = '', peChanged = 0, peKind = 'cleaning';
 
-  async function openPhotoEditor(row, slot) {
+  /** ชื่อคำสั่งของเอกสารแต่ละชนิด — สองแบบอยู่คนละตาราง จึงมีคำสั่งของตัวเอง */
+  const PE_API = {
+    cleaning: { read: 'getCleaningPhotos', save: 'saveCleaningPhoto', del: 'deleteCleaningPhoto' },
+    repair:   { read: 'getRepairPhotos',   save: 'saveRepairPhoto',   del: 'deleteRepairPhoto' }
+  };
+
+  async function openPhotoEditor(row, slot, kind) {
     peRow = row; peSlot = Number(slot) || 1; pePhotos = {}; peDocNo = ''; peChanged = 0;
+    peKind = PE_API[kind] ? kind : 'cleaning';
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
@@ -6560,7 +6640,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <i class="ph ph-arrow-left text-xl"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <h2 class="font-bold text-gray-800 leading-tight truncate">แก้รูปเครื่องที่ ${peSlot}</h2>
+              <h2 class="font-bold text-gray-800 leading-tight truncate">${peKind === 'repair' ? 'แก้รูปเอกสารซ่อม' : 'แก้รูปเครื่องที่ ' + peSlot}</h2>
               <p id="pe_sub" class="text-xs text-gray-500 leading-tight">กำลังโหลดรูป...</p>
             </div>
           </div>
@@ -6580,7 +6660,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       </div>`;
 
     try {
-      const res = await call('getCleaningPhotos', row);
+      const res = await call(PE_API[peKind].read, row);
       if (!document.getElementById('pe_box')) return;   // ปิดหน้าไปแล้วระหว่างรอ
       pePhotos = (res && res.photos) || {};
       peDocNo = (res && res.docNo) || '';
@@ -6598,7 +6678,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     const box = document.getElementById('pe_box');
     if (!box) return;
 
-    const cells = PHOTO_CAPTIONS.map((cap, i) => {
+    const caps = peKind === 'repair' ? REPAIR_PHOTO_CAPTIONS : PHOTO_CAPTIONS;
+    const cells = caps.map((cap, i) => {
       const index = i + 1;
       const src = pePhotos[peSlot + '-' + index];
       const required = true;   // บังคับทุกช่อง
@@ -6625,11 +6706,11 @@ const CLEANING_CHECKLIST_ITEMS = [
         </div>`;
     }).join('');
 
-    const done = PHOTO_CAPTIONS.filter((_, i) => pePhotos[peSlot + '-' + (i + 1)]).length;
+    const done = caps.filter((_, i) => pePhotos[peSlot + '-' + (i + 1)]).length;
 
     box.innerHTML = `
       <div class="flex items-center justify-between mb-2 gap-2">
-        <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${peSlot}</div>
+        <div class="text-xs font-semibold text-gray-700">${peKind === 'repair' ? 'รูปประกอบการซ่อม' : 'เครื่องที่ ' + peSlot}</div>
         <div class="text-[11px] flex-shrink-0 ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
       </div>
       <p class="text-[11px] text-gray-500 mb-2 leading-tight">กดที่รูปเพื่อเปลี่ยน · กดกากบาทเพื่อลบ</p>
@@ -6651,7 +6732,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
       try {
         const dataUrl = await shrinkImage(file);
-        await call('saveCleaningPhoto', { row: peRow, unitSlot: peSlot, index, dataUrl });
+        await call(PE_API[peKind].save, { row: peRow, unitSlot: peSlot, index, dataUrl });
         pePhotos[peSlot + '-' + index] = dataUrl;
         peChanged++;
         renderPhotoEditor();
@@ -6665,11 +6746,12 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.pePick = pePick;
 
   async function peRemove(index) {
-    const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + PHOTO_CAPTIONS[index - 1] + ') ของเครื่องที่ ' + peSlot + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
+    const caps = peKind === 'repair' ? REPAIR_PHOTO_CAPTIONS : PHOTO_CAPTIONS;
+    const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + caps[index - 1] + ')' + (peKind === 'repair' ? '' : ' ของเครื่องที่ ' + peSlot) + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
     if (!ok) return;
 
     try {
-      await call('deleteCleaningPhoto', { row: peRow, unitSlot: peSlot, index });
+      await call(PE_API[peKind].del, { row: peRow, unitSlot: peSlot, index });
       delete pePhotos[peSlot + '-' + index];
       peChanged++;
       renderPhotoEditor();
@@ -6793,6 +6875,13 @@ const CLEANING_CHECKLIST_ITEMS = [
     'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
   ];
 
+  /** คำบรรยายของแบบฟอร์มซ่อม NE-005 — ต่างจากของใบล้างแค่คำว่าซ่อม */
+  const REPAIR_PHOTO_CAPTIONS = [
+    'รูปก่อนดำเนินซ่อม', 'รูปดำเนินการซ่อม', 'รูปดำเนินการซ่อม',
+    'รูปดำเนินการซ่อม', 'รูปดำเนินการซ่อม', 'รูปหลังดำเนินการซ่อม',
+    'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
+  ];
+
   /**
    * ย่อรูปในเบราว์เซอร์ก่อนส่งขึ้นเซิร์ฟเวอร์
    *
@@ -6861,13 +6950,21 @@ const CLEANING_CHECKLIST_ITEMS = [
    * แล้วเก็บสำเนาไว้ที่ data/docs/<ปี>/<เดือน>/ ไปด้วยพร้อมกัน
    * ปุ่มนี้จึงได้ทั้งไฟล์ลงเครื่องคนกด และไฟล์ที่ค้างไว้บนเซิร์ฟเวอร์
    */
-  async function downloadCleaningPdf(row, id, btn) {
+  /**
+   * ขอไฟล์ PDF ของเอกสารใบหนึ่งแล้วสั่งดาวน์โหลด
+   *
+   * รับชื่อคำสั่งมาด้วย เพราะเอกสารล้างกับเอกสารซ่อมอยู่คนละตาราง จึงมีคำสั่ง
+   * ของตัวเอง แต่ขั้นตอนแปลงไฟล์กับสั่งดาวน์โหลดเหมือนกันทุกอย่าง
+   *
+   * @returns {Promise<boolean>} สำเร็จหรือไม่
+   */
+  async function downloadDocPdf(fn, row, id, btn) {
     const old = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
 
     try {
       // ส่งเลขที่ภายในไปด้วย ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นใบเดิมอยู่จริง
-      const res = await call('getCleaningDocPdf', row, id);
+      const res = await call(fn, row, id);
       if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
 
       // แปลง base64 กลับเป็นไฟล์ แล้วสั่งดาวน์โหลด โดยไม่ต้องเปิดแท็บใหม่
@@ -6894,6 +6991,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       if (btn) { btn.disabled = false; btn.innerHTML = old; }
     }
   }
+
+  const downloadCleaningPdf = (row, id, btn) => downloadDocPdf('getCleaningDocPdf', row, id, btn);
   window.downloadCleaningPdf = downloadCleaningPdf;
 
 
@@ -6990,6 +7089,45 @@ const CLEANING_CHECKLIST_ITEMS = [
       showToast('ลบบันทึกสำเร็จ');
     } catch (e) {}
   }
+
+  async function deleteRepairFormRow(row, id) {
+    const confirmed = await showConfirm(
+      'ยืนยันการลบเอกสารซ่อมใบนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย\n' +
+      '(ใบประวัติ "ซ่อมแล้ว" ที่ลงไว้ตอนบันทึก จะไม่ถูกลบตาม ต้องไปลบเองที่หน้าประวัติถ้าต้องการ)'
+    );
+    if (!confirmed) return;
+    try {
+      currentRepairForms = await call('deleteRepairForm', row, id);
+      renderCleaningFormTable();
+      showToast('ลบเอกสารซ่อมสำเร็จ');
+    } catch (e) {}
+  }
+  window.deleteRepairFormRow = deleteRepairFormRow;
+
+  /** เปิดเอกสารซ่อมในแท็บใหม่ พร้อมต่อสายปุ่มดาวน์โหลดบนแถบลอยของหน้านั้น */
+  async function openRepairDoc(row, id) {
+    const win = await openDocWindow('getRepairDocHtml', row);
+    if (!win) return false;
+
+    try {
+      win.__docDownload = async btn => {
+        const old = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'กำลังเตรียมไฟล์...'; }
+
+        const ok = await downloadDocPdf('getRepairDocPdf', row, id);
+        if (!btn) return;
+
+        btn.textContent = ok ? 'บันทึกไฟล์แล้ว' : 'ไม่สำเร็จ ลองใหม่อีกครั้ง';
+        setTimeout(() => {
+          try { btn.disabled = false; btn.textContent = old; } catch (e) { /* ปิดแท็บไปแล้ว */ }
+        }, 2500);
+      };
+    } catch (e) {
+      // เบราว์เซอร์บางตัวกันการเขียนข้ามหน้าต่าง — ปุ่มปริ้นยังใช้ได้ตามปกติ
+    }
+    return true;
+  }
+  window.openRepairDoc = openRepairDoc;
 
   /* ---------- Modal กรอกฟอร์ม ---------- */
   /**
@@ -7428,6 +7566,459 @@ const CLEANING_CHECKLIST_ITEMS = [
     closeModal();
   }
   window.closeCleaningForm = closeCleaningForm;
+
+  /* ============== หน้ากรอกเอกสารซ่อม (ITEL-FM-NE-005) ============== */
+
+  /**
+   * รายการบันทึกผล 5 ข้อ — ต้องตรงกับ REPAIR_CHECKLIST_ITEMS ใน src/schema.js
+   * (มีก็อปปี้สองที่เหมือนเช็คลิสต์ 21 ข้อของใบล้าง ถ้าจะแก้ ให้แก้ทั้งสองที่)
+   */
+  const REPAIR_CHECKLIST_ITEMS = [
+    { no: 1, label: 'ค่าแรงดันไฟฟ้า (Voltage)', type: 'value', unit: 'V (220–240)' },
+    { no: 2, label: 'ค่ากระแสคอมเพรสเซอร์ขณะทำงาน', type: 'value', unit: 'A' },
+    { no: 3, label: 'ค่าแรงดันน้ำยาด้านต่ำ (Low/Suction)', type: 'value', unit: 'PSI' },
+    { no: 4, label: 'ทดสอบเดินเครื่องต่อเนื่อง (Run Test)', type: 'check' },
+    { no: 5, label: 'ทำความสะอาดพื้นที่หลังติดตั้ง', type: 'check' }
+  ];
+
+  /** จำนวนแถวอะไหล่บนแบบฟอร์ม — กระดาษมี 4 แถว */
+  const REPAIR_PART_ROWS = 4;
+
+  /** รูปที่เลือกไว้ รอส่งขึ้นหลังบันทึกสำเร็จ (เหตุผลเดียวกับใบล้าง — เลขที่เพิ่งมีตอนบันทึก) */
+  let rfPhotos = {};
+  let rfSavedRow = null;
+  let rfUnit = null;
+
+  /**
+   * เปิดหน้ากรอกเอกสารซ่อม
+   *
+   * เปิดจากหน้างานซ่อม (ปุ่ม "ปิดงาน + ออกเอกสาร") จึงรู้เครื่องมาแล้วเสมอ
+   * ข้อมูลเครื่องที่เหลือฝั่งเซิร์ฟเวอร์ดึงจากทะเบียนเอง จะได้ไม่มีสองความจริง
+   */
+  async function openRepairForm(airCode, symptom) {
+    const found = (currentAirList || []).find(a => String(a.AirCode) === String(airCode));
+    if (!found) { showToast('ไม่พบข้อมูลเครื่อง ' + airCode, 'error'); return; }
+
+    rfUnit = found;
+    rfPhotos = {};
+    rfSavedRow = null;
+
+    const card = inner => `<section class="bg-white rounded-xl border border-gray-200 p-4">${inner}</section>`;
+    const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]';
+    const area = 'w-full rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920] resize-none';
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+
+        <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
+          <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            <button onclick="closeRepairForm()" title="ย้อนกลับ"
+              class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
+              <i class="ph ph-arrow-left text-xl"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <h2 class="font-bold text-gray-800 leading-tight truncate">บันทึกผลการซ่อม</h2>
+              <p class="text-xs text-gray-500 leading-tight truncate">${esc(found.AirCode)} · ${esc(found.NodeName)}</p>
+            </div>
+          </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto">
+          <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
+
+            ${card(`
+              <div class="flex items-start justify-between gap-2 flex-wrap mb-2">
+                <div>
+                  <div class="font-bold text-[#f47920]">${esc(found.AirCode)}</div>
+                  <div class="text-sm text-gray-500">${esc(found.NodeName)} · ${esc(found.Province || '-')}</div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">ITEL-FM-NE-005</span>
+              </div>
+              <div class="text-xs text-gray-500">
+                ยี่ห้อ ${esc(found.Brand || '-')} · BTU ${esc(found.BTU || '-')} ·
+                SN ${esc(found.IndoorSN || '-')} / ${esc(found.OutdoorSN || '-')}
+              </div>`)}
+
+            ${card(`
+              <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label>
+              ${dateField('rf_date', new Date().toISOString().slice(0,10), field)}`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-2">ส่วนที่ 2 · สาเหตุและการแก้ไข</h3>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">อาการเสีย <span class="text-red-500">*</span></label>
+                  <textarea id="rf_symptom" rows="2" class="${area}">${esc(symptom || '')}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">สาเหตุ</label>
+                  <textarea id="rf_cause" rows="2" class="${area}"></textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">การแก้ไข <span class="text-red-500">*</span></label>
+                  <textarea id="rf_fix" rows="2" class="${area}"></textarea>
+                </div>
+              </div>`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-2">ส่วนที่ 3 · รายการบันทึกผล</h3>
+              <div id="rf_checklist" class="space-y-2"></div>`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-1">ส่วนที่ 4 · อะไหล่ที่ใช้</h3>
+              <p class="text-xs text-gray-500 mb-2">ไม่ได้เปลี่ยนอะไหล่ก็เว้นว่างไว้ได้</p>
+              <div id="rf_parts" class="space-y-2"></div>`)}
+
+            ${card(`
+              <label class="block text-sm font-medium text-gray-700 mb-1">ส่วนที่ 5 · แนวทางป้องกันและข้อเสนอแนะ</label>
+              <textarea id="rf_suggestion" rows="2" class="${area}"></textarea>`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h3>
+              <p class="text-xs text-red-600 font-medium mb-2">⚠️ ต้องแนบให้ครบทั้ง 9 ช่อง ไม่ครบบันทึกไม่ได้</p>
+              <div id="rf_photoBox"></div>
+              <input type="file" id="rf_photoFile" accept="image/*" multiple class="hidden">`)}
+
+            ${card(`
+              <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label>
+                  <input type="number" id="rf_cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
+                  <input id="rf_company" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
+                  <input id="rf_tech" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                  <input id="rf_supervisor" class="${field}"></div>
+              </div>`)}
+
+            <div class="pb-2">
+              <button onclick="submitRepairForm()" id="rf_submitBtn"
+                class="w-full px-4 py-3.5 text-base font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm flex items-center justify-center gap-2">
+                <i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร
+              </button>
+              <p class="text-[11px] text-gray-500 mt-2 text-center">
+                บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เอง
+              </p>
+            </div>
+
+          </div>
+        </main>
+      </div>`;
+
+    renderRfChecklist();
+    renderRfParts();
+    renderRfPhotos();
+  }
+  window.openRepairForm = openRepairForm;
+
+  /** รายการบันทึกผล 5 ข้อ — การ์ดต่อข้อ ให้กดง่ายบนมือถือ */
+  function renderRfChecklist() {
+    const box = document.getElementById('rf_checklist');
+    if (!box) return;
+
+    box.innerHTML = REPAIR_CHECKLIST_ITEMS.map(item => {
+      const input = item.type === 'check'
+        ? `<select class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none" data-no="${item.no}" data-col="value">
+             <option value=""></option><option>ผ่าน</option><option>ไม่ผ่าน</option>
+           </select>`
+        : `<input class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none" data-no="${item.no}" data-col="value" inputmode="decimal">`;
+
+      return `
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="text-sm text-gray-800"><span class="text-gray-400 mr-1">${item.no}.</span>${esc(item.label)}</div>
+            ${item.unit ? `<span class="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">${esc(item.unit)}</span>` : ''}
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            ${input}
+            <input class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none"
+              data-no="${item.no}" data-col="note" placeholder="หมายเหตุ">
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /** ตารางอะไหล่ 4 แถว ตามกระดาษ */
+  function renderRfParts() {
+    const box = document.getElementById('rf_parts');
+    if (!box) return;
+
+    box.innerHTML = Array.from({ length: REPAIR_PART_ROWS }, (_, i) => `
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <div class="col-span-1 text-sm text-gray-400 text-center">${i + 1}</div>
+        <input class="rf_part col-span-6 min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none"
+          data-no="${i}" data-col="name" placeholder="รายการอะไหล่">
+        <input class="rf_part col-span-2 min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none text-center"
+          data-no="${i}" data-col="qty" placeholder="จำนวน">
+        <input class="rf_part col-span-3 min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none"
+          data-no="${i}" data-col="note" placeholder="หมายเหตุ">
+      </div>`).join('');
+  }
+
+  /** ช่องใส่รูป 9 ช่อง — ใบซ่อมมีเครื่องเดียว จึงมีชุดเดียว */
+  function renderRfPhotos() {
+    const box = document.getElementById('rf_photoBox');
+    if (!box) return;
+
+    const cells = REPAIR_PHOTO_CAPTIONS.map((cap, i) => {
+      const index = i + 1;
+      const src = rfPhotos['1-' + index];
+
+      const inner = src
+        ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
+           <button type="button" onclick="event.stopPropagation(); rfRemovePhoto(${index})"
+             class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] leading-5 hover:bg-red-500"
+             title="ลบรูปช่องนี้">&times;</button>`
+        : '<span class="text-red-300 text-lg"><i class="ph ph-plus"></i></span>';
+
+      const border = src
+        ? 'border-[#f47920]'
+        : 'border-dashed border-red-300 bg-red-50/40 hover:border-red-500';
+
+      return `
+        <div class="space-y-0.5">
+          <div onclick="rfPickPhoto(${index})"
+            class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
+            ${inner}
+          </div>
+          <div class="text-[9px] ${src ? 'text-gray-500' : 'text-red-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+        </div>`;
+    }).join('');
+
+    const done = REPAIR_PHOTO_CAPTIONS.filter((_, i) => rfPhotos['1-' + (i + 1)]).length;
+
+    box.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-gray-700">รูปประกอบการซ่อม</div>
+        <div class="text-[11px] ${done === 9 ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/9 ช่อง</div>
+      </div>
+      <button type="button" onclick="rfPickManyPhotos()"
+        class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
+        <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-6 พร้อมกัน
+      </button>
+      <p class="text-[10px] text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
+      <div class="grid grid-cols-3 gap-2">${cells}</div>`;
+  }
+
+  function rfPickPhoto(index) {
+    const input = document.getElementById('rf_photoFile');
+    if (!input) return;
+
+    input.multiple = false;
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      try {
+        rfPhotos['1-' + index] = await shrinkImage(file);
+        renderRfPhotos();
+      } catch (e) { showToast('อ่านไฟล์รูปไม่สำเร็จ', 'error'); }
+    };
+    input.click();
+  }
+  window.rfPickPhoto = rfPickPhoto;
+
+  /** เลือกหลายรูปพร้อมกัน ลงให้แค่ช่อง 1-6 ด้วยเหตุผลเดียวกับใบล้าง */
+  function rfPickManyPhotos() {
+    const input = document.getElementById('rf_photoFile');
+    if (!input) return;
+
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = [...(input.files || [])];
+      input.value = '';
+      if (!files.length) return;
+
+      files.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
+
+      const empty = [];
+      for (let i = 1; i <= PHOTO_BULK; i++) if (!rfPhotos['1-' + i]) empty.push(i);
+      if (!empty.length) {
+        showToast('ช่อง 1-' + PHOTO_BULK + ' ครบแล้ว — รูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่องเอง');
+        return;
+      }
+
+      let ok = 0, bad = 0;
+      for (let i = 0; i < Math.min(files.length, empty.length); i++) {
+        try { rfPhotos['1-' + empty[i]] = await shrinkImage(files[i]); ok++; }
+        catch (e) { bad++; }
+      }
+
+      renderRfPhotos();
+      showToast('ใส่รูปช่อง 1-' + PHOTO_BULK + ' แล้ว ' + ok + ' ใบ' + (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
+        ' — รูปวัดค่าช่อง 7-9 กดเลือกทีละช่องเอง', bad ? 'error' : 'success');
+    };
+    input.click();
+  }
+  window.rfPickManyPhotos = rfPickManyPhotos;
+
+  function rfRemovePhoto(index) {
+    delete rfPhotos['1-' + index];
+    renderRfPhotos();
+  }
+  window.rfRemovePhoto = rfRemovePhoto;
+
+  /** ช่องรูปที่ยังว่างอยู่ — ใบซ่อมบังคับครบทั้ง 9 ช่องเหมือนใบล้าง */
+  function rfMissingPhotos() {
+    const out = [];
+    for (let i = 1; i <= PHOTO_SLOTS; i++) if (!rfPhotos['1-' + i]) out.push(i);
+    return out;
+  }
+
+  async function submitRepairForm() {
+    if (rfSavedRow) return retryRfPhotos();
+
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const date = val('rf_date');
+    if (!date) { showToast('กรุณาระบุวันที่ซ่อมเสร็จ', 'error'); return; }
+
+    const symptom = val('rf_symptom').trim();
+    const fix = val('rf_fix').trim();
+    if (!symptom) { showToast('กรุณากรอกอาการเสีย', 'error'); return; }
+    if (!fix) { showToast('กรุณากรอกการแก้ไข — เป็นสิ่งที่คนอ่านเอกสารย้อนหลังต้องการรู้ที่สุด', 'error'); return; }
+
+    const missing = rfMissingPhotos();
+    if (missing.length) {
+      showToast('ยังแนบรูปไม่ครบ ขาดช่อง ' + missing.slice(0, 4).join(', ') +
+                (missing.length > 4 ? ' ...' : '') + ' — ต้องครบทั้ง ' + PHOTO_SLOTS + ' ช่องก่อนบันทึก', 'error');
+      const box = document.getElementById('rf_photoBox');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const checklist = REPAIR_CHECKLIST_ITEMS.map(item => ({
+      no: item.no,
+      value: (document.querySelector(`.rf_val[data-no="${item.no}"][data-col="value"]`) || {}).value || '',
+      note: (document.querySelector(`.rf_val[data-no="${item.no}"][data-col="note"]`) || {}).value || ''
+    }));
+
+    const parts = Array.from({ length: REPAIR_PART_ROWS }, (_, i) => ({
+      name: (document.querySelector(`.rf_part[data-no="${i}"][data-col="name"]`) || {}).value || '',
+      qty: (document.querySelector(`.rf_part[data-no="${i}"][data-col="qty"]`) || {}).value || '',
+      note: (document.querySelector(`.rf_part[data-no="${i}"][data-col="note"]`) || {}).value || ''
+    })).filter(p => p.name.trim() || p.qty.trim() || p.note.trim());
+
+    const record = {
+      AirCode: rfUnit.AirCode,
+      Date: date,
+      Symptom: symptom,
+      Cause: val('rf_cause'),
+      Fix: fix,
+      Suggestion: val('rf_suggestion'),
+      Cost: val('rf_cost'),
+      CompanyName: val('rf_company'),
+      TechnicianName: val('rf_tech'),
+      SupervisorName: val('rf_supervisor'),
+      Checklist: checklist,
+      Parts: parts
+    };
+
+    const btn = document.getElementById('rf_submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...';
+
+    try {
+      const res = await call('saveRepairForm', record);
+      if (!res) {
+        closeModal();
+        showToast('บันทึกข้อมูลแล้ว แต่โหลดผลลัพธ์กลับมาไม่ได้ กรุณากดรีเฟรชหน้าเว็บเพื่อตรวจสอบ (อย่ากดบันทึกซ้ำ)', 'error');
+        return;
+      }
+      currentRepairForms = Array.isArray(res.forms) ? res.forms : currentRepairForms;
+
+      // ส่งรูปตามขึ้นไป — เลขที่เอกสารเพิ่งมีตอนนี้ (เหตุผลเดียวกับใบล้าง)
+      const savedRow = (res.forms || []).find(f => String(f.DocNo) === String(res.docNo));
+      const up = savedRow ? await uploadRfPhotos(savedRow._row) : null;
+
+      if (up) up.done.forEach(k => delete rfPhotos[k]);
+
+      if (!up || up.failed.length) {
+        rfSavedRow = savedRow ? savedRow._row : null;
+        renderRfPhotos();
+        const left = up ? up.failed.length : Object.keys(rfPhotos).length;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + left + ' ใบ)';
+        btn.classList.remove('bg-[#f47920]', 'hover:bg-[#d96615]');
+        btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+        showToast('บันทึกเอกสารสำเร็จแล้ว แต่รูปยังส่งไม่ขึ้น ' + left + ' ใบ — ' +
+                  'อย่าเพิ่งปิดหน้านี้ กดปุ่มด้านล่างเพื่อส่งซ้ำเมื่อสัญญาณดีขึ้น', 'error');
+        return;
+      }
+
+      rfPhotos = {};
+      rfSavedRow = null;
+      closeModal();
+      showToast('บันทึกเอกสารซ่อม ' + res.docNo + ' แล้ว · ลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เรียบร้อย');
+
+      // สถานะเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที
+      try {
+        const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
+        if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
+        if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
+      } catch (e) {}
+      loadDashboard();
+      loadBudget();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร';
+    }
+  }
+  window.submitRepairForm = submitRepairForm;
+
+  /** ส่งรูปขึ้นทีละใบ เหมือนใบล้าง — ฝั่งเซิร์ฟเวอร์รับทีละช่องและหน่วงสร้าง PDF ให้เอง */
+  async function uploadRfPhotos(row) {
+    const keys = Object.keys(rfPhotos);
+    const done = [], failed = [];
+
+    for (const key of keys) {
+      const index = Number(key.split('-')[1]);
+      try {
+        await callQuiet('saveRepairPhoto', { row, index, dataUrl: rfPhotos[key] });
+        done.push(key);
+      } catch (e) { failed.push(key); }
+    }
+    return { total: keys.length, done, failed };
+  }
+
+  async function retryRfPhotos() {
+    const btn = document.getElementById('rf_submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังส่งรูป...';
+
+    const up = await uploadRfPhotos(rfSavedRow);
+    up.done.forEach(k => delete rfPhotos[k]);
+    renderRfPhotos();
+
+    if (!up.failed.length) {
+      rfPhotos = {};
+      rfSavedRow = null;
+      closeModal();
+      showToast('ส่งรูปครบแล้ว');
+      return;
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + up.failed.length + ' ใบ)';
+    showToast('ยังส่งไม่ขึ้น ' + up.failed.length + ' ใบ — ลองใหม่อีกครั้งเมื่อสัญญาณดีขึ้น', 'error');
+  }
+
+  async function closeRepairForm() {
+    if (rfSavedRow) {
+      const ok = await showConfirm(
+        'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + Object.keys(rfPhotos).length + ' ใบที่ส่งไม่ขึ้น\n' +
+        'ปิดตอนนี้ก็ได้ แล้วค่อยไปเพิ่มจากปุ่ม "แก้รูป" ในตารางเอกสารทีหลัง\n\n' +
+        'ยืนยันจะปิดเลยมั้ย?'
+      );
+      if (!ok) return;
+    } else if (Object.keys(rfPhotos).length || (document.getElementById('rf_fix') || {}).value) {
+      const ok = await showConfirm('ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก ออกจากหน้านี้เลยมั้ย?');
+      if (!ok) return;
+    }
+    rfPhotos = {};
+    rfSavedRow = null;
+    closeModal();
+  }
+  window.closeRepairForm = closeRepairForm;
 
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
   function onCleaningFormNodeChange() {
