@@ -362,7 +362,8 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
   // ช่องส่วนกลางของใบ เติมให้เฉพาะที่ยังว่างอยู่ ไม่ทับของเดิม
   // ผลประเมินไม่อยู่ในรายการนี้ เพราะเป็นของรายเครื่อง — slotPayload เขียนให้ตามช่องของมันเอง
   for (const col of ['TimeStart', 'TimeEnd', 'TotalTime',
-                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
+                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName',
+                     'MissingPhotoNote']) {
     if (!plainText(existing[col]).trim() && plainText(record[col]).trim()) {
       payload[col] = record[col];
     }
@@ -781,6 +782,29 @@ async function withFreshDocPdf(ctx, work) {
 /** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
 function photoIndexOf(store, docNo) {
   return Object.keys(store.readAll(docNo));
+}
+
+/**
+ * รูปทั้งหมดของเอกสารใบหนึ่ง พร้อมตัวรูปจริง
+ *
+ * ============================================================================
+ * ทำไมต้องมีตัวนี้ ทั้งที่มี getCleaningPhotoIndex อยู่แล้ว
+ * ============================================================================
+ * ตัวเดิมบอกได้แค่ว่าช่องไหนมีรูปแล้ว ซึ่งพอสำหรับการแสดงความคืบหน้า
+ * แต่ไม่พอสำหรับหน้าแก้รูป เพราะคนที่จะแก้ต้องเห็นก่อนว่ารูปเดิมเป็นยังไง
+ * ถึงจะรู้ว่าใบไหนเบลอ ใบไหนถ่ายผิดเครื่อง
+ *
+ * รูปถูกย่อตั้งแต่ฝั่งเบราว์เซอร์ก่อนส่งขึ้นมาแล้ว (ด้านยาวสุด 1600 คุณภาพ 0.82)
+ * ทั้งใบจึงอยู่ราว 3-6 MB ซึ่งหนักเกินกว่าจะโหลดตอนเปิดตาราง
+ * แต่รับได้สำหรับหน้าที่ผู้ใช้ตั้งใจกดเข้าไปแก้
+ */
+export async function getCleaningPhotos(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) return {};
+  if (!ctx.photos) return {};
+
+  const { docNo } = await formForPhotos(ctx, row);
+  return { docNo, photos: ctx.photos.readAll(docNo) };
 }
 
 /** รายชื่อช่องที่มีรูปแล้วของเอกสารใบหนึ่ง (หน้าเว็บใช้แสดงว่าช่องไหนกรอกแล้ว) */

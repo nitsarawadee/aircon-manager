@@ -104,7 +104,9 @@ export const TABLES = {
       // ผลประเมินของเครื่องที่ 2 — ของเครื่องที่ 1 ยังใช้คอลัมน์ EquipmentCondition เดิม
       EquipmentCondition2: S,
       // เลขที่ของเครื่องตัวที่สองในใบเดียวกัน — ของตัวแรกใช้คอลัมน์ DocNo เดิม
-      DocNo2: S
+      DocNo2: S,
+      // เหตุผลที่รูปวัดค่า (ช่อง 7-9) ไม่ครบ — ว่างไว้ถ้าแนบครบ
+      MissingPhotoNote: S
     },
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },

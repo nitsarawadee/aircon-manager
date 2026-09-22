@@ -18,7 +18,7 @@ import {
 import {
   getCleaningFormNodes, getCleaningForms, saveCleaningForm, deleteCleaningForm,
   uploadNodeDocuments, getCleaningDocHtml, getCleaningBlankDocHtml,
-  saveCleaningPhoto, deleteCleaningPhoto, getCleaningPhotoIndex, getCleaningDocPdf,
+  saveCleaningPhoto, deleteCleaningPhoto, getCleaningPhotoIndex, getCleaningPhotos, getCleaningDocPdf,
   getCleaningAttachments, getCleaningAttachment
 } from './modules/cleaningform.js';
 
@@ -99,6 +99,7 @@ const API_FUNCTIONS = {
   saveCleaningPhoto,
   deleteCleaningPhoto,
   getCleaningPhotoIndex,
+  getCleaningPhotos,
   getCleaningDocPdf,
   getCleaningAttachments,
   getCleaningAttachment,

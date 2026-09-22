@@ -252,6 +252,15 @@ function photoPage(unit, form, photos, opts) {
     rows.push('<tr>' + [1, 2, 3].map(c => cell(r * 3 + c)).join('') + '</tr>');
   }
 
+  // เหตุผลที่รูปวัดค่าไม่ครบ ต้องอยู่บนหน้าเดียวกับกรอบที่ว่าง
+  // ไม่งั้นคนที่เปิดเอกสารมาดูจะเห็นแค่กรอบว่างลอยๆ โดยไม่รู้ว่าเพราะอะไร
+  const why = plainText(form.MissingPhotoNote).trim();
+  const note = why
+    ? `<table class="info"><tbody><tr>
+    <th>เหตุที่รูปวัดค่าไม่ครบ</th><td colspan="3">${val(why)}</td>
+  </tr></tbody></table>`
+    : '';
+
   return `<div class="sheet"><div class="frame">
   ${pageHeader('ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + unit.slot +
                ' (AIR ' + unit.slot + ')', opts)}
@@ -260,6 +269,7 @@ function photoPage(unit, form, photos, opts) {
     <th>วันที่</th><td>${val(formatDate(form.Date))}</td>
   </tr></tbody></table>
   <table class="pics"><tbody>${rows.join('')}</tbody></table>
+  ${note}
 </div><div class="code">${FORM_CODE}</div></div>`;
 }
 

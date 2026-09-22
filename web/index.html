@@ -6214,7 +6214,10 @@ const CLEANING_CHECKLIST_ITEMS = [
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
                <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
                  class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-download-simple"></i> PDF</button>`
+                 <i class="ph ph-download-simple"></i> PDF</button>
+               <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
+                 class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
+                 <i class="ph ph-camera"></i> แก้รูป</button>`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${
@@ -6305,6 +6308,32 @@ const CLEANING_CHECKLIST_ITEMS = [
       .map(u => ({ slot: unitSlotOfCode(u.AirCode), airCode: u.AirCode }));
   }
 
+  /**
+   * รูป 6 ช่องแรกใช้มือถือถ่ายเปล่าๆ (ก่อนล้าง ระหว่างล้าง หลังล้าง) จึงบังคับให้ครบ
+   *
+   * ส่วนช่อง 7-9 เป็นรูปวัดค่า ต้องมีแคลมป์มิเตอร์ มิเตอร์วัดไฟ และเกจวัดน้ำยา
+   * ถ้าวันนั้นช่างไม่ได้เอาเครื่องมือไป ก็ถ่ายย้อนหลังไม่ได้อีกแล้ว
+   * บังคับให้ครบทั้ง 9 = คนที่ลืมบันทึกเอกสารไม่ได้เลยสักใบ ซึ่งแย่กว่าเอกสารที่ขาดรูป
+   */
+  const PHOTO_REQUIRED = 6;
+
+  /** ช่องที่ยังว่างอยู่ในช่วงที่ระบุ ของทุกเครื่องในฟอร์มนี้ — คืนเป็นคีย์ "<เครื่อง>-<ช่อง>" */
+  function cfMissingIn(from, to) {
+    const missing = [];
+    for (const u of cfPhotoUnits()) {
+      for (let i = from; i <= to; i++) {
+        if (!cfPhotos[u.slot + '-' + i]) missing.push(u.slot + '-' + i);
+      }
+    }
+    return missing;
+  }
+
+  /** ช่องที่บังคับแต่ยังว่างอยู่ */
+  const cfMissingRequired = () => cfMissingIn(1, PHOTO_REQUIRED);
+
+  /** ช่องวัดค่า (7-9) ที่ยังว่างอยู่ — ขาดได้ แต่ต้องมีเหตุผลกำกับ */
+  const cfMissingMeasure = () => cfMissingIn(PHOTO_REQUIRED + 1, 9);
+
   /** วาดช่องใส่รูปของทุกเครื่องที่ฟอร์มนี้ครอบคลุม */
   function renderCfPhotos() {
     const box = document.getElementById('cf_photoBox');
@@ -6313,6 +6342,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     const units = cfPhotoUnits();
     if (!units.length) {
       box.innerHTML = '<p class="text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg px-3 py-4 text-center">เลือก Node ก่อน แล้วช่องใส่รูปจะขึ้นให้เอง</p>';
+      renderCfPhotoNote();
       return;
     }
 
@@ -6320,43 +6350,94 @@ const CLEANING_CHECKLIST_ITEMS = [
       const cells = PHOTO_CAPTIONS.map((cap, i) => {
         const index = i + 1;
         const src = cfPhotos[u.slot + '-' + index];
+        const required = index <= PHOTO_REQUIRED;
 
         const inner = src
           ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
              <button type="button" onclick="event.stopPropagation(); cfRemovePhoto(${u.slot}, ${index})"
                class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] leading-5 hover:bg-red-500"
                title="ลบรูปช่องนี้">&times;</button>`
-          : `<span class="text-gray-300 text-lg"><i class="ph ph-plus"></i></span>`;
+          : `<span class="${required ? 'text-red-300' : 'text-gray-300'} text-lg"><i class="ph ph-plus"></i></span>`;
+
+        // ช่องบังคับที่ยังว่าง ขอบแดง จะได้เห็นตั้งแต่ยังไม่กดบันทึกว่าเหลือช่องไหน
+        const border = src
+          ? 'border-[#1153a1]'
+          : (required ? 'border-dashed border-red-300 bg-red-50/40 hover:border-red-500'
+                      : 'border-dashed border-gray-300 hover:border-[#1153a1] hover:bg-blue-50/40');
 
         return `
           <div class="space-y-0.5">
             <div onclick="cfPickPhoto(${u.slot}, ${index})"
-              class="relative aspect-[4/3] border ${src ? 'border-[#1153a1]' : 'border-dashed border-gray-300 hover:border-[#1153a1] hover:bg-blue-50/40'} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
+              class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
               ${inner}
             </div>
-            <div class="text-[9px] text-gray-500 leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+            <div class="text-[9px] ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
           </div>`;
       }).join('');
 
       const done = PHOTO_CAPTIONS.filter((_, i) => cfPhotos[u.slot + '-' + (i + 1)]).length;
+      const need = PHOTO_CAPTIONS.slice(0, PHOTO_REQUIRED).filter((_, i) => cfPhotos[u.slot + '-' + (i + 1)]).length;
 
       return `
         <div class="border border-gray-200 rounded-lg p-3 mb-3">
-          <div class="flex items-center justify-between mb-2">
-            <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${u.slot} · ${esc(u.airCode)}</div>
-            <div class="text-[11px] ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
+          <div class="flex items-center justify-between mb-2 gap-2">
+            <div class="text-xs font-semibold text-gray-700 truncate">เครื่องที่ ${u.slot} · ${esc(u.airCode)}</div>
+            <div class="text-[11px] flex-shrink-0 ${need < PHOTO_REQUIRED ? 'text-red-500 font-medium' : (done === 9 ? 'text-emerald-600' : 'text-gray-400')}">${done}/9 ช่อง</div>
           </div>
+          <button type="button" onclick="cfPickManyPhotos(${u.slot})"
+            class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
+            <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-${PHOTO_REQUIRED} พร้อมกัน
+          </button>
+          <p class="text-[10px] text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
           <div class="grid grid-cols-3 gap-2">${cells}</div>
         </div>`;
     }).join('');
+
+    renderCfPhotoNote();
   }
   window.renderCfPhotos = renderCfPhotos;
+
+  /**
+   * ช่องกรอกเหตุผล โผล่เฉพาะตอนที่รูปวัดค่ายังไม่ครบ
+   *
+   * ต้องเก็บค่าที่พิมพ์ค้างไว้ก่อนวาดใหม่ เพราะฟังก์ชันนี้ถูกเรียกทุกครั้งที่แนบรูป
+   * ถ้าไม่เก็บ คนที่พิมพ์เหตุผลไปครึ่งทางแล้วเผลอแนบรูปเพิ่ม จะโดนล้างที่พิมพ์ไปทิ้ง
+   */
+  function renderCfPhotoNote() {
+    const box = document.getElementById('cf_photoNoteBox');
+    if (!box) return;
+
+    const missing = cfMissingMeasure();
+    if (!missing.length) { box.innerHTML = ''; return; }
+
+    const keep = (document.getElementById('cf_photoNote') || {}).value;
+    if (box.dataset.on === '1') {
+      // มีช่องอยู่แล้ว แค่อัปเดตจำนวนที่ขาด ไม่ต้องสร้างใหม่ให้เคอร์เซอร์กระเด็น
+      const label = document.getElementById('cf_photoNoteCount');
+      if (label) label.textContent = missing.length;
+      return;
+    }
+
+    box.dataset.on = '1';
+    box.innerHTML = `
+      <div class="mt-1 border border-amber-200 bg-amber-50 rounded-lg p-3">
+        <label class="block text-xs font-medium text-amber-900 mb-1">
+          รูปวัดค่ายังขาดอยู่ <span id="cf_photoNoteCount">${missing.length}</span> ใบ — บอกเหตุผลด้วย
+        </label>
+        <input id="cf_photoNote" placeholder="เช่น ไม่ได้นำเกจวัดน้ำยาไปหน้างาน"
+          class="w-full rounded-lg border-amber-300 border focus:ring-2 focus:ring-amber-400 text-sm px-3 py-2.5 outline-none bg-white">
+        <p class="text-[11px] text-amber-700 mt-1.5">ข้อความนี้จะขึ้นบนเอกสาร ใต้กรอบรูปที่ว่าง</p>
+      </div>`;
+    const el = document.getElementById('cf_photoNote');
+    if (el && keep) el.value = keep;
+  }
 
   /** เลือกรูปให้ช่องนั้น ย่อขนาดก่อนเก็บด้วยตัวเดียวกับหน้าต่างรูปถ่าย */
   function cfPickPhoto(slot, index) {
     const input = document.getElementById('cf_photoFile');
     if (!input) return;
 
+    input.multiple = false;
     input.onchange = async () => {
       const file = input.files && input.files[0];
       input.value = '';   // ล้างค่า จะได้เลือกไฟล์เดิมซ้ำได้
@@ -6373,6 +6454,239 @@ const CLEANING_CHECKLIST_ITEMS = [
     input.click();
   }
   window.cfPickPhoto = cfPickPhoto;
+
+  /**
+   * เลือกรูปหลายใบพร้อมกัน แล้วไล่ลงช่องที่ยังว่างตามลำดับ
+   *
+   * ============================================================================
+   * ทำไมต้องมีปุ่มนี้
+   * ============================================================================
+   * ช่างถ่ายรูปไว้หน้างานก่อน แล้วค่อยมานั่งกรอกเอกสารทีหลัง ตอนกรอกจึงมีรูปครบ
+   * อยู่ในเครื่องแล้ว การเลือกทีละช่องแปลว่าต้องเปิดแกลเลอรี หาไฟล์ กดเลือก
+   * 9 รอบต่อเครื่อง สองเครื่องคือ 18 รอบ ซึ่งเป็นจุดที่คนเลิกแนบกลางคัน
+   *
+   * เรียงตามชื่อไฟล์เพราะกล้องมือถือตั้งชื่อไล่ตามเวลาที่ถ่าย ลำดับที่ได้จึงตรงกับ
+   * ลำดับการทำงานจริง ซึ่งตรงกับลำดับของช่องบนฟอร์มพอดี (ก่อน → ระหว่าง → หลัง)
+   * ใช้ตัวเทียบแบบรู้จักตัวเลข ไม่งั้น IMG_10 จะมาก่อน IMG_9
+   *
+   * ============================================================================
+   * ทำไมลงให้แค่ช่อง 1-6 ไม่ลงช่องวัดค่า
+   * ============================================================================
+   * ช่อง 1-6 เป็นรูปตามลำดับเวลาจริง (ก่อนล้าง → ระหว่างล้าง → หลังล้าง)
+   * เรียงตามชื่อไฟล์แล้วลงเรียงกันจึงตรงตามที่ควรเป็น
+   *
+   * แต่ช่อง 7-9 เป็นรูปเฉพาะเจาะจงว่าวัดอะไร (กระแส / แรงดันไฟ / แรงดันน้ำยา)
+   * ซึ่งดูจากลำดับไฟล์ไม่ออก ถ้าไล่ลงให้เองมีโอกาสสูงที่รูปวัดไฟจะไปอยู่ช่อง
+   * วัดน้ำยา แล้วเอกสารจะออกมาผิดโดยไม่มีอะไรฟ้อง — สามช่องนี้จึงต้องเลือกเอง
+   *
+   * ลงเฉพาะช่องที่ว่าง ไม่ทับรูปที่เลือกไว้แล้ว ถ้าลำดับไม่ตรงค่อยกดแก้เป็นช่องๆ
+   */
+  function cfPickManyPhotos(slot) {
+    const input = document.getElementById('cf_photoFile');
+    if (!input) return;
+
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = [...(input.files || [])];
+      input.value = '';
+      if (!files.length) return;
+
+      files.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
+
+      const empty = [];
+      for (let i = 1; i <= PHOTO_REQUIRED; i++) if (!cfPhotos[slot + '-' + i]) empty.push(i);
+
+      if (!empty.length) {
+        showToast('เครื่องที่ ' + slot + ' แนบรูปช่อง 1-' + PHOTO_REQUIRED + ' ครบแล้ว — ' +
+                  'รูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่องเอง และถ้าจะเปลี่ยนรูปเดิมก็กดที่ช่องนั้นโดยตรง');
+        return;
+      }
+
+      const btn = document.getElementById('cf_submitBtn');
+      const was = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังอ่านรูป...'; }
+
+      let ok = 0, bad = 0;
+      for (let i = 0; i < Math.min(files.length, empty.length); i++) {
+        try {
+          cfPhotos[slot + '-' + empty[i]] = await shrinkImage(files[i]);
+          ok++;
+        } catch (e) { bad++; }
+      }
+
+      if (btn) { btn.disabled = false; btn.innerHTML = was; }
+      renderCfPhotos();
+      updateCfProgress();
+
+      const over = files.length - empty.length;
+      showToast('ใส่รูปช่อง 1-' + PHOTO_REQUIRED + ' ของเครื่องที่ ' + slot + ' แล้ว ' + ok + ' ใบ' +
+        (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
+        (over > 0 ? ' · เลือกมาเกิน ' + over + ' ใบ ไม่ได้ใส่ให้' : '') +
+        ' — รูปวัดค่าช่อง 7-9 กดเลือกทีละช่องเอง และถ้าลำดับไม่ตรงก็กดที่ช่องนั้นเปลี่ยนได้',
+        bad ? 'error' : 'success');
+    };
+    input.click();
+  }
+  window.cfPickManyPhotos = cfPickManyPhotos;
+
+  /* ---------- แก้รูปของเอกสารที่บันทึกไปแล้ว ---------- */
+
+  /**
+   * หน้าแก้รูปของเอกสารใบที่บันทึกไปแล้ว
+   *
+   * ============================================================================
+   * ทำไมแก้ได้ทั้งที่ปิดงานในแผนไปแล้ว
+   * ============================================================================
+   * การปิดงานยึดกับวันที่ ราคา ช่าง สถานะ และประวัติ ซึ่งรูปไม่ได้ไปยุ่งด้วยเลย
+   * เปลี่ยนรูปจึงไม่ทำให้รอบที่ปิดไปแล้วเพี้ยน และไม่ต้องเปิดรอบใหม่
+   *
+   * หน้านี้แก้ได้เฉพาะรูปเท่านั้น ไม่มีช่องวันที่ ราคา หรือผลประเมิน เพราะสามอย่างนั้น
+   * เป็นฐานของการปิดงานกับประวัติ ถ้าให้แก้ตรงนี้จะต้องตามไปแก้แผนและประวัติด้วย
+   * ซึ่งเป็นคนละเรื่องกับการเปลี่ยนรูปที่ถ่ายเบลอ
+   *
+   * เปลี่ยนแล้วบันทึกขึ้นทันทีทีละใบ ไม่ต้องกดบันทึกรวม เพราะเอกสารมีอยู่แล้ว
+   * ไฟล์ PDF ถูกสร้างใหม่ให้เองหลังหยุดแก้ (ฝั่งเซิร์ฟเวอร์หน่วงไว้ 5 วินาที)
+   */
+  let peRow = null, peSlot = 1, pePhotos = {}, peDocNo = '', peChanged = 0;
+
+  async function openPhotoEditor(row, slot) {
+    peRow = row; peSlot = Number(slot) || 1; pePhotos = {}; peDocNo = ''; peChanged = 0;
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+        <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
+          <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            <button onclick="closePhotoEditor()" title="ย้อนกลับ"
+              class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
+              <i class="ph ph-arrow-left text-xl"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <h2 class="font-bold text-gray-800 leading-tight truncate">แก้รูปเครื่องที่ ${peSlot}</h2>
+              <p id="pe_sub" class="text-xs text-gray-500 leading-tight">กำลังโหลดรูป...</p>
+            </div>
+          </div>
+        </header>
+        <main class="flex-1 overflow-y-auto">
+          <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
+            <section class="bg-white rounded-xl border border-gray-200 p-4">
+              <div id="pe_box"><div class="flex justify-center py-8"><div class="loader"></div></div></div>
+              <input type="file" id="pe_file" accept="image/*" class="hidden">
+            </section>
+            <p class="text-xs text-gray-500 px-1 pb-4">
+              เปลี่ยนแล้วขึ้นทันที ไม่ต้องกดบันทึก · ไฟล์ PDF จะถูกสร้างใหม่ให้เองหลังหยุดแก้
+              <br>หน้านี้แก้ได้เฉพาะรูป — วันที่ ราคา และผลประเมิน แก้ที่นี่ไม่ได้ เพราะเป็นฐานของการปิดงานและประวัติ
+            </p>
+          </div>
+        </main>
+      </div>`;
+
+    try {
+      const res = await call('getCleaningPhotos', row);
+      if (!document.getElementById('pe_box')) return;   // ปิดหน้าไปแล้วระหว่างรอ
+      pePhotos = (res && res.photos) || {};
+      peDocNo = (res && res.docNo) || '';
+      const sub = document.getElementById('pe_sub');
+      if (sub) sub.textContent = peDocNo ? 'เอกสารเลขที่ ' + peDocNo : '';
+      renderPhotoEditor();
+    } catch (e) {
+      const box = document.getElementById('pe_box');
+      if (box) box.innerHTML = '<p class="text-sm text-red-600 py-6 text-center">โหลดรูปไม่สำเร็จ: ' + esc(e.message || '') + '</p>';
+    }
+  }
+  window.openPhotoEditor = openPhotoEditor;
+
+  function renderPhotoEditor() {
+    const box = document.getElementById('pe_box');
+    if (!box) return;
+
+    const cells = PHOTO_CAPTIONS.map((cap, i) => {
+      const index = i + 1;
+      const src = pePhotos[peSlot + '-' + index];
+      const required = index <= PHOTO_REQUIRED;
+
+      const inner = src
+        ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
+           <button type="button" onclick="event.stopPropagation(); peRemove(${index})"
+             class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs leading-6 hover:bg-red-500"
+             title="ลบรูปช่องนี้">&times;</button>`
+        : `<span class="${required ? 'text-red-300' : 'text-gray-300'} text-lg"><i class="ph ph-plus"></i></span>`;
+
+      const border = src
+        ? 'border-[#1153a1]'
+        : (required ? 'border-dashed border-red-300 bg-red-50/40 hover:border-red-500'
+                    : 'border-dashed border-gray-300 hover:border-[#1153a1] hover:bg-blue-50/40');
+
+      return `
+        <div class="space-y-0.5">
+          <div onclick="pePick(${index})" id="pe_cell${index}"
+            class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
+            ${inner}
+          </div>
+          <div class="text-[9px] ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+        </div>`;
+    }).join('');
+
+    const done = PHOTO_CAPTIONS.filter((_, i) => pePhotos[peSlot + '-' + (i + 1)]).length;
+
+    box.innerHTML = `
+      <div class="flex items-center justify-between mb-2 gap-2">
+        <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${peSlot}</div>
+        <div class="text-[11px] flex-shrink-0 ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
+      </div>
+      <p class="text-[11px] text-gray-500 mb-2 leading-tight">กดที่รูปเพื่อเปลี่ยน · กดกากบาทเพื่อลบ</p>
+      <div class="grid grid-cols-3 gap-2">${cells}</div>`;
+  }
+
+  /** เปลี่ยนรูปช่องนั้น แล้วส่งขึ้นทันที */
+  function pePick(index) {
+    const input = document.getElementById('pe_file');
+    if (!input) return;
+
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+
+      const cell = document.getElementById('pe_cell' + index);
+      if (cell) cell.innerHTML = '<div class="loader"></div>';
+
+      try {
+        const dataUrl = await shrinkImage(file);
+        await call('saveCleaningPhoto', { row: peRow, unitSlot: peSlot, index, dataUrl });
+        pePhotos[peSlot + '-' + index] = dataUrl;
+        peChanged++;
+        renderPhotoEditor();
+      } catch (e) {
+        renderPhotoEditor();   // คืนรูปเดิมให้เห็นว่ายังไม่ถูกเปลี่ยน
+        showToast('เปลี่ยนรูปช่อง ' + index + ' ไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด') + ' — รูปเดิมยังอยู่ ลองใหม่ได้', 'error');
+      }
+    };
+    input.click();
+  }
+  window.pePick = pePick;
+
+  async function peRemove(index) {
+    const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + PHOTO_CAPTIONS[index - 1] + ') ของเครื่องที่ ' + peSlot + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
+    if (!ok) return;
+
+    try {
+      await call('deleteCleaningPhoto', { row: peRow, unitSlot: peSlot, index });
+      delete pePhotos[peSlot + '-' + index];
+      peChanged++;
+      renderPhotoEditor();
+    } catch (e) {
+      showToast('ลบรูปไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
+    }
+  }
+  window.peRemove = peRemove;
+
+  function closePhotoEditor() {
+    const n = peChanged;
+    peRow = null; pePhotos = {}; peChanged = 0;
+    closeModal();
+    if (n) showToast('แก้รูปไปแล้ว ' + n + ' ช่อง — ไฟล์ PDF กำลังถูกสร้างใหม่ ถ้ากดโหลดทันทีอาจยังได้ไฟล์เดิม รออีกสักครู่แล้วลองใหม่');
+  }
+  window.closePhotoEditor = closePhotoEditor;
 
   function cfRemovePhoto(slot, index) {
     delete cfPhotos[slot + '-' + index];
@@ -6784,9 +7098,12 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             ${card(`
               <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h3>
-              <p class="text-xs text-gray-500 mb-2">⚠️ แนบให้ครบตอนนี้เลย — บันทึกไปแล้วกลับมาเพิ่มรูปทีหลังไม่ได้</p>
+              <p class="text-xs text-gray-500 mb-2">ช่อง 1-6 ต้องแนบให้ครบ · ช่อง 7-9 เป็นรูปวัดค่า ถ้าไม่มีให้บอกเหตุผล</p>
               <div id="cf_photoBox"></div>
-              <input type="file" id="cf_photoFile" accept="image/*" class="hidden">`)}
+              <div id="cf_photoNoteBox"></div>
+              <!-- multiple: ช่างถ่ายรูปไว้หน้างานก่อนแล้วมานั่งกรอกทีหลัง ตอนกรอกจึงมีรูป
+                   ครบอยู่ในเครื่องแล้ว เลือกทีละใบแปลว่าต้องเปิดแกลเลอรี 18 รอบต่อหนึ่งใบ -->
+              <input type="file" id="cf_photoFile" accept="image/*" multiple class="hidden">`)}
 
             ${card(`
               <label class="block text-sm font-medium text-gray-700 mb-1">บันทึกเพิ่มเติม</label>
@@ -6954,7 +7271,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     return {
       node: val('cf_node'), date: val('cf_date'),
       timeStart: val('cf_timeStart'), timeEnd: val('cf_timeEnd'),
-      price: val('cf_price'), note: val('cf_note'),
+      price: val('cf_price'), note: val('cf_note'), photoNote: val('cf_photoNote'),
       company: val('cf_company'), tech: val('cf_tech'), supervisor: val('cf_supervisor'),
       cond1: radio('cf_condition'), cond2: radio('cf_condition2'),
       vals
@@ -6964,7 +7281,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   function saveCfDraft() {
     try {
       const f = readCfFields();
-      const hasAny = Object.keys(f.vals).length || f.cond1 || f.cond2 || f.note || f.company || f.tech || f.supervisor;
+      const hasAny = Object.keys(f.vals).length || f.cond1 || f.cond2 || f.note || f.photoNote || f.company || f.tech || f.supervisor;
       if (!hasAny) { localStorage.removeItem(CF_DRAFT_KEY); return; }
 
       localStorage.setItem(CF_DRAFT_KEY, JSON.stringify({
@@ -7025,8 +7342,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       set('cf_node', f.node);
       onCleaningFormNodeChange();   // ต้องวาดข้อมูลเครื่องกับช่องรูปใหม่ให้ตรงกับ Node ที่กู้มา
     }
-    ['date', 'timeStart', 'timeEnd', 'price', 'note', 'company', 'tech', 'supervisor']
-      .forEach(k => set('cf_' + (k === 'date' ? 'date' : k), f[k]));
+    // photoNote ต้องอยู่หลัง onCleaningFormNodeChange เพราะช่องนั้นเพิ่งถูกวาดตอนนั้น
+    ['date', 'timeStart', 'timeEnd', 'price', 'note', 'photoNote', 'company', 'tech', 'supervisor']
+      .forEach(k => set('cf_' + k, f[k]));
 
     pick('cf_condition', f.cond1);
     pick('cf_condition2', f.cond2);
@@ -7052,7 +7370,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       const left = Object.keys(cfPhotos).length;
       const ok = await showConfirm(
         'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + left + ' ใบที่ส่งไม่ขึ้น' + '\n' +
-        'ปิดหน้านี้แล้วจะแนบรูปพวกนี้ไม่ได้อีก ต้องถ่ายใหม่ทั้งหมด' + '\n\n' +
+        'ปิดตอนนี้ก็ได้ แล้วค่อยไปเพิ่มจากปุ่ม "แก้รูป" ในตารางเอกสารทีหลัง' + '\n' +
+        'แต่ถ้ายังอยู่ตรงนี้จะกดส่งซ้ำได้เลย ไม่ต้องไปตามหาใบในตาราง' + '\n\n' +
         'ยืนยันจะปิดเลยมั้ย?'
       );
       if (!ok) return;
@@ -7065,7 +7384,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const f = readCfFields();
     const dirty = Object.keys(f.vals).length || Object.keys(cfPhotos).length ||
-                  f.cond1 || f.cond2 || f.note || f.company || f.supervisor;
+                  f.cond1 || f.cond2 || f.note || f.photoNote || f.company || f.supervisor;
 
     if (dirty) {
       const ok = await showConfirm('ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก ออกจากหน้านี้เลยมั้ย?\n(ข้อมูลที่พิมพ์ไว้จะถูกเก็บเป็นร่างให้ ยกเว้นรูปถ่าย)');
@@ -7147,6 +7466,31 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const date = document.getElementById('cf_date').value;
     if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
+
+    // ---------- รูปต้องครบก่อนถึงจะบันทึกได้ ----------
+    //
+    // ด่านนี้อยู่ฝั่งหน้าเว็บอย่างเดียว ไม่ใช่เพราะลืม แต่เพราะรูปเก็บด้วยเลขที่เอกสาร
+    // ซึ่งเพิ่งมีตอนบันทึกเสร็จ ตอนที่เซิร์ฟเวอร์ตรวจได้จึงยังไม่มีรูปให้ตรวจ
+    // เป็นด่านกันลืม ไม่ใช่ด่านกันคนตั้งใจเลี่ยง — ของแบบนั้นต้องอยู่ฝั่งเซิร์ฟเวอร์
+    const missing = cfMissingRequired();
+    if (missing.length) {
+      const where = missing.slice(0, 3).map(photoSlotLabel).join(', ');
+      showToast('ยังแนบรูปไม่ครบ ขาดอีก ' + missing.length + ' ใบ (' + where +
+                (missing.length > 3 ? ' ...' : '') + ') — ช่อง 1-6 ต้องมีครบทุกเครื่องก่อนบันทึก', 'error');
+      const box = document.getElementById('cf_photoBox');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // ช่องวัดค่าขาดได้ แต่ต้องรู้ว่าเพราะอะไร ไม่งั้นเอกสารจะมีกรอบว่างลอยๆ
+    const photoNote = ((document.getElementById('cf_photoNote') || {}).value || '').trim();
+    if (cfMissingMeasure().length && !photoNote) {
+      showToast('รูปวัดค่ายังไม่ครบ กรุณากรอกเหตุผลในช่องสีเหลือง เช่น "ไม่ได้นำเกจวัดน้ำยาไปหน้างาน"', 'error');
+      const el = document.getElementById('cf_photoNote');
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+      return;
+    }
+
     const timeStart = document.getElementById('cf_timeStart').value;
     const timeEnd = document.getElementById('cf_timeEnd').value;
 
@@ -7188,6 +7532,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       EquipmentCondition: (cfContext && cfUnitSlot === 2) ? '' : cond1,
       EquipmentCondition2: (cfContext && cfUnitSlot === 2) ? cond1 : cond2,
       AdditionalNote: document.getElementById('cf_note').value,
+      MissingPhotoNote: photoNote,
       CompanyName: document.getElementById('cf_company').value,
       TechnicianName: document.getElementById('cf_tech').value,
       SupervisorName: document.getElementById('cf_supervisor').value
