@@ -171,7 +171,14 @@ export function usedDocNumbers(ctx) {
     docNos = ctx.ss.objects(SHEETS.CLEANFORM).flatMap(f => [f.DocNo, f.DocNo2]);
   } catch { /* ยังไม่ได้โหลดตารางเอกสาร */ }
 
-  return [...ids, ...docNos].filter(Boolean);
+  // เอกสารซ่อมใช้เลขชุดเดียวกัน (ขึ้นต้น CM เหมือนใบประวัติงานซ่อม)
+  // ถ้าไม่นับด้วย ใบประวัติใบถัดไปจะได้เลขเดียวกับเอกสารซ่อมที่ออกไปแล้ว
+  let repairNos = [];
+  try {
+    repairNos = ctx.ss.objects(SHEETS.REPAIRFORM).map(f => f.DocNo);
+  } catch { /* ยังไม่ได้โหลดตารางเอกสารซ่อม */ }
+
+  return [...ids, ...docNos, ...repairNos].filter(Boolean);
 }
 
 export async function addHistoryRaw(ctx, record) {

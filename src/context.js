@@ -1,7 +1,7 @@
 import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
-  CLEANFORM_HEADERS, CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH
+  CLEANFORM_HEADERS, REPAIRFORM_HEADERS, CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH
 } from './schema.js';
 import { normalizeCode, normalizeRegion } from './values.js';
 
@@ -91,7 +91,8 @@ export class Ctx {
       [SHEETS.HISTORY, HISTORY_HEADERS],
       [SHEETS.CONFIG, CONFIG_HEADERS],
       [SHEETS.USERS, USERS_HEADERS],
-      [SHEETS.CLEANFORM, CLEANFORM_HEADERS]
+      [SHEETS.CLEANFORM, CLEANFORM_HEADERS],
+      [SHEETS.REPAIRFORM, REPAIRFORM_HEADERS]
     ];
 
     for (const [name, headers] of specs) {

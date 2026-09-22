@@ -12,6 +12,7 @@ import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd 
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
 import { closePlanRound } from './plan.js';
+import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 
 /**
  * ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ
@@ -803,64 +804,6 @@ export async function deleteCleaningPhoto(ctx, payload) {
  * ใช้ได้ เพราะงานที่เลื่อนออกไปอ่านแค่ข้อมูลของ "ใบ" ซึ่งไม่ได้เปลี่ยนระหว่าง
  * ที่คนแก้รูป ส่วนตัวรูปถูกอ่านสดจากดิสก์ทุกครั้งที่สร้างไฟล์
  */
-const DOC_PDF_DELAY_MS = 5000;
-
-/** งานที่รออยู่ แยกตามเลขที่เอกสาร — ใบเดียวกันมีได้ครั้งละหนึ่งงานเท่านั้น */
-const pendingDocPdf = new Map();
-
-/**
- * นัดสร้างไฟล์ PDF ใหม่ ยกเลิกนัดเดิมของใบเดียวกันถ้ามี
- *
- * ไม่ await ผลลัพธ์ เพราะคนแนบรูปไม่ควรต้องรอไฟล์สำเนาที่สร้างใหม่ได้เสมอ
- */
-function scheduleDocPdf(ctx, docNo) {
-  const name = plainText(docNo).trim();
-  if (!ctx.pdf || !ctx.docs || !name) return;
-
-  cancelDocPdf(name);
-
-  let done;
-  const finished = new Promise(resolve => { done = resolve; });
-
-  const timer = setTimeout(async () => {
-    pendingDocPdf.delete(name);
-    await storeDocPdf(ctx, name);
-    done();
-  }, delayOf(ctx));
-
-  // ห้ามให้ตัวจับเวลากันโปรเซสไม่ให้ปิด ไม่งั้นสั่งหยุดเซิร์ฟเวอร์แล้วค้างรอ
-  if (timer.unref) timer.unref();
-
-  pendingDocPdf.set(name, { timer, run: async () => { await storeDocPdf(ctx, name); done(); }, finished });
-}
-
-/** ยกเลิกนัดของใบนั้น ใช้ตอนลบเอกสาร ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว */
-function cancelDocPdf(docNo) {
-  const name = plainText(docNo).trim();
-  const job = pendingDocPdf.get(name);
-  if (!job) return;
-  clearTimeout(job.timer);
-  pendingDocPdf.delete(name);
-}
-
-/** เวลารอ ตั้งทับได้ทาง env เพื่อให้เทสต์ไม่ต้องนั่งรอจริง */
-function delayOf(ctx) {
-  const raw = ctx.env && ctx.env.DOC_PDF_DELAY_MS;
-  return raw === undefined || raw === '' || isNaN(Number(raw)) ? DOC_PDF_DELAY_MS : Number(raw);
-}
-
-/**
- * ทำงานที่ค้างอยู่ทั้งหมดให้เสร็จเดี๋ยวนี้ แล้วรอจนจบ
- *
- * มีไว้ให้เทสต์เรียก เพื่อไม่ต้องพึ่งการนับเวลาจริงซึ่งเปราะและช้า
- */
-export async function settleDocPdfQueue() {
-  const jobs = [...pendingDocPdf.values()];
-  pendingDocPdf.clear();
-  for (const job of jobs) clearTimeout(job.timer);
-  await Promise.all(jobs.map(job => job.run()));
-}
-
 /**
  * รอผลของงานที่แก้รูป แล้วนัดสร้างไฟล์ PDF ใหม่ให้ตรงกับรูปล่าสุด
  *
@@ -868,9 +811,11 @@ export async function settleDocPdfQueue() {
  */
 async function withFreshDocPdf(ctx, work) {
   const { docNo, ...out } = await work;
-  scheduleDocPdf(ctx, docNo);
+  scheduleDocPdf(ctx, docNo, () => storeDocPdf(ctx, docNo));
   return out;
 }
+
+export { settleDocPdfQueue };
 
 /** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
 function photoIndexOf(store, docNo) {

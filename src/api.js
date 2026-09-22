@@ -21,6 +21,11 @@ import {
   saveCleaningPhoto, deleteCleaningPhoto, getCleaningPhotoIndex, getCleaningPhotos, getCleaningDocPdf,
   getCleaningAttachments, getCleaningAttachment
 } from './modules/cleaningform.js';
+import {
+  getRepairForms, saveRepairForm, deleteRepairForm,
+  getRepairDocHtml, getRepairBlankDocHtml, getRepairDocPdf,
+  saveRepairPhoto, deleteRepairPhoto, getRepairPhotos
+} from './modules/repairform.js';
 
 /**
  * ============================================================================
@@ -103,7 +108,18 @@ const API_FUNCTIONS = {
   getCleaningDocPdf,
   getCleaningAttachments,
   getCleaningAttachment,
-  uploadNodeDocuments
+  uploadNodeDocuments,
+
+  // เอกสารซ่อม ITEL-FM-NE-005
+  getRepairForms,
+  saveRepairForm,
+  deleteRepairForm,
+  getRepairDocHtml,
+  getRepairBlankDocHtml,
+  getRepairDocPdf,
+  saveRepairPhoto,
+  deleteRepairPhoto,
+  getRepairPhotos
 };
 
 /** คำสั่งที่เรียกได้ก่อนล็อกอิน */

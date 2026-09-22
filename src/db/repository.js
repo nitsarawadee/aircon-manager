@@ -34,6 +34,7 @@ const SHEET_TO_TABLE = {
   Users: 'users',
   Budget: 'budgets',
   CleaningForm: 'cleaning_forms',
+  RepairForm: 'repair_forms',
   Config: 'config_values'
 };
 
