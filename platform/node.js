@@ -41,7 +41,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
 const { backupDatabase, pruneBackups } = await import('./backup.js');
-const { addMissingColumns } = await import('../src/db/migrate.js');
+const { addMissingTables, addMissingColumns } = await import('../src/db/migrate.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -245,9 +245,14 @@ db.exec('PRAGMA busy_timeout = 5000');
 
 console.log('ฐานข้อมูล: ' + dbPath);
 
-// เติมคอลัมน์ที่โค้ดต้องการแต่ฐานข้อมูลยังไม่มี ก่อนเปิดรับคำสั่งใดๆ
-// ตัวอ่านข้อมูลสร้าง SQL จากรายชื่อคอลัมน์ในโค้ด ถ้าฐานข้อมูลตามไม่ทัน
-// ทุกหน้าที่อ่านตารางนั้นจะพังทันที การอัปเดตจึงต้องเหลือแค่รีสตาร์ท
+// เติมตารางและคอลัมน์ที่โค้ดต้องการแต่ฐานข้อมูลยังไม่มี ก่อนเปิดรับคำสั่งใดๆ
+// ตัวอ่านข้อมูลสร้าง SQL จากนิยามในโค้ด ถ้าฐานข้อมูลตามไม่ทัน
+// ทุกหน้าที่แตะตารางนั้นจะพังทันที การอัปเดตจึงต้องเหลือแค่รีสตาร์ท
+//
+// ตารางต้องมาก่อนคอลัมน์เสมอ เพราะตัวเติมคอลัมน์ข้ามตารางที่ยังไม่มีไปเลย
+const addedTables = addMissingTables(db);
+if (addedTables.length) console.log('สร้างตารางใหม่ในฐานข้อมูล: ' + addedTables.join(', '));
+
 const addedCols = addMissingColumns(db);
 if (addedCols.length) console.log('เพิ่มคอลัมน์ใหม่ในฐานข้อมูล: ' + addedCols.join(', '));
 
