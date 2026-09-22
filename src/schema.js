@@ -13,7 +13,8 @@ export const SHEETS = {
   CONFIG: 'Config',
   USERS: 'Users',
   BUDGET: 'Budget',
-  CLEANFORM: 'CleaningForm'
+  CLEANFORM: 'CleaningForm',
+  REPAIRFORM: 'RepairForm'
 };
 
 export const AIRLIST_HEADERS = [
@@ -97,6 +98,61 @@ export function cleanFormColKind(name) {
   if (CLEANFORM_TIME_COLS.includes(name)) return 'time';
   return 'plain';
 }
+
+/* ==================== เอกสารซ่อม ITEL-FM-NE-005 ==================== */
+
+/**
+ * คอลัมน์ของชีต RepairForm
+ *
+ * ============================================================================
+ * ทำไมเป็นตารางของตัวเอง ไม่ใช้ CleaningForm ร่วมกัน
+ * ============================================================================
+ * ใบซ่อมกับใบล้างเป็นคนละแบบฟอร์มควบคุม (NE-005 กับ NE-004) และช่องแทบไม่ทับกันเลย
+ *
+ * ใบล้างมีเช็คลิสต์ 21 ข้อ · สองเครื่องต่อใบ (Unit2_* · EquipmentCondition2 · DocNo2)
+ * ซึ่งใบซ่อมไม่ใช้เลยสักช่อง — ใบซ่อมมีเครื่องเดียวทั้งใบ
+ * ส่วนใบซ่อมมีอาการเสีย สาเหตุ การแก้ไข ตารางอะไหล่ และข้อเสนอแนะ ซึ่งใบล้างไม่มี
+ *
+ * ยัดรวมกันจะได้ตารางที่ครึ่งหนึ่งว่างตลอดเวลา และจะยิ่งบวมตอนมีเอกสารติดตั้งอีกใบ
+ *
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น (กติกาเดียวกับ CLEANFORM_HEADERS)
+ */
+export const REPAIRFORM_HEADERS = [
+  'ID', 'Date', 'NodeName', 'SiteCode', 'Region', 'Province', 'LocationType',
+  'AirCode',
+  'Brand', 'BTU', 'IndoorSerial', 'IndoorAsset', 'OutdoorSerial', 'OutdoorAsset',
+  // ส่วนที่ 2 ของแบบฟอร์ม — สามช่องข้อความยาว
+  'Symptom', 'Cause', 'Fix',
+  // ส่วนที่ 3 — ผลตรวจ 5 ข้อ เก็บเป็น JSON แบบเดียวกับใบล้าง
+  'ChecklistJSON',
+  // ส่วนที่ 4 — อะไหล่ที่ใช้ 4 แถว เก็บเป็น JSON [{no, name, qty, note}]
+  'PartsJSON',
+  // ส่วนที่ 5
+  'Suggestion',
+  'CompanyName', 'TechnicianName', 'SupervisorName',
+  'Cost',
+  'CreatedAt', 'RecordedBy',
+  // เลขที่เอกสารที่คนอ่านออก ใช้ชุดเลขเดียวกับทั้งระบบ (งานซ่อมเป็น CM)
+  'DocNo',
+  // เคสงานซ่อมที่ใบนี้ผูกอยู่ ร้อยกับใบประวัติชุดเดียวกัน
+  'CaseID',
+  // เพิ่มภายหลัง — ต่อท้ายสุดเท่านั้น
+];
+
+/**
+ * รายการบันทึกผล 5 ข้อ ตามแบบฟอร์ม NE-005
+ * (มีก็อปปี้เดียวกันไว้ฝั่งหน้าเว็บ — ถ้าจะแก้ ให้แก้ทั้ง 2 ที่ให้ตรงกัน)
+ */
+export const REPAIR_CHECKLIST_ITEMS = [
+  { no: 1, label: 'ค่าแรงดันไฟฟ้า (Voltage)', type: 'value', unit: 'V (220–240)' },
+  { no: 2, label: 'ค่ากระแสคอมเพรสเซอร์ขณะทำงาน', type: 'value', unit: 'A' },
+  { no: 3, label: 'ค่าแรงดันน้ำยาด้านต่ำ (Low/Suction)', type: 'value', unit: 'PSI' },
+  { no: 4, label: 'ทดสอบเดินเครื่องต่อเนื่อง (Run Test)', type: 'check' },
+  { no: 5, label: 'ทำความสะอาดพื้นที่หลังติดตั้ง', type: 'check' }
+];
+
+/** จำนวนแถวอะไหล่บนแบบฟอร์ม — กระดาษมี 4 แถว */
+export const REPAIR_PART_ROWS = 4;
 
 /** ค่าตั้งต้นของชีต Config — เติมเฉพาะค่าที่ยังไม่มี ไม่ลบ/แก้ค่าที่ผู้ใช้เพิ่มเอง */
 export const CONFIG_DEFAULTS = {

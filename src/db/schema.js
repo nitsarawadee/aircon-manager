@@ -109,6 +109,33 @@ export const TABLES = {
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },
 
+  /**
+   * เอกสารบันทึกผลการซ่อม ตามแบบฟอร์มควบคุม ITEL-FM-NE-005
+   *
+   * แยกจาก cleaning_forms เพราะเป็นคนละแบบฟอร์มและช่องแทบไม่ทับกัน
+   * (ดูเหตุผลเต็มที่ REPAIRFORM_HEADERS ใน src/schema.js)
+   *
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ REPAIRFORM_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  repair_forms: {
+    sheet: 'RepairForm',
+    columns: {
+      ID: S, Date: D, NodeName: S, SiteCode: S, Region: S, Province: S, LocationType: S,
+      AirCode: S,
+      Brand: S, BTU: N, IndoorSerial: S, IndoorAsset: S, OutdoorSerial: S, OutdoorAsset: S,
+      Symptom: S, Cause: S, Fix: S,
+      ChecklistJSON: S,
+      PartsJSON: S,
+      Suggestion: S,
+      CompanyName: S, TechnicianName: S, SupervisorName: S,
+      Cost: N,
+      CreatedAt: DT, RecordedBy: S,
+      DocNo: S,
+      CaseID: S
+    },
+    indexes: [['AirCode'], ['Region'], ['CaseID'], ['CreatedAt']]
+  },
+
   users: {
     sheet: 'Users',
     columns: {
