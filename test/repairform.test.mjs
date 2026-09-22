@@ -286,3 +286,64 @@ test('ไม่มีที่เก็บไฟล์ ต้องยังบ�
   assert.ok(res.docNo);
   assert.equal((await getRepairForms(ctxOf(db))).length, 1);
 });
+
+/* ==================== ปิดงานจริง ไม่ใช่แค่ลงประวัติ ==================== */
+
+test('ออกเอกสารแล้ว สถานะเครื่องต้องกลับเป็น "ใช้งานปกติ"', async () => {
+  // ข้อนี้สำคัญที่สุดในไฟล์ — เจ้าของงานให้เอาปุ่ม "ปิดงานอย่างเดียว" ออก
+  // การออกเอกสารจึงเป็นทางเดียวที่ปิดงานซ่อมได้ ถ้าไม่คืนสถานะ เครื่องจะค้าง
+  // เป็น "รอซ่อม" ตลอดไป และไม่มีทางปิดงานได้อีกเลย
+  const db = freshDb();
+  assert.equal(db.prepare('SELECT Status s FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1').s, 'รอซ่อม');
+
+  await saveRepairForm(ctxOf(db), payload());
+
+  const after = db.prepare('SELECT Status s, Note n FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1');
+  assert.equal(after.s, 'ใช้งานปกติ');
+  assert.equal(String(after.n || ''), '', 'อาการที่แจ้งไว้ต้องถูกล้างออกจากข้อมูลเครื่อง');
+});
+
+test('อาการที่แจ้งไว้ต้องไม่หายไปจากระบบ ต้องย้ายไปอยู่ในประวัติ', async () => {
+  // ล้าง Note ทิ้งโดยไม่เก็บไว้ที่ไหน = อาการเสียที่แจ้งไว้หายไปทั้งระบบ
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET Note = ? WHERE AirCode = ?").run('คอมเพรสเซอร์ไม่ทำงาน', 'KKN-CPE-AIR-1');
+
+  await saveRepairForm(ctxOf(db), payload({ Symptom: 'ไม่เย็นเลย' }));
+
+  const [h] = await getHistory(ctxOf(db));
+  assert.ok(String(h.Detail).includes('คอมเพรสเซอร์ไม่ทำงาน'), 'ได้ ' + h.Detail);
+  assert.ok(String(h.Detail).includes('ไม่เย็นเลย'), 'อาการที่ช่างกรอกก็ต้องอยู่ด้วย');
+});
+
+test('คนกรอกลบอาการที่แจ้งไว้ทิ้ง ก็ต้องยังเก็บไว้ในประวัติ', async () => {
+  // ไม่พึ่งข้อความที่หน้าเว็บส่งมา เพราะคนกรอกแก้ได้
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET Note = ? WHERE AirCode = ?").run('น้ำยารั่ว', 'KKN-CPE-AIR-1');
+
+  await saveRepairForm(ctxOf(db), payload({ Symptom: 'อย่างอื่นไปเลย' }));
+
+  const [h] = await getHistory(ctxOf(db));
+  assert.ok(String(h.Detail).includes('น้ำยารั่ว'));
+});
+
+test('เครื่องที่ใช้งานปกติอยู่ ต้องไม่ถูกแตะสถานะ', async () => {
+  // ช่างซ่อมหน้างานเลยโดยไม่ได้แจ้งล่วงหน้า เครื่องยังปกติอยู่ ไม่ต้องไปเปลี่ยนอะไร
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET Status = 'ใช้งานปกติ', Note = 'หมายเหตุอื่น' WHERE AirCode = ?")
+    .run('KKN-CPE-AIR-1');
+
+  await saveRepairForm(ctxOf(db), payload());
+
+  const after = db.prepare('SELECT Status s, Note n FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1');
+  assert.equal(after.s, 'ใช้งานปกติ');
+  assert.equal(after.n, 'หมายเหตุอื่น', 'หมายเหตุที่ไม่เกี่ยวกับงานซ่อม ต้องไม่ถูกล้าง');
+});
+
+test('เครื่องที่ยังอยู่ขั้น "ชำรุด" ออกเอกสารแล้วต้องปิดงานให้ด้วย', async () => {
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET Status = 'ชำรุด' WHERE AirCode = ?").run('KKN-CPE-AIR-1');
+
+  await saveRepairForm(ctxOf(db), payload());
+
+  assert.equal(db.prepare('SELECT Status s FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1').s, 'ใช้งานปกติ');
+});

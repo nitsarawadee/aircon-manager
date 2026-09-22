@@ -103,6 +103,11 @@ export async function saveRepairForm(ctx, record) {
   const unit = await unitOf(ctx, record.AirCode);
   await ctx.assertRegionAccess(unit.Region);
 
+  // อาการที่แจ้งไว้ตอนเปิดเคส — เก็บไว้ก่อน เพราะจะถูกล้างออกจากข้อมูลเครื่องตอนปิดงาน
+  // ไม่พึ่งข้อความที่หน้าเว็บส่งมา เพราะคนกรอกลบทิ้งได้ ถ้าไม่ดักตรงนี้
+  // อาการเสียที่แจ้งไว้จะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
+  const reported = plainText(unit.Note).trim();
+
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
 
@@ -145,16 +150,46 @@ export async function saveRepairForm(ctx, record) {
     ctx.ss.appendRow(SHEETS.REPAIRFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
 
     // ลงประวัติ "ซ่อมแล้ว" ซึ่งเป็นตัวปิดเคสตามกติกาเดิมของระบบ
+    //
+    // อาการที่แจ้งไว้ตอนเปิดเคสต้องติดไปในประวัติด้วย เพราะกำลังจะถูกล้าง
+    // ออกจากข้อมูลเครื่อง ถ้าไม่เก็บไว้ที่นี่ก็หายไปจากระบบทั้งหมด
+    const symptom = plainText(row.Symptom).trim();
+    const detail = [reported && !symptom.includes(reported) ? 'อาการที่แจ้งไว้: ' + reported : '',
+                    [symptom, plainText(row.Fix).trim()].filter(Boolean).join(' → ')]
+      .filter(Boolean).join(' — ') || 'ซ่อมตามเอกสาร ' + row.DocNo;
+
     await addHistoryRaw(ctx, {
       AirCode: row.AirCode,
       Date: row.Date,
       EventType: CLOSE_EVENT,
-      Detail: [row.Symptom, row.Fix].filter(Boolean).join(' → ') || 'ซ่อมตามเอกสาร ' + row.DocNo,
+      Detail: detail,
       Cost: row.Cost,
       Technician: row.TechnicianName,
       Note: 'เอกสาร ' + row.DocNo,
       CaseID: row.CaseID
     });
+
+    // ============================================================================
+    // ปิดงานจริง — คืนสถานะเครื่องและล้างอาการเสียที่ค้างอยู่
+    // ============================================================================
+    // ขาดขั้นตอนนี้ไปไม่ได้ เพราะตอนนี้การออกเอกสารเป็นทางเดียวที่ปิดงานซ่อมได้
+    // (เจ้าของงานให้เอาปุ่ม "ปิดงานอย่างเดียว" ออก) ถ้าไม่คืนสถานะ เครื่องจะค้าง
+    // เป็น "รอซ่อม" ตลอดไป และขึ้นอยู่ในหน้างานซ่อมทั้งที่ซ่อมเสร็จแล้ว
+    //
+    // ล้าง Note ด้วย ไม่งั้นเครื่องที่ซ่อมเสร็จจะยังโชว์อาการเดิมค้างอยู่
+    // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
+    //
+    // เครื่องที่ไม่ได้อยู่ในสถานะงานซ่อม (เช่นช่างซ่อมหน้างานเลยโดยไม่ได้แจ้ง)
+    // ไม่ต้องแตะสถานะ เพราะมันใช้งานปกติอยู่แล้ว
+    const airRow = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === normalizeCode(unit.AirCode));
+    if (airRow && ['รอซ่อม', 'ชำรุด'].includes(plainText(airRow.Status).trim())) {
+      ctx.ss.writeByHeaders(SHEETS.AIRLIST, airRow._row, {
+        Status: 'ใช้งานปกติ',
+        Note: '',
+        UpdatedAt: ymdhms(new Date()),
+        UpdatedBy: row.RecordedBy
+      });
+    }
 
     await ctx.ss.flush();
     return { docNo: row.DocNo, caseId: row.CaseID, forms: await getRepairForms(ctx) };

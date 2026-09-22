@@ -7,7 +7,7 @@ import {
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
   getHistory, addHistoryRecord, deleteHistoryRecord,
-  reportRepair, markCannotRepair, completeRepairRecord
+  reportRepair, markCannotRepair
 } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
 import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
@@ -74,7 +74,6 @@ const API_FUNCTIONS = {
   // ขั้นของเคสงานซ่อม เรียงตามลำดับที่เกิดจริง
   reportRepair,
   markCannotRepair,
-  completeRepairRecord,
 
   getPlanYears,
   getCleaningPlan,

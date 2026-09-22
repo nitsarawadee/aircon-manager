@@ -5462,14 +5462,15 @@
                     <i class="ph ph-hourglass"></i> รอผู้ดูแลระบบอนุมัติ</span>`);
             }
             if (status === 'รอซ่อม') {
-              // ทางหลักคือออกเอกสารตามแบบฟอร์มควบคุม ซึ่งปิดเคสให้เองอยู่แล้ว
-              // ส่วนปุ่มเดิมเก็บไว้เป็นทางลัดสำหรับงานที่ไม่ต้องออกเอกสาร
+              // ปิดงานซ่อมได้ทางเดียวคือออกเอกสารตามแบบฟอร์มควบคุม ซึ่งลงประวัติ
+              // "ซ่อมแล้ว" และปิดเคสให้เองอยู่แล้ว
+              //
+              // เดิมมีปุ่ม "ปิดงานอย่างเดียว" เป็นทางลัดที่ไม่ต้องออกเอกสาร แต่เจ้าของงาน
+              // ให้เอาออก ด้วยเหตุผลเดียวกับที่หน้าแผนล้างแอร์ปิดรอบเองไม่ได้ —
+              // ปิดงานได้โดยไม่มีหลักฐาน แปลว่าตัวเลขเดินไปโดยไม่มีอะไรยืนยันย้อนหลัง
               actions.push(`<button onclick="openRepairForm('${jsStr(a.AirCode)}', '${jsStr(a.Note || '')}')"
                 class="text-white bg-[#f47920] hover:bg-[#d96615] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] text-xs font-medium inline-flex items-center gap-1">
                 <i class="ph ph-file-text"></i> ปิดงาน + ออกเอกสาร</button>`);
-              actions.push(`<button onclick='openCompleteRepairModal(${JSON.stringify(a).replace(/'/g,"&apos;")})'
-                class="text-emerald-700 hover:text-white hover:bg-emerald-600 px-3 py-1.5 rounded-lg transition shadow-sm border border-emerald-600 bg-white text-xs font-medium inline-flex items-center gap-1">
-                <i class="ph ph-check-circle"></i> ปิดงานอย่างเดียว</button>`);
             }
             if (status === 'ชำรุด' || status === 'รอซ่อม') {
               actions.push(`<button onclick="openCannotRepairModal('${jsStr(a.AirCode)}')"
@@ -5741,52 +5742,6 @@
       } catch (e) {}
     }
     window.submitReportRepair = submitReportRepair;
-
-    function openCompleteRepairModal(data) {
-      const content = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
-            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 class="text-lg font-bold text-emerald-700 flex items-center gap-2"><i class="ph ph-check-circle"></i> ปิดงานซ่อมบำรุง</h3>
-              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
-            </div>
-            <div class="p-6 space-y-4">
-              <div class="bg-emerald-50 text-emerald-700 text-xs p-3 rounded-lg flex gap-2">
-                <i class="ph ph-info text-lg shrink-0"></i><p>เมื่อกดบันทึก สถานะของแอร์ <b>${esc(data.AirCode)}</b> จะถูกเปลี่ยนกลับเป็น "ใช้งานปกติ" และข้อมูลจะถูกบันทึกลงหน้าประวัติให้อัตโนมัติ</p>
-              </div>
-              <input type="hidden" id="cr_air" value="${esc(data.AirCode)}">
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label>${dateField('cr_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500')}</div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียดการซ่อม / อะไหล่ที่เปลี่ยน</label><textarea id="cr_detail" rows="3" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm">อ้างอิงอาการเสีย: ${esc(data.Note)}</textarea></div>
-              <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label><input type="number" id="cr_cost" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ดำเนินการ</label><input id="cr_tech" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"></div>
-              </div>
-            </div>
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
-              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-              <button onclick="submitCompleteRepair()" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm"><i class="ph ph-floppy-disk"></i> บันทึกปิดงาน</button>
-            </div>
-          </div>
-        </div>`;
-      document.getElementById('modalRoot').innerHTML = content;
-    }
-
-    async function submitCompleteRepair() {
-      const record = { AirCode: document.getElementById('cr_air').value, Date: document.getElementById('cr_date').value, Detail: document.getElementById('cr_detail').value, Cost: document.getElementById('cr_cost').value, Technician: document.getElementById('cr_tech').value };
-      if(!record.Date) { showToast('กรุณาระบุวันที่ซ่อมเสร็จ', 'error'); return; }
-      try {
-        const result = await call('completeRepairRecord', record);
-        currentAirList = result.air;
-        currentHistory = result.history;
-        renderAirTable(currentAirList);
-        renderHistoryTable(); 
-        closeModal();
-        showToast('ปิดงานซ่อมและบันทึกประวัติสำเร็จ', 'success');
-        loadDashboard(); 
-        loadBudget();
-      } catch (e) {}
-    }
 
     /* ============== 5. BUDGET (งบประมาณ) ============== */
     async function loadBudget() {
