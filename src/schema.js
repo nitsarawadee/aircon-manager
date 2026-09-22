@@ -74,7 +74,10 @@ export const CLEANFORM_HEADERS = [
   'DocNo',
   // ผลประเมินของเครื่องที่ 2 — แบบฟอร์มกระดาษให้ติ๊กแยกรายเครื่อง
   // คอลัมน์ EquipmentCondition เดิมกลายเป็นผลของเครื่องที่ 1 (ดู slotCols ใน cleaningform.js)
-  'EquipmentCondition2'
+  'EquipmentCondition2',
+  // เลขที่ของเครื่องตัวที่สอง — การล้างของแต่ละเครื่องมีเลขของตัวเอง
+  // แม้จะอยู่ในเอกสารใบเดียวกัน (คอลัมน์ DocNo เดิมเป็นเลขของเครื่องตัวแรก)
+  'DocNo2'
 ];
 
 /**

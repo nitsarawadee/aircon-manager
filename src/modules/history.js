@@ -141,7 +141,9 @@ export function usedDocNumbers(ctx) {
   // กรณีนั้นถือว่าไม่มีเลขเอกสารให้หลบ ซึ่งถูกต้อง เพราะไม่มีการออกเลขเอกสารด้วย
   let docNos = [];
   try {
-    docNos = ctx.ss.objects(SHEETS.CLEANFORM).map(f => f.DocNo);
+    // เอกสารใบเดียวมีได้ถึงสองเลข เพราะการล้างของแต่ละเครื่องมีเลขของตัวเอง
+    // ต้องนับทั้งสองช่อง ไม่งั้นเลขของเครื่องตัวที่สองจะถูกออกซ้ำให้รายการอื่น
+    docNos = ctx.ss.objects(SHEETS.CLEANFORM).flatMap(f => [f.DocNo, f.DocNo2]);
   } catch { /* ยังไม่ได้โหลดตารางเอกสาร */ }
 
   return [...ids, ...docNos].filter(Boolean);

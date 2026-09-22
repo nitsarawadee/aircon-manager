@@ -43,8 +43,45 @@ const DOC_ASSETS = { fontHref: '/vendor/fonts.css', logoHref: '/assets/form-logo
  * ต้องเรียกภายใน withLock หลัง ensureBase แล้วเท่านั้น ไม่งั้นสองคนที่กด
  * บันทึกพร้อมกันจะได้เลขเดียวกัน
  */
-function nextDocNo(ctx, eventType, date) {
-  return makeHistoryId(eventType, date, usedDocNumbers(ctx));
+function nextDocNo(ctx, eventType, date, alsoUsed = []) {
+  return makeHistoryId(eventType, date, [...usedDocNumbers(ctx), ...alsoUsed]);
+}
+
+/**
+ * ออกเลขให้เครื่องที่ยังไม่มีเลข ในใบที่กำลังจะเขียน
+ *
+ * ============================================================================
+ * ทำไมเครื่องละเลข ทั้งที่เป็นเอกสารใบเดียวกัน
+ * ============================================================================
+ * ตัวเอกสารที่ปริ้นรวมสองเครื่องไว้ในใบเดียวตามแบบฟอร์มกระดาษ แต่หน่วยที่คน
+ * ตามงานจริงคือ "การล้างของเครื่องแต่ละตัว" ซึ่งควรมีเลขของตัวเองไว้อ้างอิง
+ *
+ * เลขของเครื่องตัวแรกอยู่คอลัมน์ DocNo เดิม ตัวที่สองอยู่ DocNo2
+ * (ชื่อไม่สมมาตรเพราะแก้ฐานข้อมูลได้แค่เพิ่มคอลัมน์ เปลี่ยนชื่อของเดิมไม่ได้)
+ *
+ * ⚠️ ตัวออกเลขนับจากแถวที่มีอยู่จริงเท่านั้น ยังไม่เห็นเลขที่ยังไม่ได้เขียนลงแถว
+ * จึงต้องส่งเลขที่เพิ่งออกในรอบเดียวกันกลับเข้าไปเอง ไม่งั้นเครื่องทั้งสองตัว
+ * จะได้เลขเดียวกัน
+ *
+ * @param {Object} view   หน้าตาของแถวหลังเขียนแล้ว (ใช้ดูว่าช่องไหนมีเครื่อง/มีเลขแล้ว)
+ * @param {Object} target ที่ให้เขียนเลขใหม่ลงไป — ตอนรวมใบคือ payload ไม่ใช่แถวเดิม
+ */
+function assignDocNumbers(ctx, view, date, target = view) {
+  const issued = [];
+
+  for (const slot of [1, 2]) {
+    const col = slot === 2 ? 'DocNo2' : 'DocNo';
+    if (!plainText(view['AirCode' + slot]).trim()) continue;   // ไม่มีเครื่องในช่องนี้
+
+    const have = plainText(view[col]).trim();
+    if (have) { issued.push(have); continue; }                 // มีเลขอยู่แล้ว
+
+    const next = nextDocNo(ctx, 'ล้างแอร์', date, issued);
+    target[col] = next;
+    issued.push(next);
+  }
+
+  return issued;
 }
 
 /* ==================== Node / Serial สำหรับ dropdown ==================== */
@@ -308,6 +345,10 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
 
   if (!Object.keys(payload).length) return;   // ไม่มีเครื่องใหม่ให้เติม
 
+  // เครื่องที่เพิ่งเติมเข้ามาต้องได้เลขของตัวเอง เหมือนตอนกรอกทั้งสองเครื่องพร้อมกัน
+  // ส่งเลขที่ใบนี้ถืออยู่แล้วเข้าไปด้วย ตัวออกเลขจะได้ไม่ออกเลขซ้ำกับของเดิม
+  assignDocNumbers(ctx, { ...existing, ...payload }, existing.Date, payload);
+
   // เช็คลิสต์: เอาของเดิมเป็นหลัก แล้วเติมเฉพาะคอลัมน์ของเครื่องที่เพิ่งกรอก
   payload.ChecklistJSON = JSON.stringify(
     mergeChecklists(existing.ChecklistJSON, record.Checklist || [], Object.keys(bySlot).map(Number))
@@ -474,7 +515,7 @@ export async function saveCleaningForm(ctx, record) {
     } else {
       // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
       record.DocType = 'cleaning';
-      record.DocNo = nextDocNo(ctx, 'ล้างแอร์', record.Date);
+      assignDocNumbers(ctx, record, record.Date);
 
       const headers = ctx.ss.headers(SHEETS.CLEANFORM);
       ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
@@ -974,7 +1015,18 @@ export async function uploadNodeDocuments(ctx, payload) {
     // ---------- ออกเลขที่เอกสารก่อน เพราะใช้เป็นชื่อโฟลเดอร์ของไฟล์ ----------
     // ออกเลขในล็อกเสมอ เหมือนตอนบันทึกฟอร์ม เพื่อไม่ให้สองคนได้เลขเดียวกัน
     const docDate = plainText(closeout && closeout.date) || ymd(new Date());
-    const docNo = nextDocNo(ctx, 'ล้างแอร์', docDate);
+
+    // เครื่องละเลข เหมือนใบที่กรอกในระบบ — เลขของเครื่องตัวแรกใช้เป็นชื่อโฟลเดอร์ไฟล์ด้วย
+    const docNumbers = {
+      AirCode1: units[0] ? units[0].airCode : '',
+      AirCode2: units[1] ? units[1].airCode : ''
+    };
+    assignDocNumbers(ctx, docNumbers, docDate);
+
+    // ไม่ได้ติ๊กปิดงานในแผน = ไม่มีรายการเครื่อง แต่ยังต้องมีเลขให้ใบนี้
+    // ไม่งั้นไฟล์ที่แนบมาจะไม่มีชื่อโฟลเดอร์ให้เก็บ
+    if (!docNumbers.DocNo) docNumbers.DocNo = nextDocNo(ctx, 'ล้างแอร์', docDate);
+    const docNo = docNumbers.DocNo;
 
     // ---------- เก็บไฟล์ลงดิสก์ ----------
     const stored = ctx.attachments.save(docNo, docDate, files);
@@ -1018,6 +1070,7 @@ export async function uploadNodeDocuments(ctx, payload) {
       ID: 'CF' + Date.now(),
       DocType: 'cleaning',
       DocNo: docNo,
+      DocNo2: docNumbers.DocNo2 || '',
       Date: docDate,
       NodeName: nodeName,
       SiteCode: plainText(first.SiteCode),

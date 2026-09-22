@@ -76,7 +76,7 @@ test('คอลัมน์ที่เพิ่มใหม่ต้องอ�
   //
   // ตรึงท้ายรายการไว้เป็นสัญญาณเตือน: เพิ่มคอลัมน์ใหม่แล้วเทสต์นี้จะแดง
   // เป็นการบังคับให้คนที่เพิ่มต้องยืนยันว่าวางไว้ท้ายสุดจริง ไม่ใช่แทรกกลาง
-  assert.deepEqual(CLEANFORM_HEADERS.slice(-3), ['DocType', 'DocNo', 'EquipmentCondition2']);
+  assert.deepEqual(CLEANFORM_HEADERS.slice(-3), ['DocNo', 'EquipmentCondition2', 'DocNo2']);
 });
 
 test('ลำดับคอลัมน์ในโค้ดกับในฐานข้อมูลต้องเรียงตรงกัน', () => {

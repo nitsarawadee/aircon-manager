@@ -181,6 +181,55 @@ test('รวมแล้วไฟล์เดิมต้องถูกล้�
   assert.equal((await getCleaningForms(ctxOf(db)))[0].PdfUrl, '');
 });
 
+/* ==================== เลขที่รายเครื่อง ==================== */
+
+test('กรอกสองเครื่องพร้อมกัน ต้องได้เลขคนละเลข ไม่ใช่เลขเดียวกัน', async () => {
+  // ตัวออกเลขนับจากแถวที่มีอยู่จริง ยังไม่เห็นเลขที่เพิ่งออกในรอบเดียวกัน
+  // ถ้าไม่ส่งกลับเข้าไปเอง เครื่องทั้งสองตัวจะได้เลขเดียวกัน
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), {
+    ...oneUnit(1),
+    AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier'
+  });
+
+  const [form] = await getCleaningForms(ctxOf(db));
+  assert.ok(form.DocNo, 'เครื่องที่ 1 ต้องมีเลข');
+  assert.ok(form.DocNo2, 'เครื่องที่ 2 ต้องมีเลข');
+  assert.notEqual(form.DocNo, form.DocNo2, 'สองเครื่องต้องไม่ได้เลขเดียวกัน');
+});
+
+test('กรอกทีละเครื่องแล้วรวมใบ เครื่องที่เติมทีหลังก็ต้องได้เลขของตัวเอง', async () => {
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), oneUnit(1));
+
+  const before = (await getCleaningForms(ctxOf(db)))[0];
+  assert.ok(before.DocNo);
+  assert.equal(before.DocNo2, '', 'ตอนมีเครื่องเดียว ยังไม่ต้องมีเลขที่สอง');
+
+  await saveCleaningForm(ctxOf(db), oneUnit(2));
+
+  const after = (await getCleaningForms(ctxOf(db)))[0];
+  assert.equal(after.DocNo, before.DocNo, 'เลขของเครื่องแรกต้องไม่เปลี่ยน');
+  assert.ok(after.DocNo2, 'เครื่องที่เติมทีหลังต้องได้เลข');
+  assert.notEqual(after.DocNo2, after.DocNo);
+});
+
+test('เลขที่ออกให้เครื่อง ต้องไม่ไปชนกับเลขของใบประวัติ', async () => {
+  // เอกสารกับประวัติใช้ชุดเลขเดียวกัน ถ้าตัวออกเลขไม่นับช่องที่สองด้วย
+  // รายการถัดไปจะได้เลขซ้ำกับเลขของเครื่องที่ 2
+  const db = freshDb();
+  await saveCleaningForm(ctxOf(db), {
+    ...oneUnit(1),
+    AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier'
+  });
+
+  const [form] = await getCleaningForms(ctxOf(db));
+  const hist = await getHistory(ctxOf(db));
+
+  const all = [form.DocNo, form.DocNo2, ...hist.map(h => h.ID)].filter(Boolean);
+  assert.equal(new Set(all).size, all.length, 'ทุกเลขต้องไม่ซ้ำกันเลย: ' + all.join(', '));
+});
+
 /* ==================== สิ่งที่ต้องไม่รวม ==================== */
 
 test('กรอกเครื่องเดิมซ้ำ ต้องถูกปฏิเสธพร้อมบอกเลขใบเดิม', async () => {

@@ -5870,8 +5870,11 @@
    * ไม่ใช่ "การไปหนึ่งครั้ง" — เครื่องตัวไหนล้างวันไหน ผลเป็นยังไง ค่าเท่าไหร่
    * ตารางจึงแยกให้เห็นทีละเครื่อง ส่วนตัวเอกสารยังเป็นใบเดียวเหมือนเดิม
    *
-   * เลขที่เอกสารเป็นเลขเดียวกันทั้งสองแถว ไม่ได้ออกเลขใหม่ให้เครื่องที่สอง
-   * เพราะมันคือเอกสารใบเดียวกันจริงๆ แถวที่สองขึ้นลูกศรนำหน้าให้เห็นว่าต่อกัน
+   * การล้างของแต่ละเครื่องมีเลขของตัวเอง (เครื่องแรกใช้ DocNo เครื่องที่สองใช้ DocNo2)
+   * แต่ทั้งสองแถวเปิดเอกสารใบเดียวกัน เพราะกระดาษใบนั้นมีทั้งสองเครื่องอยู่แล้ว
+   *
+   * ใบเก่าที่บันทึกไว้ก่อนมีเลขรายเครื่อง จะยังไม่มี DocNo2 กรณีนั้นแถวที่สอง
+   * ใช้เลขของใบไปก่อน ดีกว่าขึ้นช่องว่างจนดูเหมือนข้อมูลหาย
    */
   function cleaningFormUnitRows(form) {
     const slots = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
@@ -5881,6 +5884,7 @@
       form,
       slot,
       first: i === 0,
+      docNo: (slot === 2 && String(form.DocNo2 || '').trim()) || displayDocNo(form),
       airCode: String(form['AirCode' + slot] || '').trim(),
       cond: String(form[slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition'] || '').trim(),
       price: unitPriceOf(form, slot, i === 0)
@@ -5909,7 +5913,7 @@
     if (!q) return currentCleaningForms || [];
     return (currentCleaningForms || []).filter(f =>
       [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2,
-       f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, fmtDate(f.Date)]
+       f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, f.DocNo2, fmtDate(f.Date)]
         .map(v => String(v == null ? '' : v).toLowerCase())
         .join(' ')
         .includes(q)
@@ -5998,8 +6002,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
-        <td class="px-4 py-3 font-mono text-[12px] ${r.first ? 'text-slate-600' : 'text-slate-400'}">
-          ${r.first ? '' : '<span class="mr-1">&#8627;</span>'}${esc(displayDocNo(f)) || '-'}
+        <td class="px-4 py-3 font-mono text-[12px] text-slate-600">
+          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${esc(r.docNo) || '-'}
         </td>
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
@@ -6018,20 +6022,18 @@ const CLEANING_CHECKLIST_ITEMS = [
           r.price ? '฿' + r.price.toLocaleString() : '<span class="text-gray-300">-</span>'
         }</td>
         <td class="px-4 py-3 whitespace-nowrap">${
-          // ปุ่มเอกสารขึ้นเฉพาะแถวแรกของใบ เพราะทั้งสองแถวเปิดเอกสารใบเดียวกัน
-          // ถ้าขึ้นทั้งสองแถวจะดูเหมือนมีเอกสารสองใบ ซึ่งไม่จริง
-          !r.first
-            ? '<span class="text-xs text-gray-400">อยู่ในเอกสารใบเดียวกัน</span>'
-            : isAttach
-              ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
-                   class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                   <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
-              : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น"
-                   class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                   <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
-                 <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
-                   class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                   <i class="ph ph-download-simple"></i> PDF</button>`
+          // ทั้งสองแถวเปิดเอกสารได้ เพราะกระดาษใบนั้นมีทั้งสองเครื่องอยู่แล้ว
+          // กดจากแถวไหนก็ได้ใบเดียวกัน ซึ่งถูกต้อง ไม่ใช่เอกสารคนละใบ
+          isAttach
+            ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
+            : `<button onclick="openCleaningDoc(${f._row})" title="เปิดเอกสารเพื่อดูหรือสั่งปริ้น (ใบนี้มีทั้งสองเครื่อง)"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+               <button onclick="downloadCleaningPdf(${f._row}, '${esc(f.ID)}', this)" title="บันทึกเป็นไฟล์ PDF"
+                 class="text-slate-500 hover:text-white hover:bg-slate-600 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
+                 <i class="ph ph-download-simple"></i> PDF</button>`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${isAttach ? '' : `<button onclick="openPhotoModal(${f._row}, ${r.slot})" title="แนบรูปถ่ายของเครื่องตัวที่ ${r.slot}"
