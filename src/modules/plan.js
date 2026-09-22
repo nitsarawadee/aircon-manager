@@ -365,12 +365,32 @@ export async function createCleaningPlan(ctx, year) {
   });
 }
 
+/**
+ * มีเอกสารของการล้างครั้งนั้นอยู่จริงหรือยัง
+ *
+ * "ครั้งนั้น" = เครื่องตัวนี้ ปีนี้ รอบนี้ ซึ่งตรงกับที่ฟอร์มบันทึกผลการล้าง
+ * และการแนบเอกสารเขียนมือเก็บไว้ทั้งคู่
+ */
+function hasCleaningDoc(ctx, airCode, year, round) {
+  const want = normalizeCode(airCode);
+  const y = String(year == null ? '' : year).trim();
+  const r = String(round == null ? '' : round).trim();
+
+  return ctx.ss.objects(SHEETS.CLEANFORM).some(f =>
+    String(f.PlanYear == null ? '' : f.PlanYear).trim() === y &&
+    String(f.PlanRound == null ? '' : f.PlanRound).trim() === r &&
+    [f.AirCode1, f.AirCode2].some(c => c && normalizeCode(c) === want)
+  );
+}
+
 export async function updateCleaningRound(ctx, year, row, round, data) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('plan');
 
     const name = planSheet(year);
     await ctx.connect();
+    // ต้องมีตารางเอกสารในมือ เพื่อตรวจว่าการปิดงานรอบนี้มีเอกสารรองรับหรือยัง
+    await ctx.ensureBase();
     if (!(await ctx.ss.hasSheet(name))) throw new Error('ไม่พบแผนล้างแอร์ปี ' + year);
     await ctx.ss.load(name);
     await ctx.ss.ensureColumns(name, PLAN_HEADERS);
@@ -384,6 +404,25 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
 
     // อ่านสถานะเดิมไว้ก่อน เพื่อดูว่ารอบนี้ "เพิ่งถูกปิดงาน" หรือ "ปิดอยู่แล้ว"
     const wasDone = String(ctx.ss.cell(name, row, startCol + 4)).trim() === 'ล้างเสร็จสิ้น';
+
+    // ============================================================================
+    // ปิดงานได้ต่อเมื่อมีเอกสารรองรับ
+    // ============================================================================
+    // ช่องสถานะในหน้าแผนกดเปลี่ยนเป็น "ล้างเสร็จสิ้น" ได้เลยโดยไม่ต้องมีหลักฐานอะไร
+    // ซึ่งทำให้ตัวเลขความคืบหน้าและงบประมาณเดินไปได้ทั้งที่ไม่มีใบงานสักใบ
+    //
+    // ทางที่ถูกคือกรอกฟอร์มบันทึกผลการล้าง หรือแนบเอกสารที่ช่างเขียนมือ
+    // แล้วระบบจะปิดงานให้เองพร้อมลงประวัติและค่าใช้จ่ายให้ครบ
+    //
+    // ตรวจเฉพาะตอน "เพิ่งเปลี่ยนเป็นเสร็จ" รอบที่ปิดไปแล้วยังแก้ราคา/ชื่อช่างได้ตามปกติ
+    if (data.status === 'ล้างเสร็จสิ้น' && !wasDone && !hasCleaningDoc(ctx, airCode, year, round)) {
+      throw new Error(
+        'ยังปิดงานรอบที่ ' + round + ' ของเครื่อง ' + airCode + ' ไม่ได้ ' +
+        'เพราะยังไม่มีเอกสารของการล้างครั้งนี้ — ' +
+        'กรุณากรอกฟอร์มบันทึกผลการล้าง หรือแนบเอกสารที่เขียนด้วยมือก่อน ' +
+        'แล้วระบบจะปิดงานให้เองพร้อมบันทึกประวัติและค่าใช้จ่าย'
+      );
+    }
 
     ctx.ss.setValues(name, row, startCol, [[
       data.planDate || '', data.actualDate || '', data.price || '',

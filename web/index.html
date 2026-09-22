@@ -4599,6 +4599,8 @@
 
     function openRoundModal(i, r) {
       const p = currentPlan[i];
+      // จำไว้ว่ารอบนี้ปิดไปแล้วหรือยัง ใช้ตัดสินว่าจะเตือนเรื่องเอกสารหรือไม่
+      roundWasDone = String(p['R' + r + '_Status'] || '').trim() === 'ล้างเสร็จสิ้น';
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -4616,12 +4618,18 @@
                 <div><label class="block text-xs font-medium text-[#1153a1] mb-1">ดำเนินการ</label>${dateField('rp_actual', p['R'+r+'_ActualDate'], 'w-full rounded-lg border-blue-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-blue-50')}</div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
-                <select id="rp_status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">
+                <select id="rp_status" onchange="onRoundStatusChange()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">
                   <option ${p['R'+r+'_Status']==='รอดำเนินการ'?'selected':''}>รอดำเนินการ</option>
                   <option ${p['R'+r+'_Status']==='นัดหมายแล้ว'?'selected':''}>นัดหมายแล้ว</option>
                   <option ${p['R'+r+'_Status']==='ล้างเสร็จสิ้น'?'selected':''}>ล้างเสร็จสิ้น</option>
                   <option ${p['R'+r+'_Status']==='ยกเลิก'?'selected':''}>ยกเลิก</option>
                 </select>
+                <!-- เตือนตั้งแต่ตอนเลือก ดีกว่าปล่อยให้กดบันทึกแล้วค่อยโดนปฏิเสธ
+                     ส่วนด่านจริงอยู่ที่เซิร์ฟเวอร์เสมอ ตรงนี้กันได้แค่การกดพลาด -->
+                <p id="rp_needDoc" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
+                  <i class="ph ph-warning-circle text-base mt-0.5 flex-shrink-0"></i>
+                  <span>ปิดงานจากตรงนี้ไม่ได้ ต้องมีเอกสารก่อน — กด <b>กรอกฟอร์ม</b> หรือ <b>แนบเอกสาร + ปิดงาน</b> ข้างล่าง แล้วระบบจะปิดงานให้เองพร้อมลงประวัติและค่าใช้จ่าย</span>
+                </p>
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ราคา (฿)</label><input type="number" id="rp_price" value="${esc(p['R'+r+'_Price'])}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
@@ -4687,6 +4695,18 @@
         technician: p['R' + r + '_Technician'] || ''
       });
     }
+
+    /** เตือนทันทีที่เลือก "ล้างเสร็จสิ้น" ในรอบที่ยังไม่เคยปิด */
+    function onRoundStatusChange() {
+      const sel = document.getElementById('rp_status');
+      const hint = document.getElementById('rp_needDoc');
+      if (!sel || !hint) return;
+      hint.classList.toggle('hidden', !(sel.value === 'ล้างเสร็จสิ้น' && !roundWasDone));
+    }
+    window.onRoundStatusChange = onRoundStatusChange;
+
+    /** รอบที่กำลังแก้อยู่ ปิดงานไปแล้วหรือยัง (รอบที่ปิดแล้วยังแก้ราคา/ช่างได้ตามปกติ) */
+    let roundWasDone = false;
 
     async function saveRound(i, r) {
       const data = {
