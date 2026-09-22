@@ -359,10 +359,12 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
   const p2 = payload.Price2 !== undefined ? payload.Price2 : existing.Price2;
   payload.Price = (Number(p1) || 0) + (Number(p2) || 0) || '';
 
+  // เวลาต้องรวมกัน ไม่ใช่เอาของใบแรกแล้วทิ้งของใบหลัง (ดู mergeWorkTime)
+  Object.assign(payload, mergeWorkTime(existing, record));
+
   // ช่องส่วนกลางของใบ เติมให้เฉพาะที่ยังว่างอยู่ ไม่ทับของเดิม
   // ผลประเมินไม่อยู่ในรายการนี้ เพราะเป็นของรายเครื่อง — slotPayload เขียนให้ตามช่องของมันเอง
-  for (const col of ['TimeStart', 'TimeEnd', 'TotalTime',
-                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
+  for (const col of ['AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
     if (!plainText(existing[col]).trim() && plainText(record[col]).trim()) {
       payload[col] = record[col];
     }
@@ -374,6 +376,88 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
   payload.PdfFileId = '';
 
   ctx.ss.writeByHeaders(SHEETS.CLEANFORM, row, payload);
+}
+
+/* ==================== เวลาทำงานของใบที่รวมกัน ==================== */
+
+/** "09:30" -> 570 นาที · ค่าที่อ่านไม่ออกคืน null ไม่ใช่ 0 (0 คือเที่ยงคืนจริงๆ) */
+function minutesOf(hhmm) {
+  const m = plainText(hhmm).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+/** 570 -> "09:30" */
+const hhmmOf = mins => String(Math.floor(mins / 60) % 24).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+
+/** 190 -> "3 ชม. 10 นาที" — รูปแบบเดียวกับที่หน้าเว็บคำนวณให้ตอนกรอกใบเดียว */
+const durationText = mins => Math.floor(mins / 60) + ' ชม. ' + (mins % 60) + ' นาที';
+
+/**
+ * ช่วงเวลาทำงานของใบหนึ่ง คืน null ถ้ากรอกไม่ครบ
+ * เลิกงานเป็นตัวเลขน้อยกว่าเริ่มงาน = ข้ามเที่ยงคืน (กติกาเดียวกับ computeDuration_ ในหน้าเว็บ)
+ */
+function spanOf(row) {
+  const from = minutesOf(row.TimeStart);
+  const to = minutesOf(row.TimeEnd);
+  if (from === null || to === null) return null;
+  return { from, to: to < from ? to + 24 * 60 : to };
+}
+
+/**
+ * รวมเวลาทำงานของสองใบที่กำลังถูกรวมเป็นใบเดียว
+ *
+ * ============================================================================
+ * ปัญหาที่ตัวนี้แก้
+ * ============================================================================
+ * ของเดิมเวลาถูกนับเป็น "ช่องส่วนกลาง" ที่เติมให้เฉพาะตอนยังว่าง แปลว่าถ้าเครื่อง
+ * แรกกรอก 09:00-10:30 ไว้แล้ว เครื่องที่สองกรอก 14:00-15:30 ตามมา เวลาของ
+ * เครื่องที่สองจะถูกทิ้งเงียบๆ เอกสารขึ้นแค่ 09:00-10:30 ทั้งที่อยู่หน้างานถึงบ่าย
+ *
+ * ============================================================================
+ * ทำไมไม่บวกเวลาตรงๆ
+ * ============================================================================
+ * เพราะหน้างานล้างสองตัวพร้อมกันเป็นเรื่องปกติ ซึ่งจะกรอกเวลามาทับกัน
+ * เช่น 09:00-10:30 ทั้งสองเครื่อง ถ้าบวกกันจะได้ 3 ชม. ทั้งที่ทำงานจริง 1.5 ชม.
+ *
+ * จึงคิดจาก "ช่วงเวลาที่ถูกครอบคลุมจริง" ซึ่งถูกทั้งสามแบบ
+ *   ล้างคนละช่วง  09:00-10:30 + 14:00-15:30  ->  เริ่ม 09:00 จบ 15:30 รวม 3 ชม.
+ *   ล้างพร้อมกัน   09:00-10:30 + 09:00-10:30  ->  เริ่ม 09:00 จบ 10:30 รวม 1 ชม. 30 นาที
+ *   คาบเกี่ยวกัน   09:00-10:30 + 10:00-11:00  ->  เริ่ม 09:00 จบ 11:00 รวม 2 ชม.
+ *
+ * ช่องบนแบบฟอร์มจึงอ่านได้ตรงตัว — "เวลาเริ่ม–สิ้นสุด" คือช่วงที่อยู่หน้างาน
+ * ส่วน "รวมเวลา" คือเวลาที่ลงมือจริง
+ *
+ * @returns {Object} ช่องที่ต้องเขียนทับ — ว่างเปล่าถ้าไม่มีอะไรต้องเปลี่ยน
+ */
+function mergeWorkTime(existing, record) {
+  const spans = [spanOf(existing), spanOf(record)].filter(Boolean);
+
+  // ใบใดใบหนึ่งกรอกเวลาไม่ครบ ยึดของที่กรอกครบไว้ ดีกว่าลบทิ้งทั้งคู่
+  if (!spans.length) return {};
+  if (spans.length === 1) {
+    const only = spans[0];
+    return { TimeStart: hhmmOf(only.from), TimeEnd: hhmmOf(only.to), TotalTime: durationText(only.to - only.from) };
+  }
+
+  spans.sort((a, b) => a.from - b.from);
+
+  // รวมช่วงที่ทับกันเข้าด้วยกันก่อน แล้วค่อยบวกความยาวของช่วงที่เหลือ
+  const merged = [spans[0]];
+  for (const s of spans.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (s.from <= last.to) last.to = Math.max(last.to, s.to);
+    else merged.push({ ...s });
+  }
+
+  const worked = merged.reduce((sum, s) => sum + (s.to - s.from), 0);
+  return {
+    TimeStart: hhmmOf(merged[0].from),
+    TimeEnd: hhmmOf(merged[merged.length - 1].to),
+    TotalTime: durationText(worked)
+  };
 }
 
 /** รวมเช็คลิสต์สองชุด โดยหยิบเฉพาะคอลัมน์ของช่องที่ระบุมาจากชุดใหม่ */
