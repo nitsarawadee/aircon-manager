@@ -1376,7 +1376,7 @@
                oninput="dfType(this)" onblur="dfCommit(this)"
                onkeydown="if(event.key==='Enter'){event.preventDefault();dfCommit(this);}">
         <button type="button" tabindex="-1" onclick="dfPicker(this)"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1153a1] p-0.5">
+                class="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-11 flex items-center justify-center text-gray-400 hover:text-[#1153a1]">
           <i class="ph ph-calendar-blank"></i>
         </button>
       </div>`;
@@ -1661,11 +1661,22 @@
       });
     }
 
-    function closeModal() { 
+    /**
+     * ปิดหน้าต่าง/หน้าที่เปิดอยู่
+     *
+     * ล้างเนื้อหาแบบหน่วง 200ms เพื่อให้ทันเห็นภาพจางหาย แต่ต้องเช็คก่อนล้างว่า
+     * สิ่งที่อยู่ในนั้น "ยังเป็นตัวเดิม" อยู่หรือเปล่า
+     *
+     * ถ้าไม่เช็ค แล้วมีหน้าใหม่ถูกเปิดขึ้นมาภายใน 200ms นั้น ตัวจับเวลาของหน้าเก่า
+     * จะไปล้างหน้าใหม่ทิ้ง กลายเป็นจอว่างเปล่าโดยไม่มีอะไรฟ้อง
+     * (เจอจริงตอนทดสอบการกู้ร่างที่กรอกค้างไว้)
+     */
+    function closeModal() {
       const root = document.getElementById('modalRoot');
-      if(root.children[0]) {
-        root.children[0].classList.add('opacity-0');
-        setTimeout(() => root.innerHTML = '', 200);
+      const el = root.children[0];
+      if (el) {
+        el.classList.add('opacity-0');
+        setTimeout(() => { if (root.children[0] === el) root.innerHTML = ''; }, 200);
       } else { root.innerHTML = ''; }
     }
 
@@ -6231,6 +6242,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       try {
         cfPhotos[slot + '-' + index] = await shrinkImage(file);
         renderCfPhotos();
+        updateCfProgress();
       } catch (e) {
         showToast('อ่านไฟล์รูปไม่สำเร็จ', 'error');
       }
@@ -6242,6 +6254,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   function cfRemovePhoto(slot, index) {
     delete cfPhotos[slot + '-' + index];
     renderCfPhotos();
+    updateCfProgress();
   }
   window.cfRemovePhoto = cfRemovePhoto;
 
@@ -6590,9 +6603,25 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   /**
-   * เปิดฟอร์มบันทึกผลการล้าง
-   * @param {Object} ctx ไม่ใส่ = โหมดเดิม (เลือก Node เอง ได้ 2 เครื่องในใบเดียว)
-   *                     ใส่ { airCode, year, round } = โหมดแยกใบต่อเครื่อง กรอกเสร็จปิดงานในแผนเลย
+   * หน้ากรอกผลการล้าง — เต็มจอ ออกแบบให้มือถือใช้ก่อน
+   *
+   * ============================================================================
+   * ทำไมเป็นหน้าเต็มจอ ไม่ใช่กล่องลอย
+   * ============================================================================
+   * ช่างกรอกจากมือถือที่หน้างานจริง ไม่ใช่มานั่งกรอกที่ออฟฟิศทีหลัง
+   *
+   * วัดของจริงบนจอ 375x812 ตอนยังเป็นกล่องลอย: ช่องที่เลื่อนได้จริงสูงแค่ 477px
+   * แต่เนื้อหาข้างในสูง 2,638px — ต้องเลื่อน 5.5 รอบในกล่องเล็กๆ และตารางเช็คลิสต์
+   * ยังล้นออกนอกกล่องจนต้องเลื่อนซ้ายขวาอีกแกนหนึ่ง รวมกับจุดที่นิ้วแตะยาก
+   * (เล็กกว่า 44px) อีก 80 จุด
+   *
+   * หน้าเต็มจอได้พื้นที่คืนทั้งหมด เลื่อนแกนเดียว และปุ่มบันทึกติดขอบล่างตลอด
+   *
+   * ============================================================================
+   * เลื่อนแกนเดียว = เช็คลิสต์เป็นการ์ดทีละข้อ
+   * ============================================================================
+   * ตาราง 5 คอลัมน์บนจอ 375px บีบจนคอลัมน์ค่าที่วัดเหลือ 60px ซึ่งกรอกไม่ไหว
+   * การ์ดทีละข้อยาวกว่าก็จริง แต่เลื่อนนิ้วเดียวลงไปเรื่อยๆ ได้ ไม่ต้องเล็งแตะ
    */
   function openCleaningFormModal(ctx) {
     cfContext = (ctx && ctx.airCode) ? ctx : null;
@@ -6611,143 +6640,161 @@ const CLEANING_CHECKLIST_ITEMS = [
       `<option value="${esc(n.NodeName)}" ${single && n.NodeName === single.node.NodeName ? 'selected' : ''}>${esc(n.NodeName)} (${esc(n.SiteCode || '-')})</option>`
     ).join('');
 
-    // ส่วนหัวสำหรับโหมดแยกใบ: แสดงเครื่องที่กำลังล้าง + รอบ + ช่องกรอกค่าล้าง
-    const singleHeader = !single ? '' : `
-            <div class="p-3 bg-blue-50/60 border border-blue-100 rounded-lg space-y-3">
-              <div class="flex items-center justify-between flex-wrap gap-2">
-                <div class="text-sm">
-                  <span class="font-bold text-[#1153a1]">${esc(single.unit.AirCode)}</span>
-                  <span class="text-gray-500"> — ${esc(single.node.NodeName)}</span>
-                </div>
-                <span class="px-2 py-1 rounded-full bg-[#f47920] text-white text-xs font-medium">รอบที่ ${esc(cfContext.round)} / ${esc(cfContext.year)}</span>
-              </div>
-              <div class="grid grid-cols-2 gap-3 text-xs text-gray-600">
-                <div>ยี่ห้อ: ${esc(single.unit.Brand || '-')} | BTU: ${esc(single.unit.BTU || '-')}</div>
-                <div>Serial: ${esc(single.unit.IndoorSerial || '-')} / ${esc(single.unit.OutdoorSerial || '-')}</div>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">ค่าล้างเครื่องนี้ (บาท)</label>
-                <input type="number" id="cf_price" min="0" step="0.01" placeholder="0.00" value="${esc(cfContext.price || '')}" class="w-full sm:w-56 rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]">
-                <p class="text-xs text-gray-500 mt-1">${cfContext.price ? 'ดึงราคาที่ตั้งไว้ในแผนมาให้แล้ว แก้ได้ถ้าราคาจริงต่างจากนี้' : 'ยังไม่ได้ตั้งราคาในแผน กรอกได้ที่นี่'} — บันทึกแล้วระบบจะปิดงานรอบนี้และบันทึกค่าล้างเข้างบประมาณให้</p>
-              </div>
-            </div>`;
+    const card = inner => `<section class="bg-white rounded-xl border border-gray-200 p-4">${inner}</section>`;
+    const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
+
+    // ส่วนหัวสำหรับโหมดแยกใบ: บอกว่ากำลังล้างเครื่องไหน รอบไหน พร้อมช่องกรอกค่าล้าง
+    const singleHeader = !single ? '' : card(`
+      <div class="flex items-start justify-between gap-2 flex-wrap mb-3">
+        <div>
+          <div class="font-bold text-[#1153a1]">${esc(single.unit.AirCode)}</div>
+          <div class="text-sm text-gray-500">${esc(single.node.NodeName)}</div>
+        </div>
+        <span class="px-2.5 py-1 rounded-full bg-[#f47920] text-white text-xs font-medium">รอบที่ ${esc(cfContext.round)} / ${esc(cfContext.year)}</span>
+      </div>
+      <div class="text-xs text-gray-500 mb-3">
+        ยี่ห้อ ${esc(single.unit.Brand || '-')} · BTU ${esc(single.unit.BTU || '-')} ·
+        SN ${esc(single.unit.IndoorSerial || '-')} / ${esc(single.unit.OutdoorSerial || '-')}
+      </div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">ค่าล้างเครื่องนี้ (บาท)</label>
+      <input type="number" id="cf_price" min="0" step="0.01" inputmode="decimal" placeholder="0.00" value="${esc(cfContext.price || '')}" class="${field}">
+      <p class="text-xs text-gray-500 mt-1">${cfContext.price ? 'ดึงราคาที่ตั้งไว้ในแผนมาให้แล้ว แก้ได้ถ้าราคาจริงต่างจากนี้' : 'ยังไม่ได้ตั้งราคาในแผน กรอกได้ที่นี่'}</p>`);
 
     const content = `
-      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative z-10 animate-[fadeIn_0.2s_ease] max-h-[90vh] flex flex-col">
-          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-clipboard-text text-[#1153a1]"></i> ${single ? 'บันทึกผลการล้าง + ปิดงาน' : 'บันทึกผลการล้างเครื่องปรับอากาศ'}</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+      <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+
+        <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
+          <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            <button onclick="closeCleaningForm()" title="ย้อนกลับ"
+              class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
+              <i class="ph ph-arrow-left text-xl"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <h2 class="font-bold text-gray-800 leading-tight truncate">${single ? 'บันทึกผล + ปิดงาน' : 'บันทึกผลการล้าง'}</h2>
+              <p id="cf_progress" class="text-xs text-gray-500 leading-tight"></p>
+            </div>
           </div>
-          <div class="p-6 space-y-5 overflow-y-auto">
+        </header>
+
+        <main id="cf_scroll" class="flex-1 overflow-y-auto">
+          <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
 
             ${singleHeader}
 
-            <div class="${single ? 'hidden' : ''}">
+            ${single ? '' : card(`
               <label class="block text-sm font-medium text-gray-700 mb-1">เลือก Node <span class="text-red-500">*</span></label>
-              <select id="cf_node" onchange="onCleaningFormNodeChange()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 bg-white outline-none">
+              <select id="cf_node" onchange="onCleaningFormNodeChange()" class="${field} bg-white">
                 <option value="">-- เลือก Node --</option>
                 ${nodeOptions}
               </select>
-            </div>
+              <div id="cf_unitInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3"></div>`)}
 
-            <div id="cf_unitInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-4 ${single ? 'hidden' : ''}"></div>
-
-            <div class="grid grid-cols-3 gap-4">
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ <span class="text-red-500">*</span></label>
-                ${dateField('cf_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]')}</div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่ม</label>
-                <input type="time" id="cf_timeStart" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาสิ้นสุด</label>
-                <input type="time" id="cf_timeEnd" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
-            </div>
-
-            <div>
-              <h4 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2"><i class="ph ph-list-checks text-[#f47920]"></i> รายละเอียดการบำรุงรักษา (21 ข้อ)</h4>
-              <div class="border border-gray-200 rounded-lg overflow-hidden">
-                <table class="w-full text-xs">
-                  <thead class="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th class="px-2 py-2 text-left w-6">#</th>
-                      <th class="px-2 py-2 text-left">รายการ</th>
-                      <th class="px-2 py-2 text-left w-28">${single ? 'ผลตรวจเช็ค' : 'ตัวที่ 1'}</th>
-                      <th class="px-2 py-2 text-left w-28 ${single ? 'hidden' : ''}">ตัวที่ 2</th>
-                      <th class="px-2 py-2 text-left w-32">หมายเหตุ</th>
-                    </tr>
-                  </thead>
-                  <tbody id="cf_checklistBody" class="divide-y divide-gray-100"></tbody>
-                </table>
-              </div>
-            </div>
+            ${card(`
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ <span class="text-red-500">*</span></label>
+                  ${dateField('cf_date', new Date().toISOString().slice(0,10), field)}</div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่ม</label>
+                  <input type="time" id="cf_timeStart" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาสิ้นสุด</label>
+                  <input type="time" id="cf_timeEnd" class="${field}"></div>
+              </div>`)}
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">ผลประเมินสภาพเครื่องปรับอากาศ</label>
+              <h3 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2 px-1">
+                <i class="ph ph-list-checks text-[#f47920]"></i> รายละเอียดการบำรุงรักษา (21 ข้อ)
+              </h3>
+              <div id="cf_checklistBox" class="space-y-2"></div>
+            </div>
+
+            ${card(`
+              <label class="block text-sm font-medium text-gray-700 mb-2">ผลประเมินสภาพเครื่องปรับอากาศ</label>
               <!-- แยกผลรายเครื่อง เพราะไปล้างสองตัวแล้วเจอตัวหนึ่งไม่สมบูรณ์เป็นเรื่องปกติ
-                   ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ
-                   ไม่งั้นฟอร์มเปล่าที่ปริ้นออกไปจะมีผลประเมินติดมาแล้ว -->
+                   ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ -->
               <div class="space-y-2">
-                <div class="flex items-center gap-4 flex-wrap">
+                <div class="flex items-center gap-3 flex-wrap">
                   <span class="text-xs text-gray-500 w-14 ${single ? 'hidden' : ''}">ตัวที่ 1</span>
-                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องสมบูรณ์"> สภาพเครื่องสมบูรณ์</label>
-                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition" value="สภาพเครื่องควรปรับปรุง"> สภาพเครื่องควรปรับปรุง</label>
+                  <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition" value="สภาพเครื่องสมบูรณ์" class="w-5 h-5"> สภาพเครื่องสมบูรณ์</label>
+                  <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition" value="สภาพเครื่องควรปรับปรุง" class="w-5 h-5"> ควรปรับปรุง</label>
                 </div>
-                <div id="cf_cond2Row" class="flex items-center gap-4 flex-wrap hidden">
+                <div id="cf_cond2Row" class="flex items-center gap-3 flex-wrap hidden">
                   <span class="text-xs text-gray-500 w-14">ตัวที่ 2</span>
-                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition2" value="สภาพเครื่องสมบูรณ์"> สภาพเครื่องสมบูรณ์</label>
-                  <label class="flex items-center gap-2 text-sm"><input type="radio" name="cf_condition2" value="สภาพเครื่องควรปรับปรุง"> สภาพเครื่องควรปรับปรุง</label>
+                  <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition2" value="สภาพเครื่องสมบูรณ์" class="w-5 h-5"> สภาพเครื่องสมบูรณ์</label>
+                  <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition2" value="สภาพเครื่องควรปรับปรุง" class="w-5 h-5"> ควรปรับปรุง</label>
                 </div>
-              </div>
-            </div>
+              </div>`)}
 
-            <div>
-              <h4 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h4>
-              <p class="text-xs text-gray-500 mb-2">แนบได้เลยตรงนี้ ไม่ต้องไปกดเพิ่มทีหลัง — เว้นว่างไว้ก่อนก็ได้ แล้วค่อยมาเพิ่มจากปุ่ม "รูปถ่าย" ในตาราง</p>
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h3>
+              <p class="text-xs text-gray-500 mb-2">แนบได้เลยตรงนี้ — เว้นว่างไว้ก่อนก็ได้ แล้วค่อยมาเพิ่มจากปุ่ม "รูปถ่าย" ในตาราง</p>
               <div id="cf_photoBox"></div>
-              <input type="file" id="cf_photoFile" accept="image/*" class="hidden">
-            </div>
+              <input type="file" id="cf_photoFile" accept="image/*" class="hidden">`)}
 
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">บันทึกเพิ่มเติม</label>
-              <textarea id="cf_note" rows="2" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></textarea></div>
+            ${card(`
+              <label class="block text-sm font-medium text-gray-700 mb-1">บันทึกเพิ่มเติม</label>
+              <textarea id="cf_note" rows="2" class="${field} resize-none"></textarea>`)}
 
-            <div class="grid grid-cols-3 gap-4">
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
-                <input id="cf_company" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
-                <input id="cf_tech" value="${single ? esc(cfContext.technician || '') : ''}" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
-                <input id="cf_supervisor" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
-            </div>
+            ${card(`
+              <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
+                  <input id="cf_company" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
+                  <input id="cf_tech" value="${single ? esc(cfContext.technician || '') : ''}" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                  <input id="cf_supervisor" class="${field}"></div>
+              </div>`)}
 
-          </div>
-          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 rounded-b-2xl flex-shrink-0">
-            <div class="flex flex-col sm:flex-row gap-2">
-              <button onclick="printCleaningFormPreview()" id="cf_printBtn" class="px-4 py-2 text-sm font-medium text-[#1153a1] bg-white border border-[#1153a1] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2" title="ปริ้นฟอร์มตามข้อมูลที่กรอกไว้ตอนนี้ (จะกรอกครบหรือไม่ครบก็ได้) โดยไม่บันทึกข้อมูลลงระบบ เผื่อจะเขียนด้วยมือหน้างานแล้วถ่ายรูปส่งภายหลัง">
-                <i class="ph ph-printer"></i> ปริ้นฟอร์ม (ไม่บันทึกข้อมูล)
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
+              <button onclick="printCleaningFormPreview()" id="cf_printBtn" class="px-4 py-3 text-sm font-medium text-[#1153a1] bg-white border border-[#1153a1] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2" title="ปริ้นฟอร์มตามข้อมูลที่กรอกไว้ตอนนี้ โดยไม่บันทึกลงระบบ">
+                <i class="ph ph-printer"></i> ปริ้นฟอร์ม (ไม่บันทึก)
               </button>
-              <button onclick="openAttachDocsDialog()" id="cf_attachBtn" class="px-4 py-2 text-sm font-medium text-[#f47920] bg-white border border-[#f47920] rounded-lg hover:bg-orange-50 flex items-center justify-center gap-2" title="แนบไฟล์เอกสารเข้ากับ Node ที่เลือก เช่น ฟอร์มที่เขียนด้วยมือแล้วถ่ายรูป ใบเสร็จ หรือเอกสารอื่นๆ">
+              <button onclick="openAttachDocsDialog()" id="cf_attachBtn" class="px-4 py-3 text-sm font-medium text-[#f47920] bg-white border border-[#f47920] rounded-lg hover:bg-orange-50 flex items-center justify-center gap-2" title="แนบไฟล์เอกสารเข้ากับ Node ที่เลือก">
                 <i class="ph ph-paperclip"></i> แนบไฟล์เอกสาร
               </button>
             </div>
-            <div class="flex gap-3 justify-end">
-              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-              <button onclick="submitCleaningForm()" id="cf_submitBtn" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm flex items-center gap-2"><i class="ph ph-floppy-disk"></i> ${single ? 'บันทึกและปิดงาน' : 'บันทึก'}</button>
-            </div>
           </div>
-        </div>
+        </main>
+
+        <footer class="bg-white border-t border-gray-200 flex-shrink-0">
+          <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            <button onclick="closeCleaningForm()" class="px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 flex-shrink-0">ยกเลิก</button>
+            <button onclick="submitCleaningForm()" id="cf_submitBtn" class="flex-1 px-4 py-3 text-base font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm flex items-center justify-center gap-2">
+              <i class="ph ph-floppy-disk text-lg"></i> ${single ? 'บันทึกและปิดงาน' : 'บันทึก'}
+            </button>
+          </div>
+        </footer>
       </div>`;
+
     document.getElementById('modalRoot').innerHTML = content;
     renderChecklistRows();
 
     // เปิดฟอร์มใหม่ = เริ่มนับรูปใหม่ ไม่เอารูปของใบก่อนหน้าติดมาด้วย
     cfPhotos = {};
     renderCfPhotos();
+
+    // ทุกการพิมพ์/เลือก ทำสองอย่าง: อัปเดตตัวนับด้านบน และเก็บร่างไว้กันข้อมูลหาย
+    const page = document.querySelector('#modalRoot .fixed');
+    page.addEventListener('input', onCfChanged);
+    page.addEventListener('change', onCfChanged);
+
+    offerCfDraft();
+    updateCfProgress();
   }
 
-  /** วาดตารางเช็คลิสต์ 21 ข้อ ตามชนิดของแต่ละข้อ (check / value / select) */
+  /**
+   * เช็คลิสต์ 21 ข้อ — การ์ดทีละข้อ
+   *
+   * ใช้ชื่อช่องเดิมทุกอย่าง (.cf_val + data-no + data-col) ตัวส่งข้อมูลจึงไม่ต้องแก้เลย
+   * เปลี่ยนแค่หน้าตาจากแถวในตารางเป็นการ์ด
+   */
   function renderChecklistRows() {
-    const tbody = document.getElementById('cf_checklistBody');
-    tbody.innerHTML = CLEANING_CHECKLIST_ITEMS.map(item => {
+    const box = document.getElementById('cf_checklistBox');
+    if (!box) return;
+
+    // min-h-[44px] เพราะนิ้วมือต้องการพื้นที่แตะอย่างน้อยเท่านี้
+    // ปล่อยให้ความสูงมาจาก padding อย่างเดียวจะได้ 37-42px ซึ่งพลาดบ่อยบนมือถือ
+    const inputCls = 'cf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
+
+    box.innerHTML = CLEANING_CHECKLIST_ITEMS.map(item => {
       const inputHtml = (col) => {
         if (item.type === 'check') {
           // ต้องมีตัวเลือกว่างไว้ข้างหน้าและเลือกไว้เป็นค่าเริ่มต้นเสมอ
@@ -6756,31 +6803,212 @@ const CLEANING_CHECKLIST_ITEMS = [
           //   1. ปริ้นฟอร์มเปล่าไปเขียนมือ แต่ใน PDF มีเครื่องหมายถูกติดมาครบ 21 ข้อแล้ว
           //   2. ร้ายแรงกว่า — ฟอร์มที่บันทึกจริงจะอ้างว่าตรวจครบทุกข้อและปกติหมด
           //      ทั้งที่ช่างอาจไม่ได้แตะเลยสักข้อ กลายเป็นเอกสารที่ข้อมูลไม่ตรงความจริง
-          return `<select data-no="${item.no}" data-col="${col}" class="cf_val w-full text-xs rounded border-gray-300 border px-1.5 py-1 bg-white outline-none">
+          return `<select data-no="${item.no}" data-col="${col}" class="${inputCls} bg-white">
             <option value="" selected>-</option><option value="ปกติ">ปกติ</option><option value="ผิดปกติ">ผิดปกติ</option></select>`;
         }
         if (item.type === 'select') {
-          return `<select data-no="${item.no}" data-col="${col}" class="cf_val w-full text-xs rounded border-gray-300 border px-1.5 py-1 bg-white outline-none">
+          return `<select data-no="${item.no}" data-col="${col}" class="${inputCls} bg-white">
             <option value="">-</option>${item.options.map(o => `<option value="${o}">${o}</option>`).join('')}</select>`;
         }
-        return `<div class="flex items-center gap-1">
-          <input data-no="${item.no}" data-col="${col}" class="cf_val w-full text-xs rounded border-gray-300 border px-1.5 py-1 outline-none" type="number" step="any">
-          <span class="text-[10px] text-gray-400 flex-shrink-0">${item.unit || ''}</span></div>`;
+        return `<input data-no="${item.no}" data-col="${col}" class="${inputCls}" type="number" step="any" inputmode="decimal" placeholder="${esc(item.unit || '')}">`;
       };
-      return `<tr>
-        <td class="px-2 py-1.5 align-top text-gray-500">${item.no}</td>
-        <td class="px-2 py-1.5 align-top">${esc(item.label)}</td>
-        <td class="px-2 py-1.5 align-top">${inputHtml('val1')}</td>
-        <td class="px-2 py-1.5 align-top ${cfContext ? 'hidden' : ''}">${inputHtml('val2')}</td>
-        <td class="px-2 py-1.5 align-top"><input data-no="${item.no}" data-col="note" class="cf_val w-full text-xs rounded border-gray-300 border px-1.5 py-1 outline-none"></td>
-      </tr>`;
+
+      const slotLabel = n => `<div class="text-[11px] text-gray-500 mb-1">${cfContext ? 'ผลตรวจเช็ค' : 'ตัวที่ ' + n}</div>`;
+
+      return `
+        <div class="bg-white rounded-xl border border-gray-200 p-3">
+          <div class="flex gap-2 mb-2.5">
+            <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-medium flex items-center justify-center flex-shrink-0">${item.no}</span>
+            <div class="min-w-0">
+              <div class="text-sm text-gray-800 leading-snug">${esc(item.label)}</div>
+              ${item.unit ? `<div class="text-[11px] text-gray-400 mt-0.5">เกณฑ์: ${esc(item.unit)}</div>` : ''}
+            </div>
+          </div>
+          <div class="grid ${cfContext ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
+            <div>${slotLabel(1)}${inputHtml('val1')}</div>
+            <div class="${cfContext ? 'hidden' : ''}">${slotLabel(2)}${inputHtml('val2')}</div>
+          </div>
+          <input data-no="${item.no}" data-col="note" placeholder="หมายเหตุ (ถ้ามี)"
+            class="cf_val w-full min-h-[44px] rounded-lg border-gray-200 border px-3 py-2 text-sm mt-2 outline-none focus:border-[#1153a1]">
+        </div>`;
     }).join('');
   }
 
+  /* ---------- ตัวนับความคืบหน้า ---------- */
+
+  /** กรอกไปแล้วกี่ข้อ และแนบรูปไปกี่ใบ — ให้เห็นตั้งแต่หัวหน้าโดยไม่ต้องเลื่อนหา */
+  function updateCfProgress() {
+    const el = document.getElementById('cf_progress');
+    if (!el) return;
+
+    const cols = cfContext ? ['val1'] : ['val1', 'val2'];
+    const wanted = CLEANING_CHECKLIST_ITEMS.length * cols.length;
+    let done = 0;
+    for (const col of cols) {
+      document.querySelectorAll('.cf_val[data-col="' + col + '"]').forEach(inp => {
+        if (String(inp.value || '').trim()) done++;
+      });
+    }
+
+    const photoSlots = cfPhotoUnits().length * 9;
+    const photoDone = Object.keys(cfPhotos).length;
+
+    el.textContent = 'กรอกแล้ว ' + done + '/' + wanted + ' ช่อง' +
+      (photoSlots ? ' · รูป ' + photoDone + '/' + photoSlots : '');
+  }
+  window.updateCfProgress = updateCfProgress;
+
+  /* ---------- ร่างที่เก็บไว้ในเครื่อง ---------- */
+
+  /**
+   * เก็บสิ่งที่กรอกไว้ในเครื่องของผู้ใช้ กันข้อมูลหายตอนเน็ตหลุดหรือปิดหน้าไปเอง
+   *
+   * ============================================================================
+   * เก็บเฉพาะตัวหนังสือ ไม่เก็บรูป
+   * ============================================================================
+   * ค่าที่วัดจากมิเตอร์ 21 ข้อคือของที่หายแล้วหาคืนไม่ได้ ต้องกลับไปวัดใหม่หน้างาน
+   * ส่วนรูปยังอยู่ในคลังภาพของมือถืออยู่ดี เลือกใหม่ได้
+   *
+   * และรูป 18 ใบเป็น base64 รวมกันหลายเมกะไบต์ ซึ่งเกินพื้นที่ที่เบราว์เซอร์ให้เก็บ
+   * ถ้าฝืนเก็บจะพังทั้งร่าง รวมถึงตัวหนังสือที่สำคัญกว่าด้วย
+   */
+  const CF_DRAFT_KEY = 'aircon.cleaningFormDraft';
+  let cfDraftTimer = null;
+
+  function onCfChanged() {
+    updateCfProgress();
+    clearTimeout(cfDraftTimer);
+    cfDraftTimer = setTimeout(saveCfDraft, 800);
+  }
+
+  /** สิ่งที่กรอกอยู่ตอนนี้ทั้งหมด (ยกเว้นรูป) */
+  function readCfFields() {
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const radio = name => (document.querySelector('input[name="' + name + '"]:checked') || {}).value || '';
+
+    const vals = {};
+    document.querySelectorAll('.cf_val').forEach(inp => {
+      const v = String(inp.value || '');
+      if (v) vals[inp.getAttribute('data-no') + '|' + inp.getAttribute('data-col')] = v;
+    });
+
+    return {
+      node: val('cf_node'), date: val('cf_date'),
+      timeStart: val('cf_timeStart'), timeEnd: val('cf_timeEnd'),
+      price: val('cf_price'), note: val('cf_note'),
+      company: val('cf_company'), tech: val('cf_tech'), supervisor: val('cf_supervisor'),
+      cond1: radio('cf_condition'), cond2: radio('cf_condition2'),
+      vals
+    };
+  }
+
+  function saveCfDraft() {
+    try {
+      const f = readCfFields();
+      const hasAny = Object.keys(f.vals).length || f.cond1 || f.cond2 || f.note || f.company || f.tech || f.supervisor;
+      if (!hasAny) { localStorage.removeItem(CF_DRAFT_KEY); return; }
+
+      localStorage.setItem(CF_DRAFT_KEY, JSON.stringify({
+        at: Date.now(),
+        ctx: cfContext ? { airCode: cfContext.airCode, year: cfContext.year, round: cfContext.round } : null,
+        fields: f
+      }));
+    } catch (e) { /* พื้นที่เต็มหรือเบราว์เซอร์ปิดไว้ — ไม่ใช่เรื่องที่ต้องขัดจังหวะคนกรอก */ }
+  }
+
+  function clearCfDraft() {
+    try { localStorage.removeItem(CF_DRAFT_KEY); } catch (e) { /* ไม่มีก็ไม่เป็นไร */ }
+  }
+
+  /** ร่างที่เก็บไว้เป็นของฟอร์มที่กำลังเปิดอยู่หรือเปล่า */
+  function draftMatchesNow(d) {
+    if (!d) return false;
+    if (cfContext) {
+      return !!d.ctx && String(d.ctx.airCode) === String(cfContext.airCode) &&
+             String(d.ctx.year) === String(cfContext.year) &&
+             String(d.ctx.round) === String(cfContext.round);
+    }
+    return !d.ctx;
+  }
+
+  /** เจอร่างค้างอยู่ ถามก่อนว่าจะเอากลับมามั้ย ไม่เติมให้เองเงียบๆ */
+  async function offerCfDraft() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(CF_DRAFT_KEY) || 'null'); } catch (e) { return; }
+    if (!draftMatchesNow(d)) return;
+
+    // ระหว่างรอคนตอบ หน้าอาจถูกปิดไปแล้ว ต้องเช็คก่อนทุกครั้งที่จะไปแตะช่องกรอก
+    const stillOpen = () => !!document.getElementById('cf_checklistBox');
+    if (!stillOpen()) return;
+
+    const when = new Date(d.at);
+    const ok = await showConfirm(
+      'มีข้อมูลที่กรอกค้างไว้เมื่อ ' + when.toLocaleString('th-TH') + ' เอากลับมาใส่ให้มั้ย?\n' +
+      '(รูปถ่ายไม่ได้เก็บไว้ ต้องเลือกใหม่)'
+    );
+    if (!ok) { clearCfDraft(); return; }
+    if (!stillOpen()) return;
+
+    applyCfDraft(d.fields);
+    updateCfProgress();
+    showToast('เอาข้อมูลที่กรอกค้างไว้กลับมาแล้ว');
+  }
+
+  function applyCfDraft(f) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    const pick = (name, v) => {
+      if (!v) return;
+      const el = document.querySelector('input[name="' + name + '"][value="' + v + '"]');
+      if (el) el.checked = true;
+    };
+
+    if (f.node) {
+      set('cf_node', f.node);
+      onCleaningFormNodeChange();   // ต้องวาดข้อมูลเครื่องกับช่องรูปใหม่ให้ตรงกับ Node ที่กู้มา
+    }
+    ['date', 'timeStart', 'timeEnd', 'price', 'note', 'company', 'tech', 'supervisor']
+      .forEach(k => set('cf_' + (k === 'date' ? 'date' : k), f[k]));
+
+    pick('cf_condition', f.cond1);
+    pick('cf_condition2', f.cond2);
+
+    Object.entries(f.vals || {}).forEach(([key, v]) => {
+      const [no, col] = key.split('|');
+      const el = document.querySelector('.cf_val[data-no="' + no + '"][data-col="' + col + '"]');
+      if (el) el.value = v;
+    });
+  }
+
+  /* ---------- ปิดหน้า ---------- */
+
+  /**
+   * ปิดหน้ากรอกฟอร์ม — ถามก่อนถ้ายังมีของที่กรอกค้างอยู่
+   *
+   * หน้าเต็มจอไม่มีพื้นหลังให้กดปิดโดยบังเอิญก็จริง แต่ปุ่มย้อนกลับกดพลาดได้
+   * และบนมือถือการกดปุ่ม back ของเครื่องก็พาออกจากหน้าไปเหมือนกัน
+   */
+  async function closeCleaningForm() {
+    const f = readCfFields();
+    const dirty = Object.keys(f.vals).length || Object.keys(cfPhotos).length ||
+                  f.cond1 || f.cond2 || f.note || f.company || f.supervisor;
+
+    if (dirty) {
+      const ok = await showConfirm('ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก ออกจากหน้านี้เลยมั้ย?\n(ข้อมูลที่พิมพ์ไว้จะถูกเก็บเป็นร่างให้ ยกเว้นรูปถ่าย)');
+      if (!ok) return;
+      saveCfDraft();
+    }
+    cfPhotos = {};
+    closeModal();
+  }
+  window.closeCleaningForm = closeCleaningForm;
+
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
   function onCleaningFormNodeChange() {
-    const nodeName = document.getElementById('cf_node').value;
+    const sel = document.getElementById('cf_node');
     const box = document.getElementById('cf_unitInfo');
+    if (!sel || !box) return;   // หน้าถูกปิดไปแล้วระหว่างที่ยังมีงานค้างอยู่
+
+    const nodeName = sel.value;
     const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
     if (!node) { box.innerHTML = ''; return; }
 
@@ -6802,6 +7030,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     // ล้างรูปที่เลือกไว้ด้วย เพราะมันเป็นรูปของ Node เดิม
     cfPhotos = {};
     renderCfPhotos();
+    updateCfProgress();
 
     if (node.units.length > 2) {
       box.innerHTML += `<div class="sm:col-span-2 text-xs text-amber-600 flex items-center gap-1"><i class="ph ph-warning"></i> Node นี้มีมากกว่า 2 เครื่อง ระบบจะบันทึกเฉพาะ 2 เครื่องแรกในฟอร์มนี้ (บันทึกฟอร์มแยกสำหรับเครื่องที่เหลือได้)</div>`;
@@ -6921,6 +7150,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         }
       }
       cfPhotos = {};
+      clearCfDraft();   // บันทึกเข้าระบบแล้ว ไม่ต้องเก็บร่างไว้อีก
 
       renderCleaningFormTable();
       closeModal();
