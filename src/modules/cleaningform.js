@@ -1,6 +1,6 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd } from '../values.js';
-import { addHistoryRaw, getHistory, makeHistoryId, usedDocNumbers } from './history.js';
+import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
 import { closePlanRound } from './plan.js';
 
@@ -429,7 +429,9 @@ export async function getCleaningForms(ctx, airCode) {
     list = list.filter(o => (info.regions || []).includes(normalizeRegion(o.Region)));
   }
 
-  return list.sort((a, b) => (a.CreatedAt < b.CreatedAt ? 1 : -1));
+  // เรียงใหม่ก่อนเก่า — ใบที่บันทึกวินาทีเดียวกันตัดสินด้วยลำดับที่เข้ามา
+  // (เกิดขึ้นจริงตอนรวมใบ ซึ่งเขียนสองแถวติดกันในคำสั่งเดียว)
+  return list.sort(newestFirst('CreatedAt'));
 }
 
 /**
