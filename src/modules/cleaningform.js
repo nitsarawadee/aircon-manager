@@ -362,8 +362,7 @@ function mergeIntoForm(ctx, existing, record, bySlot) {
   // ช่องส่วนกลางของใบ เติมให้เฉพาะที่ยังว่างอยู่ ไม่ทับของเดิม
   // ผลประเมินไม่อยู่ในรายการนี้ เพราะเป็นของรายเครื่อง — slotPayload เขียนให้ตามช่องของมันเอง
   for (const col of ['TimeStart', 'TimeEnd', 'TotalTime',
-                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName',
-                     'MissingPhotoNote']) {
+                     'AdditionalNote', 'CompanyName', 'TechnicianName', 'SupervisorName']) {
     if (!plainText(existing[col]).trim() && plainText(record[col]).trim()) {
       payload[col] = record[col];
     }

@@ -1,27 +1,22 @@
 /**
- * กติกาเรื่องรูปถ่ายประกอบเอกสาร
+ * แก้รูปของเอกสารที่บันทึกไปแล้ว
  *
  * ============================================================================
  * ที่มา
  * ============================================================================
- * เอกสาร 25 ใบในระบบ มีรูปแนบอยู่แค่ 4 ใบ และทั้ง 4 ใบนั้นแนบครบ 9/9
- * ไม่มีใบไหนอยู่ระหว่างกลาง แปลว่าคนไม่ได้ "แนบไปครึ่งเดียวแล้วลืม"
- * แต่เป็น "แนบก็แนบครบ ไม่แนบก็ไม่แนบเลย"
+ * เอกสาร 25 ใบในระบบ มีรูปแนบแค่ 4 ใบ และทั้ง 4 ใบแนบครบ 9/9
+ * ไม่มีใบไหนอยู่ระหว่างกลาง แปลว่าไม่ใช่ "แนบไปครึ่งเดียวแล้วลืม"
+ * แต่เป็น "แนบก็แนบครบ ไม่แนบก็ไม่แนบเลย" เจ้าของงานจึงให้บังคับครบทั้ง 9 ช่อง
  *
- * เจ้าของงานจึงให้บังคับแนบตอนบันทึก แต่รูป 3 ช่องสุดท้าย (กระแส แรงดันไฟ
- * แรงดันน้ำยา) ต้องใช้เครื่องมือวัด ถ้าวันนั้นช่างไม่ได้เอาไป ก็ถ่ายย้อนหลังไม่ได้
- * บังคับให้ครบทั้ง 9 = คนที่ลืมบันทึกเอกสารไม่ได้เลยสักใบ ทั้งที่ล้างไปแล้วจริง
- *
- * ทางออกคือให้ขาดได้ แต่ต้องบอกเหตุผล แล้วเหตุผลไปขึ้นบนเอกสารให้คนอ่านเห็น
- * ว่ากรอบที่ว่างอยู่นั้นว่างเพราะอะไร ไม่ใช่ว่างเฉยๆ โดยไม่มีใครรู้
+ * ด่านบังคับอยู่ฝั่งหน้าเว็บ (ดู photo-required-web.test.mjs) เพราะรูปเก็บด้วย
+ * เลขที่เอกสารซึ่งเพิ่งมีตอนบันทึกเสร็จ ตอนที่เซิร์ฟเวอร์ตรวจได้จึงยังไม่มีรูปให้ตรวจ
+ * ไฟล์นี้คุมฝั่งเซิร์ฟเวอร์ คือการอ่านรูปเดิมมาแก้
  *
  * ============================================================================
  * กติกาที่ล็อกไว้
  * ============================================================================
- * - เหตุผลที่รูปวัดค่าไม่ครบ ต้องถูกเก็บลงฐานข้อมูล และขึ้นบนหน้ารูปของเอกสาร
- * - กรอกครบไม่ต้องใส่เหตุผล เอกสารต้องไม่มีบรรทัดนั้นโผล่มา
- * - รวมใบ (กรอกทีละเครื่องแล้วรวมเป็นใบเดียว) เหตุผลต้องไม่หายไป
- * - อ่านรูปของเอกสารมาแก้ได้ แม้ปิดงานในแผนไปแล้ว
+ * - อ่านรูปของเอกสารมาแก้ได้ และต้องได้ตัวรูปจริง ไม่ใช่แค่รายชื่อช่อง
+ * - แก้ได้แม้ปิดงานในแผนไปแล้ว และการแก้ต้องไม่ทำให้รอบที่ปิดไว้ขยับ
  * - ใบที่เป็นเอกสารแนบ (ถ่ายฟอร์มที่เขียนมือมา) แก้รูปแบบนี้ไม่ได้
  */
 
@@ -30,58 +25,8 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
-import { CLEANFORM_HEADERS } from '../src/schema.js';
 import { Ctx } from '../src/context.js';
-import { buildCleaningDocHtml } from '../src/modules/cleaning-doc.js';
 import { saveCleaningForm, getCleaningPhotos, saveCleaningPhoto } from '../src/modules/cleaningform.js';
-
-/* ==================== เหตุผลต้องขึ้นบนเอกสาร ==================== */
-
-const docForm = (over = {}) => ({
-  DocNo: 'PM2609-07', ID: 'CF123', Date: '2026-09-15',
-  NodeName: 'วังน้อย', SiteCode: 'AYA-WNI', Province: 'อยุธยา',
-  AirCode1: 'AYA-WNI-AIR-1', Unit1_Brand: 'Daikin', Unit1_BTU: '18000',
-  Price1: 450, EquipmentCondition: 'สภาพเครื่องสมบูรณ์',
-  TechnicianName: 'ช่างสมชาย', ChecklistJSON: '[]',
-  ...over
-});
-
-test('เหตุผลที่รูปวัดค่าไม่ครบ ต้องขึ้นบนหน้ารูปของเอกสาร', () => {
-  // คนที่เปิดเอกสารมาดูต้องรู้ว่ากรอบที่ว่างอยู่ ว่างเพราะอะไร
-  const html = buildCleaningDocHtml(docForm({ MissingPhotoNote: 'ไม่ได้นำเกจวัดน้ำยาไปหน้างาน' }), {});
-
-  assert.ok(html.includes('ไม่ได้นำเกจวัดน้ำยาไปหน้างาน'), 'ต้องเห็นเหตุผลบนเอกสาร');
-  assert.ok(html.includes('เหตุที่รูปวัดค่าไม่ครบ'), 'ต้องมีหัวข้อกำกับให้รู้ว่านี่คืออะไร');
-});
-
-test('ไม่มีเหตุผล เอกสารต้องไม่มีบรรทัดนั้นโผล่มา', () => {
-  const html = buildCleaningDocHtml(docForm({}), {});
-  assert.ok(!html.includes('เหตุที่รูปวัดค่าไม่ครบ'));
-});
-
-test('เหตุผลเป็นช่องว่างล้วน ต้องนับว่าไม่มี', () => {
-  const html = buildCleaningDocHtml(docForm({ MissingPhotoNote: '   ' }), {});
-  assert.ok(!html.includes('เหตุที่รูปวัดค่าไม่ครบ'));
-});
-
-test('เหตุผลที่มีอักขระพิเศษ ต้องไม่หลุดเป็น HTML', () => {
-  const html = buildCleaningDocHtml(docForm({ MissingPhotoNote: '<b>ลืม</b> เกจ & มิเตอร์' }), {});
-  assert.ok(!html.includes('<b>ลืม</b>'), 'แท็กต้องถูกแปลงเป็นตัวหนังสือ');
-  assert.ok(html.includes('&lt;b&gt;'), 'ต้องเห็นข้อความตามที่พิมพ์มา');
-});
-
-test('เหตุผลต้องขึ้นบนหน้ารูปของทุกเครื่องในใบ', () => {
-  // ใบที่ครอบสองเครื่องมีหน้ารูปสองหน้า ทั้งสองหน้าต้องบอกเหตุผลเหมือนกัน
-  // ไม่งั้นคนที่เปิดมาเจอหน้าเครื่องที่ 2 ก่อน จะเห็นกรอบว่างโดยไม่มีคำอธิบาย
-  const html = buildCleaningDocHtml(docForm({
-    AirCode2: 'AYA-WNI-AIR-2', Unit2_Brand: 'Carrier', Price2: 500,
-    MissingPhotoNote: 'มิเตอร์เสีย'
-  }), {});
-
-  assert.equal((html.match(/เหตุที่รูปวัดค่าไม่ครบ/g) || []).length, 2);
-});
-
-/* ==================== คอลัมน์ใหม่ต้องถูกเก็บจริง ==================== */
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -132,43 +77,6 @@ const formPayload = (over = {}) => ({
   ...over
 });
 
-test('คอลัมน์เหตุผลต้องอยู่ท้ายสุดของรายการคอลัมน์', () => {
-  // ระบบเติมคอลัมน์ที่ขาดด้วยการต่อท้าย ถ้าวางไว้กลาง ข้อมูลจะลงผิดช่องทั้งตาราง
-  assert.equal(CLEANFORM_HEADERS[CLEANFORM_HEADERS.length - 1], 'MissingPhotoNote');
-});
-
-test('เหตุผลที่กรอกมา ต้องถูกเก็บลงฐานข้อมูล', async () => {
-  const db = freshDb();
-  await saveCleaningForm(ctxOf(db), formPayload({ MissingPhotoNote: 'ไม่ได้นำแคลมป์มิเตอร์ไป' }));
-
-  const row = db.prepare('SELECT MissingPhotoNote n FROM cleaning_forms').get();
-  assert.equal(row.n, 'ไม่ได้นำแคลมป์มิเตอร์ไป');
-});
-
-test('กรอกทีละเครื่องแล้วรวมเป็นใบเดียว เหตุผลต้องไม่หายไป', async () => {
-  // ใบที่รวมกันเขียนทับเฉพาะช่องของเครื่องที่เพิ่งกรอก ช่องส่วนกลางต้องถูกเติมให้ด้วย
-  const db = freshDb();
-  await saveCleaningForm(ctxOf(db), formPayload({ PlanYear: 2026, PlanRound: 2 }));
-  await saveCleaningForm(ctxOf(db), formPayload({
-    AirCode1: '', AirCode2: 'AYA-WNI-AIR-2', Price1: '', Price2: 500,
-    PlanYear: 2026, PlanRound: 2, MissingPhotoNote: 'เกจวัดน้ำยาเสีย'
-  }));
-
-  const rows = db.prepare('SELECT MissingPhotoNote n FROM cleaning_forms').all();
-  assert.equal(rows.length, 1, 'ต้องรวมเป็นใบเดียว');
-  assert.equal(rows[0].n, 'เกจวัดน้ำยาเสีย');
-});
-
-test('ใบที่รวมกันมีเหตุผลอยู่แล้ว ต้องไม่ถูกทับด้วยของใบทีหลัง', async () => {
-  const db = freshDb();
-  await saveCleaningForm(ctxOf(db), formPayload({ PlanYear: 2026, PlanRound: 2, MissingPhotoNote: 'เหตุผลเดิม' }));
-  await saveCleaningForm(ctxOf(db), formPayload({
-    AirCode1: '', AirCode2: 'AYA-WNI-AIR-2', Price1: '', Price2: 500,
-    PlanYear: 2026, PlanRound: 2, MissingPhotoNote: 'เหตุผลใหม่'
-  }));
-
-  assert.equal(db.prepare('SELECT MissingPhotoNote n FROM cleaning_forms').get().n, 'เหตุผลเดิม');
-});
 
 /* ==================== อ่านรูปมาแก้ได้ ==================== */
 

@@ -6309,30 +6309,36 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   /**
-   * รูป 6 ช่องแรกใช้มือถือถ่ายเปล่าๆ (ก่อนล้าง ระหว่างล้าง หลังล้าง) จึงบังคับให้ครบ
+   * รูปต้องครบทั้ง 9 ช่องทุกเครื่อง ไม่มีข้อยกเว้น (เจ้าของงานสั่ง)
    *
-   * ส่วนช่อง 7-9 เป็นรูปวัดค่า ต้องมีแคลมป์มิเตอร์ มิเตอร์วัดไฟ และเกจวัดน้ำยา
-   * ถ้าวันนั้นช่างไม่ได้เอาเครื่องมือไป ก็ถ่ายย้อนหลังไม่ได้อีกแล้ว
-   * บังคับให้ครบทั้ง 9 = คนที่ลืมบันทึกเอกสารไม่ได้เลยสักใบ ซึ่งแย่กว่าเอกสารที่ขาดรูป
+   * ผมเสนอให้ 3 ช่องวัดค่า (กระแส แรงดันไฟ แรงดันน้ำยา) ขาดได้ถ้ามีเหตุผลกำกับ
+   * เพราะถ้าวันนั้นช่างไม่ได้เอาเครื่องมือไป ก็ถ่ายย้อนหลังไม่ได้อีกแล้ว
+   * เจ้าของงานพิจารณาแล้วให้บังคับครบทุกช่อง — ใบงานต้องสมบูรณ์เท่านั้น
    */
-  const PHOTO_REQUIRED = 6;
+  const PHOTO_SLOTS = 9;
 
-  /** ช่องที่ยังว่างอยู่ในช่วงที่ระบุ ของทุกเครื่องในฟอร์มนี้ — คืนเป็นคีย์ "<เครื่อง>-<ช่อง>" */
-  function cfMissingIn(from, to) {
+  /**
+   * ช่องที่ปุ่ม "เลือกรูปหลายใบ" ไล่ลงให้ — แค่ 6 ช่องแรกเท่านั้น
+   *
+   * 6 ช่องแรกเป็นรูปตามลำดับเวลาจริง (ก่อนล้าง → ระหว่างล้าง → หลังล้าง)
+   * เรียงตามชื่อไฟล์แล้วลงเรียงกันจึงตรงตามที่ควรเป็น
+   *
+   * แต่ช่อง 7-9 เป็นรูปเฉพาะเจาะจงว่าวัดอะไร ซึ่งดูจากลำดับไฟล์ไม่ออก
+   * ถ้าไล่ลงให้เองมีโอกาสสูงที่รูปวัดไฟจะไปอยู่ช่องวัดน้ำยา แล้วเอกสารผิด
+   * โดยไม่มีอะไรฟ้อง — สามช่องนี้จึงต้องเลือกเอง แม้จะบังคับให้มีครบก็ตาม
+   */
+  const PHOTO_BULK = 6;
+
+  /** ช่องที่ยังว่างอยู่ ของทุกเครื่องในฟอร์มนี้ — คืนเป็นคีย์ "<เครื่อง>-<ช่อง>" */
+  function cfMissingRequired() {
     const missing = [];
     for (const u of cfPhotoUnits()) {
-      for (let i = from; i <= to; i++) {
+      for (let i = 1; i <= PHOTO_SLOTS; i++) {
         if (!cfPhotos[u.slot + '-' + i]) missing.push(u.slot + '-' + i);
       }
     }
     return missing;
   }
-
-  /** ช่องที่บังคับแต่ยังว่างอยู่ */
-  const cfMissingRequired = () => cfMissingIn(1, PHOTO_REQUIRED);
-
-  /** ช่องวัดค่า (7-9) ที่ยังว่างอยู่ — ขาดได้ แต่ต้องมีเหตุผลกำกับ */
-  const cfMissingMeasure = () => cfMissingIn(PHOTO_REQUIRED + 1, 9);
 
   /** วาดช่องใส่รูปของทุกเครื่องที่ฟอร์มนี้ครอบคลุม */
   function renderCfPhotos() {
@@ -6342,7 +6348,6 @@ const CLEANING_CHECKLIST_ITEMS = [
     const units = cfPhotoUnits();
     if (!units.length) {
       box.innerHTML = '<p class="text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg px-3 py-4 text-center">เลือก Node ก่อน แล้วช่องใส่รูปจะขึ้นให้เอง</p>';
-      renderCfPhotoNote();
       return;
     }
 
@@ -6350,7 +6355,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const cells = PHOTO_CAPTIONS.map((cap, i) => {
         const index = i + 1;
         const src = cfPhotos[u.slot + '-' + index];
-        const required = index <= PHOTO_REQUIRED;
+        const required = true;   // บังคับทุกช่อง
 
         const inner = src
           ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
@@ -6376,61 +6381,23 @@ const CLEANING_CHECKLIST_ITEMS = [
       }).join('');
 
       const done = PHOTO_CAPTIONS.filter((_, i) => cfPhotos[u.slot + '-' + (i + 1)]).length;
-      const need = PHOTO_CAPTIONS.slice(0, PHOTO_REQUIRED).filter((_, i) => cfPhotos[u.slot + '-' + (i + 1)]).length;
 
       return `
         <div class="border border-gray-200 rounded-lg p-3 mb-3">
           <div class="flex items-center justify-between mb-2 gap-2">
             <div class="text-xs font-semibold text-gray-700 truncate">เครื่องที่ ${u.slot} · ${esc(u.airCode)}</div>
-            <div class="text-[11px] flex-shrink-0 ${need < PHOTO_REQUIRED ? 'text-red-500 font-medium' : (done === 9 ? 'text-emerald-600' : 'text-gray-400')}">${done}/9 ช่อง</div>
+            <div class="text-[11px] flex-shrink-0 ${done === PHOTO_SLOTS ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/${PHOTO_SLOTS} ช่อง</div>
           </div>
           <button type="button" onclick="cfPickManyPhotos(${u.slot})"
             class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
-            <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-${PHOTO_REQUIRED} พร้อมกัน
+            <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-${PHOTO_BULK} พร้อมกัน
           </button>
           <p class="text-[10px] text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
           <div class="grid grid-cols-3 gap-2">${cells}</div>
         </div>`;
     }).join('');
-
-    renderCfPhotoNote();
   }
   window.renderCfPhotos = renderCfPhotos;
-
-  /**
-   * ช่องกรอกเหตุผล โผล่เฉพาะตอนที่รูปวัดค่ายังไม่ครบ
-   *
-   * ต้องเก็บค่าที่พิมพ์ค้างไว้ก่อนวาดใหม่ เพราะฟังก์ชันนี้ถูกเรียกทุกครั้งที่แนบรูป
-   * ถ้าไม่เก็บ คนที่พิมพ์เหตุผลไปครึ่งทางแล้วเผลอแนบรูปเพิ่ม จะโดนล้างที่พิมพ์ไปทิ้ง
-   */
-  function renderCfPhotoNote() {
-    const box = document.getElementById('cf_photoNoteBox');
-    if (!box) return;
-
-    const missing = cfMissingMeasure();
-    if (!missing.length) { box.innerHTML = ''; return; }
-
-    const keep = (document.getElementById('cf_photoNote') || {}).value;
-    if (box.dataset.on === '1') {
-      // มีช่องอยู่แล้ว แค่อัปเดตจำนวนที่ขาด ไม่ต้องสร้างใหม่ให้เคอร์เซอร์กระเด็น
-      const label = document.getElementById('cf_photoNoteCount');
-      if (label) label.textContent = missing.length;
-      return;
-    }
-
-    box.dataset.on = '1';
-    box.innerHTML = `
-      <div class="mt-1 border border-amber-200 bg-amber-50 rounded-lg p-3">
-        <label class="block text-xs font-medium text-amber-900 mb-1">
-          รูปวัดค่ายังขาดอยู่ <span id="cf_photoNoteCount">${missing.length}</span> ใบ — บอกเหตุผลด้วย
-        </label>
-        <input id="cf_photoNote" placeholder="เช่น ไม่ได้นำเกจวัดน้ำยาไปหน้างาน"
-          class="w-full rounded-lg border-amber-300 border focus:ring-2 focus:ring-amber-400 text-sm px-3 py-2.5 outline-none bg-white">
-        <p class="text-[11px] text-amber-700 mt-1.5">ข้อความนี้จะขึ้นบนเอกสาร ใต้กรอบรูปที่ว่าง</p>
-      </div>`;
-    const el = document.getElementById('cf_photoNote');
-    if (el && keep) el.value = keep;
-  }
 
   /** เลือกรูปให้ช่องนั้น ย่อขนาดก่อนเก็บด้วยตัวเดียวกับหน้าต่างรูปถ่าย */
   function cfPickPhoto(slot, index) {
@@ -6494,10 +6461,10 @@ const CLEANING_CHECKLIST_ITEMS = [
       files.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
 
       const empty = [];
-      for (let i = 1; i <= PHOTO_REQUIRED; i++) if (!cfPhotos[slot + '-' + i]) empty.push(i);
+      for (let i = 1; i <= PHOTO_BULK; i++) if (!cfPhotos[slot + '-' + i]) empty.push(i);
 
       if (!empty.length) {
-        showToast('เครื่องที่ ' + slot + ' แนบรูปช่อง 1-' + PHOTO_REQUIRED + ' ครบแล้ว — ' +
+        showToast('เครื่องที่ ' + slot + ' แนบรูปช่อง 1-' + PHOTO_BULK + ' ครบแล้ว — ' +
                   'รูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่องเอง และถ้าจะเปลี่ยนรูปเดิมก็กดที่ช่องนั้นโดยตรง');
         return;
       }
@@ -6519,7 +6486,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       updateCfProgress();
 
       const over = files.length - empty.length;
-      showToast('ใส่รูปช่อง 1-' + PHOTO_REQUIRED + ' ของเครื่องที่ ' + slot + ' แล้ว ' + ok + ' ใบ' +
+      showToast('ใส่รูปช่อง 1-' + PHOTO_BULK + ' ของเครื่องที่ ' + slot + ' แล้ว ' + ok + ' ใบ' +
         (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
         (over > 0 ? ' · เลือกมาเกิน ' + over + ' ใบ ไม่ได้ใส่ให้' : '') +
         ' — รูปวัดค่าช่อง 7-9 กดเลือกทีละช่องเอง และถ้าลำดับไม่ตรงก็กดที่ช่องนั้นเปลี่ยนได้',
@@ -6602,7 +6569,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     const cells = PHOTO_CAPTIONS.map((cap, i) => {
       const index = i + 1;
       const src = pePhotos[peSlot + '-' + index];
-      const required = index <= PHOTO_REQUIRED;
+      const required = true;   // บังคับทุกช่อง
 
       const inner = src
         ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
@@ -7098,9 +7065,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             ${card(`
               <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-[#f47920]"></i> รูปถ่ายประกอบเอกสาร</h3>
-              <p class="text-xs text-gray-500 mb-2">ช่อง 1-6 ต้องแนบให้ครบ · ช่อง 7-9 เป็นรูปวัดค่า ถ้าไม่มีให้บอกเหตุผล</p>
+              <p class="text-xs text-red-600 font-medium mb-2">⚠️ ต้องแนบให้ครบทั้ง 9 ช่องทุกเครื่อง ไม่ครบบันทึกไม่ได้</p>
               <div id="cf_photoBox"></div>
-              <div id="cf_photoNoteBox"></div>
               <!-- multiple: ช่างถ่ายรูปไว้หน้างานก่อนแล้วมานั่งกรอกทีหลัง ตอนกรอกจึงมีรูป
                    ครบอยู่ในเครื่องแล้ว เลือกทีละใบแปลว่าต้องเปิดแกลเลอรี 18 รอบต่อหนึ่งใบ -->
               <input type="file" id="cf_photoFile" accept="image/*" multiple class="hidden">`)}
@@ -7271,7 +7237,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     return {
       node: val('cf_node'), date: val('cf_date'),
       timeStart: val('cf_timeStart'), timeEnd: val('cf_timeEnd'),
-      price: val('cf_price'), note: val('cf_note'), photoNote: val('cf_photoNote'),
+      price: val('cf_price'), note: val('cf_note'),
       company: val('cf_company'), tech: val('cf_tech'), supervisor: val('cf_supervisor'),
       cond1: radio('cf_condition'), cond2: radio('cf_condition2'),
       vals
@@ -7281,7 +7247,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   function saveCfDraft() {
     try {
       const f = readCfFields();
-      const hasAny = Object.keys(f.vals).length || f.cond1 || f.cond2 || f.note || f.photoNote || f.company || f.tech || f.supervisor;
+      const hasAny = Object.keys(f.vals).length || f.cond1 || f.cond2 || f.note || f.company || f.tech || f.supervisor;
       if (!hasAny) { localStorage.removeItem(CF_DRAFT_KEY); return; }
 
       localStorage.setItem(CF_DRAFT_KEY, JSON.stringify({
@@ -7342,8 +7308,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       set('cf_node', f.node);
       onCleaningFormNodeChange();   // ต้องวาดข้อมูลเครื่องกับช่องรูปใหม่ให้ตรงกับ Node ที่กู้มา
     }
-    // photoNote ต้องอยู่หลัง onCleaningFormNodeChange เพราะช่องนั้นเพิ่งถูกวาดตอนนั้น
-    ['date', 'timeStart', 'timeEnd', 'price', 'note', 'photoNote', 'company', 'tech', 'supervisor']
+    ['date', 'timeStart', 'timeEnd', 'price', 'note', 'company', 'tech', 'supervisor']
       .forEach(k => set('cf_' + k, f[k]));
 
     pick('cf_condition', f.cond1);
@@ -7384,7 +7349,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const f = readCfFields();
     const dirty = Object.keys(f.vals).length || Object.keys(cfPhotos).length ||
-                  f.cond1 || f.cond2 || f.note || f.photoNote || f.company || f.supervisor;
+                  f.cond1 || f.cond2 || f.note || f.company || f.supervisor;
 
     if (dirty) {
       const ok = await showConfirm('ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก ออกจากหน้านี้เลยมั้ย?\n(ข้อมูลที่พิมพ์ไว้จะถูกเก็บเป็นร่างให้ ยกเว้นรูปถ่าย)');
@@ -7476,18 +7441,10 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (missing.length) {
       const where = missing.slice(0, 3).map(photoSlotLabel).join(', ');
       showToast('ยังแนบรูปไม่ครบ ขาดอีก ' + missing.length + ' ใบ (' + where +
-                (missing.length > 3 ? ' ...' : '') + ') — ช่อง 1-6 ต้องมีครบทุกเครื่องก่อนบันทึก', 'error');
+                (missing.length > 3 ? ' ...' : '') + ') — ต้องครบทั้ง ' + PHOTO_SLOTS +
+                ' ช่องทุกเครื่องก่อนถึงจะบันทึกได้', 'error');
       const box = document.getElementById('cf_photoBox');
       if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    // ช่องวัดค่าขาดได้ แต่ต้องรู้ว่าเพราะอะไร ไม่งั้นเอกสารจะมีกรอบว่างลอยๆ
-    const photoNote = ((document.getElementById('cf_photoNote') || {}).value || '').trim();
-    if (cfMissingMeasure().length && !photoNote) {
-      showToast('รูปวัดค่ายังไม่ครบ กรุณากรอกเหตุผลในช่องสีเหลือง เช่น "ไม่ได้นำเกจวัดน้ำยาไปหน้างาน"', 'error');
-      const el = document.getElementById('cf_photoNote');
-      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
       return;
     }
 
@@ -7532,7 +7489,6 @@ const CLEANING_CHECKLIST_ITEMS = [
       EquipmentCondition: (cfContext && cfUnitSlot === 2) ? '' : cond1,
       EquipmentCondition2: (cfContext && cfUnitSlot === 2) ? cond1 : cond2,
       AdditionalNote: document.getElementById('cf_note').value,
-      MissingPhotoNote: photoNote,
       CompanyName: document.getElementById('cf_company').value,
       TechnicianName: document.getElementById('cf_tech').value,
       SupervisorName: document.getElementById('cf_supervisor').value
