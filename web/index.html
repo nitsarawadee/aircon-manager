@@ -4168,7 +4168,9 @@
       const shell = body => `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
-          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+          <!-- กว้างเกือบเต็มจอ เพราะปฏิทินมี 7 คอลัมน์ และแต่ละช่องต้องอ่านรหัสเครื่อง
+               ได้ครบโดยไม่ถูกตัดท้าย · ตั้งเพดานไว้ 1600px กันจอกว้างมากแล้วช่องยืดจนโหว่ -->
+          <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[1600px] max-h-[95vh] flex flex-col">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <i class="ph-fill ph-calendar-blank text-[#1153a1]"></i> ปฏิทินนัดหมายล้างแอร์
@@ -4208,7 +4210,7 @@
       const mixedYears = calYears.length > 1;
 
       const cells = [];
-      for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[92px] rounded-lg bg-gray-50/60"></div>');
+      for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[132px] rounded-lg bg-gray-50/60"></div>');
 
       for (let d = 1; d <= daysInMonth; d++) {
         const items = cal.days[d] || [];
@@ -4216,31 +4218,32 @@
         const dow = new Date(calYear, calMonth - 1, d).getDay();
         const weekend = dow === 0 || dow === 6;
 
-        // ในช่องแสดงได้ 3 รายการ ที่เหลือกดดูทั้งหมดได้ในรายการด้านล่าง
+        // ในช่องแสดงได้ 4 รายการ ที่เหลือกดดูทั้งหมดได้ในรายการด้านล่าง
         // จำกัดไว้เพราะถ้าปล่อยให้ยาวตามจำนวนงาน ช่องนั้นจะดันแถวอื่นจนตารางทั้งเดือนเสียรูป
-        const shown = items.slice(0, 3);
+        // (เพิ่มจาก 3 เป็น 4 ตอนขยายหน้าต่างให้ใหญ่ขึ้น ช่องสูงพอแล้ว)
+        const shown = items.slice(0, 4);
         const rest = items.length - shown.length;
         const selected = calSelectedDay === d;
 
         cells.push(`
           <div ${items.length ? `onclick="selectPlanCalendarDay(${d})" role="button" tabindex="0"` : ''}
-               class="min-h-[92px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors
+               class="min-h-[132px] rounded-lg border p-2 flex flex-col gap-1 transition-colors
                       ${items.length ? 'cursor-pointer hover:border-[#1153a1]' : ''}
                       ${selected ? 'border-[#1153a1] border-2 ring-2 ring-[#1153a1]/20'
                         : isToday ? 'border-[#1153a1] border-2 bg-blue-50/40'
                         : weekend ? 'border-gray-100 bg-slate-50/60' : 'border-gray-100'}">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold ${isToday || selected ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
-              ${items.length ? `<span class="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1">${items.length}</span>` : ''}
+              <span class="text-sm font-semibold ${isToday || selected ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
+              ${items.length ? `<span class="text-[11px] font-medium text-gray-500 bg-gray-100 rounded px-1.5">${items.length}</span>` : ''}
             </div>
             ${shown.map(it => `
-              <div class="flex items-center gap-1 text-[10px] leading-tight ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
+              <div class="flex items-center gap-1.5 text-[11px] leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
                    title="${esc(it.AirCode)} · แผนปี ${esc(it.planYear || '-')} รอบที่ ${it.round}">
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
                 ${mixedYears && it.planYear ? `<span class="ml-auto text-[9px] text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
               </div>`).join('')}
-            ${rest > 0 ? `<div class="text-[10px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
+            ${rest > 0 ? `<div class="text-[11px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
           </div>`);
       }
 
