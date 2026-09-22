@@ -14,11 +14,18 @@ import { join } from 'node:path';
  * ============================================================================
  * ไฟล์ไปอยู่ไหน
  * ============================================================================
- *   <DATA_DIR>/photos/<เลขที่เอกสาร>/u<เครื่อง>-<ช่อง>.jpg
- * เช่น  data/photos/PM2609-01/u1-3.jpg
+ *   <DATA_DIR>/photos/<ชนิดเอกสาร>/<เลขที่เอกสาร>/u<เครื่อง>-<ช่อง>.jpg
+ * เช่น  data/photos/cleaning/PM2609-01/u1-3.jpg
+ *       data/photos/repair/CM2609-31/u1-3.jpg
  *
- * แยกโฟลเดอร์ตามเลขเอกสาร เพื่อให้ลบเอกสารแล้วลบรูปตามได้ในคำสั่งเดียว
+ * แยกตามชนิดเอกสารชั้นนอกสุด เพราะงานล้างกับงานซ่อมเป็นคนละแบบฟอร์มควบคุม
+ * และคนที่ไปหยิบไฟล์ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
+ *
+ * แยกโฟลเดอร์ตามเลขเอกสารอีกชั้น เพื่อให้ลบเอกสารแล้วลบรูปตามได้ในคำสั่งเดียว
  * และเปิดดูด้วยตาเวลาต้องตรวจสอบย้อนหลังได้ง่าย
+ *
+ * ⚠️ ไฟล์ที่เก็บไว้ก่อนมีการแยกชนิด อยู่ที่ <DATA_DIR>/photos/<เลขที่เอกสาร>/
+ * ตัวอ่านจึงมองที่เดิมให้ด้วยถ้าหาในที่ใหม่ไม่เจอ ของเก่าจะได้ไม่หายไปเฉยๆ
  *
  * ============================================================================
  * รูปไม่ได้ถูกเสิร์ฟผ่าน URL สาธารณะ
@@ -37,10 +44,37 @@ const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 /** ชื่อโฟลเดอร์/ไฟล์ต้องปลอดภัย กันการพาออกนอกที่เก็บด้วยชื่อแปลกๆ */
 const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 
-function docDir(root, docNo) {
+/** ชนิดเอกสารที่มีที่เก็บของตัวเอง */
+const KINDS = ['cleaning', 'repair'];
+
+function kindDir(root, kind) {
+  if (!KINDS.includes(kind)) throw new Error('ชนิดเอกสารไม่ถูกต้อง: ' + kind);
+  return join(root, 'photos', kind);
+}
+
+function docDir(root, kind, docNo) {
+  const name = String(docNo || '').trim();
+  if (!SAFE.test(name)) throw new Error('เลขที่เอกสารไม่ถูกรูปแบบ จึงเก็บรูปไม่ได้');
+  return join(kindDir(root, kind), name);
+}
+
+/**
+ * ที่เก็บเดิมก่อนมีการแยกชนิดเอกสาร — <DATA_DIR>/photos/<เลขที่เอกสาร>/
+ * ใช้เฉพาะตอนอ่านและตอนลบ ของใหม่ไม่เขียนลงที่นี่แล้ว
+ */
+function legacyDir(root, docNo) {
   const name = String(docNo || '').trim();
   if (!SAFE.test(name)) throw new Error('เลขที่เอกสารไม่ถูกรูปแบบ จึงเก็บรูปไม่ได้');
   return join(root, 'photos', name);
+}
+
+/** โฟลเดอร์ที่มีรูปของใบนี้อยู่จริง — ที่ใหม่ก่อน ไม่มีค่อยดูที่เดิม */
+function findDir(root, kind, docNo) {
+  const now = docDir(root, kind, docNo);
+  try { statSync(now); return now; } catch { /* ยังไม่มีที่ใหม่ */ }
+
+  const old = legacyDir(root, docNo);
+  try { statSync(old); return old; } catch { return null; }
 }
 
 /** ชื่อไฟล์ของช่องรูปหนึ่งช่อง */
@@ -75,13 +109,13 @@ export function decodePhoto(dataUrl) {
  * เก็บรูปหนึ่งช่อง — ทับของเดิมถ้าช่องนั้นมีรูปอยู่แล้ว
  * @returns {{name: string, bytes: number}}
  */
-export function savePhoto(root, docNo, unitSlot, index, dataUrl) {
+export function savePhoto(root, kind, docNo, unitSlot, index, dataUrl) {
   const { bytes, ext } = decodePhoto(dataUrl);
-  const dir = docDir(root, docNo);
+  const dir = docDir(root, kind, docNo);
   mkdirSync(dir, { recursive: true });
 
   // ช่องเดียวกันอาจเคยเก็บเป็นนามสกุลอื่น ลบของเดิมก่อนเพื่อไม่ให้เหลือสองไฟล์
-  removePhoto(root, docNo, unitSlot, index);
+  removePhoto(root, kind, docNo, unitSlot, index);
 
   const name = slotName(unitSlot, index, ext);
   writeFileSync(join(dir, name), bytes);
@@ -89,16 +123,20 @@ export function savePhoto(root, docNo, unitSlot, index, dataUrl) {
 }
 
 /** ลบรูปของช่องที่ระบุ (ไม่มีอยู่ก็ไม่เป็นไร) */
-export function removePhoto(root, docNo, unitSlot, index) {
-  const dir = docDir(root, docNo);
-  for (const ext of Object.values(TYPES)) {
-    try { rmSync(join(dir, slotName(unitSlot, index, ext))); } catch { /* ไม่มีไฟล์นั้น */ }
+export function removePhoto(root, kind, docNo, unitSlot, index) {
+  // ลบทั้งที่ใหม่และที่เดิม เผื่อใบนั้นยังเก็บอยู่ที่เดิม
+  for (const dir of [docDir(root, kind, docNo), legacyDir(root, docNo)]) {
+    for (const ext of Object.values(TYPES)) {
+      try { rmSync(join(dir, slotName(unitSlot, index, ext))); } catch { /* ไม่มีไฟล์นั้น */ }
+    }
   }
 }
 
 /** ลบรูปทั้งหมดของเอกสารใบหนึ่ง ใช้ตอนลบเอกสาร */
-export function removeDocPhotos(root, docNo) {
-  try { rmSync(docDir(root, docNo), { recursive: true, force: true }); } catch { /* ไม่มีโฟลเดอร์ */ }
+export function removeDocPhotos(root, kind, docNo) {
+  for (const dir of [docDir(root, kind, docNo), legacyDir(root, docNo)]) {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* ไม่มีโฟลเดอร์ */ }
+  }
 }
 
 /**
@@ -106,9 +144,12 @@ export function removeDocPhotos(root, docNo) {
  *
  * @returns {Object} เช่น { '1-3': 'data:image/jpeg;base64,...' } โดยคีย์คือ เครื่อง-ช่อง
  */
-export function readDocPhotos(root, docNo) {
+export function readDocPhotos(root, kind, docNo) {
+  const dir = findDir(root, kind, docNo);
+  if (!dir) return {};
+
   let files;
-  try { files = readdirSync(docDir(root, docNo)); } catch { return {}; }
+  try { files = readdirSync(dir); } catch { return {}; }
 
   const out = {};
   for (const f of files) {
@@ -116,25 +157,36 @@ export function readDocPhotos(root, docNo) {
     if (!m) continue;
 
     const mime = Object.keys(TYPES).find(k => TYPES[k] === m[3]);
-    const bytes = readFileSync(join(docDir(root, docNo), f));
+    const bytes = readFileSync(join(dir, f));
     out[m[1] + '-' + m[2]] = 'data:' + mime + ';base64,' + bytes.toString('base64');
   }
   return out;
 }
 
-/** พื้นที่ที่รูปใช้ไปทั้งหมด สำหรับดูว่าโตเร็วแค่ไหน */
+/**
+ * พื้นที่ที่รูปใช้ไปทั้งหมด สำหรับดูว่าโตเร็วแค่ไหน
+ *
+ * เดินลงทุกชั้น เพราะตอนนี้มีทั้งของใหม่ที่ลึกสามชั้น (photos/<ชนิด>/<เลขที่>/ไฟล์)
+ * และของเดิมที่ลึกสองชั้น (photos/<เลขที่>/ไฟล์) ปนกันอยู่
+ */
 export function photosDiskUsage(root) {
-  const base = join(root, 'photos');
-  let files = 0, bytes = 0;
-  let dirs;
-  try { dirs = readdirSync(base); } catch { return { files: 0, bytes: 0 }; }
+  const walk = dir => {
+    let out = { files: 0, bytes: 0 };
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
 
-  for (const d of dirs) {
-    let inner;
-    try { inner = readdirSync(join(base, d)); } catch { continue; }
-    for (const f of inner) {
-      try { bytes += statSync(join(base, d, f)).size; files++; } catch { /* ถูกลบระหว่างนับ */ }
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        const sub = walk(full);
+        out.files += sub.files;
+        out.bytes += sub.bytes;
+      } else {
+        try { out.bytes += statSync(full).size; out.files++; } catch { /* ถูกลบระหว่างนับ */ }
+      }
     }
-  }
-  return { files, bytes };
+    return out;
+  };
+
+  return walk(join(root, 'photos'));
 }

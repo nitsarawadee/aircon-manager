@@ -52,10 +52,11 @@ function fakePhotoStore() {
   const files = new Map();
   const key = (doc, slot, i) => doc + '|' + slot + '-' + i;
   return {
-    save(doc, slot, i, dataUrl) { files.set(key(doc, slot, i), dataUrl); return { bytes: 10 }; },
-    remove(doc, slot, i) { files.delete(key(doc, slot, i)); },
-    removeAll(doc) { for (const k of [...files.keys()]) if (k.startsWith(doc + '|')) files.delete(k); },
-    readAll(doc) {
+    // อาร์กิวเมนต์แรกคือชนิดเอกสาร บอกที่เก็บว่าไฟล์ไปอยู่โฟลเดอร์ไหน
+    save(kind, doc, slot, i, dataUrl) { files.set(key(doc, slot, i), dataUrl); return { bytes: 10 }; },
+    remove(kind, doc, slot, i) { files.delete(key(doc, slot, i)); },
+    removeAll(kind, doc) { for (const k of [...files.keys()]) if (k.startsWith(doc + '|')) files.delete(k); },
+    readAll(kind, doc) {
       const out = {};
       for (const [k, v] of files) if (k.startsWith(doc + '|')) out[k.split('|')[1]] = v;
       return out;

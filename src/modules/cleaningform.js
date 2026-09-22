@@ -1,4 +1,13 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
+
+/**
+ * ชนิดเอกสารของโมดูลนี้ — ใช้บอกที่เก็บว่าไฟล์ของใบล้างไปอยู่โฟลเดอร์ไหน
+ *
+ * ไฟล์ PDF ไปที่ data/docs/cleaning/<ปี>/<เดือน>/ และรูปไปที่ data/photos/cleaning/
+ * แยกจากงานซ่อมซึ่งใช้ 'repair' เพราะเป็นคนละแบบฟอร์มควบคุม และคนที่ไปหยิบไฟล์
+ * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
+ */
+const KIND = 'cleaning';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { getAirList } from './airlist.js';
@@ -702,7 +711,7 @@ export async function getCleaningDocHtml(ctx, row) {
   // ฟอนต์และโลโก้เสิร์ฟจากเครื่องเราเอง ไม่ได้ดึงจากอินเทอร์เน็ต
   // รูปถ่ายฝังลงไปในหน้าเลย จึงไม่มีที่อยู่ให้ใครเปิดดูโดยไม่ผ่านการตรวจสิทธิ์
   const docNo = plainText(form.DocNo) || plainText(form.ID);
-  const photos = ctx.photos ? ctx.photos.readAll(docNo) : {};
+  const photos = ctx.photos ? ctx.photos.readAll(KIND, docNo) : {};
   // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่ (ดู renderDocPdf)
   return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
 }
@@ -755,7 +764,7 @@ export async function saveCleaningPhoto(ctx, payload) {
       throw new Error('ใบนี้ยังไม่มีข้อมูลเครื่องที่ ' + slot + ' จึงแนบรูปให้เครื่องนั้นไม่ได้');
     }
 
-    const saved = store.save(docNo, slot, payload.index, payload.dataUrl);
+    const saved = store.save(KIND, docNo, slot, payload.index, payload.dataUrl);
     return { ok: true, docNo, bytes: saved.bytes, photos: photoIndexOf(store, docNo) };
   }));
 }
@@ -767,7 +776,7 @@ export async function deleteCleaningPhoto(ctx, payload) {
     const store = requirePhotoStore(ctx);
 
     const { docNo } = await formForPhotos(ctx, payload && payload.row);
-    store.remove(docNo, Number(payload.unitSlot), Number(payload.index));
+    store.remove(KIND, docNo, Number(payload.unitSlot), Number(payload.index));
     return { ok: true, docNo, photos: photoIndexOf(store, docNo) };
   }));
 }
@@ -865,7 +874,7 @@ async function withFreshDocPdf(ctx, work) {
 
 /** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
 function photoIndexOf(store, docNo) {
-  return Object.keys(store.readAll(docNo));
+  return Object.keys(store.readAll(KIND, docNo));
 }
 
 /**
@@ -888,7 +897,7 @@ export async function getCleaningPhotos(ctx, row) {
   if (!ctx.photos) return {};
 
   const { docNo } = await formForPhotos(ctx, row);
-  return { docNo, photos: ctx.photos.readAll(docNo) };
+  return { docNo, photos: ctx.photos.readAll(KIND, docNo) };
 }
 
 /** รายชื่อช่องที่มีรูปแล้วของเอกสารใบหนึ่ง (หน้าเว็บใช้แสดงว่าช่องไหนกรอกแล้ว) */
@@ -916,7 +925,7 @@ async function renderDocPdf(ctx, form) {
     // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
     fontHref: base + DOC_ASSETS.fontHref,
     logoHref: base + DOC_ASSETS.logoHref,
-    photos: ctx.photos ? ctx.photos.readAll(docNo) : {}
+    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {}
   });
 
   return { docNo, base64: await ctx.pdf.render(html) };
@@ -947,7 +956,7 @@ async function storeDocPdf(ctx, docNo) {
     if (!form || plainText(form.Source) === 'attach') return false;
 
     const { base64 } = await renderDocPdf(ctx, form);
-    ctx.docs.save(name, plainText(form.Date), base64);
+    ctx.docs.save(KIND, name, plainText(form.Date), base64);
     return true;
   } catch (err) {
     // บอกไว้ใน log ของเซิร์ฟเวอร์พอ ไม่ต้องรบกวนคนที่กำลังกรอกฟอร์ม
@@ -991,7 +1000,7 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
 
   // เก็บสำเนาไว้ด้วย แต่เก็บไม่ได้ก็ยังต้องได้ไฟล์ดาวน์โหลดตามที่กดมา
   if (ctx.docs) {
-    try { ctx.docs.save(docNo, plainText(form.Date), base64); }
+    try { ctx.docs.save(KIND, docNo, plainText(form.Date), base64); }
     catch (err) { console.error('[เก็บไฟล์ PDF ' + docNo + ']', err && err.message ? err.message : err); }
   }
 
@@ -1027,12 +1036,12 @@ export async function deleteCleaningForm(ctx, row, expectId) {
     // ลบรูปหลังลบแถวสำเร็จแล้วเท่านั้น และห้ามให้การลบรูปล้มแล้วทำให้ทั้งคำสั่งพัง
     // เพราะแถวถูกลบไปแล้ว ถ้าโยน error ออกไป ผู้ใช้จะเข้าใจว่าลบไม่สำเร็จ
     if (ctx.photos && docNo) {
-      try { ctx.photos.removeAll(docNo); } catch { /* รูปค้างดีกว่าผู้ใช้สับสน */ }
+      try { ctx.photos.removeAll(KIND, docNo); } catch { /* รูปค้างดีกว่าผู้ใช้สับสน */ }
     }
     if (ctx.docs && docNo) {
       // ยกเลิกงานสร้างไฟล์ที่ค้างอยู่ก่อน ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว
       cancelDocPdf(docNo);
-      try { ctx.docs.remove(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
+      try { ctx.docs.remove(KIND, docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
     if (ctx.attachments && docNo) {
       try { ctx.attachments.removeAll(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }

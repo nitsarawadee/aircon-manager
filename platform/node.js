@@ -264,10 +264,10 @@ startAutoBackup(db, resolve(ROOT, PATHS.backups));
  */
 const photoRoot = resolve(ROOT, PATHS.photos);
 const photos = {
-  save: (docNo, unitSlot, index, dataUrl) => savePhoto(photoRoot, docNo, unitSlot, index, dataUrl),
-  remove: (docNo, unitSlot, index) => removePhoto(photoRoot, docNo, unitSlot, index),
-  removeAll: docNo => removeDocPhotos(photoRoot, docNo),
-  readAll: docNo => readDocPhotos(photoRoot, docNo)
+  save: (kind, docNo, unitSlot, index, dataUrl) => savePhoto(photoRoot, kind, docNo, unitSlot, index, dataUrl),
+  remove: (kind, docNo, unitSlot, index) => removePhoto(photoRoot, kind, docNo, unitSlot, index),
+  removeAll: (kind, docNo) => removeDocPhotos(photoRoot, kind, docNo),
+  readAll: (kind, docNo) => readDocPhotos(photoRoot, kind, docNo)
 };
 
 /**
@@ -298,9 +298,9 @@ console.log(browserPath
  */
 const docRoot = resolve(ROOT, PATHS.docs);
 const docs = {
-  save: (docNo, date, base64) => saveDocFile(docRoot, docNo, date, base64),
-  read: docNo => readDocFile(docRoot, docNo),
-  remove: docNo => removeDocFile(docRoot, docNo)
+  save: (kind, docNo, date, base64) => saveDocFile(docRoot, kind, docNo, date, base64),
+  read: (kind, docNo) => readDocFile(docRoot, kind, docNo),
+  remove: (kind, docNo) => removeDocFile(docRoot, kind, docNo)
 };
 
 /**

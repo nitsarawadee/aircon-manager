@@ -39,7 +39,16 @@ const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 /** โฟลเดอร์ของเอกสารที่ยังไม่รู้วันที่ — ไม่ควรมี เพราะวันที่เป็นช่องบังคับ */
 const UNSORTED = 'unsorted';
 
-const root = dir => join(dir, 'docs');
+/** ชนิดเอกสารที่มีที่เก็บของตัวเอง */
+const KINDS = ['cleaning', 'repair'];
+
+const root = (dir, kind) => {
+  if (!KINDS.includes(kind)) throw new Error('ชนิดเอกสารไม่ถูกต้อง: ' + kind);
+  return join(dir, 'docs', kind);
+};
+
+/** ที่เก็บเดิมก่อนมีการแยกชนิดเอกสาร — ใช้เฉพาะตอนอ่านและตอนลบ */
+const legacyRoot = dir => join(dir, 'docs');
 
 function safeDocNo(docNo) {
   const name = String(docNo || '').trim();
@@ -57,21 +66,25 @@ function yearMonth(ymd) {
  * ที่อยู่ของไฟล์เอกสารใบนี้ ถ้ามีเก็บไว้แล้ว
  * @returns {{full: string, rel: string} | null}
  */
-export function findDocFile(dir, docNo) {
+export function findDocFile(dir, kind, docNo) {
   const name = safeDocNo(docNo) + '.pdf';
 
-  let years;
-  try { years = readdirSync(root(dir)); } catch { return null; }
+  // ที่ใหม่ก่อน ไม่เจอค่อยมองที่เดิม (ไฟล์ที่เก็บไว้ก่อนแยกชนิดยังอยู่ที่นั่น)
+  for (const [base, rel] of [[root(dir, kind), ['docs', kind]], [legacyRoot(dir), ['docs']]]) {
+    let years;
+    try { years = readdirSync(base); } catch { continue; }
 
-  for (const y of years) {
-    let months;
-    try { months = readdirSync(join(root(dir), y)); } catch { continue; }
-    for (const mo of months) {
-      const full = join(root(dir), y, mo, name);
-      try {
-        statSync(full);
-        return { full, rel: ['docs', y, mo, name].join('/') };
-      } catch { /* ไม่ใช่เดือนนี้ */ }
+    for (const y of years) {
+      if (KINDS.includes(y)) continue;   // โฟลเดอร์ชนิด ไม่ใช่ปี
+      let months;
+      try { months = readdirSync(join(base, y)); } catch { continue; }
+      for (const mo of months) {
+        const full = join(base, y, mo, name);
+        try {
+          statSync(full);
+          return { full, rel: rel.concat([y, mo, name]).join('/') };
+        } catch { /* ไม่ใช่เดือนนี้ */ }
+      }
     }
   }
   return null;
@@ -85,53 +98,57 @@ export function findDocFile(dir, docNo) {
  *
  * @returns {{rel: string, bytes: number}}
  */
-export function saveDocFile(dir, docNo, ymd, base64) {
+export function saveDocFile(dir, kind, docNo, ymd, base64) {
   const name = safeDocNo(docNo);
   const bytes = Buffer.from(String(base64 || ''), 'base64');
   if (!bytes.length) throw new Error('ไฟล์เอกสารว่างเปล่า จึงไม่เก็บ');
 
   const [y, mo] = yearMonth(ymd);
-  const folder = join(root(dir), y, mo);
+  const folder = join(root(dir, kind), y, mo);
   const full = join(folder, name + '.pdf');
 
-  const old = findDocFile(dir, name);
+  const old = findDocFile(dir, kind, name);
   if (old && old.full !== full) rmSync(old.full, { force: true });
 
   mkdirSync(folder, { recursive: true });
   writeFileSync(full, bytes);
-  return { rel: ['docs', y, mo, name + '.pdf'].join('/'), bytes: bytes.length };
+  return { rel: ['docs', kind, y, mo, name + '.pdf'].join('/'), bytes: bytes.length };
 }
 
 /** อ่านไฟล์ที่เก็บไว้ออกมาเป็น base64 (ยังไม่มีไฟล์ก็คืน null) */
-export function readDocFile(dir, docNo) {
-  const found = findDocFile(dir, docNo);
+export function readDocFile(dir, kind, docNo) {
+  const found = findDocFile(dir, kind, docNo);
   if (!found) return null;
   return readFileSync(found.full).toString('base64');
 }
 
 /** ลบไฟล์ของเอกสารใบหนึ่ง ใช้ตอนลบเอกสาร (ไม่มีอยู่ก็ไม่เป็นไร) */
-export function removeDocFile(dir, docNo) {
-  const found = findDocFile(dir, docNo);
+export function removeDocFile(dir, kind, docNo) {
+  const found = findDocFile(dir, kind, docNo);
   if (found) rmSync(found.full, { force: true });
 }
 
 /** พื้นที่ที่ไฟล์เอกสารใช้ไปทั้งหมด สำหรับดูว่าโตเร็วแค่ไหน */
 export function docsDiskUsage(dir) {
-  let files = 0, bytes = 0;
+  // เดินลงทุกชั้น เพราะมีทั้งของใหม่ที่ลึกสี่ชั้น (docs/<ชนิด>/<ปี>/<เดือน>/ไฟล์)
+  // และของเดิมที่ลึกสามชั้น (docs/<ปี>/<เดือน>/ไฟล์) ปนกันอยู่
+  const walk = folder => {
+    const out = { files: 0, bytes: 0 };
+    let entries;
+    try { entries = readdirSync(folder, { withFileTypes: true }); } catch { return out; }
 
-  let years;
-  try { years = readdirSync(root(dir)); } catch { return { files: 0, bytes: 0 }; }
-
-  for (const y of years) {
-    let months;
-    try { months = readdirSync(join(root(dir), y)); } catch { continue; }
-    for (const mo of months) {
-      let inner;
-      try { inner = readdirSync(join(root(dir), y, mo)); } catch { continue; }
-      for (const f of inner) {
-        try { bytes += statSync(join(root(dir), y, mo, f)).size; files++; } catch { /* ถูกลบระหว่างนับ */ }
+    for (const e of entries) {
+      const full = join(folder, e.name);
+      if (e.isDirectory()) {
+        const sub = walk(full);
+        out.files += sub.files;
+        out.bytes += sub.bytes;
+      } else {
+        try { out.bytes += statSync(full).size; out.files++; } catch { /* ถูกลบระหว่างนับ */ }
       }
     }
-  }
-  return { files, bytes };
+    return out;
+  };
+
+  return walk(legacyRoot(dir));
 }

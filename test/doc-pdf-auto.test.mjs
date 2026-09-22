@@ -48,9 +48,10 @@ function fakeDocs() {
   const calls = [];
   return {
     files, calls,
-    save(docNo, date, base64) { calls.push(['save', docNo, date]); files.set(docNo, { date, base64 }); return { rel: docNo, bytes: 1 }; },
-    read(docNo) { return files.has(docNo) ? files.get(docNo).base64 : null; },
-    remove(docNo) { calls.push(['remove', docNo]); files.delete(docNo); }
+    // อาร์กิวเมนต์แรกคือชนิดเอกสาร บอกที่เก็บว่าไฟล์ไปอยู่โฟลเดอร์ไหน
+    save(kind, docNo, date, base64) { calls.push(['save', docNo, date]); files.set(docNo, { date, base64, kind }); return { rel: docNo, bytes: 1 }; },
+    read(kind, docNo) { return files.has(docNo) ? files.get(docNo).base64 : null; },
+    remove(kind, docNo) { calls.push(['remove', docNo]); files.delete(docNo); }
   };
 }
 
@@ -65,14 +66,15 @@ const fakePdf = (over = {}) => ({
 function fakePhotos() {
   const byDoc = new Map();
   return {
-    save(docNo, slot, index, dataUrl) {
+    // อาร์กิวเมนต์แรกคือชนิดเอกสาร บอกที่เก็บว่าไฟล์ไปอยู่โฟลเดอร์ไหน
+    save(kind, docNo, slot, index, dataUrl) {
       if (!byDoc.has(docNo)) byDoc.set(docNo, {});
       byDoc.get(docNo)[slot + '-' + index] = dataUrl;
       return { name: 'x', bytes: dataUrl.length };
     },
-    remove(docNo, slot, index) { delete (byDoc.get(docNo) || {})[slot + '-' + index]; },
-    removeAll(docNo) { byDoc.delete(docNo); },
-    readAll(docNo) { return byDoc.get(docNo) || {}; }
+    remove(kind, docNo, slot, index) { delete (byDoc.get(docNo) || {})[slot + '-' + index]; },
+    removeAll(kind, docNo) { byDoc.delete(docNo); },
+    readAll(kind, docNo) { return byDoc.get(docNo) || {}; }
   };
 }
 
@@ -103,7 +105,7 @@ test('บันทึกฟอร์มแล้ว ต้องได้ไฟ�
 
   const [form] = await getCleaningForms(ctxOf(db));
   assert.deepEqual(docs.calls, [['save', form.DocNo, '2026-09-15']]);
-  assert.ok(docs.read(form.DocNo), 'ต้องมีเนื้อไฟล์เก็บไว้จริง');
+  assert.ok(docs.read('cleaning', form.DocNo), 'ต้องมีเนื้อไฟล์เก็บไว้จริง');
 });
 
 test('ไฟล์ต้องถูกเก็บตามวันที่ในเอกสาร ไม่ใช่วันที่กดบันทึก', async () => {
@@ -122,17 +124,17 @@ test('แนบรูปแล้ว ไฟล์ที่เก็บไว้�
 
   await saveCleaningForm(ctxOf(db, parts), oneUnit());
   const [form] = await getCleaningForms(ctxOf(db));
-  const before = docs.read(form.DocNo);
+  const before = docs.read('cleaning', form.DocNo);
 
   await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3, dataUrl: PNG });
   await settleDocPdfQueue();
-  const after = docs.read(form.DocNo);
+  const after = docs.read('cleaning', form.DocNo);
 
   assert.notEqual(after, before, 'หน้าเอกสารมีรูปเพิ่มแล้ว ไฟล์ต้องไม่เหมือนเดิม');
 
   await deleteCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3 });
   await settleDocPdfQueue();
-  assert.equal(docs.read(form.DocNo), before, 'ลบรูปแล้วต้องกลับไปเหมือนตอนยังไม่มีรูป');
+  assert.equal(docs.read('cleaning', form.DocNo), before, 'ลบรูปแล้วต้องกลับไปเหมือนตอนยังไม่มีรูป');
 });
 
 test('แนบรูปรวดเดียวหลายใบ ต้องแปลงไฟล์แค่รอบเดียว ไม่ใช่รอบละรูป', async () => {
@@ -155,7 +157,7 @@ test('แนบรูปรวดเดียวหลายใบ ต้อง�
 
   await settleDocPdfQueue();
   assert.equal(docs.calls.length, 1, 'แนบ 9 รูป ต้องแปลงครั้งเดียว');
-  assert.equal(Object.keys(photos.readAll(form.DocNo)).length, 9, 'และรูปต้องครบทั้ง 9 ช่อง');
+  assert.equal(Object.keys(photos.readAll('cleaning', form.DocNo)).length, 9, 'และรูปต้องครบทั้ง 9 ช่อง');
 });
 
 test('ลบเอกสารแล้ว ไฟล์ต้องไม่ถูกสร้างกลับมาจากงานที่ค้างอยู่', async () => {
@@ -171,7 +173,7 @@ test('ลบเอกสารแล้ว ไฟล์ต้องไม่ถ�
   await deleteCleaningForm(ctxOf(db, parts), form._row, form.ID);
   await settleDocPdfQueue();
 
-  assert.equal(docs.read(form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
+  assert.equal(docs.read('cleaning', form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
 });
 
 test('ลบเอกสาร ต้องลบไฟล์ที่เก็บไว้ตามไปด้วย', async () => {
@@ -182,7 +184,7 @@ test('ลบเอกสาร ต้องลบไฟล์ที่เก็�
   const [form] = await getCleaningForms(ctxOf(db));
   await deleteCleaningForm(ctxOf(db, { docs }), form._row, form.ID);
 
-  assert.equal(docs.read(form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
+  assert.equal(docs.read('cleaning', form.DocNo), null, 'ไฟล์ต้องไม่ค้างอยู่ในดิสก์');
 });
 
 /* ==================== ล้มแล้วต้องไม่ลามไปถึงข้อมูล ==================== */
