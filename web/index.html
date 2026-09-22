@@ -215,6 +215,8 @@
     .toast-enter { transform: translateX(100%); opacity: 0; }
     .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.3s ease-out; }
     .toast-exit { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+    /* แถบเวลาที่เหลือใต้ข้อความ ให้เห็นว่ากำลังจะหาย ไม่ใช่หายไปเฉยๆ โดยไม่ทันตั้งตัว */
+    .toast-bar { height: 3px; border-radius: 9999px; transform-origin: left; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
@@ -1026,7 +1028,9 @@
     <div class="text-[#1153a1] font-medium text-sm animate-pulse">กำลังประมวลผล...</div>
   </div>
 
-  <div id="toastContainer" class="fixed bottom-4 right-4 z-[70] flex flex-col gap-2"></div>
+  <!-- บนมือถือกางเต็มความกว้าง เพราะของเดิมกว้าง max-w-sm (384px) ซึ่งเกินจอ 375px
+       ข้อความยาวจึงถูกบีบจนสูงมาก และตัวอักษรท้ายบรรทัดชิดขอบจนอ่านยาก -->
+  <div id="toastContainer" class="fixed bottom-4 left-4 right-4 sm:left-auto z-[70] flex flex-col gap-2 sm:items-end"></div>
 
   <!-- SheetJS สำหรับ Export/Import -->
   <script src="vendor/xlsx.full.min.js"></script>
@@ -1620,26 +1624,148 @@
       return (raw + ' ' + raw.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1')).toLowerCase();
     }
 
+    /**
+     * เวลาที่ข้อความควรค้างอยู่บนจอ คิดจากความยาวของข้อความ
+     *
+     * 1.2 วินาทีแรกคือเวลาที่สายตากว่าจะเหลือบไปเห็นว่ามีอะไรเด้งขึ้นมาตรงมุมจอ
+     * ที่เหลือคิดตามจำนวนตัวอักษรที่ต้องอ่าน ราว 11 ตัวต่อวินาที
+     */
+    function toastMs(message) {
+      const chars = String(message == null ? '' : message).length;
+      return Math.min(14000, Math.max(4000, 1200 + chars * 90));
+    }
+
+    /** ข้อความที่ค้างบนจอพร้อมกันได้มากสุด เกินกว่านี้ตัวเก่าสุดจะถูกปิดให้ */
+    const TOAST_MAX = 4;
+
+    function dismissToast(toast) {
+      if (!toast || toast._gone) return;   // กดปิดซ้ำ หรือกดปิดพอดีกับตอนหมดเวลา
+      toast._gone = true;
+      clearTimeout(toast._timer);
+      toast.classList.remove('toast-enter-active');
+      toast.classList.add('toast-exit');
+      setTimeout(() => toast.remove(), 300);
+    }
+
+    /**
+     * แจ้งเตือนมุมจอ
+     *
+     * ============================================================================
+     * ทำไมเวลาไม่เท่ากันทุกข้อความ
+     * ============================================================================
+     * ของเดิมหายไปใน 3 วินาทีเท่ากันหมด ไม่ว่าข้อความจะสั้นหรือยาว
+     * "บันทึกสำเร็จ" อ่านทัน แต่ข้อความที่บอกว่าทำไมถึงไม่สำเร็จมักยาวกว่ามาก
+     * เช่น "นำเข้าสำเร็จ 15 รายการ แต่ไม่พบรหัสนี้ในแผน: ..." ที่ยาวเป็นบรรทัด
+     *
+     * ผลคือข้อความที่สำคัญที่สุด กลายเป็นข้อความที่อ่านไม่ทันก่อนหาย
+     *
+     * ตอนนี้เวลาคิดจากความยาวข้อความ และข้อความที่เป็น error จะไม่หายเอง
+     * ต้องกดปิด เพราะเป็นข้อความที่ต้องทำอะไรต่อ ไม่ใช่แค่รับรู้แล้วผ่านไป
+     *
+     * ============================================================================
+     * ข้อความใส่แบบข้อความล้วน ไม่ใช่ HTML
+     * ============================================================================
+     * ของเดิมยัดเข้า innerHTML ทั้งก้อน ทั้งที่หลายจุดเอาสิ่งที่ผู้ใช้พิมพ์มาต่อท้าย
+     * เช่น 'ไม่พบเครื่องรหัส "' + typed + '"' ซึ่งพิมพ์แท็กใส่แล้วทำงานได้จริง
+     */
     function showToast(message, type = 'success') {
       const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      const bg = type === 'success' ? 'bg-green-50 border-green-200' : (type === 'error' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200');
-      const icon = type === 'success' ? '<i class="ph-fill ph-check-circle text-green-500 text-xl"></i>' : (type === 'error' ? '<i class="ph-fill ph-x-circle text-red-500 text-xl"></i>' : '<i class="ph-fill ph-info text-[#1153a1] text-xl"></i>');
-      const textCol = type === 'success' ? 'text-green-800' : (type === 'error' ? 'text-red-800' : 'text-[#1153a1]');
 
-      toast.className = `toast-enter flex items-center p-4 border rounded-xl shadow-lg ${bg} min-w-[250px] max-w-sm`;
-      toast.innerHTML = `<div class="mr-3">${icon}</div><div class="text-sm font-medium ${textCol}">${message}</div>`;
+      // ล้นจอแล้วตัดตัวบนสุด ซึ่งเป็นตัวที่ขึ้นมานานที่สุดและน่าจะอ่านไปแล้ว
+      //
+      // ต้องเอาออกจากหน้าทันที ห้ามเรียก dismissToast ตรงนี้ เพราะตัวนั้นเล่นภาพจาง
+      // ก่อนแล้วค่อยลบทีหลังอีก 300ms แปลว่าจำนวนลูกใน container ยังไม่ลด
+      // เงื่อนไข while จึงเป็นจริงตลอดไป กลายเป็นลูปไม่รู้จบที่ค้างทั้งหน้าเว็บ
+      while (container.children.length >= TOAST_MAX) {
+        const oldest = container.children[0];
+        clearTimeout(oldest._timer);
+        oldest._gone = true;
+        oldest.remove();
+      }
+
+      const skin = type === 'success'
+        ? ['bg-green-50 border-green-200', 'text-green-800', 'ph-check-circle text-green-500', 'bg-green-400']
+        : type === 'error'
+        ? ['bg-red-50 border-red-200', 'text-red-800', 'ph-x-circle text-red-500', 'bg-red-400']
+        : ['bg-blue-50 border-blue-200', 'text-[#1153a1]', 'ph-info text-[#1153a1]', 'bg-blue-400'];
+
+      const toast = document.createElement('div');
+      toast.className = 'toast-enter border rounded-xl shadow-lg ' + skin[0] + ' sm:min-w-[280px] sm:max-w-md';
+
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-3 p-4';
+
+      const icon = document.createElement('i');
+      icon.className = 'ph-fill ' + skin[2] + ' text-xl flex-shrink-0';
+
+      const text = document.createElement('div');
+      text.className = 'text-sm font-medium flex-1 leading-relaxed ' + skin[1];
+      text.textContent = String(message == null ? '' : message);
+
+      const close = document.createElement('button');
+      close.className = 'flex-shrink-0 -mt-1 -mr-1 w-8 h-8 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 flex items-center justify-center';
+      close.innerHTML = '<i class="ph ph-x text-base"></i>';
+      close.title = 'ปิดข้อความนี้';
+      close.onclick = () => dismissToast(toast);
+
+      row.append(icon, text, close);
+      toast.appendChild(row);
       container.appendChild(toast);
-      
+
       requestAnimationFrame(() => {
         toast.classList.remove('toast-enter');
         toast.classList.add('toast-enter-active');
       });
-      setTimeout(() => {
-        toast.classList.remove('toast-enter-active');
-        toast.classList.add('toast-exit');
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
+
+      // error ค้างไว้จนกว่าจะกดปิด — ไม่ตั้งเวลา ไม่มีแถบนับถอยหลัง
+      if (type === 'error') return;
+
+      const ms = toastMs(message);
+
+      const bar = document.createElement('div');
+      bar.className = 'toast-bar mx-4 mb-3 ' + skin[3] + ' opacity-60';
+      bar.style.transform = 'scaleX(1)';
+      toast.appendChild(bar);
+
+      // เริ่มเดินแถบด้วยการบังคับคำนวณค่าเริ่มต้นก่อน ไม่ใช่รอเฟรมถัดไป
+      //
+      // requestAnimationFrame ไม่ทำงานเลยเมื่อแท็บถูกซ่อนอยู่ ถ้าไปผูกไว้กับมัน
+      // ข้อความที่เด้งตอนผู้ใช้สลับไปแท็บอื่นจะได้แถบที่ค้างเต็มไม่ขยับ
+      // แล้วพอกลับมาดูก็หายวับไปทันทีเพราะตัวจับเวลาเดินของมันอยู่ดี
+      void bar.offsetWidth;
+      bar.style.transition = 'transform ' + ms + 'ms linear';
+      bar.style.transform = 'scaleX(0)';
+
+      toast._timer = setTimeout(() => dismissToast(toast), ms);
+
+      /**
+       * เอาเมาส์ไปวางหรือแตะค้างไว้ = หยุดนับถอยหลัง อ่านให้จบก่อนได้
+       *
+       * ตอนหยุดต้องอ่านค่า transform ที่คำนวณได้จริงมาตรึงไว้ก่อน ไม่งั้นแถบจะ
+       * กระโดดกลับไปเต็มความยาวเพราะค่าที่เขียนไว้ใน style คือปลายทาง ไม่ใช่ที่เป็นอยู่
+       */
+      const pause = () => {
+        if (toast._gone || toast._held) return;
+        toast._held = true;
+        clearTimeout(toast._timer);
+        const at = getComputedStyle(bar).transform;
+        bar.style.transition = 'none';
+        bar.style.transform = at === 'none' ? 'scaleX(1)' : at;
+      };
+
+      // ปล่อยแล้วให้เวลาอีกนิดเดียว เพราะถึงตรงนี้ถือว่าอ่านไปแล้ว
+      const resume = () => {
+        if (toast._gone || !toast._held) return;
+        toast._held = false;
+        void bar.offsetWidth;
+        bar.style.transition = 'transform 1500ms linear';
+        bar.style.transform = 'scaleX(0)';
+        toast._timer = setTimeout(() => dismissToast(toast), 1500);
+      };
+
+      toast.addEventListener('mouseenter', pause);
+      toast.addEventListener('mouseleave', resume);
+      toast.addEventListener('touchstart', pause, { passive: true });
     }
 
     function showConfirm(message, title = 'ยืนยันการทำรายการ') {
