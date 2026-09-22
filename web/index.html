@@ -779,20 +779,30 @@
                 <i class="ph ph-paperclip"></i> แนบเอกสาร + ปิดงาน
               </button>
             </div>
+              <button onclick="openRepairFormPicker()" class="bg-white border border-[#f47920] text-[#f47920] hover:bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
+                <i class="ph ph-wrench"></i> กรอกฟอร์มซ่อม
+              </button>
+            </div>
             <button onclick="openCleaningFormModal()" class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end" title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
-              หรือกรอกฟอร์มในระบบทีละข้อ &rarr;
+              หรือกรอกฟอร์มล้างในระบบทีละข้อ &rarr;
             </button>
           </div>
         </div>
 
-        <!-- แถบประเภทเอกสาร — ตอนนี้มีเฉพาะใบล้าง อีกสองประเภทรอฟอร์มจริง -->
+        <!-- แถบประเภทเอกสาร — กรองตารางด้านล่าง ยังไม่มีเอกสารติดตั้งจึงยังปิดอยู่ -->
         <div class="flex items-center gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
-          <span class="px-4 py-2 text-sm font-medium border-b-2 border-[#1153a1] text-[#1153a1] whitespace-nowrap">
+          <button id="docTab_all" onclick="setDocTypeFilter('all')"
+            class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
+            <i class="ph ph-files"></i> ทั้งหมด
+          </button>
+          <button id="docTab_cleaning" onclick="setDocTypeFilter('cleaning')"
+            class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
             <i class="ph ph-drop"></i> ล้างแอร์
-          </span>
-          <span class="px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent whitespace-nowrap cursor-not-allowed" title="ยังไม่เปิดใช้ — รอแบบฟอร์มจริง">
-            <i class="ph ph-wrench"></i> ซ่อม <span class="text-[10px]">· เร็วๆ นี้</span>
-          </span>
+          </button>
+          <button id="docTab_repair" onclick="setDocTypeFilter('repair')"
+            class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
+            <i class="ph ph-wrench"></i> ซ่อม
+          </button>
           <span class="px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent whitespace-nowrap cursor-not-allowed" title="ยังไม่เปิดใช้ — รอแบบฟอร์มจริง">
             <i class="ph ph-plus-circle"></i> ติดตั้ง <span class="text-[10px]">· เร็วๆ นี้</span>
           </span>
@@ -6160,10 +6170,37 @@
     });
   }
 
+  /** แท็บประเภทเอกสารที่เลือกอยู่ — 'all' | 'cleaning' | 'repair' */
+  let docTypeFilter = 'all';
+
+  function setDocTypeFilter(kind) {
+    docTypeFilter = kind;
+    paintDocTabs();
+    cleaningFormPage = 1;
+    renderCleaningFormTable();
+  }
+  window.setDocTypeFilter = setDocTypeFilter;
+
+  /** ระบายสีแท็บที่เลือกอยู่ — ทำแยกเพราะต้องเรียกตอนโหลดหน้าด้วย */
+  function paintDocTabs() {
+    for (const kind of ['all', 'cleaning', 'repair']) {
+      const el = document.getElementById('docTab_' + kind);
+      if (!el) continue;
+
+      const on = docTypeFilter === kind;
+      const color = kind === 'repair' ? '#f47920' : '#1153a1';
+      el.style.borderColor = on ? color : 'transparent';
+      el.style.color = on ? color : '';
+      el.classList.toggle('text-gray-500', !on);
+      el.classList.toggle('hover:text-gray-700', !on);
+    }
+  }
+
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
-    const all = allDocForms();
+    let all = allDocForms();
+    if (docTypeFilter !== 'all') all = all.filter(f => f.kind === docTypeFilter);
     if (!q) return all;
 
     return all.filter(f =>
@@ -6237,6 +6274,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       currentCleaningForms = Array.isArray(forms) ? forms : [];
       currentRepairForms = Array.isArray(repairs) ? repairs : [];
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
+      paintDocTabs();
       renderCleaningFormTable();
       lockViewOnlySection('cleaningform');
     } catch (e) {}
@@ -6251,9 +6289,10 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (cleaningFormLastList.length === 0) {
       // บอกให้ตรงว่าไม่เจอเพราะคำค้น ไม่งั้นจะเข้าใจว่าไม่มีเอกสารในระบบเลย
       const box = document.getElementById('cleaningFormSearch');
+      const ofKind = { cleaning: 'เอกสารล้างแอร์', repair: 'เอกสารซ่อม' }[docTypeFilter] || 'เอกสาร';
       const why = (box && box.value.trim())
-        ? 'ไม่พบเอกสารที่ตรงกับคำค้นหา'
-        : 'ยังไม่มีการบันทึกเอกสาร';
+        ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
+        : 'ยังไม่มีการบันทึก' + ofKind;
       tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">' + why + '</td></tr>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
@@ -8019,6 +8058,76 @@ const CLEANING_CHECKLIST_ITEMS = [
     closeModal();
   }
   window.closeRepairForm = closeRepairForm;
+
+  /**
+   * เลือกเครื่องก่อนเปิดฟอร์มซ่อม
+   *
+   * เปิดจากหน้างานซ่อมจะรู้เครื่องมาแล้ว แต่เปิดจากแท็บเอกสารยังไม่รู้
+   * จึงต้องให้เลือกก่อน — เรียงเครื่องที่กำลังรอซ่อมขึ้นก่อน เพราะเป็นตัวที่
+   * คนมากรอกเอกสารให้บ่อยที่สุด ส่วนเครื่องปกติก็ยังเลือกได้ เพราะช่างซ่อม
+   * หน้างานเลยโดยไม่ได้แจ้งล่วงหน้าเป็นเรื่องที่เกิดจริง
+   */
+  function openRepairFormPicker() {
+    const list = (currentAirList || []).slice().sort((a, b) => {
+      const rank = s => (s === 'รอซ่อม' ? 0 : s === 'ชำรุด' ? 1 : 2);
+      const d = rank(a.Status) - rank(b.Status);
+      return d || String(a.AirCode).localeCompare(String(b.AirCode));
+    });
+
+    if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
+
+    const options = list.map(a => {
+      const tag = a.Status === 'รอซ่อม' ? ' — รอซ่อม' : a.Status === 'ชำรุด' ? ' — ชำรุด' : '';
+      return `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(tag)}</option>`;
+    }).join('');
+
+    const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-[#f47920] flex items-center gap-2"><i class="ph ph-wrench"></i> กรอกเอกสารซ่อม</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div class="bg-orange-50 text-orange-800 text-xs p-3 rounded-lg flex gap-2">
+              <i class="ph ph-info text-lg shrink-0"></i>
+              <p>บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสงานซ่อมของเครื่องนั้นให้เอง
+                 ${waiting ? '· ตอนนี้มีเครื่องรอซ่อม/ชำรุดอยู่ <b>' + waiting + '</b> เครื่อง' : ''}</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">เลือกเครื่องที่ซ่อม <span class="text-red-500">*</span></label>
+              <select id="rfp_air" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
+                ${options}
+              </select>
+              <p class="text-xs text-gray-500 mt-1.5">เครื่องที่รอซ่อมอยู่ถูกจัดไว้บนสุดให้แล้ว</p>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+            <button onclick="startRepairFormFromPicker()" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm">
+              <i class="ph ph-arrow-right"></i> ถัดไป
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+  window.openRepairFormPicker = openRepairFormPicker;
+
+  function startRepairFormFromPicker() {
+    const code = (document.getElementById('rfp_air') || {}).value;
+    if (!code) { showToast('กรุณาเลือกเครื่อง', 'error'); return; }
+
+    // อาการเสียจากตอนแจ้งซ่อม (ถ้ามี) เอามาเติมให้ จะได้ไม่ต้องพิมพ์ซ้ำ
+    const open = (currentHistory || [])
+      .filter(h => String(h.AirCode) === String(code) && String(h.EventType) === 'แจ้งซ่อม')
+      .sort((a, b) => String(b.Date || '').localeCompare(String(a.Date || '')))[0];
+
+    openRepairForm(code, open ? String(open.Detail || '') : '');
+  }
+  window.startRepairFormFromPicker = startRepairFormFromPicker;
 
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
   function onCleaningFormNodeChange() {
