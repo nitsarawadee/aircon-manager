@@ -328,6 +328,43 @@ export async function getRepairBlankDocHtml(ctx, record) {
   return buildRepairDocHtml(payload, DOC_ASSETS);
 }
 
+/**
+ * แปลงก้อนไบต์เป็นข้อความ base64
+ *
+ * ทำทีละ 8KB ไม่ใช่ส่งทั้งก้อนเข้า String.fromCharCode ทีเดียว เพราะการกระจาย
+ * อาร์เรย์เป็นพารามิเตอร์หลักหมื่นตัวทำให้ call stack ล้นบนเครื่องบางเครื่อง
+ * ไฟล์ฟอร์มตอนนี้ราว 35KB ยังไม่ถึงขีด แต่ฟอร์มติดตั้งที่จะทำต่อใหญ่กว่านี้
+ */
+function toBase64(bytes) {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    out += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(out);
+}
+
+/**
+ * ฟอร์มเปล่าแบบ Excel ที่เติมข้อมูลเครื่องให้แล้ว
+ *
+ * มีไว้คู่กับฟอร์มเปล่าแบบปริ้น ต่างกันตรงที่ไฟล์นี้ "วางรูปลงไปได้"
+ * เพราะกระดาษกับไฟล์ PDF แนบรูปไม่ได้ ช่างที่กรอกบนคอมพิวเตอร์จึงใช้ไฟล์นี้
+ * แล้ววางรูปลงกรอบในชีต "รูปภาพประกอบ" ได้เลย
+ */
+export async function getRepairBlankXlsx(ctx, record) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
+  if (!ctx.forms) throw new Error('เครื่องที่รันระบบอยู่ไม่มีไฟล์แบบฟอร์มแม่แบบ');
+
+  const { buildRepairXlsx, repairXlsxFileName } = await import('./repair-xlsx.js');
+  const bytes = await buildRepairXlsx(ctx.forms.read('repair'), record || {});
+
+  return {
+    base64: toBase64(bytes),
+    fileName: repairXlsxFileName(record),
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  };
+}
+
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
 async function renderPdf(ctx, form) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);

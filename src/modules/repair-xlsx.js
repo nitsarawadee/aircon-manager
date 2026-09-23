@@ -1,0 +1,99 @@
+/**
+ * ============================================================================
+ * ฟอร์มซ่อมเปล่าแบบ Excel (ITEL-FM-NE-005)
+ * ============================================================================
+ *
+ * ต่างจากฟอร์มเปล่าแบบ PDF ตรงที่ "วางรูปลงไปได้"
+ *
+ * ฟอร์มเปล่าแบบเดิมเป็นหน้าเว็บสั่งปริ้น พอกลายเป็นกระดาษหรือไฟล์ PDF แล้ว
+ * ช่างเขียนมือได้อย่างเดียว แนบรูปไม่ได้ ไฟล์ Excel ชุดนี้จึงมีไว้ให้ช่างที่
+ * ทำงานบนคอมพิวเตอร์กรอกผลแล้ววางรูปลงในกรอบที่เตรียมไว้ในชีต "รูปภาพประกอบ"
+ * ได้เลย โดยไม่ต้องเข้าเว็บ (เช่นตอนอยู่หน้างานที่เน็ตไม่ถึง)
+ *
+ * ระบบเติมให้เฉพาะข้อมูล Node และเครื่อง ซึ่งเป็นส่วนที่ฐานข้อมูลรู้อยู่แล้ว
+ * และเป็นส่วนที่พิมพ์ผิดง่ายที่สุด (Serial กับ Asset เป็นรหัสยาวๆ)
+ * ส่วนผลตรวจวัด อะไหล่ และลายเซ็น เว้นว่างไว้ให้กรอกหน้างาน
+ * ============================================================================
+ */
+
+import { thaiDate } from './doc-common.js';
+
+/** ชีตหน้าแรกของแม่แบบ (ชื่อชีตจริงคือ "ใบแจ้งซ่อม") */
+const SHEET_MAIN = 'xl/worksheets/sheet1.xml';
+
+/**
+ * ช่องที่ระบบเติมให้ อ้างอิงตามไฟล์ฟอร์มจริง Rev2026
+ *
+ * ฝั่งซ้ายเป็นคอลัมน์ C ฝั่งขวาเป็นคอลัมน์ F ส่วนคอลัมน์ A กับ D เป็นป้ายชื่อ
+ * ที่พิมพ์มากับฟอร์มอยู่แล้ว ห้ามแตะ
+ *
+ *   แถว 3   Node Nane      | ประเภท Node
+ *   แถว 4   จังหวัด         | Brand / ยี่ห้อ
+ *   แถว 5   วันที่          | BTU / ขนาด
+ *   แถว 6   Indoor Serial  | Outdoor Serial
+ *   แถว 7   Indoor Asset   | Outdoor Asset
+ *   แถว 10  ช่องว่างใต้ "อาการเสีย :"
+ */
+export const REPAIR_XLSX_CELLS = {
+  C3: 'NodeName',
+  F3: 'LocationType',
+  C4: 'Province',
+  F4: 'Brand',
+  C5: 'Date',
+  F5: 'BTU',
+  C6: 'IndoorSerial',
+  F6: 'OutdoorSerial',
+  C7: 'IndoorAsset',
+  F7: 'OutdoorAsset',
+  A10: 'Symptom'
+};
+
+/**
+ * แปลงข้อมูลเครื่องหนึ่งตัวเป็นค่าที่จะเติมลงแต่ละช่อง
+ *
+ * แยกออกมาจากขั้นตอนเขียนไฟล์ เพื่อให้ทดสอบได้ว่าข้อมูลไปลงช่องถูกช่อง
+ * โดยไม่ต้องสร้างไฟล์ .xlsx จริง
+ *
+ * @param {Object} record ข้อมูลเครื่องจากทะเบียน
+ * @returns {Object<string,string>} ช่อง → ข้อความ
+ */
+export function repairXlsxValues(record) {
+  const r = record || {};
+  const values = {};
+
+  for (const [cell, field] of Object.entries(REPAIR_XLSX_CELLS)) {
+    // วันที่ต้องเป็น วว/ดด/ปปปป ให้ตรงกับที่ใช้ทั้งระบบ
+    // และต้องเป็นข้อความ ไม่ใช่ตัวเลขวันที่ ไม่งั้น Excel จะจัดรูปแบบใหม่ตามเครื่องของคนเปิด
+    const raw = r[field];
+    values[cell] = field === 'Date' && raw ? thaiDate(raw) : (raw == null ? '' : String(raw));
+  }
+
+  return values;
+}
+
+/**
+ * สร้างไฟล์ฟอร์มซ่อมเปล่าที่เติมข้อมูลเครื่องให้แล้ว
+ *
+ * @param {Uint8Array} template เนื้อไฟล์แม่แบบ (ชั้น platform อ่านมาให้)
+ * @param {Object} record ข้อมูลเครื่อง
+ * @returns {Promise<Uint8Array>}
+ */
+export async function buildRepairXlsx(template, record) {
+  const { fillXlsx } = await import('./xlsx-template.js');
+  return fillXlsx(template, { [SHEET_MAIN]: repairXlsxValues(record) });
+}
+
+/**
+ * ชื่อไฟล์ที่ผู้ใช้จะเห็นตอนโหลด
+ *
+ * ใส่รหัสเครื่องกับวันที่ไว้ เพราะช่างมักโหลดหลายใบในวันเดียว
+ * ถ้าชื่อซ้ำกันหมด เบราว์เซอร์จะต่อท้ายเป็น (1) (2) แล้วแยกไม่ออกว่าใบไหนของเครื่องไหน
+ */
+export function repairXlsxFileName(record) {
+  const r = record || {};
+  // อักขระพวก / : * ? " < > | ตั้งเป็นชื่อไฟล์บน Windows ไม่ได้
+  const code = String(r.AirCode || '').replace(/[\\/:*?"<>|]/g, '-').trim();
+  const date = String(r.Date || '').slice(0, 10).replace(/-/g, '');
+
+  return 'ฟอร์มซ่อม' + (code ? '-' + code : '') + (date ? '-' + date : '') + '.xlsx';
+}

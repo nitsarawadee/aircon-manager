@@ -23,7 +23,7 @@ import {
 } from './modules/cleaningform.js';
 import {
   getRepairForms, saveRepairForm, deleteRepairForm,
-  getRepairDocHtml, getRepairBlankDocHtml, getRepairDocPdf,
+  getRepairDocHtml, getRepairBlankDocHtml, getRepairBlankXlsx, getRepairDocPdf,
   saveRepairPhoto, deleteRepairPhoto, getRepairPhotos
 } from './modules/repairform.js';
 
@@ -115,6 +115,7 @@ const API_FUNCTIONS = {
   deleteRepairForm,
   getRepairDocHtml,
   getRepairBlankDocHtml,
+  getRepairBlankXlsx,
   getRepairDocPdf,
   saveRepairPhoto,
   deleteRepairPhoto,

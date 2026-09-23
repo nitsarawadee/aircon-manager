@@ -29,6 +29,7 @@ import { saveDocFile, readDocFile, removeDocFile, docsDiskUsage } from './docs.j
 import { saveAttachments, listAttachments, readAttachment, removeAttachments, attachmentsDiskUsage }
   from './attachments.js';
 import { renderPdf, findBrowser } from './pdf-render.js';
+import { readFormTemplate, missingFormTemplates } from './forms.js';
 import { webcrypto } from 'node:crypto';
 
 // Node รุ่นเก่ากว่า 20 ยังไม่มี crypto เป็นตัวแปรกลาง แต่โค้ดส่วนกลางใช้ crypto.subtle
@@ -334,8 +335,23 @@ const backup = label => {
   return name;
 };
 
+/**
+ * ไฟล์แบบฟอร์มแม่แบบ (.xlsx) ที่ระบบเอาไปเติมข้อมูลให้ก่อนส่งให้ผู้ใช้โหลด
+ *
+ * เหตุผลเดียวกับที่เก็บรูป — src/ ห้ามแตะระบบไฟล์เอง จึงรับเป็นฟังก์ชันเข้าไป
+ */
+const forms = { read: name => readFormTemplate(ROOT, name) };
+
 /** เครื่องมือทั้งหมดที่ส่งเข้าไปให้ src/ ใช้ */
-const services = { photos, pdf, docs, attachments, backup };
+const services = { photos, pdf, docs, attachments, backup, forms };
+
+{
+  // เตือนตั้งแต่ตอนเปิดเครื่อง ไม่ใช่รอให้มีคนกดโหลดแล้วเจอข้อความผิดพลาด
+  const missing = missingFormTemplates(ROOT);
+  if (missing.length) {
+    console.warn('⚠️  ไม่พบไฟล์แบบฟอร์ม: ' + missing.join(', ') + ' (ต้องอยู่ที่ assets/forms/)');
+  }
+}
 
 {
   const mb = n => (n / 1024 / 1024).toFixed(1) + ' MB';

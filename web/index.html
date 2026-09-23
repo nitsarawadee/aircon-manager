@@ -6996,6 +6996,31 @@ const CLEANING_CHECKLIST_ITEMS = [
    *
    * @returns {Promise<boolean>} สำเร็จหรือไม่
    */
+  /**
+   * แปลงไฟล์ที่เซิร์ฟเวอร์ส่งมาเป็น base64 ให้กลายเป็นไฟล์ในเครื่องคนกด
+   *
+   * ไฟล์ทุกชนิดในระบบไม่มีที่อยู่สาธารณะให้ลิงก์ตรง (กันคนไม่ได้ล็อกอินโหลดไป)
+   * จึงต้องรับเนื้อไฟล์มาทั้งก้อนแล้วประกอบเป็นไฟล์เองที่ฝั่งเบราว์เซอร์แบบนี้
+   *
+   * @param {{base64: string, mime?: string, fileName?: string}} res ไฟล์ที่ได้จากเซิร์ฟเวอร์
+   * @param {string} fallbackName ชื่อไฟล์สำรอง เผื่อเซิร์ฟเวอร์ไม่ได้ส่งชื่อมา
+   */
+  function saveFileResult(res, fallbackName) {
+    const bin = atob(res.base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+    const url = URL.createObjectURL(new Blob([bytes], { type: res.mime || 'application/octet-stream' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = res.fileName || fallbackName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // คืนหน่วยความจำหลังเบราว์เซอร์เริ่มดาวน์โหลดแล้ว
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
   async function downloadDocPdf(fn, row, id, btn) {
     const old = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
@@ -7005,20 +7030,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const res = await call(fn, row, id);
       if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
 
-      // แปลง base64 กลับเป็นไฟล์ แล้วสั่งดาวน์โหลด โดยไม่ต้องเปิดแท็บใหม่
-      const bin = atob(res.base64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-
-      const url = URL.createObjectURL(new Blob([bytes], { type: res.mime || 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = res.fileName || 'document.pdf';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      // คืนหน่วยความจำหลังเบราว์เซอร์เริ่มดาวน์โหลดแล้ว
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      saveFileResult(res, 'document.pdf');
 
       showToast('บันทึกไฟล์ ' + (res.fileName || 'PDF') + ' แล้ว (เก็บสำเนาไว้บนเซิร์ฟเวอร์ด้วย)');
       return true;
@@ -8182,9 +8194,18 @@ const CLEANING_CHECKLIST_ITEMS = [
               </select>
               <p class="text-xs text-gray-500 mt-1.5">มี ${list.length} เครื่องที่มีงานซ่อมค้างอยู่</p>
             </div>
+
+            <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+              <b>เลือกแบบไหนดี</b><br>
+              <b>ปริ้น</b> — เอาไปเขียนมือหน้างาน แนบรูปไม่ได้<br>
+              <b>Excel</b> — กรอกบนคอม วางรูปลงในกรอบที่ชีต "รูปภาพประกอบ" ได้
+            </div>
           </div>
-          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-wrap justify-end gap-3 rounded-b-2xl">
             <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+            <button onclick="downloadBlankRepairXlsx(this)" class="px-4 py-2 text-sm font-medium text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 shadow-sm">
+              <i class="ph ph-microsoft-excel-logo"></i> โหลดฟอร์ม Excel
+            </button>
             <button onclick="printBlankRepairForm()" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm">
               <i class="ph ph-printer"></i> เปิดฟอร์มเปล่า
             </button>
@@ -8194,13 +8215,19 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.openPrintRepairFormDialog = openPrintRepairFormDialog;
 
-  async function printBlankRepairForm() {
+  /**
+   * รวบข้อมูลเครื่องที่เลือกไว้ในกล่องฟอร์มเปล่า
+   *
+   * ฟอร์มเปล่าทั้งแบบปริ้นและแบบ Excel ใช้ข้อมูลชุดเดียวกัน ต่างกันแค่ปลายทาง
+   * จึงต้องเติมจากที่เดียว ไม่งั้นเพิ่มช่องใหม่ทีหนึ่งจะลืมแก้อีกฝั่งทุกที
+   */
+  function blankRepairRecord() {
     const code = (document.getElementById('prf_air') || {}).value;
     const unit = (currentAirList || []).find(a => String(a.AirCode) === String(code));
-    if (!unit) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return; }
+    if (!unit) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return null; }
 
     // เติมเท่าที่ระบบรู้ ส่วนผลตรวจกับอะไหล่เว้นว่างไว้ให้เขียนหน้างาน
-    const record = {
+    return {
       Date: new Date().toISOString().slice(0, 10),
       NodeName: unit.NodeName, SiteCode: unit.SiteCode, Province: unit.Province,
       LocationType: unit.LocationType,
@@ -8210,11 +8237,45 @@ const CLEANING_CHECKLIST_ITEMS = [
       Symptom: lastSymptomOf(code),
       Checklist: [], Parts: []
     };
+  }
+
+  async function printBlankRepairForm() {
+    const record = blankRepairRecord();
+    if (!record) return;
 
     const win = await openDocWindow('getRepairBlankDocHtml', record);
     if (win) closeModal();
   }
   window.printBlankRepairForm = printBlankRepairForm;
+
+  /**
+   * โหลดฟอร์มซ่อมเปล่าแบบ Excel ที่เติมข้อมูลเครื่องมาให้แล้ว
+   *
+   * มีไว้เพราะฟอร์มที่ปริ้นออกไปแล้ว (หรือเซฟเป็น PDF) แนบรูปไม่ได้
+   * ไฟล์ Excel ที่ได้เป็นแบบฟอร์มตัวจริง มีกรอบวางรูปเตรียมไว้ให้ในชีตที่สอง
+   */
+  async function downloadBlankRepairXlsx(btn) {
+    const record = blankRepairRecord();
+    if (!record) return;
+
+    const old = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง...'; }
+
+    try {
+      const res = await call('getRepairBlankXlsx', record);
+      if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
+
+      saveFileResult(res, 'ฟอร์มซ่อม.xlsx');
+      showToast('โหลดฟอร์ม Excel แล้ว — ข้อมูลเครื่องเติมให้เรียบร้อย ' +
+                'วางรูปได้ที่ชีต "รูปภาพประกอบ"', 'success');
+      closeModal();
+    } catch (e) {
+      showToast('โหลดฟอร์ม Excel ไม่สำเร็จ: ' + (e.message || e), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+    }
+  }
+  window.downloadBlankRepairXlsx = downloadBlankRepairXlsx;
 
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
   function onCleaningFormNodeChange() {

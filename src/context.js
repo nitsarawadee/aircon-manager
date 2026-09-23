@@ -35,6 +35,7 @@ export class Ctx {
    *   - `docs`         ที่เก็บไฟล์ PDF บนดิสก์
    *   - `attachments`  ที่เก็บไฟล์เอกสารที่ช่างถ่ายส่งกลับมา
    *   - `backup`       สำรองฐานข้อมูลทันที ใช้ก่อนงานที่เขียนทีละมากๆ
+   *   - `forms`        ไฟล์แบบฟอร์มแม่แบบ (.xlsx) ที่เอาไปเติมข้อมูลให้ผู้ใช้โหลด
    *
    *   รับเป็นอ็อบเจกต์เดียวไม่ใช่พารามิเตอร์เรียงกัน เพราะรายการนี้ยาวขึ้นเรื่อยๆ
    *   และการเรียงผิดตำแหน่งเป็นความผิดพลาดที่ไม่มีอะไรฟ้อง
@@ -48,6 +49,7 @@ export class Ctx {
     this.docs = services.docs || null;
     this.attachments = services.attachments || null;
     this.backup = services.backup || null;
+    this.forms = services.forms || null;
     this.ss = null;            // ตัวอ่าน/เขียนข้อมูล (SQLite)
     this.token = '';           // session token ที่แนบมากับ request นี้
     this.username = '';        // username จาก session ที่ยังไม่หมดอายุ
