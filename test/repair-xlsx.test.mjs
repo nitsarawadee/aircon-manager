@@ -27,7 +27,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { readZip, writeZip } from '../src/modules/zip.js';
-import { setCells, fillXlsx } from '../src/modules/xlsx-template.js';
+import { setCells, fillXlsx, recolorStyles } from '../src/modules/xlsx-template.js';
 import { repairXlsxValues, repairXlsxFileName, REPAIR_XLSX_CELLS } from '../src/modules/repair-xlsx.js';
 
 const TEMPLATE = join(process.cwd(), 'assets', 'forms', 'repair-form-template.xlsx');
@@ -289,4 +289,138 @@ test('ชื่อไฟล์ไม่มีอักขระที่ Windows
 test('ไม่มีข้อมูลเครื่องก็ยังได้ชื่อไฟล์ที่ใช้ได้', () => {
   assert.equal(repairXlsxFileName({}), 'ฟอร์มซ่อม.xlsx');
   assert.equal(repairXlsxFileName(null), 'ฟอร์มซ่อม.xlsx');
+});
+
+/* ============================ สีตัวอักษรของช่องที่เติม ============================ */
+
+/**
+ * ไฟล์ฟอร์มต้นฉบับทำสี "ช่องที่ต้องกรอก" ไม่ครบ — ในส่วนข้อมูล Node
+ * คอลัมน์ซ้าย (C) เป็นสีดำ คอลัมน์ขวา (F) เป็นสีน้ำเงิน ทั้งที่เป็นข้อมูล
+ * ชนิดเดียวกัน ตอนช่องว่างมองไม่เห็น พอระบบเติมข้อมูลลงไปเอกสารเลยออกมา
+ * สีปนกันครึ่งดำครึ่งน้ำเงิน
+ *
+ * เจ้าของงานสั่งว่า "เปลี่ยนตรงที่เราบอกเป็นสีดำ ที่เหลือเอาเหมือนเดิม"
+ * = แก้เฉพาะช่องที่ระบบเติม ช่องว่างที่เหลือให้คนกรอกเองห้ามแตะ
+ */
+
+/** สีตัวอักษรที่เซลล์หนึ่งใช้จริง ไล่จาก s= ไป cellXfs ไป fonts */
+async function fontColorOf(file, ref, sheetPath = 'xl/worksheets/sheet1.xml') {
+  const entries = await readZip(file);
+  const sheet = text(entries.find(e => e.name === sheetPath).data);
+  const styles = text(entries.find(e => e.name === 'xl/styles.xml').data);
+
+  // ดึงแท็กของเซลล์ออกมาก่อน แล้วค่อยอ่าน s= จากแท็กนั้น
+  // ปลอดภัยกว่าเขียน regex ยาวๆ ที่ต้องไล่ข้ามแอตทริบิวต์อื่นให้ถูก
+  const tag = (sheet.match(new RegExp('<c r="' + ref + '"[^>]*>')) || [])[0];
+  const s = tag ? (tag.match(/ s="(\d+)"/) || [])[1] : undefined;
+  if (s === undefined) return null;
+
+  const cellXfs = styles.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)[1];
+  const xfs = cellXfs.match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g) || [];
+  const fontId = (xfs[Number(s)].match(/fontId="(\d+)"/) || [])[1];
+
+  const fontsBlock = styles.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/)[1];
+  const fonts = fontsBlock.match(/<font\b[^>]*\/>|<font\b[^>]*>[\s\S]*?<\/font>/g) || [];
+  return (fonts[Number(fontId)].match(/<color rgb="([^"]+)"\/>/) || [])[1] || null;
+}
+
+test('ไฟล์ต้นฉบับมีปัญหาสีจริง — ช่องซ้ายดำ ช่องขวาน้ำเงิน', async () => {
+  assert.equal(await fontColorOf(template(), 'C3'), 'FF000000', 'ช่องซ้ายเป็นสีดำอยู่แล้ว');
+  assert.equal(await fontColorOf(template(), 'F3'), 'FF0000FF', 'ช่องขวาเป็นสีน้ำเงิน');
+});
+
+test('ข้อมูลที่ระบบเติมออกมาเป็นสีดำทุกช่อง', async () => {
+  const out = await (await import('../src/modules/repair-xlsx.js')).buildRepairXlsx(template(), unit);
+
+  for (const ref of Object.keys(REPAIR_XLSX_CELLS)) {
+    assert.equal(await fontColorOf(out, ref), 'FF000000', 'ช่อง ' + ref + ' ต้องเป็นสีดำ');
+  }
+});
+
+test('ช่องว่างที่เหลือไว้ให้คนกรอกเอง ยังเป็นสีเดิมทุกช่อง', async () => {
+  const out = await (await import('../src/modules/repair-xlsx.js')).buildRepairXlsx(template(), unit);
+
+  // ช่องกรอกผลตรวจวัดกับช่องข้อเสนอแนะ ระบบไม่ได้เติม จึงต้องไม่ถูกแตะ
+  for (const ref of ['F17', 'F18', 'D24', 'E25', 'A29', 'F32']) {
+    assert.equal(
+      await fontColorOf(out, ref), 'FF0000FF',
+      'ช่อง ' + ref + ' ระบบไม่ได้เติม ห้ามเปลี่ยนสี'
+    );
+  }
+});
+
+test('เปลี่ยนสีแล้วเส้นกรอบกับการจัดวางต้องเหมือนเดิม', async () => {
+  const out = await (await import('../src/modules/repair-xlsx.js')).buildRepairXlsx(template(), unit);
+
+  const styles = text((await readZip(template())).find(e => e.name === 'xl/styles.xml').data);
+  const after = text((await readZip(out)).find(e => e.name === 'xl/styles.xml').data);
+
+  const xfsOf = s => (s.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)[1]
+    .match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g) || []);
+
+  const before = xfsOf(styles);
+  const now = xfsOf(after);
+
+  // ของเดิมต้องอยู่ครบและไม่ถูกแก้ ตัวใหม่ต่อท้ายเท่านั้น
+  assert.ok(now.length >= before.length, 'รายการสไตล์ต้องไม่หดลง');
+  for (let i = 0; i < before.length; i++) {
+    assert.equal(now[i], before[i], 'สไตล์เบอร์ ' + i + ' ห้ามถูกแก้ เพราะเซลล์อื่นใช้ร่วมกันอยู่');
+  }
+
+  // สไตล์ที่เพิ่มมาต้องยังมี borderId เดิมของช่องนั้น
+  const newOnes = now.slice(before.length);
+  for (const xf of newOnes) {
+    assert.ok(/borderId="\d+"/.test(xf), 'สไตล์ใหม่ต้องยังมีเส้นกรอบ');
+  }
+});
+
+test('count ของ fonts กับ cellXfs ต้องตรงกับจำนวนจริง ไม่งั้น Excel ฟ้องไฟล์เสีย', async () => {
+  const out = await (await import('../src/modules/repair-xlsx.js')).buildRepairXlsx(template(), unit);
+  const styles = text((await readZip(out)).find(e => e.name === 'xl/styles.xml').data);
+
+  const fontsBlock = styles.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/)[1];
+  const fonts = (fontsBlock.match(/<font\b[^>]*\/>|<font\b[^>]*>[\s\S]*?<\/font>/g) || []).length;
+  assert.equal(Number(styles.match(/<fonts count="(\d+)"/)[1]), fonts);
+
+  const cellXfs = styles.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)[1];
+  const xfs = (cellXfs.match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g) || []).length;
+  assert.equal(Number(styles.match(/<cellXfs count="(\d+)"/)[1]), xfs);
+});
+
+test('ฟอนต์ที่หน้าตาซ้ำกับของเดิมต้องใช้ซ้ำ ไม่เพิ่มตัวใหม่ให้ไฟล์บวม', () => {
+  // ฟอนต์น้ำเงิน (4) กับฟอนต์ดำ (5) ในไฟล์นี้ต่างกันแค่สี พอเปลี่ยนสีน้ำเงินเป็นดำ
+  // ต้องได้ฟอนต์ 5 ที่มีอยู่แล้ว ไม่ใช่สร้างตัวที่ 13 ขึ้นมาซ้ำ
+  const styles =
+    '<styleSheet><fonts count="2">' +
+    '<font><sz val="12"/><color rgb="FF0000FF"/><name val="Angsana New"/></font>' +
+    '<font><sz val="12"/><color rgb="FF000000"/><name val="Angsana New"/></font>' +
+    '</fonts><cellXfs count="1"><xf fontId="0" borderId="3" applyFont="1"/></cellXfs></styleSheet>';
+
+  const { xml, map } = recolorStyles(styles, [0], 'FF000000');
+
+  assert.equal(Number(xml.match(/<fonts count="(\d+)"/)[1]), 2, 'ห้ามเพิ่มฟอนต์ซ้ำ');
+  assert.equal(Number(xml.match(/<cellXfs count="(\d+)"/)[1]), 2, 'เพิ่ม xf ใหม่ 1 ตัว');
+  assert.ok(xml.includes('fontId="1" borderId="3"'), 'ตัวใหม่ต้องชี้ไปฟอนต์ดำที่มีอยู่แล้ว');
+  assert.equal(map.get(0), 1);
+});
+
+test('ช่องที่สีถูกอยู่แล้ว ไม่ต้องสร้างสไตล์ใหม่', () => {
+  const styles =
+    '<styleSheet><fonts count="1">' +
+    '<font><sz val="12"/><color rgb="FF000000"/></font>' +
+    '</fonts><cellXfs count="1"><xf fontId="0" borderId="3"/></cellXfs></styleSheet>';
+
+  const { xml, map } = recolorStyles(styles, [0], 'FF000000');
+
+  assert.equal(Number(xml.match(/<cellXfs count="(\d+)"/)[1]), 1, 'ไม่ต้องเพิ่มอะไร');
+  assert.equal(map.get(0), 0, 'ชี้ไปที่เดิม');
+});
+
+test('ไฟล์ที่เปลี่ยนสีแล้ว ตัวอ่านอื่นยังเปิดได้และค่าครบ', async () => {
+  const out = await (await import('../src/modules/repair-xlsx.js')).buildRepairXlsx(template(), unit);
+  const entries = await readZip(out);
+
+  assert.equal(entries.length, 20, 'ไฟล์ย่อยยังครบ');
+  assert.equal(cellText(await sheetOf(out), 'F3'), 'Shop House', 'ค่ายังอยู่');
+  assert.equal(cellText(await sheetOf(out), 'C3'), 'ชุมแพ');
 });

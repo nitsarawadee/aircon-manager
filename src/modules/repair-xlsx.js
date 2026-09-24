@@ -80,7 +80,11 @@ export function repairXlsxValues(record) {
  */
 export async function buildRepairXlsx(template, record) {
   const { fillXlsx } = await import('./xlsx-template.js');
-  return fillXlsx(template, { [SHEET_MAIN]: repairXlsxValues(record) });
+
+  // บังคับสีดำเฉพาะช่องที่ระบบเติม เพราะไฟล์ฟอร์มต้นฉบับทำสีช่องกรอกไม่ครบ
+  // (คอลัมน์ซ้ายดำ คอลัมน์ขวาน้ำเงิน) พอเติมข้อมูลจริงเอกสารเลยออกมาสีปนกัน
+  // ช่องว่างที่เหลือไว้ให้ช่างกรอกเองยังเป็นสีเดิมทุกช่อง
+  return fillXlsx(template, { [SHEET_MAIN]: repairXlsxValues(record) }, { fontColor: 'FF000000' });
 }
 
 /**
