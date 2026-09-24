@@ -15,7 +15,9 @@ export const SHEETS = {
   BUDGET: 'Budget',
   CLEANFORM: 'CleaningForm',
   REPAIRFORM: 'RepairForm',
-  INSTALLFORM: 'InstallForm'
+  INSTALLFORM: 'InstallForm',
+  CONTRACTOR: 'Contractor',
+  NODEASSIGN: 'NodeAssignment'
 };
 
 export const AIRLIST_HEADERS = [
@@ -45,8 +47,25 @@ export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note',
 
 export const USERS_HEADERS = [
   'Email', 'Name', 'Role', 'Regions', 'Permissions', 'Active', 'UpdatedAt', 'UpdatedBy',
-  'Username', 'Password', 'PasswordHash', 'PasswordSalt'
+  'Username', 'Password', 'PasswordHash', 'PasswordSalt',
+  // เพิ่มภายหลัง — ต่อท้ายสุดเท่านั้น
+  // ผู้รับเหมาที่บัญชีนี้สังกัด ว่าง = พนักงาน INTERLINK
+  'ContractorID'
 ];
+
+/**
+ * รายชื่อผู้รับเหมา — ดูเหตุผลที่ต้องเป็นตารางมีรหัสที่ db/schema.js (contractors)
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const CONTRACTOR_HEADERS = [
+  'ID', 'Name', 'Active', 'Note', 'CreatedAt', 'UpdatedAt', 'UpdatedBy'
+];
+
+/**
+ * Node ไหนเป็นของผู้รับเหมาเจ้าไหน ผูกด้วย SiteCode
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const NODEASSIGN_HEADERS = ['SiteCode', 'ContractorID', 'UpdatedAt', 'UpdatedBy'];
 
 export const CONFIG_HEADERS = ['Region', 'LocationType', 'Brand', 'Status', 'Technician', 'EventType'];
 

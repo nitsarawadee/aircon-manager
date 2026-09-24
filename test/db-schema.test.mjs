@@ -18,7 +18,8 @@ import { TABLES, createTableStatements } from '../src/db/schema.js';
 import {
   AIRLIST_HEADERS, HISTORY_HEADERS, PLAN_HEADERS,
   BUDGET_HEADERS, USERS_HEADERS, CLEANFORM_HEADERS,
-  REPAIRFORM_HEADERS, INSTALLFORM_HEADERS
+  REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
+  CONTRACTOR_HEADERS, NODEASSIGN_HEADERS
 } from '../src/schema.js';
 
 /** ลำดับคอลัมน์ของตารางนั้น ตามที่ repository ใช้จริง */
@@ -62,7 +63,9 @@ test('ทุกคอลัมน์ที่โค้ดต้องการ �
     ['users', USERS_HEADERS],
     ['cleaning_forms', CLEANFORM_HEADERS],
     ['repair_forms', REPAIRFORM_HEADERS],
-    ['install_forms', INSTALLFORM_HEADERS]
+    ['install_forms', INSTALLFORM_HEADERS],
+    ['contractors', CONTRACTOR_HEADERS],
+    ['node_assignments', NODEASSIGN_HEADERS]
   ];
 
   for (const [table, headers] of pairs) {
@@ -85,7 +88,10 @@ test('ลำดับคอลัมน์ของตารางเอกส�
   const pairs = [
     ['cleaning_forms', CLEANFORM_HEADERS],
     ['repair_forms', REPAIRFORM_HEADERS],
-    ['install_forms', INSTALLFORM_HEADERS]
+    ['install_forms', INSTALLFORM_HEADERS],
+    ['contractors', CONTRACTOR_HEADERS],
+    ['node_assignments', NODEASSIGN_HEADERS],
+    ['users', USERS_HEADERS]
   ];
 
   for (const [table, headers] of pairs) {

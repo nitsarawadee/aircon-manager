@@ -170,10 +170,49 @@ export const TABLES = {
     columns: {
       Email: S, Name: S, Role: S, Regions: S, Permissions: S,
       Active: B, UpdatedAt: DT, UpdatedBy: S,
-      Username: S, Password: S, PasswordHash: S, PasswordSalt: S
+      Username: S, Password: S, PasswordHash: S, PasswordSalt: S,
+      // ผู้รับเหมาที่บัญชีนี้สังกัด — ว่าง = พนักงาน INTERLINK (ใช้สิทธิ์แบบเดิมทุกอย่าง)
+      ContractorID: S
     },
     indexes: [['Username']],
     unique: ['Username']
+  },
+
+  /**
+   * รายชื่อผู้รับเหมา
+   *
+   * แยกเป็นตารางที่มีรหัส ไม่ใช้ช่องชื่อบริษัทที่พิมพ์เอง เพราะสิทธิ์ของผู้รับเหมา
+   * ผูกกับรหัสนี้ ถ้าผูกกับชื่อที่พิมพ์ พิมพ์ต่างกันนิดเดียวก็เห็นงานคนละชุด
+   * (ข้อมูลจริงมีชื่อบริษัทเดียวกัน 7 แบบ: T&N / ทีแอนด์เอ็น / เติ้ล ...)
+   *
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ CONTRACTOR_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  contractors: {
+    sheet: 'Contractor',
+    columns: {
+      ID: S, Name: S, Active: B, Note: S,
+      CreatedAt: DT, UpdatedAt: DT, UpdatedBy: S
+    },
+    indexes: [['ID']],
+    unique: ['ID']
+  },
+
+  /**
+   * Node ไหนเป็นของผู้รับเหมาเจ้าไหน — ตั้งครั้งเดียวใช้จนกว่า Admin จะเปลี่ยน
+   *
+   * ผูกด้วย SiteCode ไม่ใช่ชื่อ Node เพราะชื่อ Node แก้ได้ แต่รหัสไม่เปลี่ยน
+   * (ตรวจแล้ว 238 Node ตรงกับ 238 SiteCode หนึ่งต่อหนึ่ง ไม่มีเครื่องไหนขาดรหัส)
+   *
+   * Node หนึ่งมีผู้รับเหมาได้เจ้าเดียว ดูแลทั้งงานล้างและงานติดตั้ง
+   * Node ที่ไม่มีแถวในตารางนี้ = ยังไม่ได้มอบหมาย ผู้รับเหมาคนไหนก็มองไม่เห็น
+   */
+  node_assignments: {
+    sheet: 'NodeAssignment',
+    columns: {
+      SiteCode: S, ContractorID: S, UpdatedAt: DT, UpdatedBy: S
+    },
+    indexes: [['SiteCode'], ['ContractorID']],
+    unique: ['SiteCode']
   },
 
   budgets: {
