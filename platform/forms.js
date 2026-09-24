@@ -30,7 +30,8 @@ import { join } from 'node:path';
 /** แบบฟอร์มที่ระบบรู้จัก — ชื่อสั้นที่ src/ ใช้เรียก → ชื่อไฟล์จริง */
 const FORMS = {
   cleaning: 'cleaning-form-template.xlsx',
-  repair: 'repair-form-template.xlsx'
+  repair: 'repair-form-template.xlsx',
+  install: 'install-form-template.xlsx'
 };
 
 /**

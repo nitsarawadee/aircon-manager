@@ -26,6 +26,11 @@ import {
   getRepairDocHtml, getRepairBlankDocHtml, getRepairBlankXlsx, getRepairDocPdf,
   saveRepairPhoto, deleteRepairPhoto, getRepairPhotos
 } from './modules/repairform.js';
+import {
+  getInstallForms, saveInstallForm, deleteInstallForm,
+  getInstallDocHtml, getInstallBlankDocHtml, getInstallBlankXlsx, getInstallDocPdf,
+  saveInstallPhoto, deleteInstallPhoto, getInstallPhotos
+} from './modules/installform.js';
 
 /**
  * ============================================================================
@@ -120,7 +125,19 @@ const API_FUNCTIONS = {
   getRepairDocPdf,
   saveRepairPhoto,
   deleteRepairPhoto,
-  getRepairPhotos
+  getRepairPhotos,
+
+  // เอกสารติดตั้ง ITEL-FM-NE-006
+  getInstallForms,
+  saveInstallForm,
+  deleteInstallForm,
+  getInstallDocHtml,
+  getInstallBlankDocHtml,
+  getInstallBlankXlsx,
+  getInstallDocPdf,
+  saveInstallPhoto,
+  deleteInstallPhoto,
+  getInstallPhotos
 };
 
 /** คำสั่งที่เรียกได้ก่อนล็อกอิน */

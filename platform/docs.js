@@ -40,7 +40,7 @@ const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 const UNSORTED = 'unsorted';
 
 /** ชนิดเอกสารที่มีที่เก็บของตัวเอง */
-const KINDS = ['cleaning', 'repair'];
+const KINDS = ['cleaning', 'repair', 'install'];
 
 const root = (dir, kind) => {
   if (!KINDS.includes(kind)) throw new Error('ชนิดเอกสารไม่ถูกต้อง: ' + kind);
