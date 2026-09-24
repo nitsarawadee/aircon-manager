@@ -8517,11 +8517,13 @@ const CLEANING_CHECKLIST_ITEMS = [
                   ${dateField('if_date', new Date().toISOString().slice(0, 10), field)}</div>
                 <div class="grid grid-cols-3 gap-2">
                   <div><label class="block text-xs text-gray-500 mb-1">เวลาเริ่ม</label>
-                    <input type="time" id="if_start" class="${small}"></div>
+                    <input type="time" id="if_start" oninput="updateIfTotal()" class="${small}"></div>
                   <div><label class="block text-xs text-gray-500 mb-1">เวลาเสร็จ</label>
-                    <input type="time" id="if_end" class="${small}"></div>
+                    <input type="time" id="if_end" oninput="updateIfTotal()" class="${small}"></div>
                   <div><label class="block text-xs text-gray-500 mb-1">รวม (ชม.)</label>
-                    <input id="if_total" inputmode="decimal" class="${small}"></div>
+                    <input id="if_total" readonly tabindex="-1"
+                      class="${small} bg-slate-50 text-gray-600 cursor-default"
+                      placeholder="คิดให้เอง"></div>
                 </div>
               </div>`)}
 
@@ -8578,6 +8580,28 @@ const CLEANING_CHECKLIST_ITEMS = [
     renderIfPhotos();
   }
   window.openInstallForm = openInstallForm;
+
+  /**
+   * คิดเวลารวมให้เองจากเวลาเริ่ม–เวลาเสร็จ
+   *
+   * ไม่ให้พิมพ์เอง เพราะเป็นค่าที่คำนวณได้จากสองช่องข้างๆ อยู่แล้ว
+   * ถ้าพิมพ์ได้ก็มีโอกาสที่เลขในเอกสารไม่ตรงกับเวลาที่กรอกไว้เอง
+   * ซึ่งคนอ่านย้อนหลังจะไม่มีทางรู้ว่าอันไหนถูก
+   *
+   * ใช้ตัวคำนวณตัวเดียวกับฟอร์มล้าง (computeDuration_) จะได้นับเหมือนกัน
+   * รวมถึงกรณีงานข้ามเที่ยงคืนที่ตัวนั้นเผื่อไว้แล้ว
+   */
+  function updateIfTotal() {
+    const box = document.getElementById('if_total');
+    if (!box) return;
+
+    const start = (document.getElementById('if_start') || {}).value || '';
+    const end = (document.getElementById('if_end') || {}).value || '';
+
+    // กรอกไม่ครบสองช่องก็ยังคิดไม่ได้ ปล่อยว่างไว้ดีกว่าโชว์เลขมั่ว
+    box.value = (start && end) ? computeDuration_(start, end) : '';
+  }
+  window.updateIfTotal = updateIfTotal;
 
   /**
    * รายการตรวจสอบ 18 ข้อ — การ์ดต่อข้อ ช่องกรอกแยกรายเครื่อง
@@ -8786,7 +8810,12 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const record = {
       Date: date,
-      TimeStart: val('if_start'), TimeEnd: val('if_end'), TotalTime: val('if_total'),
+      TimeStart: val('if_start'),
+      TimeEnd: val('if_end'),
+      // คิดใหม่ตรงนี้ ไม่อ่านจากช่องที่โชว์ เผื่อกรณีที่ค่าในช่องยังไม่ทันอัปเดต
+      // (บางเบราว์เซอร์ไม่ยิง oninput ตอนเลือกเวลาจากหน้าต่างนาฬิกา)
+      TotalTime: (val('if_start') && val('if_end'))
+        ? computeDuration_(val('if_start'), val('if_end')) : '',
       AdditionalNote: val('if_note'),
       Cost: val('if_cost'),
       CompanyName: val('if_company'),
