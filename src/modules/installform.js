@@ -316,9 +316,14 @@ function requirePhotoStore(ctx) {
   return ctx.photos;
 }
 
-/** ช่องเครื่องที่รูปจะไปอยู่ — ใบติดตั้งมีสองเครื่อง จึงต้องระบุมาให้ชัด */
+/**
+ * ช่องเครื่องที่รูปจะไปอยู่ — ใบติดตั้งมีสองเครื่อง จึงต้องระบุมาให้ชัด
+ *
+ * ใช้ชื่อ unitSlot ให้ตรงกับที่ใบล้างใช้อยู่ เพราะหน้าเว็บใช้ตัวแก้รูปตัวเดียวกัน
+ * ทั้งสามเอกสาร ถ้าตั้งชื่อไม่ตรง รูปจะไปลงช่องเครื่องที่ 1 เสมอโดยไม่มีอะไรฟ้อง
+ */
 function slotOf(form, payload) {
-  const slot = Number((payload && payload.slot) || 1);
+  const slot = Number((payload && payload.unitSlot) || 1);
   if (slot !== 1 && slot !== 2) throw new Error('เครื่องที่ ' + slot + ' ไม่มีในเอกสารใบนี้');
   if (!plainText(form['AirCode' + slot]).trim()) {
     throw new Error('เอกสารใบนี้ไม่มีเครื่องที่ ' + slot);

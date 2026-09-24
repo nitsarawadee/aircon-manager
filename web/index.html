@@ -794,6 +794,16 @@
                 title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
                 <i class="ph ph-wrench"></i> กรอกฟอร์มซ่อม
               </button>
+              <button id="docBtn_printInstall" onclick="openPrintInstallFormDialog()"
+                class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="ปริ้นฟอร์มติดตั้งเปล่า (ITEL-FM-NE-006) หรือโหลดเป็น Excel ที่วางรูปได้">
+                <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
+              </button>
+              <button id="docBtn_installForm" onclick="openInstallFormPicker()"
+                class="bg-white border border-teal-700 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="กรอกเอกสารบันทึกผลการติดตั้ง (ITEL-FM-NE-006) — อัปเดตทะเบียนเครื่องและลงประวัติให้เอง">
+                <i class="ph ph-plus-circle"></i> กรอกฟอร์มติดตั้ง
+              </button>
             </div>
             <button id="docBtn_cleanForm" onclick="openCleaningFormModal()"
               class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end"
@@ -816,9 +826,10 @@
             class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
             <i class="ph ph-wrench"></i> ซ่อม
           </button>
-          <span class="px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent whitespace-nowrap cursor-not-allowed" title="ยังไม่เปิดใช้ — รอแบบฟอร์มจริง">
-            <i class="ph ph-plus-circle"></i> ติดตั้ง <span class="text-[10px]">· เร็วๆ นี้</span>
-          </span>
+          <button id="docTab_install" onclick="setDocTypeFilter('install')"
+            class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
+            <i class="ph ph-plus-circle"></i> ติดตั้ง
+          </button>
           <div class="relative ml-auto w-full sm:w-72 pb-2">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขที่, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -6058,6 +6069,22 @@
   }
 
   /**
+   * ผลตรวจรับงานติดตั้ง
+   *
+   * "ไม่ผ่าน" ต้องเด่นกว่าแบบอื่น เพราะแปลว่ายังมีงานค้างที่ต้องตามต่อ
+   * ถ้าใช้สีเดียวกับผลประเมินของใบล้าง คนจะกวาดตาผ่านไปโดยไม่ทันสังเกต
+   */
+  function acceptBadge(result) {
+    const c = String(result == null ? '' : result).trim();
+    if (!c) return '<span class="text-gray-300">-</span>';
+
+    const tone = c === 'ผ่าน'
+      ? 'bg-green-100 text-green-700'
+      : 'bg-red-100 text-red-700 border border-red-200';
+    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${tone}">${esc(c)}</span>`;
+  }
+
+  /**
    * กางเอกสารหนึ่งใบออกเป็น "แถวละเครื่อง"
    *
    * ============================================================================
@@ -6096,15 +6123,21 @@
     const slots = [1, 2].filter(n => String(form['AirCode' + n] || '').trim());
     const list = slots.length ? slots : [1];   // ใบที่ยังไม่มีข้อมูลเครื่อง ก็ยังต้องเห็นในตาราง
 
+    // ใบติดตั้งแตกแถวเหมือนใบล้าง (สองเครื่องต่อใบ) ต่างกันแค่ช่อง "ผลประเมิน"
+    // ซึ่งใบติดตั้งใช้แสดงผลตรวจรับ ผ่าน/ไม่ผ่าน แทน
+    const isInstall = form.kind === 'install';
+
     return list.map((slot, i) => ({
       form,
-      kind: 'cleaning',
+      kind: isInstall ? 'install' : 'cleaning',
       slot,
       first: i === 0,
       docNo: (slot === 2 && String(form.DocNo2 || '').trim()) || displayDocNo(form),
       airCode: String(form['AirCode' + slot] || '').trim(),
-      cond: String(form[slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition'] || '').trim(),
-      price: unitPriceOf(form, slot, i === 0)
+      cond: isInstall
+        ? String(form['AcceptResult' + slot] || '').trim()
+        : String(form[slot === 2 ? 'EquipmentCondition2' : 'EquipmentCondition'] || '').trim(),
+      price: isInstall ? (i === 0 ? Number(form.Cost) || 0 : 0) : unitPriceOf(form, slot, i === 0)
     }));
   }
 
@@ -6133,7 +6166,8 @@
   function allDocForms() {
     return [
       ...(currentCleaningForms || []).map(f => ({ ...f, kind: 'cleaning' })),
-      ...(currentRepairForms || []).map(f => ({ ...f, kind: 'repair' }))
+      ...(currentRepairForms || []).map(f => ({ ...f, kind: 'repair' })),
+      ...(currentInstallForms || []).map(f => ({ ...f, kind: 'install' }))
     ].sort((a, b) => {
       const x = String(a.CreatedAt || ''), y = String(b.CreatedAt || '');
       if (x !== y) return x < y ? 1 : -1;
@@ -6142,10 +6176,10 @@
   }
 
   /**
-   * แท็บประเภทเอกสารที่เลือกอยู่ — 'cleaning' | 'repair'
+   * แท็บประเภทเอกสารที่เลือกอยู่ — 'cleaning' | 'repair' | 'install'
    *
-   * ไม่มีตัวเลือก 'ทั้งหมด' เพราะสองแบบมีคอลัมน์คนละความหมาย เอามารวมกัน
-   * หัวตารางจะตรงแค่ครึ่งเดียว (ดูคอมเมนต์ที่แถบแท็บใน HTML)
+   * ไม่มีตัวเลือก 'ทั้งหมด' เพราะสามแบบมีคอลัมน์คนละความหมาย เอามารวมกัน
+   * หัวตารางจะตรงแค่แบบเดียว (ดูคอมเมนต์ที่แถบแท็บใน HTML)
    * เริ่มที่ใบล้างเพราะเป็นงานที่ออกเอกสารบ่อยที่สุด
    */
   let docTypeFilter = 'cleaning';
@@ -6164,13 +6198,23 @@
    * ต้องซ่อนของจริง ไม่ใช่แค่จางลง เพราะปุ่มของงานล้างที่ค้างอยู่บนแท็บซ่อม
    * กดไปก็ได้ฟอร์มผิดแบบ ซึ่งเสียเวลาคนใช้เปล่าๆ
    */
+  /** สีประจำแต่ละประเภทเอกสาร — ใช้ทั้งแท็บและปุ่ม จะได้ดูออกว่ากำลังอยู่แบบไหน */
+  const DOC_KIND_COLOR = { cleaning: '#1153a1', repair: '#f47920', install: '#0f766e' };
+
+  /** หัวคอลัมน์ที่ 5 เปลี่ยนความหมายตามประเภทเอกสาร */
+  const DOC_COND_LABEL = { cleaning: 'ผลประเมิน', repair: 'อาการเสีย', install: 'ผลตรวจรับ' };
+
+  /** คำเรียกสั้นๆ ของแต่ละประเภท ใช้ในช่องค้นหาและข้อความบอกว่ายังไม่มีเอกสาร */
+  const DOC_KIND_WORD = { cleaning: 'ล้าง', repair: 'ซ่อม', install: 'ติดตั้ง' };
+  const DOC_KIND_NAME = { cleaning: 'เอกสารล้างแอร์', repair: 'เอกสารซ่อม', install: 'เอกสารติดตั้ง' };
+
   function paintDocTabs() {
-    for (const kind of ['cleaning', 'repair']) {
+    for (const kind of ['cleaning', 'repair', 'install']) {
       const el = document.getElementById('docTab_' + kind);
       if (!el) continue;
 
       const on = docTypeFilter === kind;
-      const color = kind === 'repair' ? '#f47920' : '#1153a1';
+      const color = DOC_KIND_COLOR[kind];
       el.style.borderColor = on ? color : 'transparent';
       el.style.color = on ? color : '';
       el.classList.toggle('text-gray-500', !on);
@@ -6178,22 +6222,23 @@
     }
 
     // ปุ่มไหนควรอยู่บนแท็บไหน
-    const repair = docTypeFilter === 'repair';
     const show = {
-      docBtn_printClean: !repair,
-      docBtn_attach: !repair,
-      docBtn_cleanForm: !repair,
-      docBtn_printRepair: repair,
-      docBtn_repairForm: repair
+      docBtn_printClean: docTypeFilter === 'cleaning',
+      docBtn_attach: docTypeFilter === 'cleaning',
+      docBtn_cleanForm: docTypeFilter === 'cleaning',
+      docBtn_printRepair: docTypeFilter === 'repair',
+      docBtn_repairForm: docTypeFilter === 'repair',
+      docBtn_printInstall: docTypeFilter === 'install',
+      docBtn_installForm: docTypeFilter === 'install'
     };
     for (const [id, on] of Object.entries(show)) {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', !on);
     }
 
-    // ใบซ่อมไม่มีผลประเมิน ช่องนั้นใช้แสดงอาการเสียแทน หัวตารางจึงต้องเปลี่ยนตาม
+    // ใบซ่อมไม่มีผลประเมิน ใบติดตั้งมีผลตรวจรับ หัวตารางจึงต้องเปลี่ยนตาม
     const th = document.getElementById('docCol_cond');
-    if (th) th.textContent = docTypeFilter === 'repair' ? 'อาการเสีย' : 'ผลประเมิน';
+    if (th) th.textContent = DOC_COND_LABEL[docTypeFilter] || 'ผลประเมิน';
   }
 
   function filterCleaningForms() {
@@ -6207,7 +6252,9 @@
        f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, f.DocNo2,
        // ของใบซ่อม — คนมักค้นจากอาการเสียมากกว่าเลขที่เอกสาร
        f.Symptom, f.Cause, f.Fix,
-       f.kind === 'repair' ? 'ซ่อม' : 'ล้าง',
+       // ของใบติดตั้ง — ค้นจากผลตรวจรับได้ เช่นอยากดูว่าใบไหนยัง "ไม่ผ่าน"
+       f.AcceptResult1, f.AcceptResult2,
+       DOC_KIND_WORD[f.kind] || 'ล้าง',
        fmtDate(f.Date)]
         .map(v => String(v == null ? '' : v).toLowerCase())
         .join(' ')
@@ -6261,17 +6308,22 @@ const CLEANING_CHECKLIST_ITEMS = [
    */
   let currentRepairForms = [];
 
+  /** เอกสารติดตั้งที่บันทึกไว้ — ตารางของตัวเองเหมือนกัน (ดู INSTALLFORM_HEADERS) */
+  let currentInstallForms = [];
+
   /* ---------- โหลดข้อมูล ---------- */
   async function loadCleaningForm() {
     try {
-      const [nodes, forms, repairs] = await Promise.all([
-        call('getCleaningFormNodes'), call('getCleaningForms'), call('getRepairForms')
+      const [nodes, forms, repairs, installs] = await Promise.all([
+        call('getCleaningFormNodes'), call('getCleaningForms'),
+        call('getRepairForms'), call('getInstallForms')
       ]);
       // ป้องกันกรณี response ส่งกลับมาเป็น null (เช่น ข้อมูลในชีตมีค่าที่ส่งกลับไม่ได้)
       // ถ้าไม่ดักไว้ ตารางจะพังเงียบๆ แล้วค้างข้อความเดิมโดยผู้ใช้ไม่รู้ว่าเกิดอะไรขึ้น
       cleaningFormNodes = Array.isArray(nodes) ? nodes : [];
       currentCleaningForms = Array.isArray(forms) ? forms : [];
       currentRepairForms = Array.isArray(repairs) ? repairs : [];
+      currentInstallForms = Array.isArray(installs) ? installs : [];
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
       paintDocTabs();
       renderCleaningFormTable();
@@ -6288,7 +6340,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (cleaningFormLastList.length === 0) {
       // บอกให้ตรงว่าไม่เจอเพราะคำค้น ไม่งั้นจะเข้าใจว่าไม่มีเอกสารในระบบเลย
       const box = document.getElementById('cleaningFormSearch');
-      const ofKind = docTypeFilter === 'repair' ? 'เอกสารซ่อม' : 'เอกสารล้างแอร์';
+      const ofKind = DOC_KIND_NAME[docTypeFilter] || 'เอกสารล้างแอร์';
       const why = (box && box.value.trim())
         ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
         : 'ยังไม่มีการบันทึก' + ofKind;
@@ -6307,7 +6359,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     tbody.innerHTML = page.flatMap(cleaningFormUnitRows).map(r => {
       const f = r.form;
       const isRepair = r.kind === 'repair';
-      const isAttach = !isRepair && f.Source === 'attach';
+      const isInstall = r.kind === 'install';
+      const isAttach = !isRepair && !isInstall && f.Source === 'attach';
 
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
@@ -6319,6 +6372,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${esc(f.NodeName)}
           ${isRepair
             ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-medium align-middle">ซ่อม</span>'
+            : ''}
+          ${isInstall
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">ติดตั้ง</span>'
             : ''}
           ${isAttach
             ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">เอกสารแนบ</span>'
@@ -6332,6 +6388,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
           isRepair
             ? (esc(r.cond) ? `<span class="text-slate-600" title="${esc(r.cond)}">${esc(r.cond.slice(0, 28))}${r.cond.length > 28 ? '…' : ''}</span>` : '<span class="text-gray-300">-</span>')
+          // ใบติดตั้งใช้ช่องนี้แสดงผลตรวจรับ ผ่าน/ไม่ผ่าน ซึ่งเป็นสิ่งที่คนเปิดตารางมาหา
+          : isInstall
+            ? acceptBadge(r.cond)
             : conditionBadge(r.cond)
         }</td>
         <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
@@ -6347,6 +6406,13 @@ const CLEANING_CHECKLIST_ITEMS = [
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
                <button onclick="openPhotoEditor(${f._row}, 1, 'repair')" title="เปลี่ยนหรือเพิ่มรูปของใบซ่อมนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
+                 <i class="ph ph-camera"></i> แก้รูป</button>`
+          : isInstall
+            ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
+                 class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+               <button onclick="openPhotoEditor(${f._row}, ${r.slot}, 'install')" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
+                 class="text-slate-500 hover:text-white hover:bg-teal-700 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
                  <i class="ph ph-camera"></i> แก้รูป</button>`
           : isAttach
             ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
@@ -6368,6 +6434,8 @@ const CLEANING_CHECKLIST_ITEMS = [
             !r.first ? ''
               : isRepair
               ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
+              : isInstall
+              ? `<button onclick="deleteInstallFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารติดตั้งใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
               : `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
           }
         </td>
@@ -6662,7 +6730,8 @@ const CLEANING_CHECKLIST_ITEMS = [
   /** ชื่อคำสั่งของเอกสารแต่ละชนิด — สองแบบอยู่คนละตาราง จึงมีคำสั่งของตัวเอง */
   const PE_API = {
     cleaning: { read: 'getCleaningPhotos', save: 'saveCleaningPhoto', del: 'deleteCleaningPhoto' },
-    repair:   { read: 'getRepairPhotos',   save: 'saveRepairPhoto',   del: 'deleteRepairPhoto' }
+    repair:   { read: 'getRepairPhotos',   save: 'saveRepairPhoto',   del: 'deleteRepairPhoto' },
+    install:  { read: 'getInstallPhotos',  save: 'saveInstallPhoto',  del: 'deleteInstallPhoto' }
   };
 
   async function openPhotoEditor(row, slot, kind) {
@@ -6716,7 +6785,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     const box = document.getElementById('pe_box');
     if (!box) return;
 
-    const caps = peKind === 'repair' ? REPAIR_PHOTO_CAPTIONS : PHOTO_CAPTIONS;
+    const caps = captionsOf(peKind);
     const cells = caps.map((cap, i) => {
       const index = i + 1;
       const src = pePhotos[peSlot + '-' + index];
@@ -6784,7 +6853,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.pePick = pePick;
 
   async function peRemove(index) {
-    const caps = peKind === 'repair' ? REPAIR_PHOTO_CAPTIONS : PHOTO_CAPTIONS;
+    const caps = captionsOf(peKind);
     const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + caps[index - 1] + ')' + (peKind === 'repair' ? '' : ' ของเครื่องที่ ' + peSlot) + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
     if (!ok) return;
 
@@ -6919,6 +6988,21 @@ const CLEANING_CHECKLIST_ITEMS = [
     'รูปดำเนินการซ่อม', 'รูปดำเนินการซ่อม', 'รูปหลังดำเนินการซ่อม',
     'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
   ];
+
+  /** คำบรรยายใต้รูปของใบติดตั้ง — ต้องตรงกับ PHOTO_CAPTIONS ใน install-doc.js */
+  const INSTALL_PHOTO_CAPTIONS = [
+    'รูปก่อนดำเนินการติดตั้ง', 'รูปดำเนินการติดตั้ง', 'รูปดำเนินการติดตั้ง',
+    'รูปดำเนินการติดตั้ง', 'รูปดำเนินการติดตั้ง', 'รูปหลังดำเนินการติดตั้ง',
+    'รูปวัดค่ากระแสคอมเพรสเซอร์ขณะทำงาน', 'รูปวัดแรงดันไฟฟ้า', 'รูปวัดแรงดันน้ำยาด้านต่ำ (LOW)'
+  ];
+
+  /** คำบรรยายใต้รูปของเอกสารแต่ละแบบ — ตัวแก้รูปใช้ตัวเดียวกันทั้งสามแบบ */
+  const PHOTO_CAPTIONS_BY_KIND = {
+    cleaning: () => PHOTO_CAPTIONS,
+    repair: () => REPAIR_PHOTO_CAPTIONS,
+    install: () => INSTALL_PHOTO_CAPTIONS
+  };
+  const captionsOf = kind => (PHOTO_CAPTIONS_BY_KIND[kind] || PHOTO_CAPTIONS_BY_KIND.cleaning)();
 
   /**
    * ย่อรูปในเบราว์เซอร์ก่อนส่งขึ้นเซิร์ฟเวอร์
@@ -7139,6 +7223,45 @@ const CLEANING_CHECKLIST_ITEMS = [
       showToast('ลบบันทึกสำเร็จ');
     } catch (e) {}
   }
+
+  async function deleteInstallFormRow(row, id) {
+    const confirmed = await showConfirm(
+      'ยืนยันการลบเอกสารติดตั้งใบนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย\n' +
+      '(ใบประวัติ "ติดตั้ง" และข้อมูลเครื่องที่อัปเดตไปแล้วในทะเบียน จะไม่ย้อนกลับให้)'
+    );
+    if (!confirmed) return;
+    try {
+      currentInstallForms = await call('deleteInstallForm', row, id);
+      renderCleaningFormTable();
+      showToast('ลบเอกสารติดตั้งสำเร็จ');
+    } catch (e) {}
+  }
+  window.deleteInstallFormRow = deleteInstallFormRow;
+
+  /** เปิดเอกสารติดตั้งในแท็บใหม่ พร้อมต่อสายปุ่มดาวน์โหลดบนแถบลอยของหน้านั้น */
+  async function openInstallDoc(row, id) {
+    const win = await openDocWindow('getInstallDocHtml', row);
+    if (!win) return false;
+
+    try {
+      win.__docDownload = async btn => {
+        const old = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'กำลังเตรียมไฟล์...'; }
+
+        const ok = await downloadDocPdf('getInstallDocPdf', row, id);
+        if (!btn) return;
+
+        btn.textContent = ok ? 'บันทึกไฟล์แล้ว' : 'ไม่สำเร็จ ลองใหม่อีกครั้ง';
+        setTimeout(() => {
+          try { btn.disabled = false; btn.textContent = old; } catch (e) { /* ปิดแท็บไปแล้ว */ }
+        }, 2500);
+      };
+    } catch (e) {
+      // เบราว์เซอร์บางตัวกันการเขียนข้ามหน้าต่าง — ปุ่มปริ้นยังใช้ได้ตามปกติ
+    }
+    return true;
+  }
+  window.openInstallDoc = openInstallDoc;
 
   async function deleteRepairFormRow(row, id) {
     const confirmed = await showConfirm(
@@ -8116,6 +8239,536 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.openRepairFormPicker = openRepairFormPicker;
 
+  /* ==================== กรอกเอกสารติดตั้ง ITEL-FM-NE-006 ====================
+
+     โครงเหมือนฟอร์มล้าง — เลือก Node แล้วกรอกให้เครื่อง 1–2 ตัวในใบเดียว
+     ต่างกันตรงที่ใบนี้ให้ "แก้ข้อมูลเครื่องได้" เพราะติดตั้งคือการเปลี่ยนตัวเครื่องจริง
+     ค่าที่กรอกจะถูกเขียนกลับเข้าทะเบียนให้เอง (ดู installform.js)
+     ==================================================================== */
+
+  let ifNode = null;        // Node ที่เลือก
+  let ifUnits = [];         // เครื่องที่จะกรอก เรียงตามช่อง 1–2
+  let ifPhotos = {};        // '<ช่อง>-<ลำดับ>' -> dataUrl
+  let ifPickTarget = 1;     // ช่องรูปที่กำลังเลือกไฟล์อยู่
+
+  /** เลือก Node ก่อน แล้วค่อยเข้าไปกรอก — ใช้รายการเดียวกับฟอร์มล้าง */
+  async function openInstallFormPicker() {
+    if (!cleaningFormNodes || !cleaningFormNodes.length) {
+      try {
+        const nodes = await call('getCleaningFormNodes');
+        cleaningFormNodes = Array.isArray(nodes) ? nodes : [];
+      } catch (e) { return; }
+    }
+    if (!cleaningFormNodes.length) { showToast('ยังไม่มีข้อมูล Node ในระบบ', 'error'); return; }
+
+    ifSelectedNode = '';
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-teal-700 flex items-center gap-2"><i class="ph ph-plus-circle"></i> กรอกเอกสารติดตั้ง</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div class="bg-teal-50 text-teal-800 text-xs p-3 rounded-lg flex gap-2">
+              <i class="ph ph-info text-lg shrink-0"></i>
+              <p>บันทึกแล้วระบบจะ<b>อัปเดตข้อมูลเครื่องในทะเบียน</b>ตามที่กรอก
+                 และลงประวัติ "ติดตั้ง" ให้เอง</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">เลือก Node ที่ติดตั้ง <span class="text-red-500">*</span></label>
+              <div class="relative mb-2">
+                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input id="ifp_search" oninput="renderInstallNodeList()" placeholder="ค้นหาชื่อ Node หรือรหัสไซต์..."
+                  class="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">
+              </div>
+              <div id="ifp_list" class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-56 overflow-y-auto"></div>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+            <button onclick="startInstallFormFromPicker()" class="px-4 py-2 text-sm font-medium text-white bg-teal-700 rounded-lg hover:bg-teal-800 shadow-sm">
+              <i class="ph ph-arrow-right"></i> ถัดไป
+            </button>
+          </div>
+        </div>
+      </div>`;
+    renderInstallNodeList();
+  }
+  window.openInstallFormPicker = openInstallFormPicker;
+
+  let ifSelectedNode = '';
+
+  function renderInstallNodeList() {
+    const box = document.getElementById('ifp_list');
+    if (!box) return;
+
+    const q = ((document.getElementById('ifp_search') || {}).value || '').trim().toLowerCase();
+    const list = (cleaningFormNodes || []).filter(n => !q
+      || String(n.NodeName || '').toLowerCase().includes(q)
+      || String(n.SiteCode || '').toLowerCase().includes(q));
+
+    if (!list.length) {
+      box.innerHTML = '<div class="px-3 py-6 text-center text-sm text-gray-400">ไม่พบ Node ที่ค้นหา</div>';
+      return;
+    }
+    if (!list.some(n => n.NodeName === ifSelectedNode)) ifSelectedNode = list[0].NodeName;
+
+    box.innerHTML = list.map(n => {
+      const on = n.NodeName === ifSelectedNode;
+      return `<label class="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-teal-50/60 ${on ? 'bg-teal-50' : ''}">
+        <input type="radio" name="ifp_node" value="${esc(n.NodeName)}" ${on ? 'checked' : ''}
+          onchange="pickInstallNode(this.value)" class="accent-teal-700 flex-shrink-0">
+        <span class="min-w-0">
+          <span class="block text-sm font-medium text-gray-800 truncate">${esc(n.NodeName)}</span>
+          <span class="block text-xs text-gray-500">${esc(n.SiteCode || '-')} · ${(n.units || []).length} เครื่อง</span>
+        </span>
+      </label>`;
+    }).join('');
+  }
+  window.renderInstallNodeList = renderInstallNodeList;
+
+  function pickInstallNode(name) {
+    ifSelectedNode = name;
+    renderInstallNodeList();
+  }
+  window.pickInstallNode = pickInstallNode;
+
+  function startInstallFormFromPicker() {
+    const node = (cleaningFormNodes || []).find(n => n.NodeName === ifSelectedNode);
+    if (!node) { showToast('กรุณาเลือก Node', 'error'); return; }
+    if (!(node.units || []).length) { showToast('Node นี้ยังไม่มีเครื่องในทะเบียน', 'error'); return; }
+    openInstallForm(node);
+  }
+  window.startInstallFormFromPicker = startInstallFormFromPicker;
+
+  /** รายการตรวจสอบ 18 ข้อ — ต้องตรงกับ INSTALL_CHECKLIST_ITEMS ใน src/schema.js */
+  const INSTALL_CHECKLIST_ITEMS = [
+    { no: 1, label: 'ตำแหน่งติดตั้งเหมาะสม แข็งแรง', type: 'check' },
+    { no: 2, label: 'ระดับการติดตั้ง Indoor/Outdoor ได้ระดับ', type: 'check' },
+    { no: 3, label: 'ระยะห่างระบายความร้อน Outdoor เพียงพอ', type: 'check' },
+    { no: 4, label: 'เดินท่อน้ำยาและหุ้มฉนวนเรียบร้อย', type: 'check' },
+    { no: 5, label: 'ทดสอบรั่ว (Leak Test) ผ่าน', type: 'check' },
+    { no: 6, label: 'ทำสุญญากาศ (Vacuum) ตามมาตรฐาน', type: 'check' },
+    { no: 7, label: 'เดินท่อน้ำทิ้งมีความลาดเอียง ระบายได้ดี', type: 'check' },
+    { no: 8, label: 'เดินสายไฟ/เบรกเกอร์ได้ขนาด ต่อสายแน่น', type: 'check' },
+    { no: 9, label: 'การต่อลงดิน (Grounding)', type: 'check' },
+    { no: 10, label: 'ค่าแรงดันไฟฟ้า (Voltage)', type: 'value', unit: 'V (220–240)' },
+    { no: 11, label: 'ค่ากระแสคอมเพรสเซอร์ตาม Nameplate (FLA)', type: 'value', unit: 'A' },
+    { no: 12, label: 'ค่ากระแสคอมเพรสเซอร์ขณะทำงาน', type: 'value', unit: 'A' },
+    { no: 13, label: 'ค่าแรงดันน้ำยาด้านต่ำ (Low/Suction)', type: 'value', unit: 'PSI' },
+    { no: 14, label: 'ค่าอุณหภูมิที่ตั้งไว้ (Set Point)', type: 'value', unit: '°C (24–26)' },
+    { no: 15, label: 'ค่าอุณหภูมิภายในห้อง (Room Temp)', type: 'value', unit: '°C (24–28)' },
+    { no: 16, label: 'ตั้งค่า Auto Changeover / สลับการทำงาน', type: 'value', unit: 'ชม. (4–6)' },
+    { no: 17, label: 'ทดสอบเดินเครื่องต่อเนื่อง (Run Test)', type: 'check' },
+    { no: 18, label: 'ทำความสะอาดพื้นที่หลังติดตั้ง', type: 'check' }
+  ];
+
+  const IF_ACCEPT = ['ผ่าน', 'ไม่ผ่าน'];
+
+  function openInstallForm(node) {
+    ifNode = node;
+    // เครื่องสองตัวแรกของ Node ลงช่องตามตำแหน่งตัวเอง เหมือนใบล้าง
+    ifUnits = (node.units || []).slice(0, 2);
+    ifPhotos = {};
+
+    const card = inner => `<section class="bg-white rounded-xl border border-gray-200 p-4">${inner}</section>`;
+    const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600';
+    const small = 'w-full min-h-[40px] rounded-lg border-gray-300 border px-2.5 py-2 text-sm outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600';
+
+    // ช่องแก้ข้อมูลเครื่อง — เติมของเดิมในทะเบียนมาให้ก่อน ช่างแก้เฉพาะที่เปลี่ยน
+    const unitCard = (u, i) => `
+      <div class="border border-gray-200 rounded-lg p-3 ${i ? 'mt-3' : ''}">
+        <div class="font-bold text-teal-700 text-sm mb-2">เครื่องที่ ${i + 1} · ${esc(u.AirCode)}</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
+            <input id="if_brand${i + 1}" value="${esc(u.Brand || '')}" class="${small}"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">BTU</label>
+            <input id="if_btu${i + 1}" value="${esc(u.BTU || '')}" class="${small}"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Indoor Serial</label>
+            <input id="if_insn${i + 1}" value="${esc(u.IndoorSerial || '')}" class="${small}"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Indoor Asset</label>
+            <input id="if_inast${i + 1}" value="${esc(u.IndoorAsset || '')}" class="${small}"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Outdoor Serial</label>
+            <input id="if_outsn${i + 1}" value="${esc(u.OutdoorSerial || '')}" class="${small}"></div>
+          <div><label class="block text-xs text-gray-500 mb-1">Outdoor Asset</label>
+            <input id="if_outast${i + 1}" value="${esc(u.OutdoorAsset || '')}" class="${small}"></div>
+        </div>
+        <label class="block text-xs text-gray-500 mt-3 mb-1">ผลการตรวจรับงานติดตั้ง</label>
+        <div class="flex gap-2">
+          ${IF_ACCEPT.map(v => `
+            <label class="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] border rounded-lg cursor-pointer text-sm
+                          ${v === 'ผ่าน' ? 'border-green-300' : 'border-red-300'}">
+              <input type="radio" name="if_accept${i + 1}" value="${esc(v)}"
+                class="${v === 'ผ่าน' ? 'accent-green-600' : 'accent-red-600'}"> ${esc(v)}
+            </label>`).join('')}
+        </div>
+      </div>`;
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
+
+        <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
+          <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            <button onclick="closeInstallForm()" title="ย้อนกลับ"
+              class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
+              <i class="ph ph-arrow-left text-xl"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <h2 class="font-bold text-gray-800 leading-tight truncate">บันทึกผลการติดตั้ง</h2>
+              <p class="text-xs text-gray-500 leading-tight truncate">${esc(node.NodeName)} · ${esc(node.SiteCode || '-')}</p>
+            </div>
+          </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto">
+          <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
+
+            ${card(`
+              <div class="flex items-start justify-between gap-2 flex-wrap mb-2">
+                <div>
+                  <div class="font-bold text-teal-700">${esc(node.NodeName)}</div>
+                  <div class="text-sm text-gray-500">${esc(node.SiteCode || '-')} · ${esc(node.Province || '-')}</div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 text-xs font-medium">ITEL-FM-NE-006</span>
+              </div>`)}
+
+            ${card(`
+              <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง <span class="text-red-500">*</span></label>
+                  ${dateField('if_date', new Date().toISOString().slice(0, 10), field)}</div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div><label class="block text-xs text-gray-500 mb-1">เวลาเริ่ม</label>
+                    <input type="time" id="if_start" class="${small}"></div>
+                  <div><label class="block text-xs text-gray-500 mb-1">เวลาเสร็จ</label>
+                    <input type="time" id="if_end" class="${small}"></div>
+                  <div><label class="block text-xs text-gray-500 mb-1">รวม (ชม.)</label>
+                    <input id="if_total" inputmode="decimal" class="${small}"></div>
+                </div>
+              </div>`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-1">ส่วนที่ 2 · ข้อมูลเครื่องที่ติดตั้ง</h3>
+              <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                ⚠️ ค่าที่กรอกตรงนี้จะถูก<b>เขียนทับข้อมูลเครื่องในทะเบียน</b> เพราะติดตั้งคือการเปลี่ยนตัวเครื่องจริง
+                ช่องที่เว้นว่างจะคงของเดิมไว้
+              </p>
+              ${ifUnits.map(unitCard).join('')}`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-2">ส่วนที่ 3 · รายการตรวจสอบการติดตั้ง</h3>
+              <div id="if_checklist" class="space-y-2"></div>`)}
+
+            ${card(`
+              <label class="block text-sm font-medium text-gray-700 mb-1">ส่วนที่ 5 · บันทึกเพิ่มเติม</label>
+              <textarea id="if_note" rows="2" class="w-full rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 resize-none"></textarea>`)}
+
+            ${card(`
+              <h3 class="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph ph-camera text-teal-700"></i> รูปถ่ายประกอบเอกสาร</h3>
+              <p class="text-xs text-red-600 font-medium mb-2">⚠️ ต้องแนบให้ครบ 9 ช่องต่อเครื่อง ไม่ครบบันทึกไม่ได้</p>
+              <div id="if_photoBox"></div>
+              <input type="file" id="if_photoFile" accept="image/*" multiple class="hidden">`)}
+
+            ${card(`
+              <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label>
+                  <input type="number" id="if_cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ติดตั้ง</label>
+                  <input id="if_company" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
+                  <input id="if_tech" class="${field}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                  <input id="if_supervisor" class="${field}"></div>
+              </div>`)}
+
+            <div class="pb-2">
+              <button onclick="submitInstallForm()" id="if_submitBtn"
+                class="w-full px-4 py-3.5 text-base font-medium text-white bg-teal-700 rounded-lg hover:bg-teal-800 shadow-sm flex items-center justify-center gap-2">
+                <i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร
+              </button>
+              <p class="text-[11px] text-gray-500 mt-2 text-center">
+                บันทึกแล้วระบบจะอัปเดตทะเบียนเครื่องและลงประวัติ "ติดตั้ง" ให้เอง
+              </p>
+            </div>
+
+          </div>
+        </main>
+      </div>`;
+
+    renderIfChecklist();
+    renderIfPhotos();
+  }
+  window.openInstallForm = openInstallForm;
+
+  /** รายการตรวจสอบ 18 ข้อ — การ์ดต่อข้อ ช่องกรอกแยกรายเครื่อง */
+  function renderIfChecklist() {
+    const box = document.getElementById('if_checklist');
+    if (!box) return;
+
+    box.innerHTML = INSTALL_CHECKLIST_ITEMS.map(item => {
+      const cells = ifUnits.map((u, i) => `
+        <div class="flex-1">
+          <div class="text-[10px] text-gray-400 mb-0.5">เครื่องที่ ${i + 1}</div>
+          ${item.type === 'check'
+            ? `<label class="flex items-center justify-center min-h-[40px] border border-gray-300 rounded-lg cursor-pointer text-sm">
+                 <input type="checkbox" id="if_c${item.no}_${i + 1}" class="accent-teal-700 w-5 h-5">
+               </label>`
+            : `<input id="if_c${item.no}_${i + 1}" inputmode="decimal"
+                 class="w-full min-h-[40px] rounded-lg border-gray-300 border px-2 py-2 text-sm text-center outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">`}
+        </div>`).join('');
+
+      return `
+        <div class="border border-gray-200 rounded-lg p-2.5">
+          <div class="flex items-start gap-2 mb-1.5">
+            <span class="text-xs font-bold text-gray-400 w-5 flex-shrink-0">${item.no}</span>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm text-gray-800 leading-snug">${esc(item.label)}</div>
+              ${item.unit ? `<div class="text-[11px] text-gray-400">${esc(item.unit)}</div>` : ''}
+            </div>
+          </div>
+          <div class="flex gap-2 pl-7">${cells}</div>
+          <input id="if_cnote${item.no}" placeholder="หมายเหตุ"
+            class="mt-1.5 ml-7 w-[calc(100%-1.75rem)] min-h-[36px] rounded-lg border-gray-200 border px-2 py-1.5 text-xs outline-none focus:border-teal-600">
+        </div>`;
+    }).join('');
+  }
+
+  /** ช่องใส่รูปของทุกเครื่องในใบนี้ */
+  function renderIfPhotos() {
+    const box = document.getElementById('if_photoBox');
+    if (!box) return;
+
+    box.innerHTML = ifUnits.map((u, i) => {
+      const slot = i + 1;
+      const cells = INSTALL_PHOTO_CAPTIONS.map((cap, k) => {
+        const index = k + 1;
+        const key = slot + '-' + index;
+        const got = ifPhotos[key];
+        return `
+          <button type="button" onclick="ifPickPhoto(${slot}, ${index})"
+            class="relative border rounded-lg overflow-hidden text-left ${got ? 'border-teal-500' : 'border-dashed border-gray-300'}">
+            <div class="aspect-[4/3] bg-slate-50 flex items-center justify-center">
+              ${got
+                ? `<img src="${got}" class="w-full h-full object-cover">`
+                : '<i class="ph ph-camera text-2xl text-gray-300"></i>'}
+            </div>
+            <div class="px-1.5 py-1 text-[10px] leading-tight ${got ? 'text-teal-700' : 'text-gray-500'}">
+              ${index}. ${esc(cap)}
+            </div>
+          </button>`;
+      }).join('');
+
+      const done = INSTALL_PHOTO_CAPTIONS.filter((_, k) => ifPhotos[slot + '-' + (k + 1)]).length;
+      return `
+        <div class="${i ? 'mt-4' : ''}">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${slot} · ${esc(u.AirCode)}</div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] ${done === 9 ? 'text-teal-700' : 'text-red-600'}">${done}/9</span>
+              <button type="button" onclick="ifPickManyPhotos(${slot})"
+                class="text-[11px] text-teal-700 border border-teal-300 rounded px-2 py-1 hover:bg-teal-50">
+                <i class="ph ph-images"></i> เลือกหลายรูป
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5">${cells}</div>
+        </div>`;
+    }).join('');
+  }
+
+  /** เลือกรูปทีละช่อง */
+  function ifPickPhoto(slot, index) {
+    const input = document.getElementById('if_photoFile');
+    if (!input) return;
+
+    input.multiple = false;
+    input.value = '';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      try {
+        ifPhotos[slot + '-' + index] = await shrinkImage(file);
+        renderIfPhotos();
+      } catch (e) { showToast('อ่านรูปไม่สำเร็จ', 'error'); }
+    };
+    input.click();
+  }
+  window.ifPickPhoto = ifPickPhoto;
+
+  /**
+   * เลือกหลายรูปพร้อมกัน — เติมลงช่องที่ยังว่างเรียงตามลำดับ
+   *
+   * เติมได้แค่ 6 ช่องแรก เพราะ 3 ช่องท้ายเป็นรูปวัดค่าเฉพาะเรื่อง
+   * (กระแส · แรงดันไฟ · แรงดันน้ำยา) ซึ่งต้องเลือกให้ตรงช่องเอง
+   * กติกาเดียวกับฟอร์มล้าง
+   */
+  function ifPickManyPhotos(slot) {
+    const input = document.getElementById('if_photoFile');
+    if (!input) return;
+
+    input.multiple = true;
+    input.value = '';
+    input.onchange = async () => {
+      const files = [...(input.files || [])];
+      if (!files.length) return;
+
+      let filled = 0;
+      for (const file of files) {
+        const free = [1, 2, 3, 4, 5, 6].find(i => !ifPhotos[slot + '-' + i]);
+        if (!free) break;
+        try {
+          ifPhotos[slot + '-' + free] = await shrinkImage(file);
+          filled++;
+        } catch (e) { /* ข้ามไฟล์ที่อ่านไม่ได้ */ }
+      }
+
+      renderIfPhotos();
+      showToast(filled
+        ? 'ใส่รูปให้ ' + filled + ' ช่องแล้ว — อีก 3 ช่องเป็นรูปวัดค่า ต้องเลือกเอง'
+        : 'ช่อง 1–6 เต็มแล้ว เหลือ 3 ช่องรูปวัดค่าที่ต้องเลือกเอง');
+    };
+    input.click();
+  }
+  window.ifPickManyPhotos = ifPickManyPhotos;
+
+  /** ช่องรูปที่ยังขาด */
+  function ifMissingPhotos() {
+    const missing = [];
+    ifUnits.forEach((u, i) => {
+      for (let k = 1; k <= 9; k++) if (!ifPhotos[(i + 1) + '-' + k]) missing.push((i + 1) + '-' + k);
+    });
+    return missing;
+  }
+
+  async function closeInstallForm() {
+    closeModal();
+    ifNode = null; ifUnits = []; ifPhotos = {};
+  }
+  window.closeInstallForm = closeInstallForm;
+
+  /** ส่งรูปที่เลือกไว้ขึ้นเซิร์ฟเวอร์ หลังเอกสารมีเลขที่แล้ว */
+  async function uploadIfPhotos(row) {
+    const done = [];
+    const failed = [];
+
+    for (const key of Object.keys(ifPhotos)) {
+      const [slot, index] = key.split('-').map(Number);
+      try {
+        await call('saveInstallPhoto', { row, unitSlot: slot, index, dataUrl: ifPhotos[key] });
+        done.push(key);
+      } catch (e) { failed.push(key); }
+    }
+    return { done, failed };
+  }
+
+  let ifSavedRow = null;
+
+  async function submitInstallForm() {
+    const val = id => (document.getElementById(id) || {}).value || '';
+
+    const date = val('if_date');
+    if (!date) { showToast('กรุณาระบุวันที่ติดตั้ง', 'error'); return; }
+
+    const missing = ifMissingPhotos();
+    if (missing.length) {
+      showToast('ยังแนบรูปไม่ครบ ขาดช่อง ' + missing.slice(0, 4).join(', ') +
+                (missing.length > 4 ? ' ...' : '') + ' — ต้องครบ 9 ช่องต่อเครื่องก่อนบันทึก', 'error');
+      const box = document.getElementById('if_photoBox');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // ผลตรวจที่กรอก — ช่องติ๊กเก็บเป็นเครื่องหมายถูก ช่องค่าเก็บตามที่พิมพ์
+    const checklist = INSTALL_CHECKLIST_ITEMS.map(item => {
+      const cell = i => {
+        const el = document.getElementById('if_c' + item.no + '_' + i);
+        if (!el) return '';
+        return item.type === 'check' ? (el.checked ? '✓' : '') : (el.value || '');
+      };
+      return {
+        no: item.no,
+        val1: cell(1),
+        val2: cell(2),
+        note: (document.getElementById('if_cnote' + item.no) || {}).value || ''
+      };
+    });
+
+    const record = {
+      Date: date,
+      TimeStart: val('if_start'), TimeEnd: val('if_end'), TotalTime: val('if_total'),
+      AdditionalNote: val('if_note'),
+      Cost: val('if_cost'),
+      CompanyName: val('if_company'),
+      TechnicianName: val('if_tech'),
+      SupervisorName: val('if_supervisor'),
+      Checklist: checklist
+    };
+
+    ifUnits.forEach((u, i) => {
+      const n = i + 1;
+      record['AirCode' + n] = u.AirCode;
+      record['Unit' + n + '_Brand'] = val('if_brand' + n);
+      record['Unit' + n + '_BTU'] = val('if_btu' + n);
+      record['Unit' + n + '_IndoorSerial'] = val('if_insn' + n);
+      record['Unit' + n + '_IndoorAsset'] = val('if_inast' + n);
+      record['Unit' + n + '_OutdoorSerial'] = val('if_outsn' + n);
+      record['Unit' + n + '_OutdoorAsset'] = val('if_outast' + n);
+      const picked = document.querySelector('input[name="if_accept' + n + '"]:checked');
+      record['AcceptResult' + n] = picked ? picked.value : '';
+    });
+
+    const btn = document.getElementById('if_submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...';
+
+    try {
+      const res = await call('saveInstallForm', record);
+      if (!res) {
+        closeModal();
+        showToast('บันทึกข้อมูลแล้ว แต่โหลดผลลัพธ์กลับมาไม่ได้ กรุณากดรีเฟรชหน้าเว็บเพื่อตรวจสอบ (อย่ากดบันทึกซ้ำ)', 'error');
+        return;
+      }
+      currentInstallForms = Array.isArray(res.forms) ? res.forms : currentInstallForms;
+
+      // ส่งรูปตามขึ้นไป — เลขที่เอกสารเพิ่งมีตอนนี้ (เหตุผลเดียวกับใบล้าง)
+      const savedRow = (res.forms || []).find(f => String(f.DocNo) === String(res.docNo));
+      const up = savedRow ? await uploadIfPhotos(savedRow._row) : null;
+      if (up) up.done.forEach(k => delete ifPhotos[k]);
+
+      if (!up || up.failed.length) {
+        ifSavedRow = savedRow ? savedRow._row : null;
+        renderIfPhotos();
+        const left = up ? up.failed.length : Object.keys(ifPhotos).length;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + left + ' ใบ)';
+        btn.classList.remove('bg-teal-700', 'hover:bg-teal-800');
+        btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+        showToast('บันทึกเอกสารสำเร็จแล้ว แต่รูปยังส่งไม่ขึ้น ' + left + ' ใบ — ' +
+                  'อย่าเพิ่งปิดหน้านี้ กดปุ่มด้านล่างเพื่อส่งซ้ำเมื่อสัญญาณดีขึ้น', 'error');
+        return;
+      }
+
+      ifPhotos = {};
+      ifSavedRow = null;
+      closeModal();
+      renderCleaningFormTable();
+      showToast('บันทึกเอกสารติดตั้ง ' + res.docNo + ' แล้ว · อัปเดตทะเบียนเครื่องและลงประวัติให้เรียบร้อย');
+
+      // ทะเบียนเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที
+      try {
+        const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
+        if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
+        if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
+      } catch (e) {}
+      loadDashboard();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร';
+    }
+  }
+  window.submitInstallForm = submitInstallForm;
+
   function startRepairFormFromPicker() {
     const code = pickedRepairAir('rfp');
     if (!code) { showToast('กรุณาเลือกเครื่อง', 'error'); return; }
@@ -8797,7 +9450,25 @@ const CLEANING_CHECKLIST_ITEMS = [
   let pfSelectedNode = '';
   let pfPicked = {};   // AirCode -> true
 
-  async function openPrintFormDialog() {
+  /**
+   * กล่องนี้ใช้ได้ทั้งฟอร์มล้างและฟอร์มติดตั้ง — 'cleaning' | 'install'
+   *
+   * ทั้งสองแบบเลือกของเหมือนกันเป๊ะ (เลือก Node แล้วเลือกเครื่อง 1–2 ตัว)
+   * ต่างกันแค่ชื่อหัวกล่องกับคำสั่งปลายทาง จึงใช้กล่องเดียวกัน
+   * ไม่งั้นต้องก็อปโครงกล่องยาวๆ ไปอีกชุด แล้วแก้ทีหนึ่งต้องไล่แก้สองที่
+   */
+  let pfKind = 'cleaning';
+
+  /** สีและคำที่เปลี่ยนตามประเภทฟอร์มในกล่องนี้ */
+  const PF_STYLE = {
+    cleaning: { color: '#1153a1', title: 'ปริ้นฟอร์มเปล่า', step1: 'เลือก Node ที่จะไปล้าง', verb: 'ล้าง' },
+    install: { color: '#0f766e', title: 'ปริ้นฟอร์มติดตั้งเปล่า', step1: 'เลือก Node ที่จะไปติดตั้ง', verb: 'ติดตั้ง' }
+  };
+
+  const openPrintInstallFormDialog = () => openPrintFormDialog('install');
+  window.openPrintInstallFormDialog = openPrintInstallFormDialog;
+
+  async function openPrintFormDialog(kind) {
     if (!cleaningFormNodes || cleaningFormNodes.length === 0) {
       try {
         const nodes = await call('getCleaningFormNodes');
@@ -8808,6 +9479,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     pfSelectedNode = '';
     pfPicked = {};
+    pfKind = PF_STYLE[kind] ? kind : 'cleaning';
+    const style = PF_STYLE[pfKind];
 
     const old = document.getElementById('printFormRoot');
     if (old) old.remove();
@@ -8821,7 +9494,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
           <div class="px-6 py-4 flex justify-between items-center flex-shrink-0">
             <div>
-              <h3 class="text-xl font-bold text-gray-800">ปริ้นฟอร์มเปล่า</h3>
+              <h3 class="text-xl font-bold text-gray-800">${esc(style.title)}</h3>
               <p class="text-xs text-gray-500 mt-0.5">ระบบจะเติมข้อมูลเครื่องให้ ส่วนช่องตรวจเช็คเว้นว่างไว้เขียนหน้างาน</p>
             </div>
             <button onclick="closePrintFormDialog()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-2xl"></i></button>
@@ -8829,8 +9502,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
           <div class="px-6 pb-2 overflow-y-auto">
             <div class="flex items-center gap-2 mb-3">
-              <span class="w-7 h-7 rounded-full bg-[#1153a1] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">1</span>
-              <h4 class="text-base font-semibold text-gray-800">เลือก Node ที่จะไปล้าง</h4>
+              <span class="w-7 h-7 rounded-full text-white flex items-center justify-center text-sm font-bold flex-shrink-0" style="background:${style.color}">1</span>
+              <h4 class="text-base font-semibold text-gray-800">${esc(style.step1)}</h4>
             </div>
             <div class="relative mb-2">
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -8842,7 +9515,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             <div class="border-t border-gray-100 my-4"></div>
 
             <div class="flex items-center gap-2 mb-3">
-              <span class="w-7 h-7 rounded-full bg-[#1153a1] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">2</span>
+              <span class="w-7 h-7 rounded-full text-white flex items-center justify-center text-sm font-bold flex-shrink-0" style="background:${style.color}">2</span>
               <h4 class="text-base font-semibold text-gray-800">เลือกเครื่องที่จะใส่ในฟอร์ม</h4>
             </div>
             <div id="pf_unitList" class="mb-2"></div>
@@ -8860,7 +9533,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             <button onclick="downloadBlankCleaningXlsx(this)" class="px-6 py-2 text-sm font-medium text-emerald-700 bg-white border border-emerald-300 rounded-full hover:bg-emerald-50 shadow-sm flex items-center gap-2">
               <i class="ph ph-microsoft-excel-logo"></i> โหลดฟอร์ม Excel
             </button>
-            <button onclick="submitPrintForm()" id="pf_btn" class="px-8 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-full hover:bg-[#0e4485] shadow-sm flex items-center gap-2">
+            <button onclick="submitPrintForm()" id="pf_btn" class="px-8 py-2 text-sm font-medium text-white rounded-full shadow-sm flex items-center gap-2 hover:brightness-110" style="background:${style.color}">
               <i class="ph ph-printer"></i> เปิดฟอร์มเปล่า
             </button>
           </div>
@@ -9031,12 +9704,14 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     // เปิดเป็นหน้าเอกสารในแท็บใหม่ ไม่ได้สร้างไฟล์เก็บไว้ที่ไหน
     // คนใช้กด Ctrl+P ปริ้นลงกระดาษได้เลย หรือจะเลือกบันทึกเป็น PDF ก็ได้
-    const ok = await openBlankCleaningDoc(record);
+    const fn = pfKind === 'install' ? 'getInstallBlankDocHtml' : 'getCleaningBlankDocHtml';
+    const ok = await openDocWindow(fn, record);
     btn.disabled = false;
     btn.innerHTML = '<i class="ph ph-printer"></i> เปิดฟอร์มเปล่า';
     if (ok) {
       closePrintFormDialog();
-      showToast('เปิดฟอร์มเปล่าของ Node ' + record.NodeName + ' แล้ว — กด Ctrl+P เพื่อสั่งปริ้น');
+      showToast('เปิดฟอร์ม' + (PF_STYLE[pfKind].verb === 'ติดตั้ง' ? 'ติดตั้ง' : '') +
+                'เปล่าของ Node ' + record.NodeName + ' แล้ว — กด Ctrl+P เพื่อสั่งปริ้น');
     }
   }
 
@@ -9054,10 +9729,11 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง...'; }
 
     try {
-      const res = await call('getCleaningBlankXlsx', record);
+      const isInstall = pfKind === 'install';
+      const res = await call(isInstall ? 'getInstallBlankXlsx' : 'getCleaningBlankXlsx', record);
       if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
 
-      saveFileResult(res, 'ฟอร์มล้าง.xlsx');
+      saveFileResult(res, isInstall ? 'ฟอร์มติดตั้ง.xlsx' : 'ฟอร์มล้าง.xlsx');
       showToast('โหลดฟอร์ม Excel ของ Node ' + record.NodeName + ' แล้ว — ' +
                 'วางรูปได้ที่ชีตของเครื่องแต่ละตัว', 'success');
       closePrintFormDialog();

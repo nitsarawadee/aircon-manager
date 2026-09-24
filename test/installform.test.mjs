@@ -272,7 +272,7 @@ test('รูปเก็บในโฟลเดอร์ของงานต�
 
   await saveInstallForm(ctx, payload());
   const [form] = await getInstallForms(ctx);
-  await saveInstallPhoto(ctx, { row: form._row, slot: 1, index: 1, dataUrl: PNG });
+  await saveInstallPhoto(ctx, { row: form._row, unitSlot: 1, index: 1, dataUrl: PNG });
   await settleDocPdfQueue();
 
   assert.deepEqual([...photos.kinds], ['install']);
@@ -288,8 +288,8 @@ test('รูปของเครื่องที่ 2 ต้องเก็�
   }));
   const [form] = await getInstallForms(ctx);
 
-  await saveInstallPhoto(ctx, { row: form._row, slot: 1, index: 1, dataUrl: PNG });
-  await saveInstallPhoto(ctx, { row: form._row, slot: 2, index: 1, dataUrl: PNG });
+  await saveInstallPhoto(ctx, { row: form._row, unitSlot: 1, index: 1, dataUrl: PNG });
+  await saveInstallPhoto(ctx, { row: form._row, unitSlot: 2, index: 1, dataUrl: PNG });
   await settleDocPdfQueue();
 
   const kept = photos.readAll('install', form.DocNo);
@@ -304,7 +304,7 @@ test('แนบรูปให้เครื่องที่ไม่มี�
   const [form] = await getInstallForms(ctx);
 
   await assert.rejects(
-    () => saveInstallPhoto(ctx, { row: form._row, slot: 2, index: 1, dataUrl: PNG }),
+    () => saveInstallPhoto(ctx, { row: form._row, unitSlot: 2, index: 1, dataUrl: PNG }),
     /ไม่มีเครื่องที่ 2/
   );
   await settleDocPdfQueue();
