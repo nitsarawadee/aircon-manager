@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { getAirList } from './airlist.js';
+import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 
 /**
@@ -64,7 +64,7 @@ const toSafe = (o, keepJson) => {
 
 export async function getInstallForms(ctx, airCode) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) return [];
+  if (!(await ctx.canView('installform'))) return [];
   await ctx.ensureBase();
 
   let list = ctx.ss.objects(SHEETS.INSTALLFORM).map(o => toSafe(o, false));
@@ -127,7 +127,7 @@ const docNoOf = form =>
 /** ข้อมูลเครื่องจากทะเบียน เอาไว้เติมช่องที่หน้าเว็บไม่ได้ส่งมา */
 async function unitOf(ctx, airCode) {
   const nc = normalizeCode(airCode);
-  const found = (await getAirList(ctx)).find(u => normalizeCode(u.AirCode) === nc);
+  const found = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
   if (!found) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' ในทะเบียนเครื่อง');
   return found;
 }
@@ -139,7 +139,7 @@ async function unitOf(ctx, airCode) {
  * ติดตั้งได้ทีละ 1–2 เครื่องต่อใบ ตามช่องที่แบบฟอร์มกระดาษมีให้
  */
 export async function saveInstallForm(ctx, record) {
-  await ctx.assertModuleEdit('cleaningform');
+  await ctx.assertModuleEdit('installform');
 
   const codes = [1, 2]
     .map(slot => plainText(record['AirCode' + slot]).trim())
@@ -257,7 +257,7 @@ export async function saveInstallForm(ctx, record) {
 
 export async function deleteInstallForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('installform');
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -332,7 +332,7 @@ async function withFreshPdf(ctx, work) {
 
 export async function saveInstallPhoto(ctx, payload) {
   return withFreshPdf(ctx, ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('installform');
     const store = requirePhotoStore(ctx);
 
     const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
@@ -343,7 +343,7 @@ export async function saveInstallPhoto(ctx, payload) {
 
 export async function deleteInstallPhoto(ctx, payload) {
   return withFreshPdf(ctx, ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('installform');
     const store = requirePhotoStore(ctx);
 
     const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
@@ -355,7 +355,7 @@ export async function deleteInstallPhoto(ctx, payload) {
 /** รูปทั้งหมดของใบหนึ่ง พร้อมตัวรูปจริง สำหรับหน้าแก้รูป */
 export async function getInstallPhotos(ctx, row) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) return {};
+  if (!(await ctx.canView('installform'))) return {};
   if (!ctx.photos) return {};
 
   const { docNo } = await formForPhotos(ctx, row);
@@ -367,7 +367,7 @@ export async function getInstallPhotos(ctx, row) {
 /** หน้าเอกสารสำหรับเปิดดูและสั่งปริ้น */
 export async function getInstallDocHtml(ctx, row) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!(await ctx.canView('installform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
   await ctx.ensureBase();
 
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
@@ -384,7 +384,7 @@ export async function getInstallDocHtml(ctx, row) {
 /** ฟอร์มเปล่าสำหรับปริ้นไปเขียนมือหน้างาน */
 export async function getInstallBlankDocHtml(ctx, record) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
+  if (!(await ctx.canView('installform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
 
   const payload = { ...(record || {}) };
   payload.DocNo = '(ฟอร์มเปล่า — ยังไม่ได้บันทึก)';
@@ -411,7 +411,7 @@ function toBase64(bytes) {
 /** ฟอร์มเปล่าแบบ Excel ที่เติมข้อมูล Node กับเครื่องให้แล้ว (วางรูปลงไปได้) */
 export async function getInstallBlankXlsx(ctx, record) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
+  if (!(await ctx.canView('installform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
   if (!ctx.forms) throw new Error('เครื่องที่รันระบบอยู่ไม่มีไฟล์แบบฟอร์มแม่แบบ');
 
   const { buildInstallXlsx, installXlsxFileName } = await import('./install-xlsx.js');
@@ -468,7 +468,7 @@ async function storeInstallPdf(ctx, docNo) {
 /** แปลงเป็นไฟล์ PDF ให้ดาวน์โหลด และเก็บสำเนาไว้บนเซิร์ฟเวอร์ไปด้วย */
 export async function getInstallDocPdf(ctx, row, expectId) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!(await ctx.canView('installform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
   if (!ctx.pdf) {
     throw new Error(
       'เครื่องที่รันระบบอยู่ไม่มีเบราว์เซอร์สำหรับแปลงเป็นไฟล์ PDF — ' +

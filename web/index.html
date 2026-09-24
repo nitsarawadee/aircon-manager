@@ -836,6 +836,10 @@
           </div>
         </div>
 
+        <div id="docReadonlyBanner" class="hidden mb-4 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2">
+          <i class="ph ph-eye"></i> คุณมีสิทธิ์ดูเอกสารประเภทนี้เท่านั้น (กรอกหรือลบไม่ได้)
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="cleaningFormTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -2084,13 +2088,31 @@
       return (currentUserInfo.permissions && currentUserInfo.permissions[mod]) || 'none';
     }
 
+    /** สิทธิ์ของเอกสารแต่ละแบบ — ชื่อแท็บในหน้าเอกสาร → ชื่อสิทธิ์ฝั่งเซิร์ฟเวอร์ */
+    const DOC_PERM_KEY = { cleaning: 'cleaningform', repair: 'repairform', install: 'installform' };
+    const docLevel = kind => moduleLevel(DOC_PERM_KEY[kind] || 'cleaningform');
+
+    /**
+     * สิทธิ์ของ "หน้าแบบฟอร์มเอกสาร" ทั้งหน้า = สิทธิ์ที่สูงที่สุดในสามแบบ
+     *
+     * หน้านี้รวมเอกสารสามแบบไว้ในแท็บเดียวกัน คนที่ดูได้แค่ใบซ่อมก็ต้องเข้าหน้านี้ได้
+     * ถ้ายังยึดสิทธิ์ใบล้างอย่างเดียวเหมือนเดิม หน้าทั้งหน้าจะหายไปจากคนกลุ่มนี้
+     */
+    function docPageLevel() {
+      const rank = { none: 0, view: 1, edit: 2 };
+      return Object.keys(DOC_PERM_KEY)
+        .map(docLevel)
+        .reduce((best, l) => (rank[l] > rank[best] ? l : best), 'none');
+    }
+
     /**
      * ทำงานครั้งเดียวตอนโหลดหน้า: ซ่อนเมนู+เนื้อหาของโมดูลที่ไม่มีสิทธิ์เข้าถึงเลย ('none')
      * ส่วนโมดูลที่ดูได้อย่างเดียว ('view') จะถูกล็อกปุ่ม/ฟอร์มแก้ไขทุกครั้งหลัง render (ดู lockViewOnlySection)
      */
     function applyModulePermissionsUI() {
       Object.keys(MODULE_SECTION_MAP).forEach(mod => {
-        const level = moduleLevel(mod);
+        // หน้าเอกสารรวมสามแบบ ซ่อนทั้งหน้าก็ต่อเมื่อไม่มีสิทธิ์สักแบบ
+        const level = mod === 'cleaningform' ? docPageLevel() : moduleLevel(mod);
         if (level === 'none') {
           const tabBtn = document.querySelector(`[data-tab="${mod}"]`);
           if (tabBtn) tabBtn.remove();
@@ -2200,18 +2222,45 @@
       { key: 'plan', label: 'แผนล้างแอร์' },
       { key: 'history', label: 'ประวัติ' },
       { key: 'repair', label: 'งานซ่อม' },
-      { key: 'cleaningform', label: 'แบบฟอร์มเอกสาร' },
+      { key: 'cleaningform', label: 'เอกสารล้างแอร์' },
+      { key: 'repairform', label: 'เอกสารซ่อม' },
+      { key: 'installform', label: 'เอกสารติดตั้ง' },
       { key: 'budget', label: 'งบประมาณ' }
     ];
 
-    /** แปลง string "airlist:edit,plan:view,..." จากชีตให้เป็น object เพื่อเติมค่าเริ่มต้นในฟอร์ม */
+    /** ต้องตรงกับ PERMISSION_INHERITS ใน src/schema.js — ดูเหตุผลที่นั่น */
+    const PERMISSION_INHERITS = { repairform: 'cleaningform', installform: 'cleaningform' };
+
+    /**
+     * แปลงสิทธิ์ที่เก็บไว้เป็นระดับของแต่ละโมดูล **ด้วยกติกาเดียวกับเซิร์ฟเวอร์เป๊ะ**
+     *
+     * เดิมหน้านี้เติม "แก้ไขได้" ให้ทุกช่องที่ไม่ได้ระบุ แต่เซิร์ฟเวอร์ให้ "ไม่ให้เข้าถึง"
+     * (ยกเว้นช่องที่ว่างทั้งหมด) สองฝั่งจึงไม่ตรงกัน ผลคือ Admin เปิดหน้าแก้สิทธิ์
+     * แล้วกดบันทึกโดยไม่ได้แตะอะไร สิทธิ์จะถูกยกขึ้นเป็นแก้ไขได้เงียบๆ
+     * ยิ่งพอเพิ่มสิทธิ์เอกสารซ่อม/ติดตั้ง ซึ่งผู้ใช้เดิมทุกคนยังไม่เคยตั้ง ปัญหานี้จะ
+     * เกิดกับทุกคน รวมถึงคนที่ตั้งเอกสารล้างไว้เป็นดูอย่างเดียวด้วย
+     */
     function parsePermStringToObj(str) {
+      const raw = String(str || '').trim();
+      const levels = {};
+
+      // ไม่เคยตั้งสิทธิ์เลย = ผู้ใช้ก่อนมีระบบสิทธิ์ ได้แก้ไขทุกอย่าง (กติกาเดียวกับเซิร์ฟเวอร์)
+      if (!raw) {
+        PERMISSION_MODULES.forEach(m => (levels[m.key] = 'edit'));
+        return levels;
+      }
+
       const map = {};
-      String(str || '').split(',').forEach(pair => {
+      raw.split(',').forEach(pair => {
         const [k, v] = pair.split(':').map(s => (s || '').trim());
         if (k) map[k] = v;
       });
-      return map;
+
+      PERMISSION_MODULES.forEach(m => {
+        const from = PERMISSION_INHERITS[m.key];
+        levels[m.key] = map[m.key] || (from && map[from]) || 'none';
+      });
+      return levels;
     }
 
     function openUserModal(data = {}) {
@@ -2227,7 +2276,9 @@
       }).join('');
       const currentPerms = parsePermStringToObj(data.Permissions);
       const permRows = PERMISSION_MODULES.map(m => {
-        const level = currentPerms[m.key] || 'edit'; // ผู้ใช้เดิมที่ยังไม่เคยตั้งค่า ถือว่าแก้ไขได้เต็มสิทธิ์ (ตามเดิม)
+        // ค่าที่แสดงต้องตรงกับที่เซิร์ฟเวอร์ใช้จริง ไม่งั้นกดบันทึกแล้วสิทธิ์เปลี่ยนเอง
+        // (บัญชีใหม่ที่ยังไม่มีข้อมูลสิทธิ์ ได้ "แก้ไขได้" ทุกช่องจาก parsePermStringToObj)
+        const level = currentPerms[m.key];
         return `
         <div class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50">
           <span class="text-sm text-gray-700">${m.label}</span>
@@ -6209,9 +6260,18 @@
   const DOC_KIND_NAME = { cleaning: 'เอกสารล้างแอร์', repair: 'เอกสารซ่อม', install: 'เอกสารติดตั้ง' };
 
   function paintDocTabs() {
-    for (const kind of ['cleaning', 'repair', 'install']) {
+    const kinds = ['cleaning', 'repair', 'install'];
+
+    // แท็บที่ดูไม่ได้ ต้องหายไปเลย ไม่ใช่เปิดแล้วเจอตารางว่าง
+    // ถ้าแท็บที่เลือกอยู่ดูไม่ได้ ให้ย้ายไปแท็บแรกที่ดูได้แทน
+    if (docLevel(docTypeFilter) === 'none') {
+      docTypeFilter = kinds.find(k => docLevel(k) !== 'none') || docTypeFilter;
+    }
+
+    for (const kind of kinds) {
       const el = document.getElementById('docTab_' + kind);
       if (!el) continue;
+      el.classList.toggle('hidden', docLevel(kind) === 'none');
 
       const on = docTypeFilter === kind;
       const color = DOC_KIND_COLOR[kind];
@@ -6222,19 +6282,28 @@
     }
 
     // ปุ่มไหนควรอยู่บนแท็บไหน
+    //
+    // ปุ่มปริ้นฟอร์มเปล่าให้คนที่ดูได้อย่างเดียวใช้ได้ด้วย เพราะไม่ได้เขียนอะไรลงระบบ
+    // ส่วนปุ่มที่บันทึกข้อมูล (กรอกฟอร์ม · แนบเอกสาร+ปิดงาน) ต้องมีสิทธิ์แก้ไขของแบบนั้น
+    const on = kind => docTypeFilter === kind;
+    const canFill = kind => on(kind) && docLevel(kind) === 'edit';
     const show = {
-      docBtn_printClean: docTypeFilter === 'cleaning',
-      docBtn_attach: docTypeFilter === 'cleaning',
-      docBtn_cleanForm: docTypeFilter === 'cleaning',
-      docBtn_printRepair: docTypeFilter === 'repair',
-      docBtn_repairForm: docTypeFilter === 'repair',
-      docBtn_printInstall: docTypeFilter === 'install',
-      docBtn_installForm: docTypeFilter === 'install'
+      docBtn_printClean: on('cleaning'),
+      docBtn_attach: canFill('cleaning'),
+      docBtn_cleanForm: canFill('cleaning'),
+      docBtn_printRepair: on('repair'),
+      docBtn_repairForm: canFill('repair'),
+      docBtn_printInstall: on('install'),
+      docBtn_installForm: canFill('install')
     };
-    for (const [id, on] of Object.entries(show)) {
+    for (const [id, visible] of Object.entries(show)) {
       const el = document.getElementById(id);
-      if (el) el.classList.toggle('hidden', !on);
+      if (el) el.classList.toggle('hidden', !visible);
     }
+
+    // ป้ายบอกว่าแท็บนี้ดูได้อย่างเดียว — แทนตัวล็อกทั้งหน้าแบบเดิม ซึ่งล็อกทุกแท็บพร้อมกัน
+    const banner = document.getElementById('docReadonlyBanner');
+    if (banner) banner.classList.toggle('hidden', docLevel(docTypeFilter) !== 'view');
 
     // ใบซ่อมไม่มีผลประเมิน ใบติดตั้งมีผลตรวจรับ หัวตารางจึงต้องเปลี่ยนตาม
     const th = document.getElementById('docCol_cond');
@@ -6327,7 +6396,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
       paintDocTabs();
       renderCleaningFormTable();
-      lockViewOnlySection('cleaningform');
+      // ไม่ใช้ lockViewOnlySection ที่หน้านี้แล้ว เพราะตัวนั้นล็อกทั้งหน้าตามสิทธิ์ใบล้างอย่างเดียว
+      // คนที่ดูใบล้างได้อย่างเดียวแต่กรอกใบซ่อมได้ จะโดนล็อกปุ่มใบซ่อมไปด้วย
+      // หน้านี้ตัดสินรายแท็บแทน ดู paintDocTabs กับ canEditRow ใน renderCleaningFormTable
     } catch (e) {}
   }
 
@@ -6361,6 +6432,10 @@ const CLEANING_CHECKLIST_ITEMS = [
       const isRepair = r.kind === 'repair';
       const isInstall = r.kind === 'install';
       const isAttach = !isRepair && !isInstall && f.Source === 'attach';
+
+      // ปุ่มแก้รูปกับปุ่มลบ ขึ้นเฉพาะคนที่แก้ไขเอกสารแบบนั้นได้
+      // ตัดสินรายแถวตามแบบเอกสารของแถวนั้น ไม่ใช่ล็อกทั้งหน้าด้วยสิทธิ์ใบล้างแบบเดิม
+      const canEditRow = docLevel(r.kind) === 'edit';
 
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
@@ -6403,17 +6478,17 @@ const CLEANING_CHECKLIST_ITEMS = [
           isRepair
             ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
                  class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
                <button onclick="openPhotoEditor(${f._row}, 1, 'repair')" title="เปลี่ยนหรือเพิ่มรูปของใบซ่อมนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>`
+                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
           : isInstall
             ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
                <button onclick="openPhotoEditor(${f._row}, ${r.slot}, 'install')" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-teal-700 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>`
+                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
           : isAttach
             ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
@@ -6422,16 +6497,16 @@ const CLEANING_CHECKLIST_ITEMS = [
             // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
             : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
                <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>`
+                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
-            !r.first ? ''
+            (!r.first || !canEditRow) ? ''
               : isRepair
               ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
               : isInstall

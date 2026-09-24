@@ -10,7 +10,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
 const KIND = 'cleaning';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { getAirList } from './airlist.js';
+import { unitsInScope } from './airlist.js';
 import { closePlanRound } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 
@@ -96,9 +96,17 @@ function assignDocNumbers(ctx, view, date, target = view) {
 
 /* ==================== Node / Serial สำหรับ dropdown ==================== */
 
-/** จัดกลุ่มเครื่องตาม Node เพื่อให้เลือก Node แล้วดึง Serial/Asset/Brand/BTU มาเติมอัตโนมัติ */
+/**
+ * จัดกลุ่มเครื่องตาม Node เพื่อให้เลือก Node แล้วดึง Serial/Asset/Brand/BTU มาเติมอัตโนมัติ
+ *
+ * ใช้ทั้งฟอร์มล้างและฟอร์มติดตั้ง จึงเปิดให้คนที่มีสิทธิ์ดูเอกสารแบบใดแบบหนึ่ง
+ * ไม่ได้ผูกกับสิทธิ์เมนูรายการเครื่อง (ดูเหตุผลที่ unitsInScope ใน airlist.js)
+ */
 export async function getCleaningFormNodes(ctx) {
-  const list = await getAirList(ctx); // กรองสิทธิ์ตามภูมิภาคมาแล้ว
+  await ctx.requireAccess();
+  if (!(await ctx.canView('cleaningform')) && !(await ctx.canView('installform'))) return [];
+
+  const list = await unitsInScope(ctx); // กรองตามภูมิภาคแล้ว
   const map = {};
   const order = [];
 
@@ -1075,7 +1083,7 @@ export async function uploadNodeDocuments(ctx, payload) {
     await ctx.ensureBase();
 
     // ตรวจสิทธิ์ภูมิภาคของ Node นี้ กันการแนบไฟล์ข้ามภูมิภาคที่ไม่ได้ดูแล
-    const air = await getAirList(ctx);
+    const air = await unitsInScope(ctx);
     const nodeUnits = air.filter(a => plainText(a.NodeName).trim() === nodeName);
     if (!nodeUnits.length) throw new Error('ไม่พบ Node "' + nodeName + '" หรือไม่มีสิทธิ์เข้าถึง');
     await ctx.assertRegionAccess(nodeUnits[0].Region);

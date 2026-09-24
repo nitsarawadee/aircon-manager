@@ -3,7 +3,7 @@ import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
   CONTRACTOR_HEADERS, NODEASSIGN_HEADERS,
-  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH
+  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS
 } from './schema.js';
 import { normalizeCode, normalizeRegion } from './values.js';
 
@@ -364,6 +364,12 @@ export function parsePermissions(raw) {
   });
 
   const perms = {};
-  MODULES.forEach(m => (perms[m] = map[m] || 'none'));
+  MODULES.forEach(m => {
+    if (map[m]) { perms[m] = map[m]; return; }
+    // สิทธิ์ที่เพิ่มภายหลังแต่ผู้ใช้ยังไม่เคยตั้ง ใช้ค่าของสิทธิ์เดิมที่มันแยกออกมา
+    // (ดูเหตุผลที่ PERMISSION_INHERITS ใน schema.js)
+    const from = PERMISSION_INHERITS[m];
+    perms[m] = (from && map[from]) || 'none';
+  });
   return perms;
 }

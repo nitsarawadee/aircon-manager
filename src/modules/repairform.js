@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { getAirList } from './airlist.js';
+import { unitsInScope } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 
@@ -53,7 +53,7 @@ const toSafe = (o, keepJson) => {
 
 export async function getRepairForms(ctx, airCode) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) return [];
+  if (!(await ctx.canView('repairform'))) return [];
   await ctx.ensureBase();
 
   let list = ctx.ss.objects(SHEETS.REPAIRFORM).map(o => toSafe(o, false));
@@ -83,7 +83,7 @@ function nextDocNo(ctx, date) {
 /** ข้อมูลเครื่องจากทะเบียน เอาไว้เติมช่องที่หน้าเว็บไม่ได้ส่งมา */
 async function unitOf(ctx, airCode) {
   const nc = normalizeCode(airCode);
-  const found = (await getAirList(ctx)).find(u => normalizeCode(u.AirCode) === nc);
+  const found = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
   if (!found) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' ในทะเบียนเครื่อง');
   return found;
 }
@@ -95,7 +95,7 @@ async function unitOf(ctx, airCode) {
  * วันเดียวกัน เพราะเป็นคนละเหตุการณ์ ไม่ใช่งานเดียวที่ทำต่อเนื่องกัน
  */
 export async function saveRepairForm(ctx, record) {
-  await ctx.assertModuleEdit('cleaningform');
+  await ctx.assertModuleEdit('repairform');
 
   if (!plainText(record.AirCode).trim()) throw new Error('กรุณาเลือกเครื่องปรับอากาศ');
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ดำเนินการ');
@@ -204,7 +204,7 @@ export async function saveRepairForm(ctx, record) {
 
 export async function deleteRepairForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('repairform');
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -264,7 +264,7 @@ async function withFreshPdf(ctx, work) {
 
 export async function saveRepairPhoto(ctx, payload) {
   return withFreshPdf(ctx, ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('repairform');
     const store = requirePhotoStore(ctx);
 
     const { docNo } = await formForPhotos(ctx, payload && payload.row);
@@ -276,7 +276,7 @@ export async function saveRepairPhoto(ctx, payload) {
 
 export async function deleteRepairPhoto(ctx, payload) {
   return withFreshPdf(ctx, ctx.withLock(async () => {
-    await ctx.assertModuleEdit('cleaningform');
+    await ctx.assertModuleEdit('repairform');
     const store = requirePhotoStore(ctx);
 
     const { docNo } = await formForPhotos(ctx, payload && payload.row);
@@ -288,7 +288,7 @@ export async function deleteRepairPhoto(ctx, payload) {
 /** รูปทั้งหมดของใบหนึ่ง พร้อมตัวรูปจริง สำหรับหน้าแก้รูป */
 export async function getRepairPhotos(ctx, row) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) return {};
+  if (!(await ctx.canView('repairform'))) return {};
   if (!ctx.photos) return {};
 
   const { docNo } = await formForPhotos(ctx, row);
@@ -300,7 +300,7 @@ export async function getRepairPhotos(ctx, row) {
 /** หน้าเอกสารสำหรับเปิดดูและสั่งปริ้น */
 export async function getRepairDocHtml(ctx, row) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!(await ctx.canView('repairform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
   await ctx.ensureBase();
 
   const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row));
@@ -317,7 +317,7 @@ export async function getRepairDocHtml(ctx, row) {
 /** ฟอร์มเปล่าสำหรับปริ้นไปเขียนมือหน้างาน */
 export async function getRepairBlankDocHtml(ctx, record) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
+  if (!(await ctx.canView('repairform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
 
   const payload = { ...(record || {}) };
   payload.DocNo = '(ฟอร์มเปล่า — ยังไม่ได้บันทึก)';
@@ -352,7 +352,7 @@ function toBase64(bytes) {
  */
 export async function getRepairBlankXlsx(ctx, record) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
+  if (!(await ctx.canView('repairform'))) throw new Error('ไม่มีสิทธิ์เข้าถึงเมนูนี้');
   if (!ctx.forms) throw new Error('เครื่องที่รันระบบอยู่ไม่มีไฟล์แบบฟอร์มแม่แบบ');
 
   const { buildRepairXlsx, repairXlsxFileName } = await import('./repair-xlsx.js');
@@ -409,7 +409,7 @@ async function storeRepairPdf(ctx, docNo) {
 /** แปลงเป็นไฟล์ PDF ให้ดาวน์โหลด และเก็บสำเนาไว้บนเซิร์ฟเวอร์ไปด้วย */
 export async function getRepairDocPdf(ctx, row, expectId) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('cleaningform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  if (!(await ctx.canView('repairform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
   if (!ctx.pdf) {
     throw new Error(
       'เครื่องที่รันระบบอยู่ไม่มีเบราว์เซอร์สำหรับแปลงเป็นไฟล์ PDF — ' +
