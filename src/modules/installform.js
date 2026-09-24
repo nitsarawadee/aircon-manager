@@ -113,6 +113,17 @@ function assignDocNumbers(ctx, view, date, target = view) {
   return issued;
 }
 
+/**
+ * เลขที่ที่ใช้เป็นชื่อโฟลเดอร์รูปและชื่อไฟล์ PDF ของใบนี้
+ *
+ * เลขของเครื่องแต่ละตัวอยู่คนละคอลัมน์ตามช่อง (ช่อง 1 = DocNo · ช่อง 2 = DocNo2)
+ * ติดตั้งเพิ่มเฉพาะเครื่องที่ 2 ตัวเดียว ใบนั้นจึงมีแต่ DocNo2 ส่วน DocNo ว่าง
+ * ถ้าดูแค่ DocNo ไฟล์จะไปตกที่ชื่อ ID ภายในแทน แล้วรูปกับ PDF ของใบเดียวกัน
+ * จะไปอยู่คนละชื่อ หาไม่เจอทั้งคู่
+ */
+const docNoOf = form =>
+  plainText(form.DocNo) || plainText(form.DocNo2) || plainText(form.ID);
+
 /** ข้อมูลเครื่องจากทะเบียน เอาไว้เติมช่องที่หน้าเว็บไม่ได้ส่งมา */
 async function unitOf(ctx, airCode) {
   const nc = normalizeCode(airCode);
@@ -224,8 +235,15 @@ export async function saveInstallForm(ctx, record) {
 
     await ctx.ss.flush();
     return {
-      docNo: plainText(row.DocNo),
+      // เลขที่คืนกลับไปคือเลขที่ใช้เป็นชื่อไฟล์จริง ไม่ใช่เลขของช่องที่ 1 เสมอไป
+      // (ติดตั้งเฉพาะเครื่องที่ 2 ใบนั้นมีแต่ DocNo2)
+      docNo: docNoOf(row),
+      // เลขรายช่อง เผื่อหน้าเว็บอยากบอกผู้ใช้ว่าเครื่องไหนได้เลขอะไร
+      docNo1: plainText(row.DocNo),
       docNo2: plainText(row.DocNo2),
+      // หาแถวที่เพิ่งบันทึกด้วย ID เสมอ ห้ามใช้เลขที่เอกสาร เพราะช่อง DocNo
+      // ว่างได้จริงเมื่อติดตั้งเฉพาะเครื่องที่ 2
+      id: row.ID,
       forms: await getInstallForms(ctx)
     };
   });
@@ -251,8 +269,8 @@ export async function deleteInstallForm(ctx, row, expectId) {
     await ctx.assertRegionAccess(region);
 
     // จำเลขที่ไว้ก่อนลบแถว เพื่อตามไปลบรูปและไฟล์ของใบนี้ด้วย
-    const docNo = plainText(ctx.ss.cell(SHEETS.INSTALLFORM, row, headers.indexOf('DocNo') + 1)) ||
-                  plainText(ctx.ss.cell(SHEETS.INSTALLFORM, row, headers.indexOf('ID') + 1));
+    const cell = name => ctx.ss.cell(SHEETS.INSTALLFORM, row, headers.indexOf(name) + 1);
+    const docNo = docNoOf({ DocNo: cell('DocNo'), DocNo2: cell('DocNo2'), ID: cell('ID') });
 
     await ctx.ss.deleteRow(SHEETS.INSTALLFORM, row);
     await ctx.ss.flush();
@@ -280,7 +298,7 @@ async function formForPhotos(ctx, row) {
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
   await ctx.assertRegionAccess(form.Region);
 
-  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const docNo = docNoOf(form);
   if (!docNo) throw new Error('เอกสารใบนี้ยังไม่มีเลขที่ จึงเก็บรูปไม่ได้');
   return { form, docNo };
 }
@@ -357,7 +375,7 @@ export async function getInstallDocHtml(ctx, row) {
   await ctx.assertRegionAccess(form.Region);
 
   const { buildInstallDocHtml } = await import('./install-doc.js');
-  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const docNo = docNoOf(form);
   const photos = ctx.photos ? ctx.photos.readAll(KIND, docNo) : {};
   // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่
   return buildInstallDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
@@ -408,7 +426,7 @@ export async function getInstallBlankXlsx(ctx, record) {
 
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
 async function renderPdf(ctx, form) {
-  const docNo = plainText(form.DocNo) || plainText(form.ID);
+  const docNo = docNoOf(form);
   const base = ctx.pdf.baseUrl || '';
 
   const { buildInstallDocHtml } = await import('./install-doc.js');
@@ -435,7 +453,7 @@ async function storeInstallPdf(ctx, docNo) {
 
   try {
     const form = ctx.ss.objects(SHEETS.INSTALLFORM)
-      .find(f => (plainText(f.DocNo) || plainText(f.ID)) === name);
+      .find(f => docNoOf(f) === name);
     if (!form) return false;
 
     const { base64 } = await renderPdf(ctx, form);

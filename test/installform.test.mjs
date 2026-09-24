@@ -97,6 +97,9 @@ const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 const unitOf = async (db, code) =>
   (await getAirList(ctxOf(db))).find(u => u.AirCode === code);
 
+/** ช่องว่างอาจกลับมาเป็น '' หรือ null แล้วแต่ทาง — เทียบเป็นข้อความเสมอ */
+const plainOf = v => String(v == null ? '' : v).trim();
+
 /* ==================== บันทึก ==================== */
 
 test('บันทึกแล้วได้เลขที่เอกสารจากชุดเลขเดียวกับทั้งระบบ', async () => {
@@ -138,6 +141,61 @@ test('เลือกเครื่องซ้ำกันสองช่อ�
 test('ไม่ใส่วันที่ ต้องฟ้อง', async () => {
   const db = freshDb();
   await assert.rejects(() => saveInstallForm(ctxOf(db), payload({ Date: '' })), /วันที่/);
+});
+
+test('ติดตั้งเพิ่มเฉพาะเครื่องที่ 2 ข้อมูลต้องอยู่ช่องที่ 2 ไม่เลื่อนมาช่องแรก', async () => {
+  // ติดตั้งเพิ่มทีละตัวเป็นเรื่องปกติ และคนอ่านเอกสารดูจากตำแหน่งคอลัมน์ว่า
+  // เป็นแอร์ตัวไหนของ Node ถ้าเลื่อนขึ้นมาช่องแรกจะกลายเป็นคนละเครื่องทันที
+  const db = freshDb();
+  const res = await saveInstallForm(ctxOf(db), {
+    Date: '2026-09-24',
+    AirCode2: 'KKN-CPE-AIR-2',
+    AcceptResult2: 'ผ่าน',
+    TechnicianName: 'ช่างสมชาย',
+    Checklist: [{ no: 1, val2: 'ผ่าน' }]
+  });
+
+  const [form] = await getInstallForms(ctxOf(db));
+  assert.equal(plainOf(form.AirCode1), '', 'ช่องที่ 1 ต้องว่าง');
+  assert.equal(form.AirCode2, 'KKN-CPE-AIR-2');
+  assert.equal(plainOf(form.Unit1_IndoorSerial), '', 'ข้อมูลเครื่องช่องที่ 1 ต้องว่างด้วย');
+  assert.equal(form.Unit2_IndoorSerial, 'เก่า-IN-2');
+
+  // เลขไปอยู่ช่องของเครื่องที่ 2 ส่วนช่องที่ 1 ว่าง
+  assert.equal(res.docNo1, '', 'ช่องที่ 1 ไม่มีเครื่อง จึงไม่ออกเลขให้');
+  assert.ok(/^CM\d{4}-\d+$/.test(res.docNo2), 'ได้เลข ' + res.docNo2);
+  assert.equal(res.docNo, res.docNo2, 'ชื่อไฟล์ต้องใช้เลขที่ออกจริง ไม่ใช่ช่องที่ 1 ที่ว่างอยู่');
+  assert.ok(res.id, 'ต้องคืน ID ไว้ให้หน้าเว็บหาแถวที่เพิ่งบันทึก');
+});
+
+test('ติดตั้งเฉพาะเครื่องที่ 2 รูปกับไฟล์ PDF ต้องไปอยู่ชื่อเดียวกัน', async () => {
+  // ถ้าใช้ DocNo ตรงๆ ชื่อจะกลายเป็น ID ภายใน แล้วรูปกับ PDF ของใบเดียวกัน
+  // จะไปคนละชื่อ หาไม่เจอทั้งคู่
+  const db = freshDb();
+  const photos = fakePhotos();
+  const ctx = ctxOf(db, { photos });
+
+  const res = await saveInstallForm(ctx, {
+    Date: '2026-09-24', AirCode2: 'KKN-CPE-AIR-2', TechnicianName: 'ช่างสมชาย'
+  });
+
+  const [form] = await getInstallForms(ctx);
+  await saveInstallPhoto(ctx, { row: form._row, unitSlot: 2, index: 1, dataUrl: PNG });
+  await settleDocPdfQueue();
+
+  assert.deepEqual(Object.keys(photos.readAll('install', res.docNo)), ['2-1'],
+    'รูปต้องอยู่ใต้เลขที่เดียวกับที่คืนกลับมา');
+});
+
+test('ติดตั้งเฉพาะเครื่องที่ 2 ลงประวัติให้เครื่องนั้นตัวเดียว', async () => {
+  const db = freshDb();
+  await saveInstallForm(ctxOf(db), {
+    Date: '2026-09-24', AirCode2: 'KKN-CPE-AIR-2', TechnicianName: 'ช่างสมชาย'
+  });
+
+  const installs = (await getHistory(ctxOf(db))).filter(h => h.EventType === 'ติดตั้ง');
+  assert.equal(installs.length, 1);
+  assert.equal(installs[0].AirCode, 'KKN-CPE-AIR-2');
 });
 
 /* ==================== ห้ามแตะทะเบียนเครื่อง ==================== */
