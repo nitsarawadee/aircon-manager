@@ -136,6 +136,35 @@ export const TABLES = {
     indexes: [['AirCode'], ['Region'], ['CaseID'], ['CreatedAt']]
   },
 
+  /**
+   * เอกสารบันทึกผลการติดตั้ง ตามแบบฟอร์มควบคุม ITEL-FM-NE-006
+   *
+   * สองเครื่องต่อใบเหมือน cleaning_forms แต่เช็คลิสต์คนละชุดและมีผลตรวจรับ
+   * (ดูเหตุผลเต็มที่ INSTALLFORM_HEADERS ใน src/schema.js)
+   *
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ INSTALLFORM_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  install_forms: {
+    sheet: 'InstallForm',
+    columns: {
+      ID: S, Date: D, NodeName: S, SiteCode: S, Region: S, Province: S, LocationType: S,
+      AirCode1: S, AirCode2: S,
+      TimeStart: S, TimeEnd: S, TotalTime: S,
+      Unit1_Brand: S, Unit1_BTU: N, Unit1_IndoorSerial: S, Unit1_IndoorAsset: S,
+      Unit1_OutdoorSerial: S, Unit1_OutdoorAsset: S,
+      Unit2_Brand: S, Unit2_BTU: N, Unit2_IndoorSerial: S, Unit2_IndoorAsset: S,
+      Unit2_OutdoorSerial: S, Unit2_OutdoorAsset: S,
+      ChecklistJSON: S,
+      AcceptResult1: S, AcceptResult2: S,
+      AdditionalNote: S,
+      CompanyName: S, TechnicianName: S, SupervisorName: S, ApproverName: S,
+      Cost: N,
+      CreatedAt: DT, RecordedBy: S,
+      DocNo: S, DocNo2: S
+    },
+    indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
+  },
+
   users: {
     sheet: 'Users',
     columns: {

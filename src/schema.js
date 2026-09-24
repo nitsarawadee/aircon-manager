@@ -14,7 +14,8 @@ export const SHEETS = {
   USERS: 'Users',
   BUDGET: 'Budget',
   CLEANFORM: 'CleaningForm',
-  REPAIRFORM: 'RepairForm'
+  REPAIRFORM: 'RepairForm',
+  INSTALLFORM: 'InstallForm'
 };
 
 export const AIRLIST_HEADERS = [
@@ -153,6 +154,82 @@ export const REPAIR_CHECKLIST_ITEMS = [
 
 /** จำนวนแถวอะไหล่บนแบบฟอร์ม — กระดาษมี 4 แถว */
 export const REPAIR_PART_ROWS = 4;
+
+/* ==================== เอกสารติดตั้ง ITEL-FM-NE-006 ==================== */
+
+/**
+ * คอลัมน์ของชีต InstallForm
+ *
+ * ============================================================================
+ * ใกล้เคียงใบล้างมากกว่าใบซ่อม
+ * ============================================================================
+ * ใบติดตั้งมี "สองเครื่องต่อใบ" เหมือนใบล้าง (ใบซ่อมมีเครื่องเดียว) ช่องข้อมูล
+ * เครื่องจึงแยกเป็น Unit1_* / Unit2_* และผลตรวจรับก็แยกรายเครื่องเหมือนกัน
+ *
+ * แต่ยังต้องเป็นตารางของตัวเอง เพราะเช็คลิสต์คนละชุด (ติดตั้ง 18 ข้อ · ล้าง 21 ข้อ)
+ * และใบติดตั้งมี "ผลการตรวจรับงานติดตั้ง" ซึ่งใบล้างไม่มี
+ *
+ * ============================================================================
+ * ติดตั้งแล้วต้องไปอัปเดตทะเบียนเครื่องด้วย
+ * ============================================================================
+ * ต่างจากใบล้างและใบซ่อมตรงที่ใบนี้เป็นจุดเดียวที่ Serial/Asset ของเครื่องจริง
+ * ถูกบันทึกครั้งแรก บันทึกใบนี้จึงเขียนกลับไปที่ทะเบียน (ดู installform.js)
+ * ไม่งั้นทะเบียนจะยังเป็นข้อมูลเครื่องเก่าหรือว่างอยู่
+ *
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น (กติกาเดียวกับ CLEANFORM_HEADERS)
+ */
+export const INSTALLFORM_HEADERS = [
+  'ID', 'Date', 'NodeName', 'SiteCode', 'Region', 'Province', 'LocationType',
+  'AirCode1', 'AirCode2',
+  'TimeStart', 'TimeEnd', 'TotalTime',
+  // ยี่ห้อกับ BTU อยู่ระดับ Node ในแบบฟอร์ม (ช่องเดียวต่อใบ) แต่เก็บรายเครื่อง
+  // เผื่อ Node ที่ติดตั้งสองเครื่องคนละรุ่น ซึ่งเกิดได้ตอนเปลี่ยนทีละตัว
+  'Unit1_Brand', 'Unit1_BTU', 'Unit1_IndoorSerial', 'Unit1_IndoorAsset',
+  'Unit1_OutdoorSerial', 'Unit1_OutdoorAsset',
+  'Unit2_Brand', 'Unit2_BTU', 'Unit2_IndoorSerial', 'Unit2_IndoorAsset',
+  'Unit2_OutdoorSerial', 'Unit2_OutdoorAsset',
+  // ส่วนที่ 3 — ผลตรวจ 18 ข้อ แยกรายเครื่อง เก็บเป็น JSON แบบเดียวกับใบล้าง
+  'ChecklistJSON',
+  // ส่วนที่ 4 — ผลการตรวจรับงานติดตั้ง แยกรายเครื่อง
+  'AcceptResult1', 'AcceptResult2',
+  // ส่วนที่ 5
+  'AdditionalNote',
+  // ส่วนที่ 6 — ใบนี้ลงนาม 4 ช่อง (ผู้ติดตั้ง · ผู้ควบคุมงาน · ผู้ตรวจรับ · Approve)
+  'CompanyName', 'TechnicianName', 'SupervisorName', 'ApproverName',
+  'Cost',
+  'CreatedAt', 'RecordedBy',
+  // เลขที่เอกสารที่คนอ่านออก ใช้ชุดเลขเดียวกับทั้งระบบ (งานติดตั้งเป็น CM)
+  'DocNo', 'DocNo2'
+  // เพิ่มภายหลัง — ต่อท้ายสุดเท่านั้น
+];
+
+/**
+ * รายการตรวจสอบการติดตั้ง 18 ข้อ ตามแบบฟอร์ม NE-006
+ *
+ * ลำดับต้องตรงกับแถว 15–32 ของไฟล์แบบฟอร์มจริง เพราะเอกสารที่ปริ้นออกมา
+ * ต้องเรียงเหมือนกระดาษที่ช่างถืออยู่ ไม่งั้นเทียบกันไม่ได้
+ * (มีก็อปปี้เดียวกันไว้ฝั่งหน้าเว็บ — ถ้าจะแก้ ให้แก้ทั้ง 2 ที่ให้ตรงกัน)
+ */
+export const INSTALL_CHECKLIST_ITEMS = [
+  { no: 1, label: 'ตำแหน่งติดตั้งเหมาะสม แข็งแรง', type: 'check' },
+  { no: 2, label: 'ระดับการติดตั้ง Indoor/Outdoor ได้ระดับ', type: 'check' },
+  { no: 3, label: 'ระยะห่างระบายความร้อน Outdoor เพียงพอ', type: 'check' },
+  { no: 4, label: 'เดินท่อน้ำยาและหุ้มฉนวนเรียบร้อย', type: 'check' },
+  { no: 5, label: 'ทดสอบรั่ว (Leak Test) ผ่าน', type: 'check' },
+  { no: 6, label: 'ทำสุญญากาศ (Vacuum) ตามมาตรฐาน', type: 'check' },
+  { no: 7, label: 'เดินท่อน้ำทิ้งมีความลาดเอียง ระบายได้ดี', type: 'check' },
+  { no: 8, label: 'เดินสายไฟ/เบรกเกอร์ได้ขนาด ต่อสายแน่น', type: 'check' },
+  { no: 9, label: 'การต่อลงดิน (Grounding)', type: 'check' },
+  { no: 10, label: 'ค่าแรงดันไฟฟ้า (Voltage)', type: 'value', unit: 'V (220–240)' },
+  { no: 11, label: 'ค่ากระแสคอมเพรสเซอร์ตาม Nameplate (FLA)', type: 'value', unit: 'A' },
+  { no: 12, label: 'ค่ากระแสคอมเพรสเซอร์ขณะทำงาน', type: 'value', unit: 'A' },
+  { no: 13, label: 'ค่าแรงดันน้ำยาด้านต่ำ (Low/Suction)', type: 'value', unit: 'PSI' },
+  { no: 14, label: 'ค่าอุณหภูมิที่ตั้งไว้ (Set Point)', type: 'value', unit: '°C  (24–26)' },
+  { no: 15, label: 'ค่าอุณหภูมิภายในห้อง (Room Temp)', type: 'value', unit: '°C  (24–28)' },
+  { no: 16, label: 'ตั้งค่า Auto Changeover / สลับการทำงาน', type: 'value', unit: 'ชม.  (4–6)' },
+  { no: 17, label: 'ทดสอบเดินเครื่องต่อเนื่อง (Run Test)', type: 'check' },
+  { no: 18, label: 'ทำความสะอาดพื้นที่หลังติดตั้ง', type: 'check' }
+];
 
 /** ค่าตั้งต้นของชีต Config — เติมเฉพาะค่าที่ยังไม่มี ไม่ลบ/แก้ค่าที่ผู้ใช้เพิ่มเอง */
 export const CONFIG_DEFAULTS = {

@@ -17,7 +17,8 @@ import test from 'node:test';
 import { TABLES, createTableStatements } from '../src/db/schema.js';
 import {
   AIRLIST_HEADERS, HISTORY_HEADERS, PLAN_HEADERS,
-  BUDGET_HEADERS, USERS_HEADERS, CLEANFORM_HEADERS
+  BUDGET_HEADERS, USERS_HEADERS, CLEANFORM_HEADERS,
+  REPAIRFORM_HEADERS, INSTALLFORM_HEADERS
 } from '../src/schema.js';
 
 /** ลำดับคอลัมน์ของตารางนั้น ตามที่ repository ใช้จริง */
@@ -59,13 +60,39 @@ test('ทุกคอลัมน์ที่โค้ดต้องการ �
     ['plans', PLAN_HEADERS],
     ['budgets', BUDGET_HEADERS],
     ['users', USERS_HEADERS],
-    ['cleaning_forms', CLEANFORM_HEADERS]
+    ['cleaning_forms', CLEANFORM_HEADERS],
+    ['repair_forms', REPAIRFORM_HEADERS],
+    ['install_forms', INSTALLFORM_HEADERS]
   ];
 
   for (const [table, headers] of pairs) {
     const cols = colsOf(table);
     const missing = headers.filter(h => !cols.includes(h));
     assert.deepEqual(missing, [], `ตาราง ${table} ขาดคอลัมน์ที่โค้ดต้องการ`);
+  }
+});
+
+/**
+ * ตารางเอกสารทั้งสามแบบ ลำดับคอลัมน์ต้องตรงกับรายการหัวตารางเป๊ะ
+ *
+ * โมดูลเอกสารเขียนข้อมูลด้วย writeByHeaders ซึ่งจับคู่ตามชื่อ แต่โค้ดที่อ่าน
+ * ผลลัพธ์กลับมายึดลำดับ ถ้าสองฝั่งเรียงไม่ตรงกันจะไม่มีอะไรฟ้องตอนรัน
+ * ข้อมูลจะไปโผล่ผิดช่องเงียบๆ แล้วเอกสารที่ปริ้นออกมาผิดโดยไม่มีใครรู้
+ *
+ * ไฟล์ db/schema.js เขียนกำกับไว้ว่า "มีเทสต์เฝ้าไว้" — เทสต์นี้คือตัวนั้น
+ */
+test('ลำดับคอลัมน์ของตารางเอกสาร ต้องตรงกับหัวตารางในโค้ดเป๊ะ', () => {
+  const pairs = [
+    ['cleaning_forms', CLEANFORM_HEADERS],
+    ['repair_forms', REPAIRFORM_HEADERS],
+    ['install_forms', INSTALLFORM_HEADERS]
+  ];
+
+  for (const [table, headers] of pairs) {
+    // cleaning_forms มีคอลัมน์เก่าที่ไม่ได้อยู่ในหัวตารางแล้ว (เช่น PhotoUrl)
+    // จึงเทียบเฉพาะคอลัมน์ที่หัวตารางอ้างถึง ว่าเรียงเหมือนกันหรือไม่
+    const cols = colsOf(table).filter(c => headers.includes(c));
+    assert.deepEqual(cols, headers, `ลำดับคอลัมน์ของตาราง ${table} ไม่ตรงกับหัวตาราง`);
   }
 });
 
