@@ -8079,18 +8079,14 @@ const CLEANING_CHECKLIST_ITEMS = [
    * หน้างานเลยโดยไม่ได้แจ้งล่วงหน้าเป็นเรื่องที่เกิดจริง
    */
   function openRepairFormPicker() {
-    const list = (currentAirList || []).slice().sort((a, b) => {
-      const rank = s => (s === 'รอซ่อม' ? 0 : s === 'ชำรุด' ? 1 : 2);
-      const d = rank(a.Status) - rank(b.Status);
-      return d || String(a.AirCode).localeCompare(String(b.AirCode));
-    });
+    // ใช้รายการเดียวกับฟอร์มเปล่า ไม่งั้นสองปุ่มนี้จะค่อยๆ เลือกได้ไม่เหมือนกัน
+    const list = unitsForRepairDoc();
 
     if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
 
-    const options = list.map(a => {
-      const tag = a.Status === 'รอซ่อม' ? ' — รอซ่อม' : a.Status === 'ชำรุด' ? ' — ชำรุด' : '';
-      return `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(tag)}</option>`;
-    }).join('');
+    const options = list.map(a =>
+      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(repairStatusTag(a.Status))}</option>`
+    ).join('');
 
     const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
 
@@ -8137,15 +8133,27 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.startRepairFormFromPicker = startRepairFormFromPicker;
 
   /**
-   * เครื่องที่มีงานซ่อมค้างอยู่ — ใช้กับทั้งฟอร์มเปล่าและฟอร์มกรอก
+   * รายการเครื่องสำหรับเอกสารซ่อม — ใช้กับทั้งฟอร์มเปล่าและฟอร์มกรอก
    *
-   * "แจ้งซ่อมไว้แล้ว" คือสถานะ ชำรุด (รออนุมัติ) หรือ รอซ่อม (อนุมัติแล้ว)
-   * สองสถานะนี้คือเคสที่เปิดค้างอยู่จริง ตรงกับที่หน้างานซ่อมแสดง
+   * ให้เลือกได้ "ทุกเครื่อง" ไม่ใช่เฉพาะที่แจ้งซ่อมไว้ เพราะช่างที่เจอของเสีย
+   * หน้างานแล้วซ่อมเลยโดยไม่ได้แจ้งล่วงหน้าเป็นเรื่องที่เกิดจริง
+   * (ฝั่งเซิร์ฟเวอร์รองรับอยู่แล้ว — saveRepairForm เปิดเคสใหม่ให้เองถ้ายังไม่มี)
+   *
+   * แต่เรียงให้เครื่องที่มีงานค้างอยู่ลอยขึ้นบนสุด เพราะเป็นกรณีที่เจอบ่อยกว่ามาก
+   * ไม่งั้นต้องไล่หาในรายการ 457 เครื่องทุกครั้ง
+   *
+   * ลำดับ: รอซ่อม (อนุมัติแล้ว) → ชำรุด (รออนุมัติ) → ที่เหลือเรียงตามรหัส
    */
-  const unitsWithOpenRepair = () =>
-    (currentAirList || [])
-      .filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด')
-      .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode)));
+  const unitsForRepairDoc = () =>
+    (currentAirList || []).slice().sort((a, b) => {
+      const rank = s => (s === 'รอซ่อม' ? 0 : s === 'ชำรุด' ? 1 : 2);
+      return (rank(a.Status) - rank(b.Status)) ||
+             String(a.AirCode).localeCompare(String(b.AirCode));
+    });
+
+  /** ป้ายสถานะท้ายชื่อเครื่องในรายการเลือก — ใส่เฉพาะตัวที่มีงานค้าง */
+  const repairStatusTag = status =>
+    status === 'รอซ่อม' ? ' — รอซ่อม' : status === 'ชำรุด' ? ' — ชำรุด' : '';
 
   /** อาการเสียจากใบแจ้งซ่อมล่าสุดของเครื่องนั้น */
   const lastSymptomOf = code => {
@@ -8158,22 +8166,19 @@ const CLEANING_CHECKLIST_ITEMS = [
   /**
    * ปริ้นฟอร์มซ่อมเปล่า
    *
-   * ต่างจากฟอร์มล้างตรงที่เลือกได้เฉพาะเครื่องที่แจ้งซ่อมไว้แล้ว ไม่ใช่ทุก Node
-   * เพราะการซ่อมเริ่มจากมีคนแจ้งเสมอ ไม่ได้ไปตามรอบเหมือนการล้าง
-   * ถ้าให้เลือกทั้ง 457 เครื่อง คนจะต้องไล่หาในรายการยาวๆ โดยไม่จำเป็น
+   * เลือกได้ทุกเครื่องเหมือนปุ่ม "กรอกฟอร์มซ่อม" ไม่ได้จำกัดเฉพาะที่แจ้งซ่อมไว้
+   * เพราะช่างอาจถือฟอร์มเปล่าไปหน้างานก่อนที่จะมีใครแจ้งซ่อมในระบบ
    */
   function openPrintRepairFormDialog() {
-    const list = unitsWithOpenRepair();
+    const list = unitsForRepairDoc();
 
-    if (!list.length) {
-      showToast('ยังไม่มีเครื่องที่แจ้งซ่อมไว้ — ฟอร์มซ่อมเปล่าออกให้เฉพาะเครื่องที่มีงานซ่อมค้างอยู่ ' +
-                'ถ้าต้องการซ่อมเครื่องที่ยังไม่ได้แจ้ง ให้ไปแจ้งซ่อมที่หน้างานซ่อมก่อน', 'error');
-      return;
-    }
+    if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
 
     const options = list.map(a =>
-      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)} — ${esc(a.Status)}</option>`
+      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(repairStatusTag(a.Status))}</option>`
     ).join('');
+
+    const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -8188,11 +8193,11 @@ const CLEANING_CHECKLIST_ITEMS = [
           </div>
           <div class="p-6 space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องที่แจ้งซ่อมไว้ <span class="text-red-500">*</span></label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">เลือกเครื่อง <span class="text-red-500">*</span></label>
               <select id="prf_air" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
                 ${options}
               </select>
-              <p class="text-xs text-gray-500 mt-1.5">มี ${list.length} เครื่องที่มีงานซ่อมค้างอยู่</p>
+              <p class="text-xs text-gray-500 mt-1.5">เลือกได้ทุกเครื่อง${waiting ? ' · เครื่องที่รอซ่อม/ชำรุด <b>' + waiting + '</b> เครื่องถูกจัดไว้บนสุดให้แล้ว' : ''}</p>
             </div>
 
             <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
