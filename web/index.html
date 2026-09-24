@@ -8084,11 +8084,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
 
-    const options = list.map(a =>
-      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(repairStatusTag(a.Status))}</option>`
-    ).join('');
-
     const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
+    resetRepairAirPick('rfp');
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -8104,13 +8101,8 @@ const CLEANING_CHECKLIST_ITEMS = [
               <p>บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสงานซ่อมของเครื่องนั้นให้เอง
                  ${waiting ? '· ตอนนี้มีเครื่องรอซ่อม/ชำรุดอยู่ <b>' + waiting + '</b> เครื่อง' : ''}</p>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">เลือกเครื่องที่ซ่อม <span class="text-red-500">*</span></label>
-              <select id="rfp_air" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
-                ${options}
-              </select>
-              <p class="text-xs text-gray-500 mt-1.5">เครื่องที่รอซ่อมอยู่ถูกจัดไว้บนสุดให้แล้ว</p>
-            </div>
+            ${repairAirPickerHtml('rfp', 'เลือกเครื่องที่ซ่อม',
+              'เลือกได้ทุกเครื่อง' + (waiting ? ' · เครื่องที่รอซ่อม/ชำรุดถูกจัดไว้บนสุดให้แล้ว' : ''))}
           </div>
           <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
             <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
@@ -8120,11 +8112,12 @@ const CLEANING_CHECKLIST_ITEMS = [
           </div>
         </div>
       </div>`;
+    renderRepairAirList('rfp');
   }
   window.openRepairFormPicker = openRepairFormPicker;
 
   function startRepairFormFromPicker() {
-    const code = (document.getElementById('rfp_air') || {}).value;
+    const code = pickedRepairAir('rfp');
     if (!code) { showToast('กรุณาเลือกเครื่อง', 'error'); return; }
 
     // อาการเสียจากตอนแจ้งซ่อม (ถ้ามี) เอามาเติมให้ จะได้ไม่ต้องพิมพ์ซ้ำ
@@ -8155,6 +8148,91 @@ const CLEANING_CHECKLIST_ITEMS = [
   const repairStatusTag = status =>
     status === 'รอซ่อม' ? ' — รอซ่อม' : status === 'ชำรุด' ? ' — ชำรุด' : '';
 
+  /* ==================== ตัวเลือกเครื่องของเอกสารซ่อม ==================== */
+
+  /**
+   * ทำไมไม่ใช้ <select> ธรรมดา
+   *
+   * รายการมี 457 เครื่อง พอกดแล้วเบราว์เซอร์กางรายการยาวจนเลยจอ แล้วมันเลือก
+   * ทิศทางเองว่าจะกางขึ้นหรือลงตามที่ว่างที่เหลือ ซึ่งสั่งด้วย CSS ไม่ได้เลย
+   * เพราะรายการของ <select> ไม่ได้อยู่ในหน้าเว็บ แต่เป็นหน้าต่างของระบบปฏิบัติการ
+   * ในกล่องนี้ช่องเลือกอยู่ค่อนไปทางล่าง มันจึงกางขึ้นไปทับหัวกล่องทุกที
+   *
+   * เปลี่ยนมาใช้ช่องค้นหา + รายการที่เลื่อนอยู่ในกล่องแทน ซึ่งเป็นของในหน้าเว็บจริง
+   * จึงอยู่กับที่เสมอ ไม่เด้งไปทับอะไร และได้ช่องค้นหาแถมมาด้วย
+   * ซึ่งจำเป็นมากกับรายการขนาดนี้ (ฟอร์มล้างใช้วิธีนี้อยู่ก่อนแล้ว)
+   */
+
+  /** เครื่องที่เลือกอยู่ เก็บแยกตามกล่อง เพราะสองกล่องใช้ตัวเรนเดอร์ตัวเดียวกัน */
+  let repairAirPick = { box: '', code: '' };
+
+  /** ช่องค้นหา + รายการ — ใช้ร่วมกันทั้งกล่องฟอร์มเปล่าและกล่องกรอกเอกสาร */
+  function repairAirPickerHtml(box, label, hint) {
+    return `
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">${label} <span class="text-red-500">*</span></label>
+        <div class="relative mb-2">
+          <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input id="${box}_search" oninput="renderRepairAirList('${box}')"
+            placeholder="ค้นหารหัสเครื่อง หรือชื่อ Node..."
+            class="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
+        </div>
+        <div id="${box}_list" class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-56 overflow-y-auto"></div>
+        <p class="text-xs text-gray-500 mt-1.5">${hint}</p>
+      </div>`;
+  }
+
+  function renderRepairAirList(box) {
+    const el = document.getElementById(box + '_list');
+    if (!el) return;
+
+    const q = ((document.getElementById(box + '_search') || {}).value || '').trim().toLowerCase();
+    const list = unitsForRepairDoc().filter(a => !q
+      || String(a.AirCode || '').toLowerCase().includes(q)
+      || String(a.NodeName || '').toLowerCase().includes(q));
+
+    if (!list.length) {
+      el.innerHTML = '<div class="px-3 py-6 text-center text-sm text-gray-400">ไม่พบเครื่องที่ค้นหา</div>';
+      return;
+    }
+
+    // ถ้าตัวที่เลือกไว้หลุดออกจากผลค้นหา ให้เลื่อนไปเลือกตัวแรกที่เห็นอยู่แทน
+    // ไม่งั้นจะกดปุ่มต่อไปแล้วได้เครื่องที่มองไม่เห็นบนจอ
+    if (!list.some(a => a.AirCode === repairAirPick.code)) {
+      repairAirPick = { box, code: list[0].AirCode };
+    }
+
+    el.innerHTML = list.map(a => {
+      const on = a.AirCode === repairAirPick.code;
+      const tag = repairStatusTag(a.Status);
+      return `<label class="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-orange-50/60 ${on ? 'bg-orange-50' : ''}">
+        <input type="radio" name="${box}_air" value="${esc(a.AirCode)}" ${on ? 'checked' : ''}
+          onchange="pickRepairAir('${box}', this.value)" class="accent-[#f47920] flex-shrink-0">
+        <span class="min-w-0">
+          <span class="block text-sm font-medium text-gray-800 truncate">${esc(a.AirCode)}</span>
+          <span class="block text-xs text-gray-500 truncate">${esc(a.NodeName || '-')}${tag
+            ? ' · <b class="text-[#f47920]">' + esc(tag.replace(' — ', '')) + '</b>' : ''}</span>
+        </span>
+      </label>`;
+    }).join('');
+  }
+  window.renderRepairAirList = renderRepairAirList;
+
+  function pickRepairAir(box, code) {
+    repairAirPick = { box, code };
+    renderRepairAirList(box);
+  }
+  window.pickRepairAir = pickRepairAir;
+
+  /** รหัสเครื่องที่เลือกไว้ในกล่องนั้น */
+  const pickedRepairAir = box => (repairAirPick.box === box ? repairAirPick.code : '');
+
+  /** เริ่มกล่องใหม่ด้วยเครื่องตัวบนสุด เหมือนที่ <select> เคยเลือกตัวแรกให้เอง */
+  function resetRepairAirPick(box) {
+    const first = unitsForRepairDoc()[0];
+    repairAirPick = { box, code: first ? first.AirCode : '' };
+  }
+
   /** อาการเสียจากใบแจ้งซ่อมล่าสุดของเครื่องนั้น */
   const lastSymptomOf = code => {
     const open = (currentHistory || [])
@@ -8174,11 +8252,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
 
-    const options = list.map(a =>
-      `<option value="${esc(a.AirCode)}">${esc(a.AirCode)} · ${esc(a.NodeName)}${esc(repairStatusTag(a.Status))}</option>`
-    ).join('');
-
     const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
+    resetRepairAirPick('prf');
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -8192,13 +8267,8 @@ const CLEANING_CHECKLIST_ITEMS = [
             <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
           </div>
           <div class="p-6 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">เลือกเครื่อง <span class="text-red-500">*</span></label>
-              <select id="prf_air" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white outline-none focus:border-[#f47920] focus:ring-1 focus:ring-[#f47920]">
-                ${options}
-              </select>
-              <p class="text-xs text-gray-500 mt-1.5">เลือกได้ทุกเครื่อง${waiting ? ' · เครื่องที่รอซ่อม/ชำรุด <b>' + waiting + '</b> เครื่องถูกจัดไว้บนสุดให้แล้ว' : ''}</p>
-            </div>
+            ${repairAirPickerHtml('prf', 'เลือกเครื่อง',
+              'เลือกได้ทุกเครื่อง' + (waiting ? ' · เครื่องที่รอซ่อม/ชำรุด <b>' + waiting + '</b> เครื่องถูกจัดไว้บนสุดให้แล้ว' : ''))}
 
             <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
               <b>เลือกแบบไหนดี</b><br>
@@ -8217,6 +8287,7 @@ const CLEANING_CHECKLIST_ITEMS = [
           </div>
         </div>
       </div>`;
+    renderRepairAirList('prf');
   }
   window.openPrintRepairFormDialog = openPrintRepairFormDialog;
 
@@ -8227,7 +8298,7 @@ const CLEANING_CHECKLIST_ITEMS = [
    * จึงต้องเติมจากที่เดียว ไม่งั้นเพิ่มช่องใหม่ทีหนึ่งจะลืมแก้อีกฝั่งทุกที
    */
   function blankRepairRecord() {
-    const code = (document.getElementById('prf_air') || {}).value;
+    const code = pickedRepairAir('prf');
     const unit = (currentAirList || []).find(a => String(a.AirCode) === String(code));
     if (!unit) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return null; }
 
