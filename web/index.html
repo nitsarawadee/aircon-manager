@@ -8771,10 +8771,19 @@ const CLEANING_CHECKLIST_ITEMS = [
             </div>
             <div id="pf_unitList" class="mb-2"></div>
             <p class="text-xs text-gray-500 mb-4">ฟอร์มกระดาษมีช่องสำหรับ 2 เครื่อง เลือกได้ 1 หรือ 2 ตัว</p>
+
+            <div class="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+              <b>เลือกแบบไหนดี</b><br>
+              <b>ปริ้น</b> — เอาไปเขียนมือหน้างาน แนบรูปไม่ได้<br>
+              <b>Excel</b> — กรอกบนคอม วางรูปลงในกรอบได้ มีหน้ารูปแยกให้เครื่องละหน้า
+            </div>
           </div>
 
-          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
+          <div class="px-6 py-4 border-t border-gray-100 flex flex-wrap justify-end gap-3 flex-shrink-0">
             <button onclick="closePrintFormDialog()" class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50">ยกเลิก</button>
+            <button onclick="downloadBlankCleaningXlsx(this)" class="px-6 py-2 text-sm font-medium text-emerald-700 bg-white border border-emerald-300 rounded-full hover:bg-emerald-50 shadow-sm flex items-center gap-2">
+              <i class="ph ph-microsoft-excel-logo"></i> โหลดฟอร์ม Excel
+            </button>
             <button onclick="submitPrintForm()" id="pf_btn" class="px-8 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-full hover:bg-[#0e4485] shadow-sm flex items-center gap-2">
               <i class="ph ph-printer"></i> เปิดฟอร์มเปล่า
             </button>
@@ -8900,17 +8909,24 @@ const CLEANING_CHECKLIST_ITEMS = [
     }).join('');
   }
 
-  /** เปิดฟอร์มเปล่าที่เติมข้อมูลเครื่องให้แล้ว สำหรับปริ้นไปเขียนด้วยมือ */
-  async function submitPrintForm() {
+  /**
+   * รวบข้อมูล Node กับเครื่องที่เลือกไว้ในกล่องฟอร์มเปล่า
+   *
+   * ฟอร์มเปล่าทั้งแบบปริ้นและแบบ Excel ใช้ข้อมูลชุดเดียวกัน ต่างกันแค่ปลายทาง
+   * จึงต้องเติมจากที่เดียว ไม่งั้นเพิ่มช่องใหม่ทีหนึ่งจะลืมแก้อีกฝั่งทุกที
+   *
+   * @param {string} [date] วันที่ที่จะใส่ให้ (แบบปริ้นเว้นว่างไว้เขียนมือ)
+   */
+  function blankCleaningRecord(date) {
     const node = cleaningFormNodes.find(n => n.NodeName === pfSelectedNode);
-    if (!node) { showToast('กรุณาเลือก Node ก่อน', 'error'); return; }
+    if (!node) { showToast('กรุณาเลือก Node ก่อน', 'error'); return null; }
 
     // ยึดตำแหน่งจริงของเครื่องใน Node ไม่ใช่ลำดับที่ติ๊ก
     // เลือกเครื่องตัวที่ 2 ตัวเดียว ข้อมูลต้องลงช่อง "ตัวที่ 2" และเว้นช่อง "ตัวที่ 1" ว่างไว้
     const { slots } = pfSlots();
     const [u1, u2] = slots;
-    if (!u1 && !u2) { showToast('กรุณาเลือกเครื่องอย่างน้อย 1 ตัว', 'error'); return; }
-    const record = {
+    if (!u1 && !u2) { showToast('กรุณาเลือกเครื่องอย่างน้อย 1 ตัว', 'error'); return null; }
+    return {
       NodeName: node.NodeName, SiteCode: node.SiteCode, Region: node.Region,
       Province: node.Province, LocationType: node.LocationType,
       AirCode1: u1 ? u1.AirCode : '', AirCode2: u2 ? u2.AirCode : '',
@@ -8920,11 +8936,18 @@ const CLEANING_CHECKLIST_ITEMS = [
       Unit2_Brand: u2 ? u2.Brand : '', Unit2_BTU: u2 ? u2.BTU : '',
       Unit2_IndoorSerial: u2 ? u2.IndoorSerial : '', Unit2_IndoorAsset: u2 ? u2.IndoorAsset : '',
       Unit2_OutdoorSerial: u2 ? u2.OutdoorSerial : '', Unit2_OutdoorAsset: u2 ? u2.OutdoorAsset : '',
-      // เว้นว่างทั้งหมดโดยตั้งใจ — นี่คือฟอร์มเปล่าสำหรับเขียนด้วยมือ
-      Date: '', TimeStart: '', TimeEnd: '', TotalTime: '',
+      // เว้นว่างทั้งหมดโดยตั้งใจ — นี่คือฟอร์มเปล่าสำหรับกรอกเอง
+      Date: date || '', TimeStart: '', TimeEnd: '', TotalTime: '',
       Checklist: [], EquipmentCondition: '', EquipmentCondition2: '', AdditionalNote: '',
       CompanyName: '', TechnicianName: '', SupervisorName: ''
     };
+  }
+
+  /** เปิดฟอร์มเปล่าที่เติมข้อมูลเครื่องให้แล้ว สำหรับปริ้นไปเขียนด้วยมือ */
+  async function submitPrintForm() {
+    // แบบปริ้นเว้นวันที่ว่างไว้ เพราะกระดาษที่ปริ้นวันนี้อาจเอาไปใช้อีกหลายวันข้างหน้า
+    const record = blankCleaningRecord();
+    if (!record) return;
 
     const btn = document.getElementById('pf_btn');
     btn.disabled = true;
@@ -8937,9 +8960,38 @@ const CLEANING_CHECKLIST_ITEMS = [
     btn.innerHTML = '<i class="ph ph-printer"></i> เปิดฟอร์มเปล่า';
     if (ok) {
       closePrintFormDialog();
-      showToast('เปิดฟอร์มเปล่าของ Node ' + node.NodeName + ' แล้ว — กด Ctrl+P เพื่อสั่งปริ้น');
+      showToast('เปิดฟอร์มเปล่าของ Node ' + record.NodeName + ' แล้ว — กด Ctrl+P เพื่อสั่งปริ้น');
     }
   }
+
+  /**
+   * โหลดฟอร์มล้างเปล่าแบบ Excel ที่เติมข้อมูล Node กับเครื่องมาให้แล้ว
+   *
+   * ต่างจากแบบปริ้นตรงที่ใส่วันที่วันนี้มาให้ด้วย เพราะไฟล์นี้กรอกบนคอมพิวเตอร์
+   * ซึ่งมักทำวันเดียวกับที่ไปหน้างาน และแก้ทับได้ง่ายถ้าไม่ตรง
+   */
+  async function downloadBlankCleaningXlsx(btn) {
+    const record = blankCleaningRecord(new Date().toISOString().slice(0, 10));
+    if (!record) return;
+
+    const old = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง...'; }
+
+    try {
+      const res = await call('getCleaningBlankXlsx', record);
+      if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
+
+      saveFileResult(res, 'ฟอร์มล้าง.xlsx');
+      showToast('โหลดฟอร์ม Excel ของ Node ' + record.NodeName + ' แล้ว — ' +
+                'วางรูปได้ที่ชีตของเครื่องแต่ละตัว', 'success');
+      closePrintFormDialog();
+    } catch (e) {
+      showToast('โหลดฟอร์ม Excel ไม่สำเร็จ: ' + (e.message || e), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+    }
+  }
+  window.downloadBlankCleaningXlsx = downloadBlankCleaningXlsx;
 
   /**
    * เปิดหน้าต่างแนบไฟล์
