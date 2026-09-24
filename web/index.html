@@ -8377,24 +8377,26 @@ const CLEANING_CHECKLIST_ITEMS = [
     const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600';
     const small = 'w-full min-h-[40px] rounded-lg border-gray-300 border px-2.5 py-2 text-sm outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600';
 
-    // ช่องแก้ข้อมูลเครื่อง — เติมของเดิมในทะเบียนมาให้ก่อน ช่างแก้เฉพาะที่เปลี่ยน
+    /**
+     * ข้อมูลเครื่อง — แสดงอย่างเดียว แก้ไม่ได้
+     *
+     * ค่าพวกนี้มาจากทะเบียนเครื่อง ถ้าเป็นเครื่องตัวใหม่ต้องไปกดเปลี่ยนเครื่อง
+     * ที่หน้ารายการเครื่องก่อน เพราะปุ่มนั้นเก็บสเปกเครื่องเก่าไว้ในประวัติให้ด้วย
+     * ถ้าให้แก้ตรงนี้ได้ จะมีทางเปลี่ยนข้อมูลเครื่องสองทาง แล้วสเปกเครื่องเก่าหายไปเฉยๆ
+     */
     const unitCard = (u, i) => `
       <div class="border border-gray-200 rounded-lg p-3 ${i ? 'mt-3' : ''}">
         <div class="font-bold text-teal-700 text-sm mb-2">เครื่องที่ ${i + 1} · ${esc(u.AirCode)}</div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs text-gray-500 mb-1">ยี่ห้อ</label>
-            <input id="if_brand${i + 1}" value="${esc(u.Brand || '')}" class="${small}"></div>
-          <div><label class="block text-xs text-gray-500 mb-1">BTU</label>
-            <input id="if_btu${i + 1}" value="${esc(u.BTU || '')}" class="${small}"></div>
-          <div><label class="block text-xs text-gray-500 mb-1">Indoor Serial</label>
-            <input id="if_insn${i + 1}" value="${esc(u.IndoorSerial || '')}" class="${small}"></div>
-          <div><label class="block text-xs text-gray-500 mb-1">Indoor Asset</label>
-            <input id="if_inast${i + 1}" value="${esc(u.IndoorAsset || '')}" class="${small}"></div>
-          <div><label class="block text-xs text-gray-500 mb-1">Outdoor Serial</label>
-            <input id="if_outsn${i + 1}" value="${esc(u.OutdoorSerial || '')}" class="${small}"></div>
-          <div><label class="block text-xs text-gray-500 mb-1">Outdoor Asset</label>
-            <input id="if_outast${i + 1}" value="${esc(u.OutdoorAsset || '')}" class="${small}"></div>
-        </div>
+        <dl class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+          ${[['ยี่ห้อ', u.Brand], ['BTU', u.BTU],
+             ['Indoor Serial', u.IndoorSerial], ['Indoor Asset', u.IndoorAsset],
+             ['Outdoor Serial', u.OutdoorSerial], ['Outdoor Asset', u.OutdoorAsset]]
+            .map(([k, v]) => `
+              <div>
+                <dt class="text-xs text-gray-500">${esc(k)}</dt>
+                <dd class="text-gray-800 truncate">${esc(v || '-')}</dd>
+              </div>`).join('')}
+        </dl>
         <label class="block text-xs text-gray-500 mt-3 mb-1">ผลการตรวจรับงานติดตั้ง</label>
         <div class="flex gap-2">
           ${IF_ACCEPT.map(v => `
@@ -8450,9 +8452,10 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             ${card(`
               <h3 class="text-sm font-bold text-gray-800 mb-1">ส่วนที่ 2 · ข้อมูลเครื่องที่ติดตั้ง</h3>
-              <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
-                ⚠️ ค่าที่กรอกตรงนี้จะถูก<b>เขียนทับข้อมูลเครื่องในทะเบียน</b> เพราะติดตั้งคือการเปลี่ยนตัวเครื่องจริง
-                ช่องที่เว้นว่างจะคงของเดิมไว้
+              <p class="text-xs text-gray-600 bg-slate-50 border border-gray-200 rounded px-2 py-1.5 mb-2">
+                ข้อมูลนี้ดึงมาจากทะเบียนเครื่อง — ถ้าเป็นเครื่องตัวใหม่
+                ให้ไปกด <b>"เปลี่ยนเครื่อง"</b> ที่หน้ารายการเครื่องก่อน แล้วค่อยกลับมาออกเอกสาร
+                เอกสารจะได้ Serial ของเครื่องใหม่มาให้เอง
               </p>
               ${ifUnits.map(unitCard).join('')}`)}
 
@@ -8501,7 +8504,20 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.openInstallForm = openInstallForm;
 
-  /** รายการตรวจสอบ 18 ข้อ — การ์ดต่อข้อ ช่องกรอกแยกรายเครื่อง */
+  /**
+   * รายการตรวจสอบ 18 ข้อ — การ์ดต่อข้อ ช่องกรอกแยกรายเครื่อง
+   *
+   * ============================================================================
+   * ข้อที่เป็นการตรวจ ใช้ดรอปดาวน์ 3 ค่า ไม่ใช่ช่องติ๊ก
+   * ============================================================================
+   * ช่องติ๊กมีแค่สองสถานะ คือติ๊กกับไม่ติ๊ก ซึ่งแยกไม่ออกว่า "ตรวจแล้วไม่ผ่าน"
+   * กับ "ยังไม่ได้ตรวจ" ต่างกันยังไง — ทั้งที่สองอย่างนี้คนละเรื่องกันคนละขั้ว
+   * เอกสารที่เซ็นกันไม่ควรมีช่องที่ตีความได้สองทาง
+   *
+   * ค่าเริ่มต้นต้องเป็น "-" เสมอ ห้ามตั้งเป็นผ่านไว้ให้ เพราะฟอร์มที่บันทึกจริง
+   * จะกลายเป็นเอกสารที่อ้างว่าตรวจครบทุกข้อแล้ว ทั้งที่ช่างอาจไม่ได้แตะเลยสักข้อ
+   * (กติกาเดียวกับฟอร์มล้าง ซึ่งเจอปัญหานี้มาก่อนแล้ว)
+   */
   function renderIfChecklist() {
     const box = document.getElementById('if_checklist');
     if (!box) return;
@@ -8511,11 +8527,14 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="flex-1">
           <div class="text-[10px] text-gray-400 mb-0.5">เครื่องที่ ${i + 1}</div>
           ${item.type === 'check'
-            ? `<label class="flex items-center justify-center min-h-[40px] border border-gray-300 rounded-lg cursor-pointer text-sm">
-                 <input type="checkbox" id="if_c${item.no}_${i + 1}" class="accent-teal-700 w-5 h-5">
-               </label>`
+            ? `<select id="if_c${item.no}_${i + 1}"
+                 class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">
+                 <option value="" selected>-</option>
+                 <option value="ผ่าน">ผ่าน</option>
+                 <option value="ไม่ผ่าน">ไม่ผ่าน</option>
+               </select>`
             : `<input id="if_c${item.no}_${i + 1}" inputmode="decimal"
-                 class="w-full min-h-[40px] rounded-lg border-gray-300 border px-2 py-2 text-sm text-center outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">`}
+                 class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm text-center outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">`}
         </div>`).join('');
 
       return `
@@ -8679,13 +8698,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       return;
     }
 
-    // ผลตรวจที่กรอก — ช่องติ๊กเก็บเป็นเครื่องหมายถูก ช่องค่าเก็บตามที่พิมพ์
+    // ผลตรวจที่กรอก — ทั้งข้อที่เลือกผ่าน/ไม่ผ่าน และข้อที่กรอกค่า เก็บเป็นข้อความตามที่เลือก
     const checklist = INSTALL_CHECKLIST_ITEMS.map(item => {
-      const cell = i => {
-        const el = document.getElementById('if_c' + item.no + '_' + i);
-        if (!el) return '';
-        return item.type === 'check' ? (el.checked ? '✓' : '') : (el.value || '');
-      };
+      const cell = i => (document.getElementById('if_c' + item.no + '_' + i) || {}).value || '';
       return {
         no: item.no,
         val1: cell(1),
@@ -8705,15 +8720,12 @@ const CLEANING_CHECKLIST_ITEMS = [
       Checklist: checklist
     };
 
+    // ส่งไปแค่รหัสเครื่องกับผลตรวจรับ
+    // ข้อมูลเครื่อง (Serial/Asset/ยี่ห้อ/BTU) ไม่ต้องส่ง เพราะเซิร์ฟเวอร์คัดจากทะเบียนเอง
+    // ถ้าส่งไปก็จะถูกทิ้ง — ส่งของที่ปลายทางไม่ใช้ทำให้คนอ่านโค้ดเข้าใจผิดว่าแก้ได้
     ifUnits.forEach((u, i) => {
       const n = i + 1;
       record['AirCode' + n] = u.AirCode;
-      record['Unit' + n + '_Brand'] = val('if_brand' + n);
-      record['Unit' + n + '_BTU'] = val('if_btu' + n);
-      record['Unit' + n + '_IndoorSerial'] = val('if_insn' + n);
-      record['Unit' + n + '_IndoorAsset'] = val('if_inast' + n);
-      record['Unit' + n + '_OutdoorSerial'] = val('if_outsn' + n);
-      record['Unit' + n + '_OutdoorAsset'] = val('if_outast' + n);
       const picked = document.querySelector('input[name="if_accept' + n + '"]:checked');
       record['AcceptResult' + n] = picked ? picked.value : '';
     });

@@ -12,17 +12,28 @@ import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue
  * ============================================================================
  * โครงเหมือนใบล้าง — สองเครื่องต่อใบ เลขที่เอกสารใบละสองเลข หน้ารูปเครื่องละหน้า
  *
- * แต่มีสิ่งที่อีกสองใบไม่มี: **ใบนี้เขียนกลับไปที่ทะเบียนเครื่อง**
- * เพราะการติดตั้งคือจุดที่ตัวเครื่องจริงเปลี่ยน Serial/Asset/ยี่ห้อ/BTU ที่กรอก
- * ในใบนี้คือของเครื่องตัวใหม่ที่เพิ่งเอาไปติด ถ้าไม่เขียนกลับ ทะเบียนจะยังเป็น
- * ข้อมูลเครื่องเก่าหรือว่างอยู่ แล้วใบล้างกับใบซ่อมที่ออกทีหลังจะดึงข้อมูลผิดไปทั้งหมด
- * (ใบล้างกับใบซ่อม "อ่าน" จากทะเบียนอย่างเดียว ไม่เขียนกลับ เพราะไม่ได้เปลี่ยนตัวเครื่อง)
+ * ============================================================================
+ * ⚠️ ใบนี้ "อ่าน" ทะเบียนอย่างเดียว ไม่เขียนกลับ
+ * ============================================================================
+ * เคยทำให้ใบนี้เขียนข้อมูลเครื่องกลับเข้าทะเบียน ด้วยเหตุผลว่าติดตั้งคือจุดที่
+ * ตัวเครื่องจริงเปลี่ยน — ซึ่งผิด เพราะระบบมี `replaceAirUnit` (ปุ่มเปลี่ยนเครื่อง
+ * ในหน้ารายการเครื่อง) ทำหน้าที่นั้นอยู่แล้ว และทำได้ครบกว่ามาก:
+ *
+ *   - แยกช่องของ "ตัวเครื่อง" ออกจากช่องของ "ตำแหน่ง" ไม่ให้แตะผิดช่อง
+ *   - เก็บสเปกของเครื่องเก่าไว้ในประวัติ ซึ่งเป็นที่เดียวที่ข้อมูลนั้นเหลืออยู่
+ *   - ผูกกับเคสงานซ่อมที่ค้างอยู่ เพื่อให้เคสปิดถูกต้อง
+ *
+ * การเขียนทะเบียนจากสองที่คือการมีความจริงสองชุด และของที่นี่ทำได้แย่กว่า
+ * (ทับสเปกเครื่องเก่าทิ้งโดยไม่เก็บไว้ที่ไหนเลย)
+ *
+ * ลำดับงานที่ถูกต้องคือ **เปลี่ยนเครื่องในหน้ารายการเครื่องก่อน แล้วค่อยออกเอกสาร**
+ * เอกสารจะดึงรหัสเครื่องกับ Serial ที่อัปเดตแล้วมาให้เอง เหมือนใบล้างและใบซ่อม
  *
  * ============================================================================
  * ไม่มีเคสงานเหมือนใบซ่อม
  * ============================================================================
  * งานติดตั้งไม่มีขั้นตอนแจ้ง-อนุมัติ-ปิดเคสแบบงานซ่อม จึงไม่มี CaseID
- * และไม่ต้องคืนสถานะเครื่อง ใบนี้แค่ลงประวัติ "ติดตั้ง" ไว้เป็นหลักฐาน
+ * ใบนี้แค่ลงประวัติ "ติดตั้ง" ไว้เป็นหลักฐาน
  */
 
 const DOC_ASSETS = { fontHref: '/vendor/fonts.css', logoHref: '/assets/form-logo.png' };
@@ -110,11 +121,6 @@ async function unitOf(ctx, airCode) {
   return found;
 }
 
-/** ค่าที่กรอกมาจริง ถ้าเว้นว่างให้ใช้ของเดิมในทะเบียนแทน */
-const pick = (typed, fallback) => {
-  const t = plainText(typed).trim();
-  return t || plainText(fallback);
-};
 
 /**
  * บันทึกเอกสารติดตั้งหนึ่งใบ
@@ -175,18 +181,20 @@ export async function saveInstallForm(ctx, record) {
       RecordedBy: await ctx.currentUser()
     };
 
-    // ข้อมูลเครื่องที่ติดตั้งจริง — ที่กรอกมาคือของตัวใหม่ ไม่ใช่ของในทะเบียน
+    // ข้อมูลเครื่องมาจากทะเบียนล้วนๆ ไม่รับจากหน้าเว็บ เพื่อไม่ให้มีความจริงสองชุด
+    // เครื่องตัวใหม่ต้องถูกเปลี่ยนในหน้ารายการเครื่องก่อนออกเอกสาร (ดูหัวไฟล์)
+    //
     // ⚠️ ทะเบียนเก็บชื่อคอลัมน์ว่า IndoorSN/OutdoorSN แต่แบบฟอร์มเขียนว่า Serial
     // ต้องแปลงชื่อตรงนี้ ไม่งั้นช่อง Serial บนเอกสารจะว่างทั้งที่ทะเบียนมีข้อมูลอยู่
     for (const slot of [1, 2]) {
       const unit = units[slot];
       const p = 'Unit' + slot + '_';
-      row[p + 'Brand'] = unit ? pick(record[p + 'Brand'], unit.Brand) : '';
-      row[p + 'BTU'] = unit ? pick(record[p + 'BTU'], unit.BTU) : '';
-      row[p + 'IndoorSerial'] = unit ? pick(record[p + 'IndoorSerial'], unit.IndoorSN) : '';
-      row[p + 'IndoorAsset'] = unit ? pick(record[p + 'IndoorAsset'], unit.IndoorAsset) : '';
-      row[p + 'OutdoorSerial'] = unit ? pick(record[p + 'OutdoorSerial'], unit.OutdoorSN) : '';
-      row[p + 'OutdoorAsset'] = unit ? pick(record[p + 'OutdoorAsset'], unit.OutdoorAsset) : '';
+      row[p + 'Brand'] = unit ? plainText(unit.Brand) : '';
+      row[p + 'BTU'] = unit ? plainText(unit.BTU) : '';
+      row[p + 'IndoorSerial'] = unit ? plainText(unit.IndoorSN) : '';
+      row[p + 'IndoorAsset'] = unit ? plainText(unit.IndoorAsset) : '';
+      row[p + 'OutdoorSerial'] = unit ? plainText(unit.OutdoorSN) : '';
+      row[p + 'OutdoorAsset'] = unit ? plainText(unit.OutdoorAsset) : '';
     }
 
     // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
@@ -195,12 +203,11 @@ export async function saveInstallForm(ctx, record) {
     const headers = ctx.ss.headers(SHEETS.INSTALLFORM);
     ctx.ss.appendRow(SHEETS.INSTALLFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
 
-    // ลงประวัติ "ติดตั้ง" ของเครื่องแต่ละตัว พร้อมอัปเดตทะเบียนให้เป็นเครื่องตัวใหม่
+    // ลงประวัติ "ติดตั้ง" ของเครื่องแต่ละตัว
     for (const slot of [1, 2]) {
       const unit = units[slot];
       if (!unit) continue;
 
-      const p = 'Unit' + slot + '_';
       const docNo = plainText(row[slot === 2 ? 'DocNo2' : 'DocNo']);
       const accept = plainText(row['AcceptResult' + slot]).trim();
 
@@ -213,39 +220,6 @@ export async function saveInstallForm(ctx, record) {
         Technician: row.TechnicianName,
         Note: 'เอกสาร ' + docNo
       });
-
-      // ============================================================================
-      // เขียนข้อมูลเครื่องตัวใหม่กลับเข้าทะเบียน
-      // ============================================================================
-      // จุดที่ต่างจากอีกสองเอกสารโดยสิ้นเชิง — ติดตั้งคือการเปลี่ยนตัวเครื่องจริง
-      // ทะเบียนต้องตามให้ทัน ไม่งั้นเอกสารล้าง/ซ่อมที่ออกทีหลังจะดึง Serial
-      // ของเครื่องเก่าที่ถูกถอดไปแล้วมาใช้ โดยไม่มีอะไรฟ้อง
-      //
-      // เขียนเฉพาะช่องที่มีค่าจริง เพื่อไม่ให้ช่องที่ช่างเว้นว่างไปลบข้อมูลเดิมทิ้ง
-      const airRow = ctx.ss.objects(SHEETS.AIRLIST)
-        .find(a => normalizeCode(a.AirCode) === normalizeCode(unit.AirCode));
-      if (!airRow) continue;
-
-      const update = {
-        Brand: row[p + 'Brand'],
-        BTU: row[p + 'BTU'],
-        IndoorSN: row[p + 'IndoorSerial'],
-        IndoorAsset: row[p + 'IndoorAsset'],
-        OutdoorSN: row[p + 'OutdoorSerial'],
-        OutdoorAsset: row[p + 'OutdoorAsset'],
-        InstallDate: row.Date,
-        UpdatedAt: ymdhms(new Date()),
-        UpdatedBy: row.RecordedBy
-      };
-      for (const k of Object.keys(update)) {
-        if (plainText(update[k]).trim() === '') delete update[k];
-      }
-
-      // ติดตั้งเสร็จแล้วเครื่องต้องพร้อมใช้งาน ยกเว้นตรวจรับไม่ผ่าน
-      // ซึ่งแปลว่ายังมีอะไรต้องแก้ ปล่อยให้เป็นสถานะเดิมไว้ให้คนตามต่อ
-      if (accept === 'ผ่าน') update.Status = 'ใช้งานปกติ';
-
-      ctx.ss.writeByHeaders(SHEETS.AIRLIST, airRow._row, update);
     }
 
     await ctx.ss.flush();

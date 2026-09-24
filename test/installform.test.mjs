@@ -4,12 +4,11 @@
  * ============================================================================
  * สิ่งที่ล็อกไว้ — เน้นจุดที่ต่างจากอีกสองเอกสาร
  * ============================================================================
- * - **เขียนข้อมูลเครื่องตัวใหม่กลับเข้าทะเบียน** จุดนี้ใบล้างกับใบซ่อมไม่ทำ
- *   ถ้าพลาด ทะเบียนจะค้างเป็นเครื่องเก่า แล้วเอกสารที่ออกทีหลังผิดตามทั้งหมด
- * - ช่องที่ช่างเว้นว่าง ต้องไม่ไปลบข้อมูลเดิมในทะเบียนทิ้ง
+ * - **ห้ามแตะทะเบียนเครื่องเลย** — การเปลี่ยนเครื่องเป็นหน้าที่ของปุ่ม
+ *   "เปลี่ยนเครื่อง" ในหน้ารายการเครื่อง ซึ่งเก็บสเปกเครื่องเก่าไว้ในประวัติให้ด้วย
+ * - ข้อมูลเครื่องในเอกสารต้องคัดมาจากทะเบียน ไม่ใช่จากที่หน้าเว็บส่งมา
  * - สองเครื่องต่อใบ ได้เลขที่คนละเลข และต้องไม่ซ้ำกัน
  * - ลงประวัติ "ติดตั้ง" ให้ทุกเครื่องในใบ
- * - ตรวจรับไม่ผ่าน ต้องไม่ตั้งสถานะเครื่องเป็นใช้งานปกติ
  * - ไฟล์และรูปเก็บแยกโฟลเดอร์จากงานล้างและงานซ่อม
  */
 
@@ -20,7 +19,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
 import { getHistory } from '../src/modules/history.js';
-import { getAirList } from '../src/modules/airlist.js';
+import { getAirList, replaceAirUnit } from '../src/modules/airlist.js';
 import {
   getInstallForms, saveInstallForm, deleteInstallForm,
   saveInstallPhoto, getInstallDocHtml, settleDocPdfQueue
@@ -141,87 +140,95 @@ test('ไม่ใส่วันที่ ต้องฟ้อง', async () =
   await assert.rejects(() => saveInstallForm(ctxOf(db), payload({ Date: '' })), /วันที่/);
 });
 
-/* ==================== เขียนกลับทะเบียน (จุดที่ต่างจากอีกสองเอกสาร) ==================== */
+/* ==================== ห้ามแตะทะเบียนเครื่อง ==================== */
 
-test('ข้อมูลเครื่องตัวใหม่ต้องถูกเขียนกลับเข้าทะเบียน', async () => {
+/**
+ * ============================================================================
+ * ทำไมเทสต์ชุดนี้กลับด้านจากตอนแรก
+ * ============================================================================
+ * เวอร์ชันแรกให้ใบติดตั้งเขียนข้อมูลเครื่องกลับเข้าทะเบียน ด้วยเหตุผลว่าติดตั้ง
+ * คือจุดที่ตัวเครื่องจริงเปลี่ยน — ซึ่งผิด เพราะระบบมีปุ่ม "เปลี่ยนเครื่อง"
+ * (replaceAirUnit) ทำหน้าที่นั้นอยู่แล้ว และทำได้ครบกว่า: แยกช่องของตัวเครื่อง
+ * ออกจากช่องของตำแหน่ง เก็บสเปกเครื่องเก่าไว้ในประวัติ และปิดเคสงานซ่อมให้
+ *
+ * ของที่ใบติดตั้งทำ ทับสเปกเครื่องเก่าทิ้งโดยไม่เก็บไว้ที่ไหนเลย
+ * เทสต์ชุดนี้กันไม่ให้ใครเผลอเอากลับมาใส่อีก
+ */
+
+test('บันทึกเอกสารแล้ว ต้องไม่ไปแตะข้อมูลเครื่องในทะเบียนเลย', async () => {
   const db = freshDb();
+  const before = await unitOf(db, 'KKN-CPE-AIR-1');
+
   await saveInstallForm(ctxOf(db), payload());
 
-  const unit = await unitOf(db, 'KKN-CPE-AIR-1');
-  assert.equal(unit.IndoorSN, 'ใหม่-IN-1', 'Serial ในทะเบียนต้องเป็นของเครื่องตัวใหม่');
-  assert.equal(unit.IndoorAsset, 'ใหม่-A-1');
-  assert.equal(unit.OutdoorSN, 'ใหม่-OUT-1');
-  assert.equal(unit.OutdoorAsset, 'ใหม่-A-2');
-  assert.equal(unit.Brand, 'Daikin', 'ยี่ห้อต้องเปลี่ยนตามเครื่องใหม่');
-  assert.equal(String(unit.BTU), '24000');
+  const after = await unitOf(db, 'KKN-CPE-AIR-1');
+  for (const field of ['IndoorSN', 'IndoorAsset', 'OutdoorSN', 'OutdoorAsset',
+                       'Brand', 'BTU', 'InstallDate', 'Status']) {
+    assert.equal(String(after[field] ?? ''), String(before[field] ?? ''),
+      'ช่อง ' + field + ' ในทะเบียนต้องไม่ถูกเอกสารแก้');
+  }
 });
 
-test('วันที่ติดตั้งในทะเบียนต้องอัปเดตตามใบนี้', async () => {
-  const db = freshDb();
-  await saveInstallForm(ctxOf(db), payload());
-
-  const unit = await unitOf(db, 'KKN-CPE-AIR-1');
-  assert.ok(String(unit.InstallDate).startsWith('2026-09-24'), 'ได้ ' + unit.InstallDate);
-});
-
-test('ช่องที่ช่างเว้นว่าง ต้องไม่ไปลบข้อมูลเดิมในทะเบียนทิ้ง', async () => {
+test('ข้อมูลเครื่องในเอกสาร ต้องคัดมาจากทะเบียน ไม่ใช่จากที่หน้าเว็บส่งมา', async () => {
+  // หน้าเว็บส่งค่ามั่วมา ก็ต้องไม่ถูกใช้ ไม่งั้นเอกสารจะไม่ตรงกับทะเบียน
   const db = freshDb();
   await saveInstallForm(ctxOf(db), payload({
-    Unit1_IndoorSerial: 'ใหม่-IN-1',
-    Unit1_IndoorAsset: '', Unit1_OutdoorSerial: '', Unit1_OutdoorAsset: '',
-    Unit1_Brand: '', Unit1_BTU: ''
+    Unit1_IndoorSerial: 'มั่ว-IN', Unit1_Brand: 'มั่ว-ยี่ห้อ', Unit1_BTU: '99999'
   }));
 
-  const unit = await unitOf(db, 'KKN-CPE-AIR-1');
-  assert.equal(unit.IndoorSN, 'ใหม่-IN-1', 'ช่องที่กรอกต้องเปลี่ยน');
-  assert.equal(unit.IndoorAsset, 'เก่า-A-1', 'ช่องที่เว้นว่างต้องคงของเดิม');
-  assert.equal(unit.OutdoorSN, 'เก่า-OUT-1');
-  assert.equal(unit.Brand, 'Carrier');
+  const [form] = await getInstallForms(ctxOf(db));
+  assert.equal(form.Unit1_IndoorSerial, 'เก่า-IN-1', 'ต้องเป็นค่าจากทะเบียน');
+  assert.equal(form.Unit1_IndoorAsset, 'เก่า-A-1');
+  assert.equal(form.Unit1_OutdoorSerial, 'เก่า-OUT-1');
+  assert.equal(form.Unit1_Brand, 'Carrier');
+  assert.equal(String(form.Unit1_BTU), '18000');
 });
 
-test('ตรวจรับผ่าน เครื่องต้องกลับมาใช้งานปกติ', async () => {
+test('เปลี่ยนเครื่องในทะเบียนก่อน แล้วออกเอกสาร ต้องได้ Serial ของเครื่องใหม่', async () => {
+  // นี่คือลำดับงานที่ถูกต้องตามที่เจ้าของงานกำหนด
+  const db = freshDb();
+  const ctx = ctxOf(db);
+
+  const unit = await unitOf(db, 'KKN-CPE-AIR-1');
+  await replaceAirUnit(ctx, unit._row, {
+    IndoorSN: 'ใหม่-IN-1', IndoorAsset: 'ใหม่-A-1',
+    OutdoorSN: 'ใหม่-OUT-1', OutdoorAsset: 'ใหม่-A-2',
+    Brand: 'Daikin', BTU: 24000, InstallDate: '2026-09-24'
+  }, 'KKN-CPE-AIR-1');
+
+  await saveInstallForm(ctxOf(db), payload());
+
+  const [form] = await getInstallForms(ctxOf(db));
+  assert.equal(form.Unit1_IndoorSerial, 'ใหม่-IN-1', 'เอกสารต้องได้ Serial ของเครื่องใหม่');
+  assert.equal(form.Unit1_OutdoorSerial, 'ใหม่-OUT-1');
+  assert.equal(form.Unit1_Brand, 'Daikin');
+});
+
+test('สเปกเครื่องเก่ายังอยู่ในประวัติ หลังเปลี่ยนเครื่องแล้วออกเอกสาร', async () => {
+  // ข้อมูลเครื่องเก่ามีที่อยู่ที่เดียวคือใบประวัติ "เปลี่ยนเครื่อง"
+  // ถ้าใบติดตั้งไปทับทะเบียนเอง ข้อมูลนี้จะไม่มีอยู่เลย
+  const db = freshDb();
+  const ctx = ctxOf(db);
+
+  const unit = await unitOf(db, 'KKN-CPE-AIR-1');
+  await replaceAirUnit(ctx, unit._row, { IndoorSN: 'ใหม่-IN-1' }, 'KKN-CPE-AIR-1');
+  await saveInstallForm(ctxOf(db), payload());
+
+  const history = await getHistory(ctxOf(db));
+  const swap = history.find(h => h.EventType === 'เปลี่ยนเครื่อง');
+  assert.ok(swap, 'ต้องมีใบเปลี่ยนเครื่อง');
+  assert.ok(swap.Detail.includes('เก่า-IN-1'), 'สเปกเครื่องเก่าต้องถูกเก็บไว้ — ได้ ' + swap.Detail);
+});
+
+test('ตรวจรับไม่ผ่าน ก็ยังไม่แตะสถานะเครื่อง', async () => {
   const db = freshDb();
   await saveInstallForm(ctxOf(db), payload({
-    AirCode1: 'KKN-CPE-AIR-2',
-    Unit1_IndoorSerial: 'ใหม่-IN-2',
-    AcceptResult1: 'ผ่าน'
+    AirCode1: 'KKN-CPE-AIR-2', AcceptResult1: 'ไม่ผ่าน'
   }));
 
   const unit = await unitOf(db, 'KKN-CPE-AIR-2');
-  assert.equal(unit.Status, 'ใช้งานปกติ');
+  assert.equal(unit.Status, 'ชำรุด', 'สถานะเป็นเรื่องของหน้ารายการเครื่อง ไม่ใช่ของเอกสาร');
 });
-
-test('ตรวจรับไม่ผ่าน ต้องไม่ตั้งสถานะเป็นใช้งานปกติ', async () => {
-  // ไม่ผ่านแปลว่ายังมีอะไรต้องแก้ ถ้าตั้งเป็นปกติให้ เรื่องจะหลุดจากสายตาคนตามงาน
-  const db = freshDb();
-  await saveInstallForm(ctxOf(db), payload({
-    AirCode1: 'KKN-CPE-AIR-2',
-    Unit1_IndoorSerial: 'ใหม่-IN-2',
-    AcceptResult1: 'ไม่ผ่าน'
-  }));
-
-  const unit = await unitOf(db, 'KKN-CPE-AIR-2');
-  assert.equal(unit.Status, 'ชำรุด', 'ต้องคงสถานะเดิมไว้ให้คนตามต่อ');
-});
-
-test('ติดตั้งสองเครื่อง ทะเบียนต้องอัปเดตทั้งสองตัว ไม่สลับกัน', async () => {
-  const db = freshDb();
-  await saveInstallForm(ctxOf(db), payload({
-    AirCode2: 'KKN-CPE-AIR-2',
-    Unit2_IndoorSerial: 'ใหม่-IN-2', Unit2_IndoorAsset: 'ใหม่-A-3',
-    Unit2_OutdoorSerial: 'ใหม่-OUT-2', Unit2_OutdoorAsset: 'ใหม่-A-4',
-    AcceptResult2: 'ผ่าน'
-  }));
-
-  const u1 = await unitOf(db, 'KKN-CPE-AIR-1');
-  const u2 = await unitOf(db, 'KKN-CPE-AIR-2');
-
-  assert.equal(u1.IndoorSN, 'ใหม่-IN-1');
-  assert.equal(u2.IndoorSN, 'ใหม่-IN-2');
-  assert.equal(u1.OutdoorSN, 'ใหม่-OUT-1');
-  assert.equal(u2.OutdoorSN, 'ใหม่-OUT-2');
-});
-
 /* ==================== ประวัติ ==================== */
 
 test('ลงประวัติ "ติดตั้ง" ให้ทุกเครื่องในใบ', async () => {
@@ -322,7 +329,7 @@ test('เปิดเอกสารได้ และเป็นแบบฟ�
 
   assert.ok(html.includes('ITEL-FM-NE-006'));
   assert.ok(html.includes('บันทึกผลการติดตั้งเครื่องปรับอากาศ'));
-  assert.ok(html.includes('ใหม่-IN-1'), 'ต้องเห็น Serial ของเครื่องตัวใหม่');
+  assert.ok(html.includes('เก่า-IN-1'), 'ต้องเห็น Serial ที่อยู่ในทะเบียน ณ วันออกเอกสาร');
 });
 
 test('ลบใบที่เลขแถวเลื่อนไปแล้ว ต้องไม่ไปโดนใบอื่น', async () => {
