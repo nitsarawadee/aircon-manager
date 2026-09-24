@@ -157,7 +157,7 @@ export const TABLES = {
       ChecklistJSON: S,
       AcceptResult1: S, AcceptResult2: S,
       AdditionalNote: S,
-      CompanyName: S, TechnicianName: S, SupervisorName: S, ApproverName: S,
+      CompanyName: S, TechnicianName: S, SupervisorName: S,
       Cost: N,
       CreatedAt: DT, RecordedBy: S,
       DocNo: S, DocNo2: S

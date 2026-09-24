@@ -99,8 +99,11 @@ const signCell = (company, signer, date) =>
  * ระบบยังไม่มีข้อมูลตรงนั้น ณ ตอนที่ออกเอกสาร จึงต้องเว้นให้เซ็นจริง
  *
  * @param {string} operatorLabel ป้ายช่องซ้ายบน เช่น "ผู้ดำเนินการล้างแอร์ (บ./หจก.)"
+ * @param {string} [checkerLabel] ป้ายช่องซ้ายล่าง — ใบติดตั้งใช้คำว่า "ผู้ตรวจรับ"
+ *   ส่วนใบล้างกับใบซ่อมใช้ "ผู้ตรวจสอบ" ตามที่พิมพ์บนแบบฟอร์มของแต่ละใบ
  */
-export function sectionSign(form, operatorLabel) {
+export function sectionSign(form, operatorLabel,
+  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)') {
   const date = thaiDate(form.Date);
 
   // ⚠️ ช่องในหน้าเว็บชื่อ "ผู้ควบคุมงาน Interlink" เก็บลงคอลัมน์ SupervisorName
@@ -109,7 +112,7 @@ export function sectionSign(form, operatorLabel) {
   return [
     [[operatorLabel, form.CompanyName, form.TechnicianName, date],
      ['ผู้ควบคุมงาน (Interlink)', '', form.SupervisorName, date]],
-    [['ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', '', '', ''],
+    [[checkerLabel, '', '', ''],
      ['Approve (Infra)', '', '', '']]
   ].map(([left, right]) =>
     '<tr>' +

@@ -194,8 +194,10 @@ export const INSTALLFORM_HEADERS = [
   'AcceptResult1', 'AcceptResult2',
   // ส่วนที่ 5
   'AdditionalNote',
-  // ส่วนที่ 6 — ใบนี้ลงนาม 4 ช่อง (ผู้ติดตั้ง · ผู้ควบคุมงาน · ผู้ตรวจรับ · Approve)
-  'CompanyName', 'TechnicianName', 'SupervisorName', 'ApproverName',
+  // ส่วนที่ 6 — เก็บแค่สองช่องบน (ผู้ติดตั้ง · ผู้ควบคุมงาน) เหมือนอีกสองเอกสาร
+  // ช่อง "ผู้ตรวจรับ" กับ "Approve (Infra)" เป็นขั้นอนุมัติที่เกิดหลังช่างส่งงาน
+  // ระบบยังไม่รู้ตอนออกเอกสาร จึงเว้นเป็นเส้นประให้เซ็นจริง ไม่มีคอลัมน์เก็บ
+  'CompanyName', 'TechnicianName', 'SupervisorName',
   'Cost',
   'CreatedAt', 'RecordedBy',
   // เลขที่เอกสารที่คนอ่านออก ใช้ชุดเลขเดียวกับทั้งระบบ (งานติดตั้งเป็น CM)
