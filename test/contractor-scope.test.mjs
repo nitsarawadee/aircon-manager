@@ -455,3 +455,19 @@ test('สรุปแผนของผู้รับเหมา นับเ�
 
   assert.equal(sum.done + sum.pending + sum.cancelled, 2, 'งานของเจ้า A มีแค่รอบ 2 ของป่าโมก 2 เครื่อง');
 });
+
+test('ปฏิทินของผู้รับเหมา มีเฉพาะนัดของรอบที่เป็นงานของตัวเอง', async () => {
+  const { getPlanCalendar } = await import('../src/modules/plan.js');
+  const db = freshDb();
+  // ป่าโมก-1 รอบ 3 เป็นของเจ้า B — ตั้งวันให้ตรงเดือนเดียวกัน จะได้เห็นว่าถูกกรองจริง
+  db.prepare("UPDATE plans SET R3_PlanDate = '2026-09-20' WHERE AirCode = 'ATG-PMK-AIR-1'").run();
+
+  const items = cal => Object.values(cal.days).flat().map(i => i.AirCode + '/' + i.round).sort();
+
+  const a = await getPlanCalendar(as(db, 'ctA'), 2026, 9);
+  assert.deepEqual(items(a), ['ATG-PMK-AIR-1/2', 'ATG-PMK-AIR-2/2']);
+  const b = await getPlanCalendar(as(db, 'ctB'), 2026, 9);
+  assert.deepEqual(items(b), ['ATG-PMK-AIR-1/3', 'AYA-WNI-AIR-1/2']);
+  const boss = await getPlanCalendar(as(db, 'boss'), 2026, 9);
+  assert.equal(boss.total, 5, 'เจ้าหน้าที่เห็นนัดครบทุกเจ้า');
+});

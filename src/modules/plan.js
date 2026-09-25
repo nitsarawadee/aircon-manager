@@ -308,6 +308,10 @@ export function planCalendar(planRows, year, month) {
 
   for (const row of planRows || []) {
     for (const r of [1, 2, 3]) {
+      // บัญชีผู้รับเหมา: รอบของเจ้าอื่นไม่ใช่นัดของตัวเอง ไม่ต้องขึ้นในปฏิทิน
+      // (ธงนี้มีเฉพาะแถวที่ getCleaningPlan ส่งให้ผู้รับเหมา)
+      if (row['R' + r + '_Mine'] === false) continue;
+
       const raw = String(row['R' + r + '_PlanDate'] || '').trim();
       if (!raw.startsWith(prefix)) continue;
 

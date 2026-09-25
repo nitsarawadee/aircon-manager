@@ -2151,13 +2151,19 @@
         }
       });
 
-      // ผู้รับเหมาไม่มีแดชบอร์ด — ตัวเลขภาพรวมเป็นของเจ้าหน้าที่ ส่วนผู้รับเหมาเปิดมา
-      // ต้องเจองานของตัวเองเลย (แผนล้าง) ไม่ใช่การ์ดสรุปที่ส่วนใหญ่เป็นศูนย์
+      // ผู้รับเหมา: แดชบอร์ดเหลือแค่ปฏิทินงานล้างของตัวเอง
+      // การ์ดตัวเลขภาพรวมเป็นของเจ้าหน้าที่ (งบ ค่าใช้จ่าย เครื่องทั้งภาค) ส่วนผู้รับเหมาเปิดมา
+      // ต้องการรู้อย่างเดียวว่าวันไหนต้องไปล้างที่ไหน
       if (isContractor()) {
-        const dashBtn = document.querySelector('[data-tab="dashboard"]');
-        if (dashBtn) dashBtn.remove();
         const dash = document.getElementById('view-dashboard');
-        if (dash) dash.remove();
+        if (dash) {
+          dash.innerHTML = `
+            <div class="mb-4">
+              <h2 class="text-2xl font-bold text-gray-800">ปฏิทินงานล้างของฉัน</h2>
+              <p class="text-sm text-gray-500">นัดล้างแอร์ที่มอบหมายให้ ${esc(currentUserInfo.contractorName || '')} · ปิดงานได้ที่เมนูแผนล้างแอร์ (กดที่ช่องรอบ)</p>
+            </div>
+            <div id="myWorkCalendar" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>`;
+        }
       }
 
       // ถ้าแท็บที่ active อยู่ตอนนี้ถูกซ่อนไปแล้ว (ไม่มีสิทธิ์) ให้สลับไปแท็บแรกที่ยังเหลืออยู่
@@ -2508,6 +2514,13 @@
     async function loadDashboard() {
       // หน้านี้ถูกถอดออกไปแล้ว (ผู้รับเหมา) — หลายจุดเรียกตัวนี้ต่อท้ายหลังบันทึกงาน ต้องไม่พัง
       if (!document.getElementById('view-dashboard')) return;
+      // ผู้รับเหมาไม่มีการ์ดสรุป มีแต่ปฏิทิน (ดู applyModulePermissionsUI)
+      // เปิดครั้งแรกที่เดือนปัจจุบัน ครั้งต่อไปคงเดือนที่เลื่อนดูอยู่
+      if (isContractor()) {
+        if (calTarget === 'myWorkCalendar') renderPlanCalendar();
+        else openPlanCalendar(null, null, 'myWorkCalendar');
+        return;
+      }
       const sel = document.getElementById('dashYearSelect');
       const s = await call('getDashboardSummary', sel && sel.value ? Number(sel.value) : null);
 
@@ -4353,8 +4366,14 @@
     let calYear = null, calMonth = null;
     /** วันที่กำลังกางรายละเอียดอยู่ (null = ยังไม่ได้เลือก) */
     let calSelectedDay = null;
+    /**
+     * วาดปฏิทินลงที่ไหน — null = หน้าต่างลอย (เจ้าหน้าที่กดจากแดชบอร์ด)
+     * รหัส element = วาดฝังในหน้า (แดชบอร์ดของผู้รับเหมา)
+     */
+    let calTarget = null;
 
-    function openPlanCalendar(year, month) {
+    function openPlanCalendar(year, month, target) {
+      calTarget = target || null;
       const now = new Date();
       // เปิดที่เดือนปัจจุบันก่อนเสมอ เพราะเป็นเดือนที่คนต้องดูบ่อยที่สุด
       calYear = Number(year) || now.getFullYear();
@@ -4373,9 +4392,12 @@
     }
 
     async function renderPlanCalendar() {
-      const root = document.getElementById('modalRoot');
+      const inline = !!calTarget;
+      const root = document.getElementById(inline ? calTarget : 'modalRoot');
+      if (!root) return;
 
-      const shell = body => `
+      // ฝังในหน้า = ไม่มีกรอบหน้าต่างลอยกับปุ่มปิด
+      const shell = body => inline ? body : `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
           <!-- กว้างเกือบเต็มจอ เพราะปฏิทินมี 7 คอลัมน์ และแต่ละช่องต้องอ่านรหัสเครื่อง
@@ -4420,7 +4442,7 @@
       const mixedYears = calYears.length > 1;
 
       const cells = [];
-      for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[132px] rounded-lg bg-gray-50/60"></div>');
+      for (let i = 0; i < lead; i++) cells.push('<div class="min-h-[56px] sm:min-h-[132px] rounded-lg bg-gray-50/60"></div>');
 
       for (let d = 1; d <= daysInMonth; d++) {
         const items = cal.days[d] || [];
@@ -4437,7 +4459,7 @@
 
         cells.push(`
           <div ${items.length ? `onclick="selectPlanCalendarDay(${d})" role="button" tabindex="0"` : ''}
-               class="min-h-[132px] rounded-lg border p-2 flex flex-col gap-1 transition-colors
+               class="min-h-[56px] sm:min-h-[132px] rounded-lg border p-1 sm:p-2 flex flex-col gap-1 transition-colors
                       ${items.length ? 'cursor-pointer hover:border-[#1153a1]' : ''}
                       ${selected ? 'border-[#1153a1] border-2 ring-2 ring-[#1153a1]/20'
                         : isToday ? 'border-[#1153a1] border-2 bg-blue-50/40'
@@ -4446,14 +4468,18 @@
               <span class="text-sm font-semibold ${isToday || selected ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
               ${items.length ? `<span class="text-[11px] font-medium text-gray-500 bg-gray-100 rounded px-1.5">${items.length}</span>` : ''}
             </div>
+            ${/* มือถือช่องแคบเกินกว่าจะอ่านรหัสเครื่องได้ (เหลือแค่ "A..") จึงแสดงจุดสีตามสถานะแทน
+                 กดที่วันแล้วได้รายการเต็มเหมือนเดิม */ ''}
+            <div class="flex flex-wrap gap-0.5 sm:hidden">${items.map(it =>
+              `<span class="w-1.5 h-1.5 rounded-full ${dot[it.state] || 'bg-gray-300'}"></span>`).join('')}</div>
             ${shown.map(it => `
-              <div class="flex items-center gap-1.5 text-[11px] leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
+              <div class="hidden sm:flex items-center gap-1.5 text-[11px] leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
                    title="${esc(it.AirCode)} · แผนปี ${esc(it.planYear || '-')} รอบที่ ${it.round}">
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
                 ${mixedYears && it.planYear ? `<span class="ml-auto text-[9px] text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
               </div>`).join('')}
-            ${rest > 0 ? `<div class="text-[11px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
+            ${rest > 0 ? `<div class="hidden sm:block text-[11px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
           </div>`);
       }
 
@@ -4549,7 +4575,7 @@
                 <tbody class="divide-y divide-gray-100">
                   ${items.map(it => `
                     <tr class="hover:bg-blue-50/50">
-                      <td class="px-5 py-2.5 font-medium whitespace-nowrap">${airCodeBtn(it.AirCode, it.state === 'cancelled' ? 'text-gray-400 line-through hover:text-gray-600 underline decoration-dotted underline-offset-2' : 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
+                      <td class="px-5 py-2.5 font-medium whitespace-nowrap">${isContractor() ? esc(it.AirCode) : airCodeBtn(it.AirCode, it.state === 'cancelled' ? 'text-gray-400 line-through hover:text-gray-600 underline decoration-dotted underline-offset-2' : 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
                       <td class="px-4 py-2.5 text-gray-600 truncate max-w-[200px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
                       <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${esc(it.planYear || '-')}</td>
                       <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
