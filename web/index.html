@@ -9229,6 +9229,37 @@ const CLEANING_CHECKLIST_ITEMS = [
       return { no: item.no, label: item.label, val1: val1El ? val1El.value : '', val2: val2El ? val2El.value : '', note };
     });
 
+    // ---------- เตือนถ้ายังมีข้อที่ไม่ได้เลือก ----------
+    //
+    // เจอจริงในใบ PM2609-33: ข้อ 4, 17, 20 ค้างเป็น "-" ทั้งที่ข้ออื่นกรอกครบ
+    // ฟอร์มเดิมบันทึกผ่านเงียบๆ เอกสารที่ปริ้นออกมาจึงมีช่องว่างโดยไม่มีใครรู้ตัว
+    //
+    // เตือนให้ยืนยัน ไม่บังคับ เพราะบางข้อไม่เกี่ยวกับบางไซต์จริง
+    // (เช่นข้อ 17–19 เรื่องชุดสลับการทำงานของแอร์ 2 ตัว ไซต์ที่มีตัวเดียวต้องเว้นว่างได้)
+    const blankCols = cfContext ? ['val1'] : ['val1'].concat(u2 ? ['val2'] : []);
+    const blankEls = [];
+    const blankNos = [];
+    for (const item of CLEANING_CHECKLIST_ITEMS) {
+      const empty = blankCols
+        .map(col => document.querySelector(`.cf_val[data-no="${item.no}"][data-col="${col}"]`))
+        .filter(el => el && !String(el.value || '').trim());
+      if (empty.length) { blankNos.push(item.no); blankEls.push(...empty); }
+    }
+    if (blankNos.length) {
+      const go = await showConfirm(
+        'ยังไม่ได้เลือกผลตรวจ ' + blankNos.length + ' ข้อ: ข้อ ' + blankNos.join(', ') + '\n\n' +
+        'ข้อเหล่านี้จะเป็นช่องว่างในเอกสาร ถ้าข้อไหนไม่เกี่ยวกับไซต์นี้ กดยืนยันเพื่อบันทึกต่อได้เลย',
+        'ยังกรอกไม่ครบ');
+      if (!go) {
+        // พากลับไปที่ข้อแรกที่ยังว่าง และทำกรอบสีให้เห็นทุกช่องที่ยังว่าง
+        blankEls.forEach(el => el.classList.add('ring-2', 'ring-amber-400'));
+        blankEls[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        blankEls.forEach(el => el.addEventListener('change',
+          () => el.classList.remove('ring-2', 'ring-amber-400'), { once: true }));
+        return;
+      }
+    }
+
     // ผลประเมินเป็นของรายเครื่อง เหมือนช่องตรวจเช็ค 21 ข้อ
     // โหมดแยกใบมีช่องเดียวบนจอ ต้องย้ายไปลงช่องที่ตรงกับตำแหน่งจริงของเครื่อง
     const pickedCond = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value || '';
