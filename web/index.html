@@ -4257,10 +4257,34 @@
       } else {
         // เข้าหน้าแผนเองตามปกติ ให้กล่องสรุปกลับไปใช้ความชอบที่จำไว้
         planSummaryForceOpen = false;
+        sel.value = pickPlanYear([...sel.options].map(o => o.value), currentYear, new Date().getFullYear());
       }
 
       currentYear = sel.value;
       await loadPlan();
+    }
+
+    /**
+     * ปีของแผนที่จะเปิดให้ดู เมื่อไม่มีใครขอปีไหนมาเป็นพิเศษ
+     *
+     * เดิมเปิดปีแรกในรายการเสมอ ซึ่งเรียงใหม่ไปเก่า พอสร้างแผนปีหน้าไว้ล่วงหน้า
+     * (ทำกันทุกปลายปี) หน้าแผนก็เปิดมาที่ปีหน้าแทนปีที่กำลังล้างอยู่ และกลับไปปีหน้า
+     * ทุกครั้งที่ออกจากหน้าแล้วเข้ามาใหม่ แม้เพิ่งเลือกปีนี้ไว้
+     *
+     * ลำดับ: ปีที่เลือกดูอยู่ก่อนออกจากหน้า → ปีปัจจุบัน → ปีล่าสุดที่ยังไม่เกินปีปัจจุบัน → ปีข้างหน้าที่ใกล้ที่สุด
+     *
+     * @param {string[]} years   ปีที่มีแผน (ข้อความ เช่น "2026")
+     * @param {*}        current ปีที่เปิดดูอยู่ก่อนหน้า (null = เพิ่งเปิดแอป)
+     * @param {number}   nowYear ปีปัจจุบัน
+     */
+    function pickPlanYear(years, current, nowYear) {
+      const has = y => y != null && years.includes(String(y));
+      if (has(current)) return String(current);
+      if (has(nowYear)) return String(nowYear);
+      const past = years.filter(y => Number(y) <= nowYear).sort((a, b) => b - a);
+      if (past.length) return past[0];
+      // มีแต่แผนของปีข้างหน้า — เอาปีที่ใกล้ที่สุด (ปีหน้า ไม่ใช่อีกสามปี)
+      return [...years].sort((a, b) => a - b)[0] || '';
     }
 
     /* ============== โหมดกลางวัน / กลางคืน ============== */
