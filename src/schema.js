@@ -16,8 +16,7 @@ export const SHEETS = {
   CLEANFORM: 'CleaningForm',
   REPAIRFORM: 'RepairForm',
   INSTALLFORM: 'InstallForm',
-  CONTRACTOR: 'Contractor',
-  NODEASSIGN: 'NodeAssignment'
+  CONTRACTOR: 'Contractor'
 };
 
 export const AIRLIST_HEADERS = [
@@ -40,7 +39,10 @@ export const PLAN_HEADERS = [
   'R3_PlanDate', 'R3_ActualDate', 'R3_Price', 'R3_Technician', 'R3_Status', 'R3_Note',
   'UpdatedBy',
   // เพิ่มภายหลัง — ต่อท้ายสุดเท่านั้น
-  'R1_FormUrl', 'R2_FormUrl', 'R3_FormUrl'
+  'R1_FormUrl', 'R2_FormUrl', 'R3_FormUrl',
+  // ผู้รับเหมาที่มอบหมายงานรอบนั้น (รหัสจากตาราง Contractor) — บัญชีผู้รับเหมาเห็นเฉพาะรอบของตัวเอง
+  // แยกจาก R*_Technician ซึ่งเป็นข้อความพิมพ์เอง (ข้อมูลเก่ามีชื่อเดียวกันหลายแบบ ใช้ผูกสิทธิ์ไม่ได้)
+  'R1_ContractorID', 'R2_ContractorID', 'R3_ContractorID'
 ];
 
 export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note', 'UpdatedAt', 'UpdatedBy'];
@@ -60,12 +62,6 @@ export const USERS_HEADERS = [
 export const CONTRACTOR_HEADERS = [
   'ID', 'Name', 'Active', 'Note', 'CreatedAt', 'UpdatedAt', 'UpdatedBy'
 ];
-
-/**
- * Node ไหนเป็นของผู้รับเหมาเจ้าไหน ผูกด้วย SiteCode
- * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
- */
-export const NODEASSIGN_HEADERS = ['SiteCode', 'ContractorID', 'UpdatedAt', 'UpdatedBy'];
 
 export const CONFIG_HEADERS = ['Region', 'LocationType', 'Brand', 'Status', 'Technician', 'EventType'];
 
@@ -317,8 +313,8 @@ export const PERMISSION_INHERITS = {
 /**
  * สิทธิ์ของบัญชีผู้รับเหมา — ตายตัว ไม่ได้ตั้งรายคนเหมือนเจ้าหน้าที่
  *
- * ผู้รับเหมาทุกเจ้าทำงานแบบเดียวกัน คือกรอกเอกสารล้างกับติดตั้งของ Node
- * ที่ได้รับมอบหมาย ถ้าเปิดให้ตั้งรายคน วันหนึ่งจะมีคนติ๊กเผลอให้ผู้รับเหมา
+ * ผู้รับเหมาทุกเจ้าทำงานแบบเดียวกัน คือกรอกเอกสารของงานล้างที่มอบหมายไว้ในแผน
+ * (และใบติดตั้งของเครื่องที่มีงานของตัวเอง) ถ้าเปิดให้ตั้งรายคน วันหนึ่งจะมีคนติ๊กเผลอให้ผู้รับเหมา
  * เห็นงบประมาณหรือแก้ทะเบียนเครื่องได้ โดยไม่มีใครสังเกต
  *
  * - แผนล้าง: ดูได้ เพื่อรู้ว่ารอบไหนถึงกำหนด ส่วนการปิดรอบเกิดจากการกรอกเอกสาร

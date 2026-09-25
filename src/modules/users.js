@@ -1,5 +1,6 @@
 import { SHEETS, MODULES } from '../schema.js';
 import { formatDate, ymdhms } from '../values.js';
+import { findOrCreateContractor } from './contractors.js';
 
 /**
  * การเข้าสู่ระบบและการจัดการผู้ใช้งาน
@@ -321,10 +322,16 @@ export async function saveUser(ctx, user) {
     let contractorId = '';
     if (role === 'Contractor') {
       contractorId = String(user.ContractorID || '').trim();
-      if (!contractorId) throw new Error('กรุณาเลือกผู้รับเหมาที่บัญชีนี้สังกัด');
-      const exists = ctx.ss.objects(SHEETS.CONTRACTOR)
-        .some(c => String(c.ID || '').trim().toUpperCase() === contractorId.toUpperCase());
-      if (!exists) throw new Error('ไม่พบผู้รับเหมารหัส ' + contractorId + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
+      if (contractorId) {
+        const exists = ctx.ss.objects(SHEETS.CONTRACTOR)
+          .some(c => String(c.ID || '').trim().toUpperCase() === contractorId.toUpperCase());
+        if (!exists) throw new Error('ไม่พบผู้รับเหมารหัส ' + contractorId + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
+      } else if (String(user.NewContractorName || '').trim()) {
+        // บริษัทที่ยังไม่มีในรายชื่อ — เพิ่มให้เลย แล้วจะไปโผล่เป็นตัวเลือกในแผนล้างทันที
+        contractorId = await findOrCreateContractor(ctx, user.NewContractorName);
+      } else {
+        throw new Error('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมาที่บัญชีนี้สังกัด');
+      }
     }
 
     const isActive = !(user.Active === false || user.Active === 'false');

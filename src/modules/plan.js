@@ -1,6 +1,7 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
 import { formatDate, isRetiredStatus, normalizeCode } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
+import { jobKey } from '../context.js';
 
 /**
  * แผนล้างแอร์ประจำปี
@@ -74,7 +75,55 @@ export async function getCleaningPlan(ctx, year) {
     const allowed = await ctx.allowedAirCodes();
     list = list.filter(o => allowed.has(normalizeCode(o.AirCode)));
   }
+
+  // ชื่อผู้รับเหมาของแต่ละรอบ — แผนเก็บแค่รหัส หน้าเว็บต้องการชื่อไปแสดง
+  const names = contractorNames(ctx);
+  for (const o of list) {
+    for (const r of [1, 2, 3]) {
+      const id = String(o['R' + r + '_ContractorID'] || '').trim();
+      o['R' + r + '_ContractorName'] = id ? (names.get(id.toUpperCase()) || id) : '';
+    }
+  }
+
+  // ผู้รับเหมาเห็นเครื่องที่มีงานของตัวเอง แต่เครื่องเดียวกันอาจมีรอบอื่นเป็นของเจ้าอื่น
+  // รอบพวกนั้นต้องไม่เห็นราคา ชื่อช่าง และหมายเหตุ (คือค่าจ้างของคู่แข่ง)
+  // เหลือไว้แค่วันที่กับสถานะ ให้รู้ว่าเครื่องนี้มีคนดูแลรอบนั้นอยู่
+  if (info.role === 'Contractor') {
+    const jobs = new Set(info.jobs || []);
+    for (const o of list) {
+      for (const r of [1, 2, 3]) {
+        const mine = jobs.has(jobKey(year, r, normalizeCode(o.AirCode)));
+        o['R' + r + '_Mine'] = mine;
+        if (mine) continue;
+        for (const k of ['Price', 'Technician', 'Note', 'FormUrl', 'ContractorID', 'ContractorName']) {
+          o['R' + r + '_' + k] = '';
+        }
+      }
+    }
+  }
   return list;
+}
+
+/** รหัสผู้รับเหมา (ตัวพิมพ์ใหญ่) → ชื่อ */
+function contractorNames(ctx) {
+  return new Map(ctx.ss.objects(SHEETS.CONTRACTOR)
+    .map(c => [String(c.ID || '').trim().toUpperCase(), String(c.Name || '').trim()]));
+}
+
+/**
+ * ตรวจรหัสผู้รับเหมาที่จะมอบหมายงาน — ค่าว่าง = ไม่มอบหมายให้ใคร
+ * คืนรหัสตามที่เก็บในตาราง (ตัวพิมพ์ตรงกับต้นฉบับ)
+ */
+function checkContractorId(ctx, id) {
+  const want = String(id == null ? '' : id).trim();
+  if (!want) return '';
+  const c = ctx.ss.objects(SHEETS.CONTRACTOR)
+    .find(x => String(x.ID || '').trim().toUpperCase() === want.toUpperCase());
+  if (!c) throw new Error('ไม่พบผู้รับเหมารหัส ' + want + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
+  if (c.Active === false || String(c.Active).toUpperCase() === 'FALSE') {
+    throw new Error('ผู้รับเหมา "' + c.Name + '" ถูกปิดใช้งานอยู่');
+  }
+  return String(c.ID).trim();
 }
 
 /**
@@ -178,6 +227,10 @@ export function summarizeCleaning(planRows, airUnits, year) {
     let doneThisUnit = 0;
 
     for (const r of [1, 2, 3]) {
+      // บัญชีผู้รับเหมา: รอบที่เป็นงานของเจ้าอื่นไม่ใช่งานของตัวเอง ไม่นับทั้งเสร็จและค้าง
+      // (ธงนี้มีเฉพาะแถวที่ getCleaningPlan ส่งให้ผู้รับเหมา เจ้าหน้าที่นับครบทุกรอบเหมือนเดิม)
+      if (row['R' + r + '_Mine'] === false) continue;
+
       const state = roundState(row, r, retired);
       const cost = Number(row['R' + r + '_Price']) || 0;
 
@@ -402,6 +455,10 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
     const startCol = headers.indexOf('R' + round + '_PlanDate') + 1;
     if (startCol <= 0) throw new Error('ไม่พบข้อมูลรอบที่ ' + round + ' ในแผนปีนี้');
 
+    // ผู้รับเหมาของรอบนี้ — ตรวจก่อนเขียนอะไรลงไป
+    // หน้าเว็บรุ่นเก่าไม่ส่งค่านี้มา (undefined) ต้องไม่ล้างของเดิมทิ้ง
+    const contractorId = data.contractorId === undefined ? undefined : checkContractorId(ctx, data.contractorId);
+
     // อ่านสถานะเดิมไว้ก่อน เพื่อดูว่ารอบนี้ "เพิ่งถูกปิดงาน" หรือ "ปิดอยู่แล้ว"
     const wasDone = String(ctx.ss.cell(name, row, startCol + 4)).trim() === 'ล้างเสร็จสิ้น';
 
@@ -430,6 +487,10 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
     ]]);
     ctx.ss.setValue(name, row, headers.indexOf('UpdatedBy') + 1, await ctx.currentUser());
 
+    if (contractorId !== undefined) {
+      ctx.ss.setValue(name, row, headers.indexOf('R' + round + '_ContractorID') + 1, contractorId);
+    }
+
     // บันทึกประวัติเฉพาะตอนที่ "เพิ่งเปลี่ยนเป็นล้างเสร็จสิ้น" เท่านั้น
     // ถ้ารอบนี้ถูกปิดไปแล้ว (เช่น ปิดจากการกรอกฟอร์ม แล้วมาแก้ราคาทีหลัง)
     // การเขียนประวัติซ้ำจะทำให้ค่าใช้จ่ายถูกนับซ้ำในงบประมาณ
@@ -453,14 +514,18 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
  * ตั้งวันตามแผนของทุกเครื่องใน Node เดียวกันพร้อมกัน
  *
  * เขียนกลับเป็น "รายคอลัมน์" (คอลัมน์ละ 1 ช่วง) แทนการเขียนทีละแถว
- * จำนวนคำสั่งจึงคงที่ 4 ช่วงเสมอ ไม่ว่าจะมีกี่ร้อยเครื่องก็ตาม
+ * จำนวนคำสั่งจึงคงที่ไม่กี่ช่วงเสมอ ไม่ว่าจะมีกี่ร้อยเครื่องก็ตาม
+ *
+ * @param {Object} [contractors] ผู้รับเหมารายรอบ { r1, r2, r3 } — ไม่ส่งรอบไหน = ไม่แตะรอบนั้น
+ *   ค่าว่าง = ยกเลิกการมอบหมาย (มอบหมายทั้ง Node ทีเดียว แทนการกดทีละเครื่องทีละรอบ)
  */
-export async function updatePlanDatesByNode(ctx, year, nodeName, dates) {
+export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contractors) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('plan');
 
     const name = planSheet(year);
     await ctx.connect();
+    await ctx.ensureBase();   // ต้องมีรายชื่อผู้รับเหมาในมือไว้ตรวจรหัส
     if (!(await ctx.ss.hasSheet(name))) throw new Error('ไม่พบแผนล้างแอร์ปี ' + year);
     await ctx.ss.load(name);
     await ctx.ss.ensureColumns(name, PLAN_HEADERS);
@@ -476,8 +541,18 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates) {
       r1: headers.indexOf('R1_PlanDate'),
       r2: headers.indexOf('R2_PlanDate'),
       r3: headers.indexOf('R3_PlanDate'),
+      c1: headers.indexOf('R1_ContractorID'),
+      c2: headers.indexOf('R2_ContractorID'),
+      c3: headers.indexOf('R3_ContractorID'),
       by: headers.indexOf('UpdatedBy')
     };
+    // ตรวจรหัสผู้รับเหมาทุกตัวก่อนแตะแถวไหน
+    const cids = {};
+    for (const r of [1, 2, 3]) {
+      const v = contractors && contractors['r' + r];
+      if (v !== undefined && v !== null) cids[r] = checkContractorId(ctx, v);
+    }
+
     const me = await ctx.currentUser();
 
     let matched = 0;
@@ -491,6 +566,7 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates) {
       if (dates.r1) row[idx.r1] = dates.r1;
       if (dates.r2) row[idx.r2] = dates.r2;
       if (dates.r3) row[idx.r3] = dates.r3;
+      for (const r of [1, 2, 3]) if (cids[r] !== undefined) row[idx['c' + r]] = cids[r];
       if (idx.by > -1) row[idx.by] = me;
       values[i] = row;
     }
@@ -500,7 +576,8 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates) {
     }
 
     writeBackColumns(ctx, name, values, [
-      [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String]
+      [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String],
+      [idx.c1, String], [idx.c2, String], [idx.c3, String]
     ]);
 
     await ctx.ss.flush();

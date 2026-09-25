@@ -31,7 +31,7 @@ import {
   getInstallDocHtml, getInstallBlankDocHtml, getInstallBlankXlsx, getInstallDocPdf,
   saveInstallPhoto, deleteInstallPhoto, getInstallPhotos
 } from './modules/installform.js';
-import { getContractors, saveContractor, getNodeAssignments, assignNodes } from './modules/contractors.js';
+import { getContractors } from './modules/contractors.js';
 
 /**
  * ============================================================================
@@ -98,11 +98,8 @@ const API_FUNCTIONS = {
   saveUser,
   deleteUser,
 
-  // ผู้รับเหมาและการมอบหมาย Node
+  // รายชื่อผู้รับเหมา (ตัวเลือกในแผนล้างและหน้าจัดการผู้ใช้)
   getContractors,
-  saveContractor,
-  getNodeAssignments,
-  assignNodes,
 
   changeOwnPassword,
   logout,

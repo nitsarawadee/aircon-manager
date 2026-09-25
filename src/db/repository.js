@@ -37,7 +37,6 @@ const SHEET_TO_TABLE = {
   RepairForm: 'repair_forms',
   InstallForm: 'install_forms',
   Contractor: 'contractors',
-  NodeAssignment: 'node_assignments',
   Config: 'config_values'
 };
 

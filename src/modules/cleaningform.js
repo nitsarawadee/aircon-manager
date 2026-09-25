@@ -11,6 +11,7 @@ const KIND = 'cleaning';
 import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
+import { jobKey } from '../context.js';
 import { closePlanRound } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 
@@ -293,6 +294,67 @@ function unitsBySlot(record) {
 }
 
 /**
+ * ผู้รับเหมากรอกได้เฉพาะงานที่มอบหมายให้ตัวเองในแผน
+ *
+ * ต้องรู้ปีกับรอบเสมอ ใบที่ไม่ผูกกับรอบไหนเลย ผู้รับเหมาบันทึกไม่ได้
+ * เพราะไม่มีอะไรบอกว่าเป็นงานของใคร (เจ้าหน้าที่ยังบันทึกแบบไม่ผูกรอบได้เหมือนเดิม)
+ */
+async function assertOwnJob(ctx, year, round, airCode) {
+  if (!plainText(year).trim() || !plainText(round).trim()) {
+    throw new Error('บัญชีผู้รับเหมาต้องปิดงานจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
+  }
+  if (!(await ctx.ownsJob(year, round, airCode))) {
+    throw new Error('งานล้างรอบที่ ' + round + '/' + year + ' ของเครื่อง ' + airCode + ' ไม่ได้มอบหมายให้คุณ');
+  }
+}
+
+/**
+ * ราคาที่ผู้รับเหมาได้ของงานรอบนั้น — ราคาของรอบในแผนก่อน ไม่มีค่อยใช้ราคาต่อรอบในทะเบียน
+ * (ราคาในแผนคือราคาที่เจ้าหน้าที่ตั้งตอนเปิดงาน อาจต่างจากราคามาตรฐานของเครื่อง)
+ */
+async function contractorPrice(ctx, year, round, unit) {
+  const name = 'Plan_' + plainText(year).trim();
+  if (await ctx.ss.hasSheet(name)) {
+    await ctx.ss.load(name);
+    const row = ctx.ss.objects(name).find(p => normalizeCode(p.AirCode) === normalizeCode(unit.AirCode));
+    const planned = row && row['R' + plainText(round).trim() + '_Price'];
+    if (hasPrice(planned)) return Number(planned);
+  }
+  return hasPrice(unit.CleaningPricePerRound) ? Number(unit.CleaningPricePerRound) : '';
+}
+
+/**
+ * เอกสารล้างใบนี้ ผู้ใช้คนนี้เห็นได้ไหม
+ *
+ * เจ้าหน้าที่: ตามขอบเขตปกติ (ภูมิภาค)
+ * ผู้รับเหมา: ใบของงานที่มอบหมายให้ตัวเอง (ปี + รอบ + เครื่องตรงกับงานในแผน)
+ *   หรือใบที่บัญชีของผู้รับเหมาเจ้าเดียวกันเป็นคนบันทึก
+ *   ไม่ใช้ขอบเขตเครื่องเฉยๆ เพราะเครื่องเดียวกันมีรอบของเจ้าอื่นปนอยู่ (ราคาของคู่แข่ง)
+ */
+async function cleaningFormFilter(ctx) {
+  const info = await ctx.userInfo();
+  if (info.role !== 'Contractor') return ctx.scopeFilter();
+
+  const jobs = new Set(info.jobs || []);
+  const want = String(info.contractorId).toUpperCase();
+  const ours = new Set(ctx.ss.objects(SHEETS.USERS)
+    .filter(u => String(u.ContractorID || '').trim().toUpperCase() === want)
+    .map(u => String(u.Username || '').trim().toLowerCase()));
+
+  return f => {
+    if (ours.has(plainText(f.RecordedBy).trim().toLowerCase())) return true;
+    const y = plainText(f.PlanYear).trim();
+    const r = plainText(f.PlanRound).trim();
+    if (!y || !r) return false;
+    return [f.AirCode1, f.AirCode2].some(c => c && jobs.has(jobKey(y, r, normalizeCode(c))));
+  };
+}
+
+async function assertCanSeeForm(ctx, form) {
+  if (!(await cleaningFormFilter(ctx))(form)) throw new Error('คุณไม่มีสิทธิ์เข้าถึงเอกสารใบนี้');
+}
+
+/**
  * ผูกใบที่ส่งมากับทะเบียนเครื่อง ก่อนบันทึก
  *
  * เดิมตรวจสิทธิ์ด้วย Region ที่หน้าเว็บส่งมาเอง ซึ่งคนส่งแก้ได้ — ส่ง Region
@@ -303,8 +365,10 @@ function unitsBySlot(record) {
  * ต้องทับ SiteCode ด้วย เพราะด่านรวมใบ (findOpenForm) ใช้ SiteCode หาใบเดิม
  * ถ้าเชื่อค่าที่ส่งมา ผู้รับเหมาจะเขียนเครื่องของตัวเองลงไปในใบของ Node อื่นได้
  *
- * ผู้รับเหมา: ราคาใช้ราคาต่อรอบจากทะเบียนเสมอ ราคานี้ไปลงแผนกับงบประมาณ
- * และคือค่าจ้างของผู้รับเหมาเอง คนรับเงินจึงเป็นคนกรอกตัวเลขเองไม่ได้
+ * ผู้รับเหมา:
+ * - ต้องเป็นงานที่มอบหมายให้เจ้านี้ในแผน (ระบุปีกับรอบมาด้วยเสมอ) ทุกเครื่องในใบ
+ * - ราคาใช้ราคาของรอบนั้นในแผน (ถ้าไม่ได้ตั้ง ใช้ราคาต่อรอบในทะเบียน) ราคานี้ไปลงแผน
+ *   กับงบประมาณ และคือค่าจ้างของผู้รับเหมาเอง คนรับเงินจึงเป็นคนกรอกตัวเลขเองไม่ได้
  *
  * Admin ยังบันทึกเครื่องที่ไม่มีในทะเบียนได้เหมือนเดิม (เอกสารย้อนหลังของเครื่องที่ลบไปแล้ว)
  */
@@ -338,7 +402,8 @@ async function bindToRegistry(ctx, record, bySlot) {
 
   if (info.role === 'Contractor') {
     for (const { slot, unit } of found) {
-      bySlot[slot].price = hasPrice(unit.CleaningPricePerRound) ? Number(unit.CleaningPricePerRound) : '';
+      await assertOwnJob(ctx, record.PlanYear, record.PlanRound, unit.AirCode);
+      bySlot[slot].price = await contractorPrice(ctx, record.PlanYear, record.PlanRound, unit);
     }
     // ยอดรวมทั้งใบแบบรุ่นเก่าก็ห้ามรับ ไม่งั้นจะถูกใช้แทนราคาของเครื่องที่ทะเบียนไม่ได้ตั้งไว้
     record.Price = '';
@@ -581,7 +646,7 @@ export async function getCleaningForms(ctx, airCode) {
     list = list.filter(o => normalizeCode(o.AirCode1) === nc || normalizeCode(o.AirCode2) === nc);
   }
 
-  list = list.filter(await ctx.scopeFilter());
+  list = list.filter(await cleaningFormFilter(ctx));
 
   // เรียงใหม่ก่อนเก่า — ใบที่บันทึกวินาทีเดียวกันตัดสินด้วยลำดับที่เข้ามา
   // (เกิดขึ้นจริงตอนรวมใบ ซึ่งเขียนสองแถวติดกันในคำสั่งเดียว)
@@ -798,7 +863,7 @@ export async function getCleaningDocHtml(ctx, row) {
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
 
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertCanSeeForm(ctx, form);
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ — เปิดดูไฟล์ที่แนบไว้ได้จากลิงก์ในตาราง');
@@ -820,7 +885,7 @@ async function formForPhotos(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertCanSeeForm(ctx, form);
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ จึงแนบรูปเพิ่มไม่ได้');
@@ -1031,7 +1096,7 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
 
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertCanSeeForm(ctx, form);
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ');
@@ -1167,13 +1232,22 @@ export async function uploadNodeDocuments(ctx, payload) {
         const own = plainText(w.condition);
         return {
           airCode: plainText(found.AirCode),
-          // ผู้รับเหมาใช้ราคาจากทะเบียนเสมอ (เหตุผลเดียวกับ bindToRegistry)
-          price: isContractor
-            ? (hasPrice(found.CleaningPricePerRound) ? Number(found.CleaningPricePerRound) : '')
-            : (hasPrice(w.price) ? Number(w.price) : ''),
+          price: hasPrice(w.price) ? Number(w.price) : '',
+          unit: found,
           cond: own || plainText(closeout.condition)
         };
       });
+
+      // ผู้รับเหมา: ต้องเป็นงานของตัวเองทุกเครื่อง และราคามาจากแผน/ทะเบียน (เหตุผลเดียวกับ bindToRegistry)
+      if (isContractor) {
+        for (const u of units) {
+          await assertOwnJob(ctx, closeout.year, closeout.round, u.airCode);
+          u.price = await contractorPrice(ctx, closeout.year, closeout.round, u.unit);
+        }
+      }
+    } else if (isContractor) {
+      // แนบเก็บไว้เฉยๆ โดยไม่ผูกกับงานไหน = ไม่มีอะไรบอกว่าเป็นงานของใคร
+      throw new Error('บัญชีผู้รับเหมาต้องแนบเอกสารจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
     }
 
     if (!ctx.attachments) {
@@ -1302,7 +1376,7 @@ async function docNoOfRow(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertCanSeeForm(ctx, form);
   return plainText(form.DocNo) || plainText(form.ID);
 }
 

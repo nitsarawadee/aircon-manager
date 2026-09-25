@@ -2,10 +2,10 @@ import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
-  CONTRACTOR_HEADERS, NODEASSIGN_HEADERS,
+  CONTRACTOR_HEADERS,
   CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS
 } from './schema.js';
-import { normalizeCode, normalizeRegion, normalizeSiteCode } from './values.js';
+import { normalizeCode, normalizeRegion } from './values.js';
 
 /**
  * ข้อมูลประจำ request หนึ่งครั้ง — รวมทุกอย่างที่ฟังก์ชันธุรกิจต้องใช้ไว้ที่เดียว
@@ -98,8 +98,7 @@ export class Ctx {
       [SHEETS.CLEANFORM, CLEANFORM_HEADERS],
       [SHEETS.REPAIRFORM, REPAIRFORM_HEADERS],
       [SHEETS.INSTALLFORM, INSTALLFORM_HEADERS],
-      [SHEETS.CONTRACTOR, CONTRACTOR_HEADERS],
-      [SHEETS.NODEASSIGN, NODEASSIGN_HEADERS]
+      [SHEETS.CONTRACTOR, CONTRACTOR_HEADERS]
     ];
 
     for (const [name, headers] of specs) {
@@ -192,7 +191,7 @@ export class Ctx {
     // ถ้าผิดพลาด ขอให้ผิดไปทางเห็นน้อยกว่า ไม่ใช่เห็นทั้งบริษัท
     const contractorId = String(u.ContractorID || '').trim();
     if (contractorId || String(u.Role || '').trim().toLowerCase() === 'contractor') {
-      this._userInfo = this._contractorInfo(u, contractorId);
+      this._userInfo = await this._contractorInfo(u, contractorId);
       return this._userInfo;
     }
 
@@ -213,17 +212,25 @@ export class Ctx {
   /**
    * ข้อมูลสิทธิ์ของบัญชีผู้รับเหมา
    *
-   * ขอบเขตคือรายการ SiteCode ที่มอบหมายให้ผู้รับเหมาเจ้านี้ ไม่ใช่ภูมิภาค
-   * อ่านใหม่ทุก request จึงมีผลทันทีที่ Admin เปลี่ยนการมอบหมาย หรือปิดผู้รับเหมา
+   * ============================================================================
+   * ผู้รับเหมาเห็นอะไร
+   * ============================================================================
+   * งานมาจากช่อง "ผู้รับเหมา" ของแต่ละรอบในแผนล้าง (R1/R2/R3_ContractorID)
+   * เจ้าหน้าที่เลือกผู้รับเหมาให้รอบไหน รอบนั้นคืองานของผู้รับเหมาเจ้านั้น
+   *
+   * - jobs     รอบที่มอบหมาย ในรูป "ปี|รอบ|รหัสเครื่อง" ใช้ตัดสินว่าเปิด/กรอกงานไหนได้
+   * - airCodes เครื่องที่มีงานของเจ้านี้อย่างน้อยหนึ่งรอบ ใช้เป็นขอบเขตของเครื่อง
+   *
+   * อ่านใหม่ทุก request จึงมีผลทันทีที่เจ้าหน้าที่เปลี่ยนผู้รับเหมาในแผน
    * ไม่ต้องรอให้ผู้รับเหมาล็อกอินใหม่
    *
    * ไม่มีรหัสผู้รับเหมา / หาไม่เจอ / ถูกปิดใช้งาน = เข้าระบบไม่ได้เลย
    * (ไม่ถอยไปเป็นเจ้าหน้าที่ เพราะนั่นคือการเห็นมากขึ้น)
    */
-  _contractorInfo(u, contractorId) {
+  async _contractorInfo(u, contractorId) {
     const base = {
       email: u.Email || '', username: u.Username || '', name: u.Name || '',
-      regions: [], sites: []
+      regions: []
     };
     const want = contractorId.toUpperCase();
     const c = contractorId && this.ss.objects(SHEETS.CONTRACTOR)
@@ -231,29 +238,56 @@ export class Ctx {
     const active = c && c.Active !== false && String(c.Active).toUpperCase() !== 'FALSE';
     if (!active) return { ...base, role: 'NoAccess', permissions: {} };
 
-    const sites = this.ss.objects(SHEETS.NODEASSIGN)
-      .filter(a => String(a.ContractorID || '').trim().toUpperCase() === want)
-      .map(a => normalizeSiteCode(a.SiteCode))
-      .filter(Boolean);
+    const jobs = new Set();
+    const airCodes = new Set();
+    const planNames = (await this.ss.sheetNames()).filter(n => /^Plan_\d{4}$/.test(n));
+    await this.ss.load(planNames);
+    for (const name of planNames) {
+      const year = name.slice(5);
+      for (const p of this.ss.objects(name)) {
+        const code = normalizeCode(p.AirCode);
+        if (!code) continue;
+        for (const r of [1, 2, 3]) {
+          if (String(p['R' + r + '_ContractorID'] || '').trim().toUpperCase() !== want) continue;
+          jobs.add(jobKey(year, r, code));
+          airCodes.add(code);
+        }
+      }
+    }
 
     return {
       ...base,
       role: 'Contractor',
       contractorId: String(c.ID).trim(),
       contractorName: String(c.Name || '').trim(),
-      sites,
+      // ส่งเป็นอาร์เรย์ เพราะ Set แปลงเป็น JSON ไม่ได้ (ค่านี้ไปถึงหน้าเว็บด้วย)
+      jobs: [...jobs],
+      airCodes: [...airCodes],
       permissions: contractorPermissions()
     };
   }
 
   /**
+   * งานรอบนี้ของเครื่องนี้ เป็นของผู้ใช้คนนี้หรือไม่
+   * เจ้าหน้าที่ตอบ true เสมอ (ขอบเขตของเจ้าหน้าที่ตรวจด้วย scopeFilter อยู่แล้ว)
+   */
+  async ownsJob(year, round, airCode) {
+    const info = await this.userInfo();
+    if (info.role !== 'Contractor') return info.role === 'Admin' || info.role === 'RegionAdmin';
+    return (info.jobs || []).includes(jobKey(year, round, normalizeCode(airCode)));
+  }
+
+  /**
    * ตัวตรวจว่าแถวข้อมูลแถวหนึ่งอยู่ในขอบเขตที่ผู้ใช้คนนี้เข้าถึงได้หรือไม่
    *
-   * ใช้ได้ทั้งแถวเครื่องและแถวเอกสาร เพราะทั้งคู่มีคอลัมน์ Region กับ SiteCode
+   * ใช้ได้ทั้งแถวเครื่อง (AirCode) และแถวเอกสาร (AirCode1/AirCode2)
    *   Admin       ทุกแถว
    *   RegionAdmin แถวที่ Region อยู่ในภูมิภาคที่ดูแล
-   *   Contractor  แถวที่ SiteCode เป็น Node ที่ได้รับมอบหมาย
+   *   Contractor  แถวของเครื่องที่มีงานมอบหมายให้เจ้านี้ในแผนล้าง
    *   อื่นๆ       ไม่มีสักแถว
+   *
+   * ⚠️ สำหรับผู้รับเหมา นี่คือขอบเขต "เครื่อง" ไม่ใช่ขอบเขต "งาน" — เครื่องเดียวกัน
+   * อาจมีรอบอื่นที่เป็นของเจ้าอื่น งานที่ผูกกับรอบ (ใบล้าง) ต้องตรวจด้วย ownsJob เพิ่ม
    *
    * ทุกหน้าที่กรองข้อมูลต้องใช้ตัวนี้ตัวเดียว ถ้าแต่ละหน้าเขียนเงื่อนไขเอง
    * พอเพิ่มบทบาทใหม่ หน้าที่ลืมแก้จะปล่อยข้อมูลรั่วโดยไม่มีอะไรฟ้อง
@@ -266,8 +300,11 @@ export class Ctx {
       return row => regions.has(normalizeRegion((row || {}).Region));
     }
     if (info.role === 'Contractor') {
-      const sites = new Set(info.sites || []);
-      return row => sites.has(normalizeSiteCode((row || {}).SiteCode));
+      const codes = new Set(info.airCodes || []);
+      return row => {
+        const r = row || {};
+        return [r.AirCode, r.AirCode1, r.AirCode2].some(c => c && codes.has(normalizeCode(c)));
+      };
     }
     return () => false;
   }
@@ -468,4 +505,9 @@ export function parsePermissions(raw) {
     perms[m] = (from && map[from]) || 'none';
   });
   return perms;
+}
+
+/** กุญแจของงานหนึ่งรอบ: "ปี|รอบ|รหัสเครื่อง" (รหัสต้อง normalize มาแล้ว) */
+export function jobKey(year, round, airCode) {
+  return String(year).trim() + '|' + String(round).trim() + '|' + airCode;
 }

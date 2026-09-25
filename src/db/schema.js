@@ -81,7 +81,9 @@ export const TABLES = {
       R1_PlanDate: D, R1_ActualDate: D, R1_Price: N, R1_Technician: S, R1_Status: S, R1_Note: S, R1_FormUrl: S,
       R2_PlanDate: D, R2_ActualDate: D, R2_Price: N, R2_Technician: S, R2_Status: S, R2_Note: S, R2_FormUrl: S,
       R3_PlanDate: D, R3_ActualDate: D, R3_Price: N, R3_Technician: S, R3_Status: S, R3_Note: S, R3_FormUrl: S,
-      UpdatedBy: S
+      UpdatedBy: S,
+      // ผู้รับเหมาที่มอบหมายงานแต่ละรอบ (ดู PLAN_HEADERS ใน src/schema.js)
+      R1_ContractorID: S, R2_ContractorID: S, R3_ContractorID: S
     },
     indexes: [['Year'], ['Year', 'AirCode'], ['NodeName']],
     unique: ['Year', 'AirCode']
@@ -195,24 +197,6 @@ export const TABLES = {
     },
     indexes: [['ID']],
     unique: ['ID']
-  },
-
-  /**
-   * Node ไหนเป็นของผู้รับเหมาเจ้าไหน — ตั้งครั้งเดียวใช้จนกว่า Admin จะเปลี่ยน
-   *
-   * ผูกด้วย SiteCode ไม่ใช่ชื่อ Node เพราะชื่อ Node แก้ได้ แต่รหัสไม่เปลี่ยน
-   * (ตรวจแล้ว 238 Node ตรงกับ 238 SiteCode หนึ่งต่อหนึ่ง ไม่มีเครื่องไหนขาดรหัส)
-   *
-   * Node หนึ่งมีผู้รับเหมาได้เจ้าเดียว ดูแลทั้งงานล้างและงานติดตั้ง
-   * Node ที่ไม่มีแถวในตารางนี้ = ยังไม่ได้มอบหมาย ผู้รับเหมาคนไหนก็มองไม่เห็น
-   */
-  node_assignments: {
-    sheet: 'NodeAssignment',
-    columns: {
-      SiteCode: S, ContractorID: S, UpdatedAt: DT, UpdatedBy: S
-    },
-    indexes: [['SiteCode'], ['ContractorID']],
-    unique: ['SiteCode']
   },
 
   budgets: {
