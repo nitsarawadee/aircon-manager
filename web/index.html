@@ -326,6 +326,9 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="budget">
         <i class="ph ph-wallet text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งบประมาณ</span>
       </button>
+      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="contractors" style="display:none">
+        <i class="ph ph-hard-hat text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>ผู้รับเหมา</span>
+      </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="users">
         <i class="ph ph-users-three text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>จัดการผู้ใช้</span>
       </button>
@@ -998,7 +1001,8 @@
           <i class="ph-fill ph-info text-lg flex-shrink-0 mt-0.5"></i>
           <div>
             <strong>Admin</strong> เห็นและแก้ไขข้อมูลได้ทุกภูมิภาค รวมถึงจัดการผู้ใช้งานหน้านี้ได้ &nbsp;|&nbsp;
-            <strong>RegionAdmin</strong> จะเห็น/แก้ไขได้เฉพาะเครื่องปรับอากาศในภูมิภาคที่กำหนดไว้เท่านั้น
+            <strong>RegionAdmin</strong> จะเห็น/แก้ไขได้เฉพาะเครื่องปรับอากาศในภูมิภาคที่กำหนดไว้เท่านั้น &nbsp;|&nbsp;
+            <strong>ผู้รับเหมา</strong> เห็นเฉพาะ Node ที่มอบหมายไว้ในเมนู "ผู้รับเหมา" และกรอกได้แค่ใบล้างกับใบติดตั้ง
           </div>
         </div>
 
@@ -1018,6 +1022,61 @@
               </thead>
               <tbody class="divide-y divide-gray-50"></tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ ผู้รับเหมา (เจ้าหน้าที่เท่านั้น) ============================
+           รายชื่อผู้รับเหมา + มอบหมาย Node ให้แต่ละเจ้า
+           บัญชีผู้รับเหมาเห็นเฉพาะ Node ที่มอบหมายไว้ที่นี่ (เซิร์ฟเวอร์เป็นคนกรอง) -->
+      <section id="view-contractors" class="view">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">ผู้รับเหมา</h2>
+            <p class="text-sm text-gray-500">รายชื่อผู้รับเหมา และ Node ที่แต่ละเจ้าดูแล — บัญชีของผู้รับเหมาจะเห็นเฉพาะ Node ที่มอบหมายไว้ที่นี่</p>
+          </div>
+          <button onclick="openContractorModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+            <i class="ph ph-plus"></i> เพิ่มผู้รับเหมา
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800 flex items-center gap-2">
+              <i class="ph ph-list-bullets text-[#1153a1]"></i> รายชื่อ
+            </div>
+            <div id="contractorListBox" class="divide-y divide-gray-50"></div>
+          </div>
+
+          <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800 flex items-center gap-2">
+              <i class="ph ph-map-pin-area text-[#1153a1]"></i> มอบหมาย Node
+            </div>
+            <div class="p-4 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <input id="naSearch" oninput="renderNodeAssignTable()" placeholder="ค้นหา Node / SiteCode"
+                  class="sm:col-span-1 rounded-lg border border-gray-300 text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#1153a1]">
+                <select id="naRegion" onchange="renderNodeAssignFilters(); renderNodeAssignTable()" class="rounded-lg border border-gray-300 text-sm px-3 py-2 bg-white outline-none"></select>
+                <select id="naProvince" onchange="renderNodeAssignTable()" class="rounded-lg border border-gray-300 text-sm px-3 py-2 bg-white outline-none"></select>
+                <select id="naOwner" onchange="renderNodeAssignTable()" class="rounded-lg border border-gray-300 text-sm px-3 py-2 bg-white outline-none"></select>
+              </div>
+              <div id="naBulkBar"></div>
+              <div class="table-container overflow-x-auto max-h-[60vh] overflow-y-auto border border-gray-100 rounded-lg">
+                <table class="w-full text-sm" id="nodeAssignTable">
+                  <thead class="bg-slate-50 text-gray-500 text-xs sticky top-0 z-10">
+                    <tr>
+                      <th class="px-3 py-2 w-8 na-pick-col"><input type="checkbox" id="naPickAll" onchange="toggleAllNodePicks(this.checked)" title="เลือกทั้งหมดที่แสดงอยู่"></th>
+                      <th class="px-3 py-2 text-left">Node</th>
+                      <th class="px-3 py-2 text-left">จังหวัด</th>
+                      <th class="px-3 py-2 text-left">ภาค</th>
+                      <th class="px-3 py-2 text-right">เครื่อง</th>
+                      <th class="px-3 py-2 text-left">ผู้รับเหมา</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1886,6 +1945,7 @@
         btn.classList.add('active', 'bg-gradient-to-r', 'from-blue-50', 'to-orange-50', 'text-[#1153a1]', 'border', 'border-[#f47920]/30', 'shadow-sm');
         document.getElementById('view-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'users') loadUsers();
+        else if (btn.dataset.tab === 'contractors') loadContractorsPage();
         else if (btn.dataset.tab === 'budget') loadBudget();
         else if (btn.dataset.tab === 'history') loadHistory();
         else if (btn.dataset.tab === 'dashboard') loadDashboard();
@@ -2045,6 +2105,9 @@
       // ซ่อนเมนู "ผู้ใช้งาน" สำหรับคนที่ไม่ใช่ Admin (ใช้ display แทนการลบทิ้ง เผื่อสลับผู้ใช้ในหน้าเดียวกัน)
       const usersTabBtn = document.querySelector('[data-tab="users"]');
       if (usersTabBtn) usersTabBtn.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
+      // หน้าผู้รับเหมา: เจ้าหน้าที่ทุกคน (RegionAdmin มอบหมายได้เฉพาะภาคตัวเอง) ผู้รับเหมาไม่เห็น
+      const contractorsTabBtn = document.querySelector('[data-tab="contractors"]');
+      if (contractorsTabBtn) contractorsTabBtn.style.display = isStaff() ? '' : 'none';
 
       applyModulePermissionsUI();
       renderUserBadge();
@@ -2057,12 +2120,19 @@
         // คงลำดับการโหลดเดิมไว้ แต่เปลี่ยนมาใช้ allSettled เพื่อความทนทาน:
         // เดิมถ้าโหลดตัวใดตัวหนึ่งพัง (เน็ตสะดุด/ชีตมีปัญหา) จะกระโดดออกทันที
         // ทำให้ประวัติกับงบประมาณที่อยู่บรรทัดถัดไปไม่ถูกโหลดเลย
+        //
+        // โหลดเฉพาะหน้าที่ยังอยู่ หน้าที่ถูกถอดออกเพราะไม่มีสิทธิ์ ไม่มีที่ให้วาดแล้ว
+        // ถ้ายังโหลด ตัววาดจะหาตารางไม่เจอแล้วขึ้นว่าโหลดไม่สำเร็จ ทั้งที่ไม่มีอะไรเสีย
+        // (ผู้รับเหมาไม่มีแดชบอร์ด รายการเครื่อง ประวัติ และงบประมาณเลย)
+        const hasTab = t => !!document.getElementById('view-' + t);
         const failed = [];
-        const group = [['แดชบอร์ด', loadDashboard], ['รายการเครื่อง', loadAirList], ['แผนล้างแอร์', loadPlanYears]];
+        const group = [['แดชบอร์ด', loadDashboard, 'dashboard'], ['รายการเครื่อง', loadAirList, 'airlist'], ['แผนล้างแอร์', loadPlanYears, 'plan']]
+          .filter(t => hasTab(t[2]));
         (await Promise.allSettled(group.map(t => t[1]())))
           .forEach((r, i) => { if (r.status === 'rejected') failed.push(group[i][0]); });
 
-        for (const t of [['ประวัติ', loadHistory], ['งบประมาณ', loadBudget]]) {
+        for (const t of [['ประวัติ', loadHistory, 'history'], ['งบประมาณ', loadBudget, 'budget']]) {
+          if (!hasTab(t[2])) continue;
           try { await t[1](); } catch (e) { failed.push(t[0]); }
         }
 
@@ -2080,6 +2150,26 @@
       airlist: 'view-airlist', plan: 'view-plan', history: 'view-history', repair: 'view-repair',
       cleaningform: 'view-cleaningform', budget: 'view-budget'
     };
+
+    /**
+     * บัญชีผู้รับเหมา — เห็นเฉพาะ Node ที่มอบหมาย (เซิร์ฟเวอร์กรองให้แล้วทุกคำสั่ง)
+     * ส่วนหน้าเว็บมีหน้าที่แค่ไม่โชว์สิ่งที่ผู้รับเหมาใช้ไม่ได้ ให้หน้าจอเหลือเฉพาะงานของตัวเอง
+     */
+    const isContractor = () => !!currentUserInfo && currentUserInfo.role === 'Contractor';
+    const isStaff = () => !!currentUserInfo &&
+      (currentUserInfo.role === 'Admin' || currentUserInfo.role === 'RegionAdmin');
+
+    /**
+     * ช่องชื่อบริษัทผู้ดำเนินการในฟอร์มเอกสาร
+     * ผู้รับเหมาได้ชื่อที่ Admin ตั้งไว้ แก้ไม่ได้ — ข้อมูลเก่ามีบริษัทเดียวกันถึง 7 ชื่อเพราะให้พิมพ์เอง
+     * (เซิร์ฟเวอร์บังคับชื่อนี้อยู่แล้ว ช่องนี้แค่โชว์ให้เห็นตรงกัน)
+     */
+    function companyInput(id, cls) {
+      if (isContractor()) {
+        return `<input id="${id}" value="${esc(currentUserInfo.contractorName || '')}" readonly class="${cls} bg-slate-50 text-gray-600">`;
+      }
+      return `<input id="${id}" class="${cls}">`;
+    }
 
     /** คืนระดับสิทธิ์ของโมดูลนี้สำหรับผู้ใช้ปัจจุบัน: 'edit' | 'view' | 'none' */
     function moduleLevel(mod) {
@@ -2120,11 +2210,21 @@
           if (section) section.remove();
         }
       });
-      // ถ้าแท็บที่ active อยู่ตอนนี้ถูกซ่อนไปแล้ว (ไม่มีสิทธิ์) ให้สลับกลับไปแดชบอร์ดแทน
+
+      // ผู้รับเหมาไม่มีแดชบอร์ด — ตัวเลขภาพรวมเป็นของเจ้าหน้าที่ ส่วนผู้รับเหมาเปิดมา
+      // ต้องเจองานของตัวเองเลย (แผนล้าง) ไม่ใช่การ์ดสรุปที่ส่วนใหญ่เป็นศูนย์
+      if (isContractor()) {
+        const dashBtn = document.querySelector('[data-tab="dashboard"]');
+        if (dashBtn) dashBtn.remove();
+        const dash = document.getElementById('view-dashboard');
+        if (dash) dash.remove();
+      }
+
+      // ถ้าแท็บที่ active อยู่ตอนนี้ถูกซ่อนไปแล้ว (ไม่มีสิทธิ์) ให้สลับไปแท็บแรกที่ยังเหลืออยู่
       const activeBtn = document.querySelector('.tab-btn.active');
       if (!activeBtn) {
-        const dashBtn = document.querySelector('[data-tab="dashboard"]');
-        if (dashBtn) dashBtn.click();
+        const first = document.querySelector('[data-tab="dashboard"]') || document.querySelector('.tab-btn');
+        if (first) first.click();
       }
     }
 
@@ -2140,7 +2240,9 @@
       if (!section.querySelector('.readonly-banner')) {
         const banner = document.createElement('div');
         banner.className = 'readonly-banner mb-4 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-2 flex items-center gap-2';
-        banner.innerHTML = '<i class="ph ph-eye"></i> คุณมีสิทธิ์ดูข้อมูลส่วนนี้เท่านั้น (แก้ไขไม่ได้)';
+        banner.innerHTML = (mod === 'plan' && docLevel('cleaning') === 'edit')
+          ? '<i class="ph ph-hand-pointing"></i> แก้แผนไม่ได้ แต่ปิดงานได้ — กดที่ช่องรอบของเครื่อง แล้วเลือกกรอกฟอร์มหรือแนบเอกสาร'
+          : '<i class="ph ph-eye"></i> คุณมีสิทธิ์ดูข้อมูลส่วนนี้เท่านั้น (แก้ไขไม่ได้)';
         section.prepend(banner);
       }
       section.querySelectorAll('[onclick]').forEach(el => {
@@ -2151,6 +2253,9 @@
         // แต่มีสิทธิ์ซ่อม จึงต้องกดแจ้งซ่อมจากหน้านี้ได้
         if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
             oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(')) return;
+        // ช่องรอบในแผนต้องกดได้ ถ้ากรอกใบล้างได้ — ปิดงานล้างทำผ่านหน้านั้น
+        // (หน้าต่างรอบจะแสดงแบบอ่านอย่างเดียว เหลือแค่ปุ่มกรอกฟอร์ม/แนบเอกสาร ดู openRoundModal)
+        if (mod === 'plan' && oc.includes('openRoundModal(') && docLevel('cleaning') === 'edit') return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -2161,8 +2266,11 @@
       const el = document.getElementById('userBadge');
       if (!el || !currentUserInfo) return;
       const displayName = currentUserInfo.name || currentUserInfo.username || '';
-      const roleLabel = currentUserInfo.role === 'Admin' ? 'ผู้ดูแลระบบ (ทุกภูมิภาค)' : `RegionAdmin: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนดภูมิภาค'}`;
-      const roleColor = currentUserInfo.role === 'Admin' ? 'text-[#1153a1] bg-blue-50' : 'text-teal-700 bg-teal-50';
+      const roleLabel = currentUserInfo.role === 'Admin' ? 'ผู้ดูแลระบบ (ทุกภูมิภาค)'
+        : isContractor() ? `ผู้รับเหมา: ${currentUserInfo.contractorName || '-'} · ${(currentUserInfo.sites || []).length} Node`
+        : `RegionAdmin: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนดภูมิภาค'}`;
+      const roleColor = currentUserInfo.role === 'Admin' ? 'text-[#1153a1] bg-blue-50'
+        : isContractor() ? 'text-amber-800 bg-amber-50' : 'text-teal-700 bg-teal-50';
       el.innerHTML = `
         <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${roleColor} text-xs">
           <i class="ph-fill ph-user-circle text-base"></i>
@@ -2184,10 +2292,25 @@
 
     /* ============== USER MANAGEMENT (Admin only) ============== */
     let currentUsersList = [];
+    /** รายชื่อผู้รับเหมา — ใช้ร่วมกันระหว่างหน้าจัดการผู้ใช้กับหน้าผู้รับเหมา */
+    let contractorList = [];
+    const contractorNameOf = id =>
+      (contractorList.find(c => c.ID === id) || {}).Name || id;
+
+    /** สลับกล่องในหน้าต่างผู้ใช้ตามบทบาท — ภูมิภาค/สิทธิ์รายเมนูใช้กับ RegionAdmin เท่านั้น */
+    function syncUserRoleBoxes() {
+      const role = document.getElementById('u_Role').value;
+      document.getElementById('u_regionBox').classList.toggle('hidden', role !== 'RegionAdmin');
+      document.getElementById('u_permBox').classList.toggle('hidden', role !== 'RegionAdmin');
+      document.getElementById('u_contractorBox').classList.toggle('hidden', role !== 'Contractor');
+    }
 
     async function loadUsers() {
       try {
-        currentUsersList = (await call('getUsers')) || [];
+        // รายชื่อผู้รับเหมาใช้ทั้งในตาราง (ชื่อสังกัด) และในหน้าต่างสร้างบัญชี (ตัวเลือก)
+        const [users, contractors] = await Promise.all([call('getUsers'), call('getContractors')]);
+        currentUsersList = users || [];
+        contractorList = contractors || [];
         renderUsersTable();
       } catch (e) {}
     }
@@ -2205,9 +2328,12 @@
           <td class="px-4 py-3 text-gray-600">${esc(u.Name) || '-'}</td>
           <td class="px-4 py-3 text-gray-500 text-xs">${esc(u.Email) || '-'}</td>
           <td class="px-4 py-3">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${u.Role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'}">${u.Role === 'Admin' ? 'Admin (ทุกภูมิภาค)' : 'RegionAdmin'}</span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${u.ContractorID ? 'bg-amber-100 text-amber-800' : u.Role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'}">${u.ContractorID ? 'ผู้รับเหมา' : u.Role === 'Admin' ? 'Admin (ทุกภูมิภาค)' : 'RegionAdmin'}</span>
           </td>
-          <td class="px-4 py-3 text-gray-600 text-sm max-w-[220px]">${u.Role === 'Admin' ? '<span class="text-gray-400">ทุกภูมิภาค</span>' : (esc(u.Regions) || '<span class="text-rose-500">ยังไม่กำหนด</span>')}</td>
+          <td class="px-4 py-3 text-gray-600 text-sm max-w-[220px]">${
+            u.ContractorID ? esc(contractorNameOf(u.ContractorID))
+            : u.Role === 'Admin' ? '<span class="text-gray-400">ทุกภูมิภาค</span>'
+            : (esc(u.Regions) || '<span class="text-rose-500">ยังไม่กำหนด</span>')}</td>
           <td class="px-4 py-3">${(u.Active === false || String(u.Active).toUpperCase() === 'FALSE') ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">ปิดใช้งาน</span>' : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">ใช้งานอยู่</span>'}</td>
           <td class="px-4 py-3 text-right space-x-1">
             <button onclick='openUserModal(${JSON.stringify(u).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
@@ -2265,6 +2391,13 @@
 
     function openUserModal(data = {}) {
       const isEdit = !!data._row;
+      // บัญชีที่ผูกผู้รับเหมาไว้ คือผู้รับเหมาเสมอ (กติกาเดียวกับเซิร์ฟเวอร์ ดู Ctx.userInfo)
+      const role = data.ContractorID ? 'Contractor' : (data.Role === 'Admin' ? 'Admin' : 'RegionAdmin');
+      // ผู้รับเหมาที่ปิดไปแล้วไม่ให้เลือกใหม่ แต่ถ้าบัญชีนี้สังกัดอยู่ ต้องยังเห็นชื่อเดิม
+      const contractorOpts = contractorList
+        .filter(c => c.Active || c.ID === data.ContractorID)
+        .map(c => `<option value="${esc(c.ID)}" ${c.ID === data.ContractorID ? 'selected' : ''}>${esc(c.Name)}${c.Active ? '' : ' (ปิดใช้งาน)'}</option>`)
+        .join('');
       const regionOpts = (currentConfig.Region || []).map(r => {
         // ต้องแปลงเป็นข้อความก่อนเสมอ เพราะภูมิภาคที่ตั้งเป็นตัวเลขล้วน (เช่น "6")
         // Google Sheets จะเก็บเป็น Number ทำให้เรียก .split() ไม่ได้ และหน้าต่างแก้ไขไม่เปิดขึ้นมาเลย
@@ -2311,15 +2444,25 @@
               <div><label class="block text-sm font-medium text-gray-700 mb-1">อีเมล (ไม่บังคับ ใช้เพื่ออ้างอิง/ติดต่อเท่านั้น)</label>
               <input id="u_Email" value="${esc(data.Email)}" placeholder="name@company.com" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">บทบาท</label>
-              <select id="u_Role" onchange="document.getElementById('u_regionBox').classList.toggle('hidden', this.value==='Admin'); document.getElementById('u_permBox').classList.toggle('hidden', this.value==='Admin')" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">
-                <option value="RegionAdmin" ${data.Role !== 'Admin' ? 'selected' : ''}>RegionAdmin (จำกัดเฉพาะภูมิภาคที่กำหนด)</option>
-                <option value="Admin" ${data.Role === 'Admin' ? 'selected' : ''}>Admin (ทุกภูมิภาค + จัดการผู้ใช้)</option>
+              <select id="u_Role" onchange="syncUserRoleBoxes()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">
+                <option value="RegionAdmin" ${role === 'RegionAdmin' ? 'selected' : ''}>RegionAdmin (จำกัดเฉพาะภูมิภาคที่กำหนด)</option>
+                <option value="Admin" ${role === 'Admin' ? 'selected' : ''}>Admin (ทุกภูมิภาค + จัดการผู้ใช้)</option>
+                <option value="Contractor" ${role === 'Contractor' ? 'selected' : ''}>ผู้รับเหมา (เห็นเฉพาะ Node ที่มอบหมาย)</option>
               </select></div>
-              <div id="u_regionBox" class="${data.Role === 'Admin' ? 'hidden' : ''}">
+              <div id="u_contractorBox" class="${role === 'Contractor' ? '' : 'hidden'}">
+                <label class="block text-sm font-medium text-gray-700 mb-1">สังกัดผู้รับเหมา <span class="text-red-500">*</span></label>
+                <select id="u_ContractorID" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">
+                  <option value="">— เลือกผู้รับเหมา —</option>
+                  ${contractorOpts}
+                </select>
+                <p class="text-xs text-gray-400 mt-1">บัญชีนี้จะเห็นเฉพาะ Node ที่มอบหมายให้ผู้รับเหมาเจ้านี้ (ตั้งที่เมนู "ผู้รับเหมา") · สิทธิ์ตายตัว: ดูแผนล้าง กรอกใบล้างกับใบติดตั้ง</p>
+                ${contractorList.length ? '' : '<p class="text-xs text-rose-500 mt-1">ยังไม่มีรายชื่อผู้รับเหมา — เพิ่มที่เมนู "ผู้รับเหมา" ก่อน</p>'}
+              </div>
+              <div id="u_regionBox" class="${role === 'RegionAdmin' ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">ภูมิภาคที่รับผิดชอบ</label>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">${regionOpts || '<p class="text-xs text-gray-400 col-span-2 px-2">ยังไม่มีรายชื่อภูมิภาคใน Config</p>'}</div>
               </div>
-              <div id="u_permBox" class="${data.Role === 'Admin' ? 'hidden' : ''}">
+              <div id="u_permBox" class="${role === 'RegionAdmin' ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งานรายเมนู</label>
                 <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">${permRows}</div>
                 <p class="text-xs text-gray-400 mt-1">สิทธิ์นี้จะถูกจำกัดร่วมกับภูมิภาคด้านบนด้วย (เช่น เลือก "แก้ไขได้" แต่จะแก้ไขได้เฉพาะภูมิภาคของตัวเองเท่านั้น)</p>
@@ -2347,7 +2490,9 @@
       if (!isEdit && !password) { showToast('กรุณาตั้งรหัสผ่านสำหรับผู้ใช้ใหม่', 'error'); return; }
       if (password && password.length < 6) { showToast('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', 'error'); return; }
       const role = document.getElementById('u_Role').value;
-      const regions = role === 'Admin' ? [] : Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value);
+      const contractorId = role === 'Contractor' ? document.getElementById('u_ContractorID').value : '';
+      if (role === 'Contractor' && !contractorId) { showToast('กรุณาเลือกผู้รับเหมาที่บัญชีนี้สังกัด', 'error'); return; }
+      const regions = role === 'RegionAdmin' ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
       if (role === 'RegionAdmin' && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 ภูมิภาคสำหรับ RegionAdmin', 'error'); return; }
       const permissions = {};
       document.querySelectorAll('.u_perm_select').forEach(sel => { permissions[sel.getAttribute('data-module')] = sel.value; });
@@ -2359,6 +2504,7 @@
         Email: document.getElementById('u_Email').value.trim(),
         Name: document.getElementById('u_Name').value.trim(),
         Role: role,
+        ContractorID: contractorId,
         Regions: regions,
         Permissions: permissions,
         Active: document.getElementById('u_Active').checked
@@ -2382,8 +2528,229 @@
       } catch (e) {}
     }
 
+    /* ============== ผู้รับเหมา: รายชื่อ + มอบหมาย Node ============== */
+    let nodeAssignList = [];
+    /** Node ที่ติ๊กเลือกไว้ (SiteCode) — เก็บแยกจากตาราง เพื่อให้เปลี่ยนตัวกรองแล้วของที่เลือกไม่หาย */
+    let nodePicks = new Set();
+
+    /**
+     * มอบหมายได้ไหม — กติกาเดียวกับเซิร์ฟเวอร์ (assignNodes):
+     * Admin ทุก Node / RegionAdmin ที่แก้แผนล้างได้ เฉพาะ Node ในภาคตัวเอง (เซิร์ฟเวอร์ส่งมาแค่นั้นอยู่แล้ว)
+     */
+    const canAssignNodes = () => isAdmin() || moduleLevel('plan') === 'edit';
+
+    async function loadContractorsPage() {
+      try {
+        const [cs, nodes] = await Promise.all([call('getContractors'), call('getNodeAssignments')]);
+        contractorList = cs || [];
+        nodeAssignList = nodes || [];
+        const exists = new Set(nodeAssignList.map(n => n.SiteCode));
+        nodePicks = new Set([...nodePicks].filter(s => exists.has(s)));
+        renderContractorList();
+        renderNodeAssignFilters();
+        renderNodeAssignTable();
+      } catch (e) {}
+    }
+
+    function renderContractorList() {
+      const box = document.getElementById('contractorListBox');
+      if (!box) return;
+      if (!contractorList.length) {
+        box.innerHTML = `<p class="px-4 py-8 text-center text-sm text-gray-400">
+          <i class="ph ph-hard-hat text-4xl block mb-2"></i>ยังไม่มีผู้รับเหมา กด "เพิ่มผู้รับเหมา" ด้านบน</p>`;
+        return;
+      }
+      box.innerHTML = contractorList.map(c => `
+        <div class="px-4 py-3 flex items-center gap-3 ${c.Active ? '' : 'opacity-60'}">
+          <button onclick="filterNodesByContractor('${jsStr(c.ID)}')" class="min-w-0 flex-1 text-left group" title="ดู Node ของเจ้านี้">
+            <div class="font-medium text-gray-800 truncate group-hover:text-[#1153a1]">${esc(c.Name)}</div>
+            <div class="text-xs text-gray-500">${esc(c.ID)} · ${c.NodeCount} Node · ${c.UserCount} บัญชี
+              ${c.Active ? '' : ' · <span class="text-rose-500">ปิดใช้งาน</span>'}</div>
+          </button>
+          ${isAdmin() ? `<button onclick='openContractorModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' title="แก้ไข"
+            class="text-[#1153a1] hover:bg-blue-50 p-1.5 rounded"><i class="ph ph-pencil-simple text-lg"></i></button>` : ''}
+        </div>`).join('');
+    }
+
+    function filterNodesByContractor(id) {
+      document.getElementById('naOwner').value = id;
+      renderNodeAssignTable();
+    }
+
+    /** เติมตัวเลือกของตัวกรอง โดยคงค่าที่เลือกค้างไว้ (ถ้ายังมีอยู่) */
+    function renderNodeAssignFilters() {
+      const fill = (id, opts, first) => {
+        const el = document.getElementById(id);
+        const keep = el.value;
+        el.innerHTML = `<option value="">${first}</option>` +
+          opts.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+        if ([...el.options].some(o => o.value === keep)) el.value = keep;
+      };
+      const uniq = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th', { numeric: true }));
+
+      fill('naRegion', uniq(nodeAssignList.map(n => n.Region)).map(r => ({ value: r, label: regionLabel(r) })), 'ทุกภาค');
+      const region = document.getElementById('naRegion').value;
+      const provinces = uniq(nodeAssignList.filter(n => !region || n.Region === region).map(n => n.Province));
+      fill('naProvince', provinces.map(p => ({ value: p, label: p })), 'ทุกจังหวัด');
+      fill('naOwner', [{ value: '__none', label: 'ยังไม่มีผู้รับเหมา' }]
+        .concat(contractorList.map(c => ({ value: c.ID, label: c.Name }))), 'ผู้รับเหมาทุกเจ้า');
+    }
+
+    function filteredNodeAssign() {
+      const q = document.getElementById('naSearch').value.trim().toLowerCase();
+      const region = document.getElementById('naRegion').value;
+      const province = document.getElementById('naProvince').value;
+      const owner = document.getElementById('naOwner').value;
+      return nodeAssignList.filter(n =>
+        (!region || n.Region === region) &&
+        (!province || n.Province === province) &&
+        (!owner || (owner === '__none' ? !n.ContractorID : n.ContractorID === owner)) &&
+        (!q || (n.NodeName + ' ' + n.SiteCode).toLowerCase().includes(q)));
+    }
+
+    function renderNodeAssignTable() {
+      const tb = document.querySelector('#nodeAssignTable tbody');
+      if (!tb) return;
+      const can = canAssignNodes();
+      const rows = filteredNodeAssign();
+
+      document.querySelectorAll('#nodeAssignTable .na-pick-col').forEach(el => el.classList.toggle('hidden', !can));
+      const all = document.getElementById('naPickAll');
+      all.checked = rows.length > 0 && rows.every(n => nodePicks.has(n.SiteCode));
+
+      tb.innerHTML = rows.length ? rows.map(n => `
+        <tr class="hover:bg-slate-50 ${nodePicks.has(n.SiteCode) ? 'bg-blue-50/60' : ''}">
+          ${can ? `<td class="px-3 py-2"><input type="checkbox" ${nodePicks.has(n.SiteCode) ? 'checked' : ''}
+            onchange="toggleNodePick('${jsStr(n.SiteCode)}', this.checked)"></td>` : ''}
+          <td class="px-3 py-2"><div class="font-medium text-gray-800">${esc(n.NodeName)}</div>
+            <div class="text-[11px] text-gray-400">${esc(n.SiteCode)}</div></td>
+          <td class="px-3 py-2 text-gray-600">${esc(n.Province) || '-'}</td>
+          <td class="px-3 py-2 text-gray-600">${esc(regionLabel(n.Region))}</td>
+          <td class="px-3 py-2 text-right tabular-nums">${n.Units}</td>
+          <td class="px-3 py-2">${n.ContractorID
+            ? `<span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">${esc(n.ContractorName || n.ContractorID)}</span>`
+            : '<span class="text-xs text-gray-400">ยังไม่มี</span>'}</td>
+        </tr>`).join('')
+        : `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">ไม่พบ Node ตามที่กรอง</td></tr>`;
+
+      renderNodeAssignBulkBar(rows.length);
+    }
+
+    function renderNodeAssignBulkBar(shown) {
+      const bar = document.getElementById('naBulkBar');
+      if (!canAssignNodes()) {
+        bar.innerHTML = `<p class="text-xs text-gray-500 bg-slate-50 rounded-lg px-3 py-2">
+          ดูได้อย่างเดียว — การมอบหมาย Node ต้องมีสิทธิ์แก้ไขแผนล้างแอร์</p>`;
+        return;
+      }
+      const active = contractorList.filter(c => c.Active);
+      bar.innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+          <span class="text-sm text-gray-700 flex-shrink-0">แสดง ${shown} Node · เลือกไว้ <b>${nodePicks.size}</b></span>
+          <select id="naAssignTo" class="flex-1 rounded-lg border border-gray-300 text-sm px-3 py-1.5 bg-white outline-none">
+            <option value="">— มอบหมายให้ผู้รับเหมา —</option>
+            ${active.map(c => `<option value="${esc(c.ID)}">${esc(c.Name)}</option>`).join('')}
+          </select>
+          <div class="flex gap-2">
+            <button onclick="assignPickedNodes(false)" ${nodePicks.size ? '' : 'disabled'}
+              class="px-3 py-1.5 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] disabled:opacity-40 whitespace-nowrap">มอบหมาย</button>
+            <button onclick="assignPickedNodes(true)" ${nodePicks.size ? '' : 'disabled'}
+              class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-40 whitespace-nowrap">ยกเลิกการมอบหมาย</button>
+          </div>
+        </div>`;
+    }
+
+    function toggleNodePick(site, on) {
+      if (on) nodePicks.add(site); else nodePicks.delete(site);
+      renderNodeAssignTable();
+    }
+
+    function toggleAllNodePicks(on) {
+      filteredNodeAssign().forEach(n => (on ? nodePicks.add(n.SiteCode) : nodePicks.delete(n.SiteCode)));
+      renderNodeAssignTable();
+    }
+
+    async function assignPickedNodes(clear) {
+      const sites = [...nodePicks];
+      if (!sites.length) return;
+      const to = clear ? '' : document.getElementById('naAssignTo').value;
+      if (!clear && !to) { showToast('กรุณาเลือกผู้รับเหมาที่จะมอบหมายให้', 'error'); return; }
+
+      // บอกให้ชัดว่ากำลังย้ายงานจากเจ้าอื่น เพราะเจ้าเดิมจะมองไม่เห็น Node นั้นทันที
+      const taken = nodeAssignList.filter(n => nodePicks.has(n.SiteCode) && n.ContractorID && n.ContractorID !== to);
+      const name = clear ? '' : contractorNameOf(to);
+      const msg = clear
+        ? `ยกเลิกการมอบหมาย ${sites.length} Node? ผู้รับเหมาเดิมจะมองไม่เห็น Node เหล่านี้ทันที`
+        : `มอบหมาย ${sites.length} Node ให้ "${name}"?` +
+          (taken.length ? `\n\n${taken.length} Node ในนี้เป็นของเจ้าอื่นอยู่ — เจ้าเดิมจะมองไม่เห็นทันที` : '');
+      if (!(await showConfirm(msg))) return;
+
+      try {
+        nodeAssignList = (await call('assignNodes', sites, to)) || [];
+        contractorList = (await call('getContractors')) || contractorList;
+        nodePicks = new Set();
+        renderContractorList();
+        renderNodeAssignTable();
+        showToast(clear ? 'ยกเลิกการมอบหมายแล้ว' : 'มอบหมายให้ ' + name + ' แล้ว', 'success');
+      } catch (e) {}
+    }
+
+    function openContractorModal(c = {}) {
+      const isEdit = !!c.ID;
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 class="text-lg font-bold text-gray-800">${isEdit ? 'แก้ไขผู้รับเหมา: ' + esc(c.ID) : 'เพิ่มผู้รับเหมา'}</h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-2xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+              <input type="hidden" id="ct_ID" value="${esc(c.ID || '')}">
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">ชื่อบริษัท / หจก. <span class="text-red-500">*</span></label>
+                <input id="ct_Name" value="${esc(c.Name || '')}" placeholder="ชื่อเต็มตามที่จะขึ้นบนเอกสาร"
+                  class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none">
+                <p class="text-xs text-gray-400 mt-1">ชื่อนี้จะขึ้นเป็น "บ./หจก. ผู้ดำเนินการ" บนเอกสารที่ผู้รับเหมากรอก — ตั้งให้ถูกครั้งเดียว</p></div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                <input id="ct_Note" value="${esc(c.Note || '')}" placeholder="เช่น เบอร์ติดต่อ, ชื่อผู้ประสานงาน"
+                  class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
+              ${isEdit ? `
+              <label class="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" id="ct_Active" ${c.Active ? 'checked' : ''}> เปิดใช้งาน
+              </label>
+              <p class="text-xs text-gray-400 -mt-2">ปิดใช้งานแล้ว บัญชีทุกบัญชีของผู้รับเหมาเจ้านี้จะเข้าระบบไม่ได้ทันที</p>` : ''}
+            </div>
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+              <button onclick="saveContractorForm()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-floppy-disk"></i> บันทึก</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function saveContractorForm() {
+      const name = document.getElementById('ct_Name').value.trim();
+      if (!name) { showToast('กรุณาระบุชื่อผู้รับเหมา', 'error'); return; }
+      const activeEl = document.getElementById('ct_Active');
+      try {
+        contractorList = (await call('saveContractor', {
+          ID: document.getElementById('ct_ID').value || undefined,
+          Name: name,
+          Note: document.getElementById('ct_Note').value.trim(),
+          Active: activeEl ? activeEl.checked : true
+        })) || [];
+        closeModal();
+        renderContractorList();
+        renderNodeAssignFilters();
+        renderNodeAssignTable();
+        showToast('บันทึกผู้รับเหมาแล้ว', 'success');
+      } catch (e) {}
+    }
+
     /* ============== DASHBOARD ============== */
     async function loadDashboard() {
+      // หน้านี้ถูกถอดออกไปแล้ว (ผู้รับเหมา) — หลายจุดเรียกตัวนี้ต่อท้ายหลังบันทึกงาน ต้องไม่พัง
+      if (!document.getElementById('view-dashboard')) return;
       const sel = document.getElementById('dashYearSelect');
       const s = await call('getDashboardSummary', sel && sel.value ? Number(sel.value) : null);
 
@@ -4895,6 +5262,11 @@
         .map(s => `<option ${status === s ? 'selected' : ''}>${s}</option>`)
         .join('');
 
+      // แก้แผนไม่ได้ (เช่นผู้รับเหมา) แต่กรอกใบล้างได้ → หน้าต่างแบบอ่านอย่างเดียว
+      // เหลือแค่ปุ่มปิดงาน ช่องวันที่/ราคา/สถานะไม่มีให้แก้ เพราะเซิร์ฟเวอร์ไม่รับอยู่แล้ว
+      // ถ้าปล่อยช่องไว้ คนกรอกจะแก้แล้วกดบันทึก ได้ข้อความว่าไม่มีสิทธิ์ ซึ่งงงกว่าไม่มีช่อง
+      if (moduleLevel('plan') !== 'edit') { openRoundReadonly(i, r); return; }
+
       const doneNote = roundWasDone ? `
         <div class="flex items-start gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
           <i class="ph-fill ph-check-circle text-base flex-shrink-0 mt-0.5"></i>
@@ -4947,6 +5319,55 @@
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
+    }
+
+    /** หน้าต่างรอบแบบอ่านอย่างเดียว สำหรับคนที่ดูแผนได้แต่กรอกใบล้างได้ (ดู openRoundModal) */
+    function openRoundReadonly(i, r) {
+      const p = currentPlan[i];
+      const status = String(p['R' + r + '_Status'] || '').trim() || 'รอดำเนินการ';
+      const done = status === 'ล้างเสร็จสิ้น';
+      const canFill = docLevel('cleaning') === 'edit' && !done && status !== 'ยกเลิก' && !p.Retired && !p.Removed;
+      const row = (label, value) => `
+        <div class="flex justify-between gap-3 py-2 border-b border-gray-100 last:border-0 text-sm">
+          <span class="text-gray-500">${label}</span><span class="font-medium text-gray-800 text-right">${value || '-'}</span>
+        </div>`;
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease] overflow-hidden">
+            <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800">รอบที่ ${r} / ${esc(currentYear)}</h3>
+                <p class="text-xs text-gray-500 mt-0.5">${esc(p.AirCode)} · ${esc(p.NodeName)}</p>
+              </div>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                ${row('วันที่ตามแผน', esc(fmtDate(p['R' + r + '_PlanDate'])))}
+                ${row('สถานะ', esc(status))}
+                ${done ? row('วันที่ล้างจริง', esc(fmtDate(p['R' + r + '_ActualDate']))) : ''}
+              </div>
+              ${canFill ? `
+              <div>
+                <p class="text-xs font-semibold text-gray-700 mb-2">ล้างเสร็จแล้ว — เลือกทางใดทางหนึ่งเพื่อปิดงาน</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button onclick="openFormForPlanUnit(${i},${r})" class="px-4 py-3 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm flex items-center justify-center gap-1.5">
+                    <i class="ph ph-clipboard-text text-base"></i> กรอกฟอร์ม
+                  </button>
+                  <button onclick="openAttachFromPlan(${i},${r})" class="px-4 py-3 text-sm font-medium text-teal-700 bg-white border border-teal-500 rounded-lg hover:bg-teal-50 shadow-sm flex items-center justify-center gap-1.5">
+                    <i class="ph ph-paperclip text-base"></i> แนบเอกสาร
+                  </button>
+                </div>
+              </div>` : done ? `
+              <p class="text-xs text-emerald-700 flex items-center gap-1.5"><i class="ph-fill ph-check-circle"></i> รอบนี้ปิดงานแล้ว</p>` : ''}
+            </div>
+            <div class="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-end">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ปิด</button>
+            </div>
+          </div>
+        </div>`;
     }
 
     /**
@@ -5810,6 +6231,8 @@
 
     /* ============== 5. BUDGET (งบประมาณ) ============== */
     async function loadBudget() {
+      // หน้างบถูกถอดออกไปแล้ว (ไม่มีสิทธิ์) — หลายจุดเรียกตัวนี้ต่อท้ายหลังบันทึกงาน ต้องไม่พัง
+      if (!document.getElementById('view-budget')) return;
       const yearInput = document.getElementById('budgetYearSelect');
 
       // ปีที่ถูกขอมาจากการ์ดบนแดชบอร์ด ต้องชนะปีที่ค้างอยู่ในช่องเลือก
@@ -6506,7 +6929,8 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
-            (!r.first || !canEditRow) ? ''
+            // ผู้รับเหมาลบเอกสารไม่ได้ แม้เป็นใบของตัวเอง (เซิร์ฟเวอร์ปฏิเสธอยู่แล้ว ไม่ต้องโชว์ปุ่ม)
+            (!r.first || !canEditRow || isContractor()) ? ''
               : isRepair
               ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
               : isInstall
@@ -7450,8 +7874,13 @@ const CLEANING_CHECKLIST_ITEMS = [
         SN ${esc(single.unit.IndoorSerial || '-')} / ${esc(single.unit.OutdoorSerial || '-')}
       </div>
       <label class="block text-sm font-medium text-gray-700 mb-1">ค่าล้างเครื่องนี้ (บาท)</label>
-      <input type="number" id="cf_price" min="0" step="0.01" inputmode="decimal" placeholder="0.00" value="${esc(cfContext.price || '')}" class="${field}">
-      <p class="text-xs text-gray-500 mt-1">${cfContext.price ? 'ดึงราคาที่ตั้งไว้ในแผนมาให้แล้ว แก้ได้ถ้าราคาจริงต่างจากนี้' : 'ยังไม่ได้ตั้งราคาในแผน กรอกได้ที่นี่'}</p>`);
+      ${isContractor()
+        // ผู้รับเหมาใช้ราคาต่อรอบจากทะเบียนเสมอ เซิร์ฟเวอร์บังคับอยู่แล้ว (ดู bindToRegistry)
+        // ช่องนี้จึงแค่โชว์ให้รู้ ไม่ให้พิมพ์ จะได้ไม่เข้าใจผิดว่าแก้ราคาได้
+        ? `<input type="number" id="cf_price" value="${esc(single.unit.CleaningPrice || '')}" readonly class="${field} bg-slate-50 text-gray-600">
+           <p class="text-xs text-gray-500 mt-1">ราคาตามที่ตั้งไว้ในทะเบียนเครื่อง ถ้าไม่ตรงกับที่ตกลงไว้ ติดต่อเจ้าหน้าที่</p>`
+        : `<input type="number" id="cf_price" min="0" step="0.01" inputmode="decimal" placeholder="0.00" value="${esc(cfContext.price || '')}" class="${field}">
+           <p class="text-xs text-gray-500 mt-1">${cfContext.price ? 'ดึงราคาที่ตั้งไว้ในแผนมาให้แล้ว แก้ได้ถ้าราคาจริงต่างจากนี้' : 'ยังไม่ได้ตั้งราคาในแผน กรอกได้ที่นี่'}</p>`}`);
 
     const content = `
       <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
@@ -7531,7 +7960,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             ${card(`
               <div class="space-y-3">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
-                  <input id="cf_company" class="${field}"></div>
+                  ${companyInput('cf_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="cf_tech" value="${single ? esc(cfContext.technician || '') : ''}" class="${field}"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
@@ -8606,7 +9035,9 @@ const CLEANING_CHECKLIST_ITEMS = [
               <h3 class="text-sm font-bold text-gray-800 mb-1">ส่วนที่ 2 · ข้อมูลเครื่องที่ติดตั้ง</h3>
               <p class="text-xs text-gray-600 bg-slate-50 border border-gray-200 rounded px-2 py-1.5 mb-2">
                 ข้อมูลนี้ดึงมาจากทะเบียนเครื่อง — ถ้าเป็นเครื่องตัวใหม่
-                ให้ไปกด <b>"เปลี่ยนเครื่อง"</b> ที่หน้ารายการเครื่องก่อน แล้วค่อยกลับมาออกเอกสาร
+                ${isContractor()
+                  ? 'ให้ส่ง Serial ของเครื่องใหม่ให้เจ้าหน้าที่ <b>เปลี่ยนเครื่องในระบบ</b> ก่อน แล้วค่อยกลับมาออกเอกสาร'
+                  : 'ให้ไปกด <b>"เปลี่ยนเครื่อง"</b> ที่หน้ารายการเครื่องก่อน แล้วค่อยกลับมาออกเอกสาร'}
                 เอกสารจะได้ Serial ของเครื่องใหม่มาให้เอง
               </p>
               ${ifUnits.map(unitCard).join('')}`)}
@@ -8630,7 +9061,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label>
                   <input type="number" id="if_cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="${field}"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ติดตั้ง</label>
-                  <input id="if_company" class="${field}"></div>
+                  ${companyInput('if_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="if_tech" class="${field}"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
@@ -9568,7 +9999,9 @@ const CLEANING_CHECKLIST_ITEMS = [
             ${u.done ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-medium">รอบนี้ปิดไปแล้ว</span>' : ''}
           </span>
         </label>
-        ${u.on ? `
+        ${u.on && isContractor() ? `
+        <div class="px-3 pb-2.5 pl-10 text-xs text-gray-500">ค่าล้างใช้ราคาตามทะเบียนเครื่อง</div>` : ''}
+        ${u.on && !isContractor() ? `
         <div class="flex items-center gap-2 px-3 pb-2.5 pl-10">
           <span class="text-xs text-gray-600 flex-shrink-0">ค่าล้าง</span>
           <input type="number" min="0" value="${esc(u.price)}" placeholder="0"
