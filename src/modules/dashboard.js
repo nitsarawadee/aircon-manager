@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { isRetiredStatus, normalizeRegion, partsOf, safeParseDate, todayStart } from '../values.js';
+import { isRetiredStatus, partsOf, safeParseDate, todayStart } from '../values.js';
 import { getPlanYears, getCleaningPlan, summarizeCleaning } from './plan.js';
 import { getHistory } from './history.js';
 
@@ -30,12 +30,8 @@ export async function getDashboardSummary(ctx, year) {
   const nowY = partsOf(new Date()).y;
   const viewYear = Number(year) || nowY;
 
-  let airList = ctx.ss.objects(SHEETS.AIRLIST);
-
-  const info = await ctx.userInfo();
-  if (info.role !== 'Admin') {
-    airList = airList.filter(a => (info.regions || []).includes(normalizeRegion(a.Region)));
-  }
+  // กรองตามขอบเขตของผู้ใช้ (ภูมิภาค หรือ Node ของผู้รับเหมา)
+  let airList = ctx.ss.objects(SHEETS.AIRLIST).filter(await ctx.scopeFilter());
 
   // เครื่องที่รื้อถอนหรือขายออกไปแล้วไม่นับเป็นของที่มีอยู่
   // ข้อมูลยังอยู่ในระบบเพราะต้องเก็บประวัติ แต่ถ้านับรวมด้วย ยอดจะบวมขึ้นทุกปี

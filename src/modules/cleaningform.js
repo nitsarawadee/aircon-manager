@@ -8,7 +8,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
  */
 const KIND = 'cleaning';
-import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms, ymd } from '../values.js';
+import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { closePlanRound } from './plan.js';
@@ -292,6 +292,61 @@ function unitsBySlot(record) {
   return out;
 }
 
+/**
+ * ผูกใบที่ส่งมากับทะเบียนเครื่อง ก่อนบันทึก
+ *
+ * เดิมตรวจสิทธิ์ด้วย Region ที่หน้าเว็บส่งมาเอง ซึ่งคนส่งแก้ได้ — ส่ง Region
+ * ของภาคตัวเองมาคู่กับรหัสเครื่องของภาคอื่นก็ผ่าน ตอนนี้หาเครื่องทุกตัวจากทะเบียน
+ * ภายในขอบเขตของผู้ใช้ แล้วเขียนข้อมูล Node (ชื่อ รหัสไซต์ ภูมิภาค จังหวัด)
+ * จากทะเบียนทับของที่ส่งมา
+ *
+ * ต้องทับ SiteCode ด้วย เพราะด่านรวมใบ (findOpenForm) ใช้ SiteCode หาใบเดิม
+ * ถ้าเชื่อค่าที่ส่งมา ผู้รับเหมาจะเขียนเครื่องของตัวเองลงไปในใบของ Node อื่นได้
+ *
+ * ผู้รับเหมา: ราคาใช้ราคาต่อรอบจากทะเบียนเสมอ ราคานี้ไปลงแผนกับงบประมาณ
+ * และคือค่าจ้างของผู้รับเหมาเอง คนรับเงินจึงเป็นคนกรอกตัวเลขเองไม่ได้
+ *
+ * Admin ยังบันทึกเครื่องที่ไม่มีในทะเบียนได้เหมือนเดิม (เอกสารย้อนหลังของเครื่องที่ลบไปแล้ว)
+ */
+async function bindToRegistry(ctx, record, bySlot) {
+  const info = await ctx.userInfo();
+  const scope = await unitsInScope(ctx);
+
+  const found = [];
+  for (const slot of Object.keys(bySlot)) {
+    const code = bySlot[slot].code;
+    const unit = scope.find(u => normalizeCode(u.AirCode) === normalizeCode(code));
+    if (!unit) {
+      if (info.role === 'Admin') continue;
+      throw new Error('ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง หรือไม่มีสิทธิ์เข้าถึง');
+    }
+    found.push({ slot, unit });
+  }
+  if (!found.length) return;
+
+  const site = normalizeSiteCode(found[0].unit.SiteCode);
+  if (found.some(f => normalizeSiteCode(f.unit.SiteCode) !== site)) {
+    throw new Error('เครื่องที่เลือกอยู่คนละ Node บันทึกในใบเดียวกันไม่ได้');
+  }
+
+  const node = found[0].unit;
+  record.NodeName = plainText(node.NodeName);
+  record.SiteCode = plainText(node.SiteCode);
+  record.Region = plainText(node.Region);
+  record.Province = plainText(node.Province);
+  record.LocationType = plainText(node.LocationType);
+
+  if (info.role === 'Contractor') {
+    for (const { slot, unit } of found) {
+      bySlot[slot].price = hasPrice(unit.CleaningPricePerRound) ? Number(unit.CleaningPricePerRound) : '';
+    }
+    // ยอดรวมทั้งใบแบบรุ่นเก่าก็ห้ามรับ ไม่งั้นจะถูกใช้แทนราคาของเครื่องที่ทะเบียนไม่ได้ตั้งไว้
+    record.Price = '';
+    // ชื่อบริษัทใช้ชื่อที่ Admin ตั้งไว้ ข้อมูลเก่ามีชื่อเดียวกันถึง 7 แบบเพราะให้พิมพ์เอง
+    record.CompanyName = info.contractorName;
+  }
+}
+
 /** ค่าที่จะเขียนลงคอลัมน์ของช่องนั้น */
 function slotPayload(slot, unit) {
   const c = slotCols(slot);
@@ -526,10 +581,7 @@ export async function getCleaningForms(ctx, airCode) {
     list = list.filter(o => normalizeCode(o.AirCode1) === nc || normalizeCode(o.AirCode2) === nc);
   }
 
-  const info = await ctx.userInfo();
-  if (info.role !== 'Admin') {
-    list = list.filter(o => (info.regions || []).includes(normalizeRegion(o.Region)));
-  }
+  list = list.filter(await ctx.scopeFilter());
 
   // เรียงใหม่ก่อนเก่า — ใบที่บันทึกวินาทีเดียวกันตัดสินด้วยลำดับที่เข้ามา
   // (เกิดขึ้นจริงตอนรวมใบ ซึ่งเขียนสองแถวติดกันในคำสั่งเดียว)
@@ -564,10 +616,10 @@ export async function saveCleaningForm(ctx, record) {
   // จึงเช็คว่ามีเครื่องอย่างน้อย 1 ใน 2 ช่อง ไม่ใช่บังคับช่องแรกเสมอ
   if (!record.AirCode1 && !record.AirCode2) throw new Error('กรุณาเลือกเครื่องปรับอากาศอย่างน้อย 1 เครื่อง');
   if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
-  await ctx.assertRegionAccess(record.Region);
 
   // จัดเครื่องลงช่องตามเลขเครื่องจริง ก่อนทำอย่างอื่นทั้งหมด
   const bySlot = unitsBySlot(record);
+  await bindToRegistry(ctx, record, bySlot);
   for (const slot of [1, 2]) {
     Object.assign(record, bySlot[slot]
       ? slotPayload(slot, bySlot[slot])
@@ -746,7 +798,7 @@ export async function getCleaningDocHtml(ctx, row) {
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
 
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ — เปิดดูไฟล์ที่แนบไว้ได้จากลิงก์ในตาราง');
@@ -768,7 +820,7 @@ async function formForPhotos(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ จึงแนบรูปเพิ่มไม่ได้');
@@ -979,7 +1031,7 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
 
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   if (plainText(form.Source) === 'attach') {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ');
@@ -999,6 +1051,8 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
 export async function deleteCleaningForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
+    // ลบแล้วรูปถ่าย ไฟล์ PDF และไฟล์ที่ช่างแนบมาหายตามไปด้วย กู้คืนไม่ได้ จึงให้เฉพาะเจ้าหน้าที่
+    await ctx.assertStaff('ลบเอกสาร');
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -1082,11 +1136,12 @@ export async function uploadNodeDocuments(ctx, payload) {
 
     await ctx.ensureBase();
 
-    // ตรวจสิทธิ์ภูมิภาคของ Node นี้ กันการแนบไฟล์ข้ามภูมิภาคที่ไม่ได้ดูแล
+    // หาเครื่องของ Node นี้เฉพาะในขอบเขตของผู้ใช้ กันการแนบไฟล์ให้ Node ที่ไม่ได้ดูแล
+    // (ภูมิภาคอื่น หรือ Node ที่ไม่ได้มอบหมายให้ผู้รับเหมาคนนี้)
     const air = await unitsInScope(ctx);
     const nodeUnits = air.filter(a => plainText(a.NodeName).trim() === nodeName);
     if (!nodeUnits.length) throw new Error('ไม่พบ Node "' + nodeName + '" หรือไม่มีสิทธิ์เข้าถึง');
-    await ctx.assertRegionAccess(nodeUnits[0].Region);
+    const isContractor = (await ctx.userInfo()).role === 'Contractor';
 
     const closeout = payload.closeout || null;
     let units = [];
@@ -1112,7 +1167,10 @@ export async function uploadNodeDocuments(ctx, payload) {
         const own = plainText(w.condition);
         return {
           airCode: plainText(found.AirCode),
-          price: hasPrice(w.price) ? Number(w.price) : '',
+          // ผู้รับเหมาใช้ราคาจากทะเบียนเสมอ (เหตุผลเดียวกับ bindToRegistry)
+          price: isContractor
+            ? (hasPrice(found.CleaningPricePerRound) ? Number(found.CleaningPricePerRound) : '')
+            : (hasPrice(w.price) ? Number(w.price) : ''),
           cond: own || plainText(closeout.condition)
         };
       });
@@ -1205,7 +1263,9 @@ export async function uploadNodeDocuments(ctx, payload) {
       EquipmentCondition: units[0] ? units[0].cond : '',
       EquipmentCondition2: units[1] ? units[1].cond : '',
       AdditionalNote: (closeout && closeout.note) || '',
-      CompanyName: (closeout && closeout.companyName) || '',
+      CompanyName: isContractor
+        ? (await ctx.userInfo()).contractorName
+        : ((closeout && closeout.companyName) || ''),
       TechnicianName: (closeout && closeout.technician) || '',
       PdfUrl: docUrl,
       PdfFileId: '',
@@ -1242,7 +1302,7 @@ async function docNoOfRow(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
   return plainText(form.DocNo) || plainText(form.ID);
 }
 

@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
-import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms } from '../values.js';
+import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
@@ -75,10 +75,7 @@ export async function getInstallForms(ctx, airCode) {
       normalizeCode(o.AirCode1) === nc || normalizeCode(o.AirCode2) === nc);
   }
 
-  const info = await ctx.userInfo();
-  if (info.role !== 'Admin') {
-    list = list.filter(o => (info.regions || []).includes(normalizeRegion(o.Region)));
-  }
+  list = list.filter(await ctx.scopeFilter());
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
   return list.sort(newestFirst('CreatedAt'));
@@ -157,12 +154,23 @@ export async function saveInstallForm(ctx, record) {
   for (const slot of [1, 2]) {
     const code = plainText(record['AirCode' + slot]).trim();
     if (!code) continue;
+    // unitOf หาเฉพาะเครื่องในขอบเขตของผู้ใช้อยู่แล้ว (ภูมิภาค หรือ Node ของผู้รับเหมา)
     const unit = await unitOf(ctx, code);
-    await ctx.assertRegionAccess(unit.Region);
     units[slot] = unit;
   }
 
+  // ใบหนึ่งคือการไปติดตั้งที่ Node เดียว ข้อมูล Node บนหัวใบเอามาจากเครื่องตัวแรก
+  // ถ้าปล่อยให้สองเครื่องมาจากคนละ Node เครื่องตัวที่สองจะไปโผล่ในใบของ Node อื่น
+  if (units[1] && units[2] &&
+      normalizeSiteCode(units[1].SiteCode) !== normalizeSiteCode(units[2].SiteCode)) {
+    throw new Error('เครื่องที่ 1 กับเครื่องที่ 2 อยู่คนละ Node บันทึกในใบเดียวกันไม่ได้');
+  }
+
   const first = units[1] || units[2];
+
+  // ผู้รับเหมา: ชื่อบริษัทใช้ชื่อที่ Admin ตั้งไว้ ไม่ให้พิมพ์เอง (ข้อมูลเก่ามีชื่อเดียวกันถึง 7 แบบ)
+  const info = await ctx.userInfo();
+  const companyName = info.role === 'Contractor' ? info.contractorName : plainText(record.CompanyName);
 
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
@@ -184,7 +192,7 @@ export async function saveInstallForm(ctx, record) {
       AcceptResult1: plainText(record.AcceptResult1),
       AcceptResult2: plainText(record.AcceptResult2),
       AdditionalNote: plainText(record.AdditionalNote),
-      CompanyName: plainText(record.CompanyName),
+      CompanyName: companyName,
       TechnicianName: plainText(record.TechnicianName),
       SupervisorName: plainText(record.SupervisorName),
       Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
@@ -258,6 +266,8 @@ export async function saveInstallForm(ctx, record) {
 export async function deleteInstallForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('installform');
+    // ลบแล้วรูปถ่ายกับไฟล์ PDF หายตามไปด้วย กู้คืนไม่ได้ จึงให้เฉพาะเจ้าหน้าที่
+    await ctx.assertStaff('ลบเอกสาร');
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -296,7 +306,7 @@ async function formForPhotos(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   const docNo = docNoOf(form);
   if (!docNo) throw new Error('เอกสารใบนี้ยังไม่มีเลขที่ จึงเก็บรูปไม่ได้');
@@ -372,7 +382,7 @@ export async function getInstallDocHtml(ctx, row) {
 
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   const { buildInstallDocHtml } = await import('./install-doc.js');
   const docNo = docNoOf(form);
@@ -483,7 +493,7 @@ export async function getInstallDocPdf(ctx, row, expectId) {
 
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
 
   const { docNo, base64 } = await renderPdf(ctx, form);
 

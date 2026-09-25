@@ -52,7 +52,7 @@ export function statusChangeEvent(status) {
 }
 
 /**
- * เครื่องทั้งหมดที่ผู้ใช้คนนี้ "เกี่ยวข้องได้" — กรองตามขอบเขตภูมิภาคอย่างเดียว
+ * เครื่องทั้งหมดที่ผู้ใช้คนนี้ "เกี่ยวข้องได้" — กรองตามขอบเขตของผู้ใช้อย่างเดียว (ภูมิภาค หรือ Node ของผู้รับเหมา)
  *
  * ============================================================================
  * ต่างจาก getAirList ตรงไหน และทำไมต้องมีสองตัว
@@ -68,7 +68,7 @@ export function statusChangeEvent(status) {
  * ไม่มีใครเจอเพราะผู้ใช้จริงทุกคนบังเอิญมีสิทธิ์ดูรายการเครื่อง แต่ผู้รับเหมาจะเจอแน่
  *
  * ตัวนี้จึงไม่ตรวจสิทธิ์เมนู ให้คนเรียกตรวจสิทธิ์ของงานตัวเองเอง (เช่นสิทธิ์เอกสาร)
- * แล้วใช้ตัวนี้แค่หาเครื่อง — ขอบเขตภูมิภาคยังบังคับเหมือนเดิมทุกอย่าง
+ * แล้วใช้ตัวนี้แค่หาเครื่อง — ขอบเขตยังบังคับเหมือนเดิมทุกอย่าง (ดู ctx.scopeFilter)
  *
  * ⚠️ ห้ามเอาไปส่งให้หน้าเว็บแทน getAirList ตรงๆ เพราะจะข้ามสิทธิ์เมนูรายการเครื่อง
  */
@@ -76,10 +76,7 @@ export async function unitsInScope(ctx) {
   await ctx.requireAccess();
   await ctx.ensureBase();
 
-  const list = ctx.ss.objects(SHEETS.AIRLIST);
-  const info = await ctx.userInfo();
-  if (info.role === 'Admin') return list;
-  return list.filter(a => (info.regions || []).includes(normalizeRegion(a.Region)));
+  return ctx.ss.objects(SHEETS.AIRLIST).filter(await ctx.scopeFilter());
 }
 
 export async function getAirList(ctx) {
@@ -94,10 +91,7 @@ export async function getAirList(ctx) {
     UpdatedAt: formatDate(o.UpdatedAt)
   }));
 
-  const info = await ctx.userInfo();
-  if (info.role !== 'Admin') {
-    list = list.filter(a => (info.regions || []).includes(normalizeRegion(a.Region)));
-  }
+  list = list.filter(await ctx.scopeFilter());
   return list;
 }
 

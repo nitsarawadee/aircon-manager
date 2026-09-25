@@ -172,6 +172,9 @@ export function normalizeCode(v) {
   return String(v == null ? '' : v).trim().toUpperCase();
 }
 
+/** รหัสไซต์ (SiteCode) ใช้กติกาเดียวกับรหัสเครื่อง */
+export const normalizeSiteCode = normalizeCode;
+
 /**
  * แปลงค่า Region ให้เป็นข้อความเสมอก่อนเทียบ
  * กัน Google Sheets แปลงค่าที่พิมพ์เป็นตัวเลข (เช่น "6") ให้กลายเป็น Number

@@ -312,14 +312,32 @@ export async function saveUser(ctx, user) {
       throw new Error('กรุณาตั้งรหัสผ่านสำหรับผู้ใช้ใหม่');
     }
 
+    // บัญชีผู้รับเหมาต้องเลือกผู้รับเหมาจากรายชื่อที่มีอยู่ ห้ามพิมพ์ชื่อเอง
+    // ขอบเขตของบัญชีนี้มาจาก Node ที่มอบหมายให้รหัสนั้น พิมพ์ผิดคือเห็นงานผิดเจ้า
+    //
+    // ภูมิภาคกับสิทธิ์รายเมนูล้างทิ้ง เพราะผู้รับเหมาใช้สิทธิ์ตายตัว (CONTRACTOR_PERMISSIONS)
+    // ถ้าเก็บค่าเก่าค้างไว้ วันที่เปลี่ยนบัญชีกลับเป็นเจ้าหน้าที่ สิทธิ์เก่าจะกลับมาเองโดยไม่มีใครตั้ง
+    const role = ['Admin', 'Contractor'].includes(user.Role) ? user.Role : 'RegionAdmin';
+    let contractorId = '';
+    if (role === 'Contractor') {
+      contractorId = String(user.ContractorID || '').trim();
+      if (!contractorId) throw new Error('กรุณาเลือกผู้รับเหมาที่บัญชีนี้สังกัด');
+      const exists = ctx.ss.objects(SHEETS.CONTRACTOR)
+        .some(c => String(c.ID || '').trim().toUpperCase() === contractorId.toUpperCase());
+      if (!exists) throw new Error('ไม่พบผู้รับเหมารหัส ' + contractorId + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
+    }
+
     const isActive = !(user.Active === false || user.Active === 'false');
     const payload = {
       Username: username,
       Email: user.Email || '',
       Name: user.Name || '',
-      Role: user.Role === 'Admin' ? 'Admin' : 'RegionAdmin',
-      Regions: Array.isArray(user.Regions) ? user.Regions.join(',') : (user.Regions || ''),
-      Permissions: permStr,
+      Role: role,
+      Regions: role === 'Contractor' ? ''
+        : (Array.isArray(user.Regions) ? user.Regions.join(',') : (user.Regions || '')),
+      // ไม่ใช้ค่าว่าง เพราะช่องว่าง = "แก้ไขได้ทุกเมนู" (ผู้ใช้ยุคก่อนมีระบบสิทธิ์)
+      Permissions: role === 'Contractor' ? MODULES.map(m => m + ':none').join(',') : permStr,
+      ContractorID: contractorId,
       Active: isActive,
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: await ctx.currentUser(),

@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
-import { cleanFormValue, normalizeCode, normalizeRegion, plainText, ymdhms } from '../values.js';
+import { cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
@@ -63,11 +63,8 @@ export async function getRepairForms(ctx, airCode) {
     list = list.filter(o => normalizeCode(o.AirCode) === nc);
   }
 
-  // กรองตามสิทธิ์ภูมิภาคเหมือนทุกหน้า
-  const info = await ctx.userInfo();
-  if (info.role !== 'Admin') {
-    list = list.filter(o => (info.regions || []).includes(normalizeRegion(o.Region)));
-  }
+  // กรองตามขอบเขตของผู้ใช้เหมือนทุกหน้า
+  list = list.filter(await ctx.scopeFilter());
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
   return list.sort(newestFirst('CreatedAt'));

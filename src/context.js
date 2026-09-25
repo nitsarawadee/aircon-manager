@@ -3,9 +3,9 @@ import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
   CONTRACTOR_HEADERS, NODEASSIGN_HEADERS,
-  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS
+  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS
 } from './schema.js';
-import { normalizeCode, normalizeRegion } from './values.js';
+import { normalizeCode, normalizeRegion, normalizeSiteCode } from './values.js';
 
 /**
  * ข้อมูลประจำ request หนึ่งครั้ง — รวมทุกอย่างที่ฟังก์ชันธุรกิจต้องใช้ไว้ที่เดียว
@@ -166,7 +166,8 @@ export class Ctx {
 
   /**
    * ข้อมูลสิทธิ์ของผู้ใช้ปัจจุบัน { email, username, name, role, regions, permissions }
-   * role: 'Admin' (ทุกภูมิภาค + จัดการผู้ใช้ได้) | 'RegionAdmin' (เฉพาะภูมิภาคที่ได้รับมอบหมาย) | 'NoAccess'
+   * role: 'Admin' (ทุกภูมิภาค + จัดการผู้ใช้ได้) | 'RegionAdmin' (เฉพาะภูมิภาคที่ได้รับมอบหมาย)
+   *     | 'Contractor' (เฉพาะ Node ที่ได้รับมอบหมาย) | 'NoAccess'
    */
   async userInfo() {
     if (this._userInfo) return this._userInfo;
@@ -186,6 +187,15 @@ export class Ctx {
       return this._userInfo;
     }
 
+    // ผู้รับเหมาเช็คก่อนบทบาทอื่นเสมอ บัญชีที่ผูกกับผู้รับเหมาไว้ จะไม่มีทางได้
+    // สิทธิ์เจ้าหน้าที่ แม้ช่อง Role จะเขียนว่า Admin (เช่นแก้ฐานข้อมูลตรงแล้วพิมพ์ผิด)
+    // ถ้าผิดพลาด ขอให้ผิดไปทางเห็นน้อยกว่า ไม่ใช่เห็นทั้งบริษัท
+    const contractorId = String(u.ContractorID || '').trim();
+    if (contractorId || String(u.Role || '').trim().toLowerCase() === 'contractor') {
+      this._userInfo = this._contractorInfo(u, contractorId);
+      return this._userInfo;
+    }
+
     const regions = u.Regions ? String(u.Regions).split(',').map(normalizeRegion).filter(Boolean) : [];
     const role = String(u.Role || '').trim().toLowerCase() === 'admin' ? 'Admin' : 'RegionAdmin';
 
@@ -198,6 +208,88 @@ export class Ctx {
       permissions: role === 'Admin' ? allEditPermissions() : parsePermissions(u.Permissions)
     };
     return this._userInfo;
+  }
+
+  /**
+   * ข้อมูลสิทธิ์ของบัญชีผู้รับเหมา
+   *
+   * ขอบเขตคือรายการ SiteCode ที่มอบหมายให้ผู้รับเหมาเจ้านี้ ไม่ใช่ภูมิภาค
+   * อ่านใหม่ทุก request จึงมีผลทันทีที่ Admin เปลี่ยนการมอบหมาย หรือปิดผู้รับเหมา
+   * ไม่ต้องรอให้ผู้รับเหมาล็อกอินใหม่
+   *
+   * ไม่มีรหัสผู้รับเหมา / หาไม่เจอ / ถูกปิดใช้งาน = เข้าระบบไม่ได้เลย
+   * (ไม่ถอยไปเป็นเจ้าหน้าที่ เพราะนั่นคือการเห็นมากขึ้น)
+   */
+  _contractorInfo(u, contractorId) {
+    const base = {
+      email: u.Email || '', username: u.Username || '', name: u.Name || '',
+      regions: [], sites: []
+    };
+    const want = contractorId.toUpperCase();
+    const c = contractorId && this.ss.objects(SHEETS.CONTRACTOR)
+      .find(x => String(x.ID || '').trim().toUpperCase() === want);
+    const active = c && c.Active !== false && String(c.Active).toUpperCase() !== 'FALSE';
+    if (!active) return { ...base, role: 'NoAccess', permissions: {} };
+
+    const sites = this.ss.objects(SHEETS.NODEASSIGN)
+      .filter(a => String(a.ContractorID || '').trim().toUpperCase() === want)
+      .map(a => normalizeSiteCode(a.SiteCode))
+      .filter(Boolean);
+
+    return {
+      ...base,
+      role: 'Contractor',
+      contractorId: String(c.ID).trim(),
+      contractorName: String(c.Name || '').trim(),
+      sites,
+      permissions: contractorPermissions()
+    };
+  }
+
+  /**
+   * ตัวตรวจว่าแถวข้อมูลแถวหนึ่งอยู่ในขอบเขตที่ผู้ใช้คนนี้เข้าถึงได้หรือไม่
+   *
+   * ใช้ได้ทั้งแถวเครื่องและแถวเอกสาร เพราะทั้งคู่มีคอลัมน์ Region กับ SiteCode
+   *   Admin       ทุกแถว
+   *   RegionAdmin แถวที่ Region อยู่ในภูมิภาคที่ดูแล
+   *   Contractor  แถวที่ SiteCode เป็น Node ที่ได้รับมอบหมาย
+   *   อื่นๆ       ไม่มีสักแถว
+   *
+   * ทุกหน้าที่กรองข้อมูลต้องใช้ตัวนี้ตัวเดียว ถ้าแต่ละหน้าเขียนเงื่อนไขเอง
+   * พอเพิ่มบทบาทใหม่ หน้าที่ลืมแก้จะปล่อยข้อมูลรั่วโดยไม่มีอะไรฟ้อง
+   */
+  async scopeFilter() {
+    const info = await this.userInfo();
+    if (info.role === 'Admin') return () => true;
+    if (info.role === 'RegionAdmin') {
+      const regions = new Set(info.regions || []);
+      return row => regions.has(normalizeRegion((row || {}).Region));
+    }
+    if (info.role === 'Contractor') {
+      const sites = new Set(info.sites || []);
+      return row => sites.has(normalizeSiteCode((row || {}).SiteCode));
+    }
+    return () => false;
+  }
+
+  /** หยุดทันทีถ้าแถวนี้อยู่นอกขอบเขตของผู้ใช้ */
+  async assertInScope(row, label) {
+    const inScope = await this.scopeFilter();
+    if (!inScope(row)) {
+      throw new Error('คุณไม่มีสิทธิ์เข้าถึง' + (label || 'ข้อมูลรายการนี้'));
+    }
+  }
+
+  /**
+   * งานที่ต้องเป็นเจ้าหน้าที่ INTERLINK เท่านั้น (ผู้รับเหมาทำไม่ได้แม้มีสิทธิ์แก้ไขเมนูนั้น)
+   * เช่นลบเอกสาร — ลบแล้วรูปถ่ายและไฟล์แนบหายตามไปด้วย กู้คืนไม่ได้
+   */
+  async assertStaff(action) {
+    await this.requireAccess();
+    const info = await this.userInfo();
+    if (info.role !== 'Admin' && info.role !== 'RegionAdmin') {
+      throw new Error('บัญชีผู้รับเหมา' + (action || 'ทำรายการนี้') + 'ไม่ได้ กรุณาติดต่อเจ้าหน้าที่');
+    }
   }
 
   async requireAccess() {
@@ -286,17 +378,14 @@ export class Ctx {
   }
 
   /**
-   * เซตของ AirCode ทั้งหมดที่ผู้ใช้ (RegionAdmin) คนนี้เข้าถึงได้
-   * ใช้กรองหน้า History/Plan ซึ่งไม่มีคอลัมน์ Region อยู่ในตัวเอง
+   * เซตของ AirCode ทั้งหมดที่ผู้ใช้คนนี้เข้าถึงได้
+   * ใช้กรองหน้า History/Plan ซึ่งไม่มีคอลัมน์ Region/SiteCode อยู่ในตัวเอง
    */
   async allowedAirCodes() {
-    const info = await this.userInfo();
     await this.ss.load(SHEETS.AIRLIST);
-    const list = this.ss.objects(SHEETS.AIRLIST);
-    const allowedRegions = info.regions || [];
+    const inScope = await this.scopeFilter();
     return new Set(
-      list.filter(a => allowedRegions.includes(normalizeRegion(a.Region)))
-          .map(a => normalizeCode(a.AirCode))
+      this.ss.objects(SHEETS.AIRLIST).filter(inScope).map(a => normalizeCode(a.AirCode))
     );
   }
 
@@ -342,6 +431,13 @@ export class Ctx {
 export function allEditPermissions() {
   const perms = {};
   MODULES.forEach(m => (perms[m] = 'edit'));
+  return perms;
+}
+
+/** สิทธิ์ตายตัวของผู้รับเหมา ครบทุกโมดูล — โมดูลที่ไม่ได้ระบุเป็น "none" */
+export function contractorPermissions() {
+  const perms = {};
+  MODULES.forEach(m => (perms[m] = CONTRACTOR_PERMISSIONS[m] || 'none'));
   return perms;
 }
 
