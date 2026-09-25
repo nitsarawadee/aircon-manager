@@ -189,6 +189,26 @@ export const TABLES = {
    *
    * ⚠️ ลำดับคอลัมน์ต้องตรงกับ CONTRACTOR_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
    */
+  /**
+   * ลิงก์กรอกเอกสารซ่อม — เจ้าหน้าที่สร้างแล้วส่งให้ใครก็ได้ (ส่วนใหญ่ผู้รับเหมา)
+   * คนที่ถือลิงก์กรอกใบซ่อมของงานนั้นได้โดยไม่ต้องมีบัญชี
+   *
+   * เก็บแค่แฮชของรหัสในลิงก์ (TokenHash) ไม่เก็บตัวรหัสเอง
+   * ถ้าไฟล์ฐานข้อมูลหลุดไป (เช่นไฟล์สำรอง) คนที่ได้ไปก็เอาไปเปิดลิงก์ไม่ได้
+   * ผลคือเจ้าหน้าที่ขอดูลิงก์เดิมซ้ำไม่ได้ ต้องสร้างใหม่ (ลิงก์เก่าจะถูกยกเลิกให้)
+   *
+   * ใช้ได้ครั้งเดียว: ส่งแล้ว UsedAt กับ DocNo มีค่า ลิงก์เหลือแค่เพิ่มรูปกับโหลด PDF
+   */
+  repair_links: {
+    sheet: 'RepairLink',
+    columns: {
+      ID: S, TokenHash: S, AirCode: S, CreatedAt: DT, CreatedBy: S, ExpiresAt: DT,
+      UsedAt: DT, DocNo: S, RevokedAt: DT, RevokedBy: S
+    },
+    indexes: [['TokenHash'], ['AirCode']],
+    unique: ['ID']
+  },
+
   contractors: {
     sheet: 'Contractor',
     columns: {

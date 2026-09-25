@@ -16,7 +16,8 @@ export const SHEETS = {
   CLEANFORM: 'CleaningForm',
   REPAIRFORM: 'RepairForm',
   INSTALLFORM: 'InstallForm',
-  CONTRACTOR: 'Contractor'
+  CONTRACTOR: 'Contractor',
+  REPAIRLINK: 'RepairLink'
 };
 
 export const AIRLIST_HEADERS = [
@@ -61,6 +62,15 @@ export const USERS_HEADERS = [
  */
 export const CONTRACTOR_HEADERS = [
   'ID', 'Name', 'Active', 'Note', 'CreatedAt', 'UpdatedAt', 'UpdatedBy'
+];
+
+/**
+ * ลิงก์กรอกเอกสารซ่อมโดยไม่ต้องล็อกอิน — ดูเหตุผลที่ db/schema.js (repair_links)
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const REPAIRLINK_HEADERS = [
+  'ID', 'TokenHash', 'AirCode', 'CreatedAt', 'CreatedBy', 'ExpiresAt',
+  'UsedAt', 'DocNo', 'RevokedAt', 'RevokedBy'
 ];
 
 export const CONFIG_HEADERS = ['Region', 'LocationType', 'Brand', 'Status', 'Technician', 'EventType'];

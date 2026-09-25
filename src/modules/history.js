@@ -196,7 +196,8 @@ export async function addHistoryRaw(ctx, record) {
     Technician: record.Technician || '',
     Note: record.Note || '',
     CreatedAt: ymdhms(new Date()),
-    RecordedBy: me,
+    // ส่งมาเองได้ สำหรับงานที่ไม่ได้มาจากผู้ใช้ที่ล็อกอิน (เช่นใบซ่อมที่กรอกผ่านลิงก์)
+    RecordedBy: record.RecordedBy || me,
     // ใบที่เป็นส่วนหนึ่งของเคสงานซ่อมจะถือเลขเคสไว้ ใบอื่นเว้นว่าง
     CaseID: record.CaseID || ''
   };

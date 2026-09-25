@@ -32,6 +32,10 @@ import {
   saveInstallPhoto, deleteInstallPhoto, getInstallPhotos
 } from './modules/installform.js';
 import { getContractors } from './modules/contractors.js';
+import {
+  getRepairLink, submitRepairLink, saveRepairLinkPhoto, getRepairLinkPdf,
+  createRepairLink, getRepairLinks, revokeRepairLink
+} from './modules/repairlink.js';
 
 /**
  * ============================================================================
@@ -132,6 +136,10 @@ const API_FUNCTIONS = {
   saveRepairPhoto,
   deleteRepairPhoto,
   getRepairPhotos,
+  // ลิงก์ให้คนนอกกรอกเอกสารซ่อม (ฝั่งเจ้าหน้าที่ — ตัวที่คนถือลิงก์ใช้อยู่ใน PUBLIC_FUNCTIONS)
+  createRepairLink,
+  getRepairLinks,
+  revokeRepairLink,
 
   // เอกสารติดตั้ง ITEL-FM-NE-006
   getInstallForms,
@@ -150,7 +158,14 @@ const API_FUNCTIONS = {
 const PUBLIC_FUNCTIONS = {
   getSystemStatus,
   login,
-  setupFirstAdmin
+  setupFirstAdmin,
+
+  // ลิงก์กรอกเอกสารซ่อม — ไม่ต้องล็อกอิน แต่ต้องมีรหัสในลิงก์ทุกคำสั่ง
+  // รหัสนั้นเปิดได้แค่งานซ่อมงานเดียวที่ผูกไว้ (ดูหัวไฟล์ modules/repairlink.js)
+  getRepairLink,
+  submitRepairLink,
+  saveRepairLinkPhoto,
+  getRepairLinkPdf
 };
 
 /** เส้นทางนี้เป็นคำสั่งของ API หรือไม่ (ที่เหลือคือไฟล์หน้าเว็บ) */

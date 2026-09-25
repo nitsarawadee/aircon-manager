@@ -32,6 +32,7 @@ const DOC_ASSETS = { fontHref: '/vendor/fonts.css', logoHref: '/assets/form-logo
  * ไฟล์ PDF ไปที่ data/docs/repair/ และรูปไปที่ data/photos/repair/
  */
 const KIND = 'repair';
+export { KIND as REPAIR_KIND };
 
 /** ประเภทเหตุการณ์ที่ใบนี้ลงในประวัติ — ตัวเดียวกับที่ปุ่มปิดงานซ่อมเดิมใช้ */
 const CLOSE_EVENT = 'ซ่อมแล้ว';
@@ -100,94 +101,9 @@ export async function saveRepairForm(ctx, record) {
   const unit = await unitOf(ctx, record.AirCode);
   await ctx.assertRegionAccess(unit.Region);
 
-  // อาการที่แจ้งไว้ตอนเปิดเคส — เก็บไว้ก่อน เพราะจะถูกล้างออกจากข้อมูลเครื่องตอนปิดงาน
-  // ไม่พึ่งข้อความที่หน้าเว็บส่งมา เพราะคนกรอกลบทิ้งได้ ถ้าไม่ดักตรงนี้
-  // อาการเสียที่แจ้งไว้จะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
-  const reported = plainText(unit.Note).trim();
-
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
-
-    const row = {
-      ID: 'RF' + Date.now(),
-      Date: plainText(record.Date),
-      NodeName: unit.NodeName,
-      SiteCode: unit.SiteCode,
-      Region: unit.Region,
-      Province: unit.Province,
-      LocationType: unit.LocationType,
-      AirCode: unit.AirCode,
-      Brand: unit.Brand,
-      BTU: unit.BTU,
-      // ⚠️ ทะเบียนเครื่องเก็บชื่อคอลัมน์ว่า IndoorSN/OutdoorSN แต่แบบฟอร์มเขียนว่า Serial
-      // ต้องแปลงชื่อตรงนี้ ไม่งั้นช่อง Serial บนเอกสารจะว่างทั้งที่ทะเบียนมีข้อมูลอยู่
-      IndoorSerial: plainText(unit.IndoorSN),
-      IndoorAsset: plainText(unit.IndoorAsset),
-      OutdoorSerial: plainText(unit.OutdoorSN),
-      OutdoorAsset: plainText(unit.OutdoorAsset),
-      Symptom: plainText(record.Symptom),
-      Cause: plainText(record.Cause),
-      Fix: plainText(record.Fix),
-      ChecklistJSON: JSON.stringify(record.Checklist || []),
-      PartsJSON: JSON.stringify(record.Parts || []),
-      Suggestion: plainText(record.Suggestion),
-      CompanyName: plainText(record.CompanyName),
-      TechnicianName: plainText(record.TechnicianName),
-      SupervisorName: plainText(record.SupervisorName),
-      Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
-      CreatedAt: ymdhms(new Date()),
-      RecordedBy: await ctx.currentUser(),
-      // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
-      DocNo: nextDocNo(ctx, record.Date),
-      // เกาะเคสที่เปิดค้างอยู่ของเครื่องนี้ ไม่มีก็เปิดเคสใหม่ให้
-      CaseID: ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode)
-    };
-
-    const headers = ctx.ss.headers(SHEETS.REPAIRFORM);
-    ctx.ss.appendRow(SHEETS.REPAIRFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
-
-    // ลงประวัติ "ซ่อมแล้ว" ซึ่งเป็นตัวปิดเคสตามกติกาเดิมของระบบ
-    //
-    // อาการที่แจ้งไว้ตอนเปิดเคสต้องติดไปในประวัติด้วย เพราะกำลังจะถูกล้าง
-    // ออกจากข้อมูลเครื่อง ถ้าไม่เก็บไว้ที่นี่ก็หายไปจากระบบทั้งหมด
-    const symptom = plainText(row.Symptom).trim();
-    const detail = [reported && !symptom.includes(reported) ? 'อาการที่แจ้งไว้: ' + reported : '',
-                    [symptom, plainText(row.Fix).trim()].filter(Boolean).join(' → ')]
-      .filter(Boolean).join(' — ') || 'ซ่อมตามเอกสาร ' + row.DocNo;
-
-    await addHistoryRaw(ctx, {
-      AirCode: row.AirCode,
-      Date: row.Date,
-      EventType: CLOSE_EVENT,
-      Detail: detail,
-      Cost: row.Cost,
-      Technician: row.TechnicianName,
-      Note: 'เอกสาร ' + row.DocNo,
-      CaseID: row.CaseID
-    });
-
-    // ============================================================================
-    // ปิดงานจริง — คืนสถานะเครื่องและล้างอาการเสียที่ค้างอยู่
-    // ============================================================================
-    // ขาดขั้นตอนนี้ไปไม่ได้ เพราะตอนนี้การออกเอกสารเป็นทางเดียวที่ปิดงานซ่อมได้
-    // (เจ้าของงานให้เอาปุ่ม "ปิดงานอย่างเดียว" ออก) ถ้าไม่คืนสถานะ เครื่องจะค้าง
-    // เป็น "รอซ่อม" ตลอดไป และขึ้นอยู่ในหน้างานซ่อมทั้งที่ซ่อมเสร็จแล้ว
-    //
-    // ล้าง Note ด้วย ไม่งั้นเครื่องที่ซ่อมเสร็จจะยังโชว์อาการเดิมค้างอยู่
-    // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
-    //
-    // เครื่องที่ไม่ได้อยู่ในสถานะงานซ่อม (เช่นช่างซ่อมหน้างานเลยโดยไม่ได้แจ้ง)
-    // ไม่ต้องแตะสถานะ เพราะมันใช้งานปกติอยู่แล้ว
-    const airRow = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === normalizeCode(unit.AirCode));
-    if (airRow && ['รอซ่อม', 'ชำรุด'].includes(plainText(airRow.Status).trim())) {
-      ctx.ss.writeByHeaders(SHEETS.AIRLIST, airRow._row, {
-        Status: 'ใช้งานปกติ',
-        Note: '',
-        UpdatedAt: ymdhms(new Date()),
-        UpdatedBy: row.RecordedBy
-      });
-    }
-
+    const row = await writeRepairForm(ctx, unit, record, await ctx.currentUser());
     await ctx.ss.flush();
     return { docNo: row.DocNo, caseId: row.CaseID, forms: await getRepairForms(ctx) };
   });
@@ -195,6 +111,109 @@ export async function saveRepairForm(ctx, record) {
   // เก็บสำเนา PDF ไว้บนเซิร์ฟเวอร์ (นอกล็อก เพราะต้องรอเบราว์เซอร์แปลงไฟล์)
   await storeRepairPdf(ctx, saved.docNo);
   return saved;
+}
+
+/**
+ * เขียนเอกสารซ่อมหนึ่งใบ + ลงประวัติ "ซ่อมแล้ว" + คืนสถานะเครื่อง (ยังไม่ flush)
+ *
+ * แยกออกมาให้ทั้งการกรอกในระบบ (saveRepairForm) และการกรอกผ่านลิงก์ (repairlink.js)
+ * ใช้ตัวเดียวกัน ถ้าลิงก์เขียนเอง วันหนึ่งสองทางจะปิดงานไม่เหมือนกัน
+ * เช่นทางหนึ่งลืมคืนสถานะเครื่อง แล้วเครื่องค้างเป็น "รอซ่อม" ตลอดไป
+ *
+ * ⚠️ ไม่ตรวจสิทธิ์เอง ผู้เรียกต้องตรวจก่อน และต้องเรียกในล็อก หลัง ensureBase
+ *
+ * @param {Object} unit        แถวเครื่องจากทะเบียน
+ * @param {string} recordedBy  ผู้บันทึก (ชื่อผู้ใช้ หรือคำอธิบายลิงก์)
+ * @returns {Promise<Object>}  แถวที่เขียนลงไป (มี DocNo, CaseID)
+ */
+export async function writeRepairForm(ctx, unit, record, recordedBy) {
+  // อาการที่แจ้งไว้ตอนเปิดเคส — เก็บไว้ก่อน เพราะจะถูกล้างออกจากข้อมูลเครื่องตอนปิดงาน
+  // ไม่พึ่งข้อความที่หน้าเว็บส่งมา เพราะคนกรอกลบทิ้งได้ ถ้าไม่ดักตรงนี้
+  // อาการเสียที่แจ้งไว้จะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
+  const reported = plainText(unit.Note).trim();
+
+  const row = {
+    ID: 'RF' + Date.now(),
+    Date: plainText(record.Date),
+    NodeName: unit.NodeName,
+    SiteCode: unit.SiteCode,
+    Region: unit.Region,
+    Province: unit.Province,
+    LocationType: unit.LocationType,
+    AirCode: unit.AirCode,
+    Brand: unit.Brand,
+    BTU: unit.BTU,
+    // ⚠️ ทะเบียนเครื่องเก็บชื่อคอลัมน์ว่า IndoorSN/OutdoorSN แต่แบบฟอร์มเขียนว่า Serial
+    // ต้องแปลงชื่อตรงนี้ ไม่งั้นช่อง Serial บนเอกสารจะว่างทั้งที่ทะเบียนมีข้อมูลอยู่
+    IndoorSerial: plainText(unit.IndoorSN),
+    IndoorAsset: plainText(unit.IndoorAsset),
+    OutdoorSerial: plainText(unit.OutdoorSN),
+    OutdoorAsset: plainText(unit.OutdoorAsset),
+    Symptom: plainText(record.Symptom),
+    Cause: plainText(record.Cause),
+    Fix: plainText(record.Fix),
+    ChecklistJSON: JSON.stringify(record.Checklist || []),
+    PartsJSON: JSON.stringify(record.Parts || []),
+    Suggestion: plainText(record.Suggestion),
+    CompanyName: plainText(record.CompanyName),
+    TechnicianName: plainText(record.TechnicianName),
+    SupervisorName: plainText(record.SupervisorName),
+    Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
+    CreatedAt: ymdhms(new Date()),
+    RecordedBy: recordedBy,
+    // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+    DocNo: nextDocNo(ctx, record.Date),
+    // เกาะเคสที่เปิดค้างอยู่ของเครื่องนี้ ไม่มีก็เปิดเคสใหม่ให้
+    CaseID: ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode)
+  };
+
+  const headers = ctx.ss.headers(SHEETS.REPAIRFORM);
+  ctx.ss.appendRow(SHEETS.REPAIRFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
+
+  // ลงประวัติ "ซ่อมแล้ว" ซึ่งเป็นตัวปิดเคสตามกติกาเดิมของระบบ
+  //
+  // อาการที่แจ้งไว้ตอนเปิดเคสต้องติดไปในประวัติด้วย เพราะกำลังจะถูกล้าง
+  // ออกจากข้อมูลเครื่อง ถ้าไม่เก็บไว้ที่นี่ก็หายไปจากระบบทั้งหมด
+  const symptom = plainText(row.Symptom).trim();
+  const detail = [reported && !symptom.includes(reported) ? 'อาการที่แจ้งไว้: ' + reported : '',
+                  [symptom, plainText(row.Fix).trim()].filter(Boolean).join(' → ')]
+    .filter(Boolean).join(' — ') || 'ซ่อมตามเอกสาร ' + row.DocNo;
+
+  await addHistoryRaw(ctx, {
+    AirCode: row.AirCode,
+    Date: row.Date,
+    EventType: CLOSE_EVENT,
+    Detail: detail,
+    Cost: row.Cost,
+    Technician: row.TechnicianName,
+    Note: 'เอกสาร ' + row.DocNo,
+    CaseID: row.CaseID,
+    RecordedBy: recordedBy
+  });
+
+  // ============================================================================
+  // ปิดงานจริง — คืนสถานะเครื่องและล้างอาการเสียที่ค้างอยู่
+  // ============================================================================
+  // ขาดขั้นตอนนี้ไปไม่ได้ เพราะตอนนี้การออกเอกสารเป็นทางเดียวที่ปิดงานซ่อมได้
+  // (เจ้าของงานให้เอาปุ่ม "ปิดงานอย่างเดียว" ออก) ถ้าไม่คืนสถานะ เครื่องจะค้าง
+  // เป็น "รอซ่อม" ตลอดไป และขึ้นอยู่ในหน้างานซ่อมทั้งที่ซ่อมเสร็จแล้ว
+  //
+  // ล้าง Note ด้วย ไม่งั้นเครื่องที่ซ่อมเสร็จจะยังโชว์อาการเดิมค้างอยู่
+  // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
+  //
+  // เครื่องที่ไม่ได้อยู่ในสถานะงานซ่อม (เช่นช่างซ่อมหน้างานเลยโดยไม่ได้แจ้ง)
+  // ไม่ต้องแตะสถานะ เพราะมันใช้งานปกติอยู่แล้ว
+  const airRow = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === normalizeCode(unit.AirCode));
+  if (airRow && ['รอซ่อม', 'ชำรุด'].includes(plainText(airRow.Status).trim())) {
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, airRow._row, {
+      Status: 'ใช้งานปกติ',
+      Note: '',
+      UpdatedAt: ymdhms(new Date()),
+      UpdatedBy: row.RecordedBy
+    });
+  }
+
+  return row;
 }
 
 /* ==================== ลบ ==================== */
@@ -363,7 +382,7 @@ export async function getRepairBlankXlsx(ctx, record) {
 }
 
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
-async function renderPdf(ctx, form) {
+export async function renderRepairPdf(ctx, form) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);
   const base = ctx.pdf.baseUrl || '';
 
@@ -385,7 +404,7 @@ async function renderPdf(ctx, form) {
  * ถ้าเครื่องไม่มีเบราว์เซอร์ หรือดิสก์เต็ม ต้องไม่ทำให้การบันทึกที่ลงไปแล้ว
  * กลายเป็น "ล้มเหลว" ในสายตาผู้ใช้ แล้วเขากดบันทึกซ้ำจนข้อมูลซ้ำ
  */
-async function storeRepairPdf(ctx, docNo) {
+export async function storeRepairPdf(ctx, docNo) {
   const name = plainText(docNo).trim();
   if (!ctx.pdf || !ctx.docs || !name) return false;
 
@@ -394,7 +413,7 @@ async function storeRepairPdf(ctx, docNo) {
       .find(f => (plainText(f.DocNo) || plainText(f.ID)) === name);
     if (!form) return false;
 
-    const { base64 } = await renderPdf(ctx, form);
+    const { base64 } = await renderRepairPdf(ctx, form);
     ctx.docs.save(KIND, name, plainText(form.Date), base64);
     return true;
   } catch (err) {
@@ -423,7 +442,7 @@ export async function getRepairDocPdf(ctx, row, expectId) {
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
   await ctx.assertRegionAccess(form.Region);
 
-  const { docNo, base64 } = await renderPdf(ctx, form);
+  const { docNo, base64 } = await renderRepairPdf(ctx, form);
 
   if (ctx.docs) {
     try { ctx.docs.save(KIND, docNo, plainText(form.Date), base64); }

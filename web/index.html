@@ -2012,6 +2012,10 @@
 
     /* --- INITIALIZATION --- */
     window.addEventListener('DOMContentLoaded', async () => {
+      // เปิดมาจากลิงก์กรอกเอกสารซ่อม — ไม่ต้องล็อกอิน ไม่ต้องโหลดอะไรของระบบเลย
+      const linkToken = repairLinkTokenFromUrl();
+      if (linkToken) { openRepairLinkPage(linkToken); return; }
+
       try {
         const status = await callPublic('getSystemStatus');
         if (status && status.needsSetup) {
@@ -5667,7 +5671,7 @@
      */
     async function loadRepair() {
       try {
-        const [air, hist] = await Promise.all([call('getAirList'), call('getHistory', null)]);
+        const [air, hist] = await Promise.all([call('getAirList'), call('getHistory', null), loadRepairLinks()]);
         if (Array.isArray(air)) currentAirList = air;
         if (Array.isArray(hist)) currentHistory = hist;
       } catch (e) { /* call() แจ้ง error ให้ผู้ใช้แล้ว */ }
@@ -5818,6 +5822,12 @@
               actions.push(`<button onclick="openRepairForm('${jsStr(a.AirCode)}', '${jsStr(a.Note || '')}')"
                 class="text-white bg-[#f47920] hover:bg-[#d96615] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] text-xs font-medium inline-flex items-center gap-1">
                 <i class="ph ph-file-text"></i> ปิดงาน + ออกเอกสาร</button>`);
+              // ส่งลิงก์ให้ช่างกรอกเองโดยไม่ต้องล็อกอิน — ส่งแล้วปิดงานเหมือนปุ่มข้างๆ
+              if (isStaff() && docLevel('repair') === 'edit') {
+                actions.push(`<button onclick="openRepairLinkModal('${jsStr(a.AirCode)}')"
+                  class="text-[#f47920] hover:text-white hover:bg-[#f47920] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] bg-white text-xs font-medium inline-flex items-center gap-1">
+                  <i class="ph ph-link"></i> ส่งลิงก์</button>`);
+              }
             }
             if (status === 'ชำรุด' || status === 'รอซ่อม') {
               actions.push(`<button onclick="openCannotRepairModal('${jsStr(a.AirCode)}')"
@@ -5848,6 +5858,7 @@
                   <button onclick="viewAirHistory('${jsStr(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
                   ${actions.join('')}
                 </div>
+                ${String(a.Status || '').trim() === 'รอซ่อม' ? repairLinkBadge(a.AirCode) : ''}
               </td>
             </tr>`;
           }).join('');
@@ -8128,6 +8139,11 @@ const CLEANING_CHECKLIST_ITEMS = [
   let rfPhotos = {};
   let rfSavedRow = null;
   let rfUnit = null;
+  /**
+   * โหมดลิงก์ { token } — ฟอร์มเดียวกัน แต่ส่งผ่านคำสั่งของลิงก์ (ไม่ต้องล็อกอิน)
+   * null = กรอกในระบบตามปกติ
+   */
+  let rfLink = null;
 
   /**
    * เปิดหน้ากรอกเอกสารซ่อม
@@ -8135,11 +8151,13 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เปิดจากหน้างานซ่อม (ปุ่ม "ปิดงาน + ออกเอกสาร") จึงรู้เครื่องมาแล้วเสมอ
    * ข้อมูลเครื่องที่เหลือฝั่งเซิร์ฟเวอร์ดึงจากทะเบียนเอง จะได้ไม่มีสองความจริง
    */
-  async function openRepairForm(airCode, symptom) {
-    const found = (currentAirList || []).find(a => String(a.AirCode) === String(airCode));
+  async function openRepairForm(airCode, symptom, link) {
+    // โหมดลิงก์: ข้อมูลเครื่องมาจากลิงก์ เพราะคนถือลิงก์ไม่ได้ล็อกอิน ไม่มีรายการเครื่องในมือ
+    const found = link ? link.unit : (currentAirList || []).find(a => String(a.AirCode) === String(airCode));
     if (!found) { showToast('ไม่พบข้อมูลเครื่อง ' + airCode, 'error'); return; }
 
     rfUnit = found;
+    rfLink = link ? { token: link.token } : null;
     rfPhotos = {};
     rfSavedRow = null;
 
@@ -8152,10 +8170,11 @@ const CLEANING_CHECKLIST_ITEMS = [
 
         <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
           <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            ${link ? '<img src="/assets/form-logo.png" alt="" class="h-9 w-auto flex-shrink-0">' : `
             <button onclick="closeRepairForm()" title="ย้อนกลับ"
               class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
               <i class="ph ph-arrow-left text-xl"></i>
-            </button>
+            </button>`}
             <div class="min-w-0 flex-1">
               <h2 class="font-bold text-gray-800 leading-tight truncate">บันทึกผลการซ่อม</h2>
               <p class="text-xs text-gray-500 leading-tight truncate">${esc(found.AirCode)} · ${esc(found.NodeName)}</p>
@@ -8234,10 +8253,12 @@ const CLEANING_CHECKLIST_ITEMS = [
             <div class="pb-2">
               <button onclick="submitRepairForm()" id="rf_submitBtn"
                 class="w-full px-4 py-3.5 text-base font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm flex items-center justify-center gap-2">
-                <i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร
+                <i class="ph ph-floppy-disk text-lg"></i> ${link ? 'ส่งเอกสาร' : 'บันทึกและออกเอกสาร'}
               </button>
               <p class="text-[11px] text-gray-500 mt-2 text-center">
-                บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เอง
+                ${link
+                  ? 'ส่งได้ครั้งเดียว — ส่งแล้วงานซ่อมนี้ปิดทันที และดาวน์โหลดไฟล์ PDF ได้'
+                  : 'บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เอง'}
               </p>
             </div>
 
@@ -8457,6 +8478,34 @@ const CLEANING_CHECKLIST_ITEMS = [
     btn.disabled = true;
     btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...';
 
+    // โหมดลิงก์: ส่งผ่านคำสั่งของลิงก์ แล้วส่งรูปตามด้วยรหัสลิงก์ (ไม่มีเลขแถวให้ใช้)
+    if (rfLink) {
+      let res;
+      try {
+        showLoading(true);
+        res = await request('/api/public', { fn: 'submitRepairLink', args: [rfLink.token, record] });
+      } catch (e) {
+        showToast(e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> ส่งเอกสาร';
+        return;
+      } finally { showLoading(false); }
+
+      const up = await uploadRfPhotos(null);
+      up.done.forEach(k => delete rfPhotos[k]);
+      if (up.failed.length) {
+        rfSavedRow = res.docNo;   // มีค่า = ส่งเอกสารแล้ว ปุ่มกลายเป็นปุ่มส่งรูปซ้ำ
+        renderRfPhotos();
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + up.failed.length + ' ใบ)';
+        showToast('ส่งเอกสาร ' + res.docNo + ' แล้ว แต่รูปยังส่งไม่ขึ้น ' + up.failed.length +
+                  ' ใบ — กดปุ่มด้านล่างเพื่อส่งซ้ำเมื่อสัญญาณดีขึ้น', 'error');
+        return;
+      }
+      openRepairLinkPage(rfLink.token);
+      return;
+    }
+
     try {
       const res = await call('saveRepairForm', record);
       if (!res) {
@@ -8513,7 +8562,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     for (const key of keys) {
       const index = Number(key.split('-')[1]);
       try {
-        await callQuiet('saveRepairPhoto', { row, index, dataUrl: rfPhotos[key] });
+        if (rfLink) await request('/api/public', { fn: 'saveRepairLinkPhoto', args: [rfLink.token, index, rfPhotos[key]] });
+        else await callQuiet('saveRepairPhoto', { row, index, dataUrl: rfPhotos[key] });
         done.push(key);
       } catch (e) { failed.push(key); }
     }
@@ -8532,6 +8582,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!up.failed.length) {
       rfPhotos = {};
       rfSavedRow = null;
+      if (rfLink) { openRepairLinkPage(rfLink.token); return; }
       closeModal();
       showToast('ส่งรูปครบแล้ว');
       return;
@@ -8559,6 +8610,255 @@ const CLEANING_CHECKLIST_ITEMS = [
     closeModal();
   }
   window.closeRepairForm = closeRepairForm;
+
+  /* ============== ลิงก์กรอกเอกสารซ่อม (คนถือลิงก์ ไม่ต้องล็อกอิน) ============== */
+
+  /**
+   * รหัสลิงก์จากที่อยู่ของหน้า — รูปแบบ /#rl=<รหัส>
+   *
+   * อยู่หลังเครื่องหมาย # เพราะเบราว์เซอร์ไม่ส่งส่วนนี้ไปกับคำขอ
+   * รหัสจึงไม่ไปค้างใน log ของเซิร์ฟเวอร์หรือของ proxy ระหว่างทาง
+   */
+  function repairLinkTokenFromUrl() {
+    const m = /(?:^#|&)rl=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    return m ? m[1] : '';
+  }
+
+  /** หน้าเต็มจอสำหรับคนถือลิงก์ — ใช้กับทุกสถานะที่ไม่ใช่ฟอร์ม */
+  function repairLinkShell(inner) {
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 bg-slate-50 overflow-y-auto">
+        <div class="max-w-lg mx-auto px-4 py-8">
+          <div class="flex items-center gap-3 mb-6">
+            <img src="/assets/form-logo.png" alt="" class="h-10 w-auto">
+            <div class="text-sm text-gray-500 leading-tight">เอกสารบันทึกผลการซ่อม<br>ITEL-FM-NE-005</div>
+          </div>
+          ${inner}
+        </div>
+      </div>`;
+  }
+
+  /**
+   * เปิดลิงก์ — ดูสถานะก่อนว่าจะแสดงอะไร
+   *   open → ฟอร์มกรอก (ฟอร์มเดียวกับที่เจ้าหน้าที่ใช้)
+   *   done → ส่งแล้ว: ดาวน์โหลด PDF + เพิ่มรูปที่ยังขาด
+   *   อื่นๆ → บอกว่าลิงก์ใช้ไม่ได้เพราะอะไร
+   */
+  async function openRepairLinkPage(token) {
+    let info;
+    try {
+      showLoading(true);
+      info = await request('/api/public', { fn: 'getRepairLink', args: [token] });
+    } catch (e) {
+      repairLinkShell(`<div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <i class="ph ph-wifi-slash text-4xl text-gray-400"></i>
+        <p class="mt-2 font-medium text-gray-700">เชื่อมต่อระบบไม่สำเร็จ</p>
+        <p class="text-sm text-gray-500 mt-1">${esc(e.message || '')}</p>
+        <button onclick="location.reload()" class="mt-4 px-4 py-2 text-sm text-white bg-[#1153a1] rounded-lg">ลองใหม่</button></div>`);
+      return;
+    } finally { showLoading(false); }
+
+    if (info.state === 'open') {
+      openRepairForm(info.unit.AirCode, info.unit.Note, { token, unit: info.unit });
+      return;
+    }
+    if (info.state === 'done') { renderRepairLinkDone(token, info); return; }
+
+    repairLinkShell(`<div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+      <i class="ph ph-link-break text-4xl text-gray-400"></i>
+      <p class="mt-2 font-medium text-gray-700">ลิงก์นี้ใช้ไม่ได้แล้ว</p>
+      <p class="text-sm text-gray-500 mt-1">${esc(info.message || '')}</p></div>`);
+  }
+
+  /**
+   * ส่งแล้ว — ดาวน์โหลด PDF ได้ และเพิ่มรูปที่ยังขาดได้ (เช่นสัญญาณหลุดตอนส่ง
+   * หรือปิดหน้าไปก่อนรูปขึ้นครบ) กดช่องไหนก็ส่งรูปช่องนั้นขึ้นทันที
+   */
+  function renderRepairLinkDone(token, info) {
+    const have = new Set(info.photos || []);
+    const cells = REPAIR_PHOTO_CAPTIONS.map((cap, i) => {
+      const index = i + 1;
+      const ok = have.has('1-' + index);
+      return `
+        <button type="button" onclick="repairLinkAddPhoto('${jsStr(token)}', ${index})"
+          class="text-left border rounded-lg p-2 ${ok ? 'border-emerald-300 bg-emerald-50' : 'border-dashed border-red-300 bg-red-50/40'}">
+          <div class="text-lg ${ok ? 'text-emerald-600' : 'text-red-400'}"><i class="ph ${ok ? 'ph-check-circle' : 'ph-plus'}"></i></div>
+          <div class="text-[10px] leading-tight ${ok ? 'text-gray-600' : 'text-red-500'}">${index}. ${esc(cap)}</div>
+        </button>`;
+    }).join('');
+
+    repairLinkShell(`
+      <div class="bg-white rounded-xl border border-emerald-200 p-5 mb-4">
+        <div class="flex items-center gap-2 text-emerald-700 font-bold"><i class="ph-fill ph-check-circle text-2xl"></i> ส่งเอกสารเรียบร้อยแล้ว</div>
+        <p class="text-sm text-gray-600 mt-1">เลขที่เอกสาร <b>${esc(info.docNo)}</b> · ${esc(info.unit.AirCode)} ${esc(info.unit.NodeName)}</p>
+        <p class="text-sm text-gray-600">งานซ่อมนี้ปิดในระบบเรียบร้อยแล้ว</p>
+        <button onclick="repairLinkDownloadPdf('${jsStr(token)}')"
+          class="mt-4 w-full px-4 py-3 text-base font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] flex items-center justify-center gap-2">
+          <i class="ph ph-file-pdf text-lg"></i> ดาวน์โหลดไฟล์ PDF</button>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-bold text-gray-800">รูปประกอบ</div>
+          <div class="text-xs ${have.size >= 9 ? 'text-emerald-600' : 'text-red-500 font-medium'}">${have.size}/9 ช่อง</div>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">กดช่องที่ยังขาดเพื่อเพิ่มรูป หรือกดช่องที่มีแล้วเพื่อเปลี่ยนรูป — ไฟล์ PDF จะอัปเดตตามให้เอง</p>
+        <div class="grid grid-cols-3 gap-2">${cells}</div>
+        <input type="file" id="rl_photoFile" accept="image/*" class="hidden">
+      </div>
+      <p class="text-[11px] text-gray-400 text-center mt-4">ลิงก์นี้ใช้เพิ่มรูปและดาวน์โหลด PDF ได้ถึง ${esc(fmtDate(String(info.readableUntil || '').slice(0, 10)))}</p>`);
+  }
+
+  function repairLinkAddPhoto(token, index) {
+    const input = document.getElementById('rl_photoFile');
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      try {
+        showLoading(true);
+        const dataUrl = await shrinkImage(file);
+        await request('/api/public', { fn: 'saveRepairLinkPhoto', args: [token, index, dataUrl] });
+        showToast('เพิ่มรูปช่อง ' + index + ' แล้ว');
+      } catch (e) {
+        showToast('ส่งรูปไม่สำเร็จ: ' + (e.message || e), 'error');
+      } finally { showLoading(false); }
+      openRepairLinkPage(token);
+    };
+    input.click();
+  }
+  window.repairLinkAddPhoto = repairLinkAddPhoto;
+
+  async function repairLinkDownloadPdf(token) {
+    try {
+      showLoading(true);
+      const res = await request('/api/public', { fn: 'getRepairLinkPdf', args: [token] });
+      saveFileResult(res, 'เอกสารซ่อม.pdf');
+    } catch (e) {
+      showToast(e.message || String(e), 'error');
+    } finally { showLoading(false); }
+  }
+  window.repairLinkDownloadPdf = repairLinkDownloadPdf;
+
+  /* ============== ลิงก์กรอกเอกสารซ่อม (ฝั่งเจ้าหน้าที่) ============== */
+
+  /** ลิงก์ล่าสุดของแต่ละเครื่อง (ไม่มีรหัส — รหัสเห็นได้ครั้งเดียวตอนสร้าง) */
+  let repairLinksByCode = {};
+
+  async function loadRepairLinks() {
+    if (!isStaff() || docLevel('repair') !== 'edit') { repairLinksByCode = {}; return; }
+    try {
+      const list = (await callQuiet('getRepairLinks')) || [];
+      repairLinksByCode = {};
+      // ใหม่ก่อนมาจากเซิร์ฟเวอร์ ตัวแรกที่เจอของแต่ละเครื่องจึงเป็นตัวล่าสุด
+      for (const l of list) if (!repairLinksByCode[l.AirCode]) repairLinksByCode[l.AirCode] = l;
+    } catch (e) { repairLinksByCode = {}; }
+  }
+
+  /** ป้ายสถานะลิงก์ใต้ปุ่มในหน้างานซ่อม */
+  function repairLinkBadge(airCode) {
+    const l = repairLinksByCode[airCode];
+    if (!l || l.state === 'revoked') return '';
+    const text = {
+      open: 'ส่งลิงก์แล้ว · รอกรอก ถึง ' + fmtDate(l.ExpiresAt.slice(0, 10)),
+      expired: 'ลิงก์หมดอายุแล้ว',
+      done: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo,
+      closed: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo
+    }[l.state];
+    return text ? `<div class="text-[11px] text-gray-400 mt-1 text-right"><i class="ph ph-link"></i> ${esc(text)}</div>` : '';
+  }
+
+  /** ที่อยู่เต็มของลิงก์ — รหัสอยู่หลัง # (ดู repairLinkTokenFromUrl) */
+  const repairLinkUrl = token => location.origin + '/#rl=' + token;
+
+  /**
+   * หน้าต่างลิงก์ของงานซ่อมหนึ่งงาน
+   *
+   * รหัสลิงก์เห็นได้ครั้งเดียวตอนสร้าง เพราะระบบเก็บแค่แฮช
+   * ปิดหน้าต่างไปแล้วอยากได้ลิงก์อีก ต้องสร้างใหม่ (ลิงก์เก่าจะถูกยกเลิกให้)
+   */
+  function openRepairLinkModal(airCode, created) {
+    const unit = (currentAirList || []).find(a => String(a.AirCode) === String(airCode)) || { AirCode: airCode };
+    const l = repairLinksByCode[airCode];
+    const open = l && l.state === 'open';
+
+    const body = created ? `
+      <p class="text-sm text-gray-600 mb-2">ส่งลิงก์นี้ให้ช่างทางไลน์ได้เลย — คนที่ได้ลิงก์กรอกได้โดยไม่ต้องล็อกอิน</p>
+      <div class="flex gap-2">
+        <input id="rl_url" readonly value="${esc(repairLinkUrl(created.token))}"
+          class="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none">
+        <button onclick="copyRepairLink()" class="px-3 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg whitespace-nowrap"><i class="ph ph-copy"></i> คัดลอก</button>
+      </div>
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+        <i class="ph ph-warning"></i> ลิงก์นี้แสดงได้ครั้งเดียว — ปิดหน้าต่างแล้วดูซ้ำไม่ได้ ต้องสร้างใหม่ (ลิงก์นี้จะถูกยกเลิกให้)
+      </p>
+      <p class="text-xs text-gray-500 mt-2">ใช้ได้ถึง ${esc(fmtDate(created.expiresAt.slice(0, 10)))} · ส่งได้ครั้งเดียว · ส่งแล้วงานนี้ปิดทันที</p>`
+    : `
+      ${open ? `<div class="text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+          มีลิงก์ที่ยังไม่มีคนกรอก (สร้างโดย ${esc(l.CreatedBy)} · ใช้ได้ถึง ${esc(fmtDate(l.ExpiresAt.slice(0, 10)))})
+          <button onclick="revokeRepairLinkRow('${jsStr(l.ID)}', '${jsStr(airCode)}')" class="block mt-1 text-xs text-red-600 hover:underline">ยกเลิกลิงก์นี้</button>
+        </div>` : ''}
+      <label class="block text-sm font-medium text-gray-700 mb-1">ลิงก์ใช้ได้กี่วัน</label>
+      <select id="rl_days" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none">
+        <option value="3">3 วัน</option><option value="7" selected>7 วัน</option><option value="14">14 วัน</option>
+      </select>
+      <p class="text-xs text-gray-500 mt-2">คนที่ได้ลิงก์กรอกเอกสารซ่อมของเครื่องนี้ได้โดยไม่ต้องล็อกอิน ส่งได้ครั้งเดียว ส่งแล้วงานนี้ปิดทันที${open ? ' — สร้างใหม่แล้วลิงก์เดิมจะใช้ไม่ได้' : ''}</p>`;
+
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-link text-[#f47920]"></i> ลิงก์กรอกเอกสารซ่อม</h3>
+              <p class="text-xs text-gray-500">${esc(unit.AirCode)} · ${esc(unit.NodeName || '')}</p>
+            </div>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="p-6">${body}</div>
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">${created ? 'เสร็จแล้ว' : 'ยกเลิก'}</button>
+            ${created ? '' : `<button onclick="createRepairLinkFor('${jsStr(airCode)}')" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-link"></i> ${open ? 'สร้างลิงก์ใหม่' : 'สร้างลิงก์'}</button>`}
+          </div>
+        </div>
+      </div>`;
+  }
+  window.openRepairLinkModal = openRepairLinkModal;
+
+  async function createRepairLinkFor(airCode) {
+    const days = Number(document.getElementById('rl_days').value) || 7;
+    try {
+      const created = await call('createRepairLink', airCode, days);
+      await loadRepairLinks();
+      openRepairLinkModal(airCode, created);
+      renderRepairView((document.getElementById('repairSearch') || {}).value || '');
+    } catch (e) {}
+  }
+  window.createRepairLinkFor = createRepairLinkFor;
+
+  async function copyRepairLink() {
+    const input = document.getElementById('rl_url');
+    try {
+      await navigator.clipboard.writeText(input.value);
+      showToast('คัดลอกลิงก์แล้ว — วางในไลน์ส่งให้ช่างได้เลย');
+    } catch (e) {
+      // บางเบราว์เซอร์ไม่ให้เขียนคลิปบอร์ด (เช่นเปิดผ่าน http ที่ไม่ใช่ localhost) — เลือกข้อความให้กดคัดลอกเอง
+      input.select();
+      showToast('กด Ctrl+C (หรือกดค้างแล้วเลือกคัดลอก) เพื่อคัดลอกลิงก์');
+    }
+  }
+  window.copyRepairLink = copyRepairLink;
+
+  async function revokeRepairLinkRow(id, airCode) {
+    if (!(await showConfirm('ยกเลิกลิงก์นี้? คนที่ได้ลิงก์ไปแล้วจะกรอกไม่ได้ทันที'))) return;
+    try {
+      await call('revokeRepairLink', id);
+      await loadRepairLinks();
+      openRepairLinkModal(airCode);
+      renderRepairView((document.getElementById('repairSearch') || {}).value || '');
+      showToast('ยกเลิกลิงก์แล้ว');
+    } catch (e) {}
+  }
+  window.revokeRepairLinkRow = revokeRepairLinkRow;
 
   /**
    * เลือกเครื่องก่อนเปิดฟอร์มซ่อม

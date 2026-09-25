@@ -1,0 +1,325 @@
+import { SHEETS } from '../schema.js';
+import { normalizeCode, plainText, ymdhms } from '../values.js';
+import { unitsInScope } from './airlist.js';
+import { writeRepairForm, storeRepairPdf, renderRepairPdf, REPAIR_KIND } from './repairform.js';
+import { scheduleDocPdf } from './doc-pdf-queue.js';
+
+/**
+ * ลิงก์กรอกเอกสารซ่อม — ส่งให้ใครก็ได้ กรอกได้โดยไม่ต้องมีบัญชี
+ *
+ * ============================================================================
+ * การทำงานตามที่เจ้าของงานกำหนด
+ * ============================================================================
+ * 1. เจ้าหน้าที่อนุมัติซ่อมแล้ว (เครื่องสถานะ "รอซ่อม") กดสร้างลิงก์ของงานนั้น
+ * 2. ส่งลิงก์ให้ผู้รับเหมาทางไลน์ — คนที่ถือลิงก์เปิดกรอกได้เลย ไม่ต้องล็อกอิน
+ * 3. กรอกครบกดส่ง = ปิดงานซ่อมทันที (ลงประวัติ คืนสถานะเครื่อง) ไม่ต้องรอใครอนุมัติ
+ *    เพราะเจ้าของงานคุยกันในไลน์อยู่แล้ว
+ * 4. หลังส่ง ลิงก์เดิมยังใช้แนบรูปที่ค้างกับโหลด PDF ได้อีกระยะหนึ่ง แล้วปิดตัวเอง
+ *
+ * ============================================================================
+ * ความปลอดภัย — ลิงก์นี้เปิดได้จากทุกที่บนอินเทอร์เน็ต
+ * ============================================================================
+ * - รหัสในลิงก์สุ่ม 32 ไบต์ (256 บิต) เดาไม่ได้ในทางปฏิบัติ
+ * - ฐานข้อมูลเก็บแค่แฮช ไฟล์สำรองหลุดไปก็เอาไปเปิดลิงก์ไม่ได้
+ * - ลิงก์หนึ่งผูกกับงานซ่อมงานเดียว เห็นข้อมูลแค่เครื่องนั้น ไม่เห็นอะไรอื่นในระบบ
+ * - ส่งได้ครั้งเดียว มีวันหมดอายุ และเจ้าหน้าที่ยกเลิกได้ทุกเมื่อ
+ * - ลิงก์ที่ใช้ไม่ได้แล้ว บอกแค่ว่าใช้ไม่ได้ ไม่ส่งข้อมูลเครื่องออกไป
+ * - รหัสอยู่หลังเครื่องหมาย # ของที่อยู่ เบราว์เซอร์ไม่ส่งส่วนนี้ไปกับคำขอ
+ *   จึงไม่ไปค้างใน log ของเซิร์ฟเวอร์หรือของ proxy ระหว่างทาง
+ */
+
+const DAY = 86400000;
+const HOUR = 3600000;
+
+/** อายุลิงก์ที่เลือกได้ (วัน) — ค่าเริ่มต้นตัวกลาง */
+export const LINK_DAYS = [3, 7, 14];
+const DEFAULT_DAYS = 7;
+
+/**
+ * หลังส่งแล้ว ลิงก์ยังใช้แนบรูป/โหลด PDF ได้อีกกี่ชั่วโมง อย่างน้อย
+ * ถ้าส่งตอนลิงก์ใกล้หมดอายุ จะได้ไม่เหลือเวลาแค่ไม่กี่นาทีให้ส่งรูปที่ค้าง
+ */
+const AFTER_SUBMIT_HOURS = 72;
+
+/** งานที่สร้างลิงก์ได้ = อนุมัติซ่อมแล้ว (เหมือนปุ่ม "ปิดงาน + ออกเอกสาร") */
+const OPEN_STATUS = 'รอซ่อม';
+
+/* ==================== รหัสในลิงก์ ==================== */
+
+const toB64Url = bytes =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+function newToken() {
+  return toB64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+async function hashToken(token) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(token)));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** รหัสที่ถูกรูปแบบ — กรองของแปลกทิ้งก่อนไปแฮชหรือค้นฐานข้อมูล */
+const TOKEN_RE = /^[A-Za-z0-9_-]{40,64}$/;
+
+/* ==================== สถานะของลิงก์ ==================== */
+
+/** ใช้แนบรูป/โหลด PDF ได้ถึงเมื่อไหร่ หลังส่งแล้ว */
+function readableUntil(link) {
+  const used = new Date(String(link.UsedAt).replace(' ', 'T') + '+07:00').getTime();
+  const after = ymdhms(new Date(used + AFTER_SUBMIT_HOURS * HOUR));
+  return String(link.ExpiresAt) > after ? String(link.ExpiresAt) : after;
+}
+
+/**
+ * สถานะของลิงก์ ณ ตอนนี้
+ *   open     ยังไม่ส่ง กรอกได้
+ *   done     ส่งแล้ว ยังแนบรูป/โหลด PDF ได้
+ *   closed   ส่งแล้ว และพ้นช่วงแนบรูป/โหลด PDF แล้ว
+ *   expired  หมดอายุก่อนมีคนส่ง
+ *   revoked  เจ้าหน้าที่ยกเลิก (หรือสร้างลิงก์ใหม่แทน)
+ */
+function stateOf(link, now = ymdhms(new Date())) {
+  if (plainText(link.RevokedAt)) return 'revoked';
+  if (plainText(link.UsedAt)) return now <= readableUntil(link) ? 'done' : 'closed';
+  if (now > String(link.ExpiresAt)) return 'expired';
+  return 'open';
+}
+
+const STATE_MESSAGE = {
+  revoked: 'ลิงก์นี้ถูกยกเลิกแล้ว — ติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่',
+  expired: 'ลิงก์นี้หมดอายุแล้ว — ติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่',
+  closed: 'งานนี้ส่งเอกสารไปแล้ว และลิงก์ปิดแล้ว — ขอไฟล์เอกสารได้จากเจ้าหน้าที่',
+  invalid: 'ลิงก์ไม่ถูกต้อง — ตรวจว่าคัดลอกมาครบ หรือติดต่อเจ้าหน้าที่'
+};
+
+/** หาลิงก์จากรหัส — ไม่พบกับรหัสผิดรูปแบบ ตอบเหมือนกัน ไม่บอกว่าผิดตรงไหน */
+async function findLink(ctx, token) {
+  await ctx.ensureBase();
+  if (!TOKEN_RE.test(String(token || ''))) return null;
+  const hash = await hashToken(token);
+  return ctx.ss.objects(SHEETS.REPAIRLINK).find(l => plainText(l.TokenHash) === hash) || null;
+}
+
+/** ลิงก์ที่ต้องอยู่ในสถานะที่กำหนด ไม่งั้นหยุดพร้อมข้อความที่คนถือลิงก์อ่านเข้าใจ */
+async function requireLink(ctx, token, wanted) {
+  const link = await findLink(ctx, token);
+  if (!link) throw new Error(STATE_MESSAGE.invalid);
+  const state = stateOf(link);
+  if (state !== wanted) {
+    throw new Error(STATE_MESSAGE[state] ||
+      (state === 'done' ? 'ลิงก์นี้ส่งเอกสารไปแล้ว (เลขที่ ' + plainText(link.DocNo) + ')' : 'ลิงก์นี้ใช้ทำรายการนี้ไม่ได้'));
+  }
+  return link;
+}
+
+function unitByCode(ctx, airCode) {
+  const nc = normalizeCode(airCode);
+  return ctx.ss.objects(SHEETS.AIRLIST).find(u => normalizeCode(u.AirCode) === nc) || null;
+}
+
+/** ผู้บันทึกของใบที่มาจากลิงก์ — ให้ย้อนดูได้ว่ามาจากลิงก์ไหน ใครเป็นคนสร้าง */
+const linkRecorder = link => 'ลิงก์ ' + plainText(link.ID) + ' (สร้างโดย ' + plainText(link.CreatedBy) + ')';
+
+/* ==================== สำหรับคนถือลิงก์ (ไม่ต้องล็อกอิน) ==================== */
+
+/**
+ * ข้อมูลของงานตามลิงก์ — ใช้วาดหน้ากรอก
+ *
+ * ลิงก์ที่ใช้ไม่ได้แล้ว คืนแค่สถานะกับข้อความ ไม่คืนข้อมูลเครื่อง
+ * ลิงก์ที่ยังไม่ส่งแต่งานถูกปิดไปทางอื่นแล้ว (เจ้าหน้าที่ปิดเอง) ก็ถือว่าใช้ไม่ได้
+ */
+export async function getRepairLink(ctx, token) {
+  const link = await findLink(ctx, token);
+  if (!link) return { state: 'invalid', message: STATE_MESSAGE.invalid };
+
+  const state = stateOf(link);
+  if (state === 'revoked' || state === 'expired' || state === 'closed') {
+    return { state, message: STATE_MESSAGE[state] };
+  }
+
+  const unit = unitByCode(ctx, link.AirCode);
+  if (!unit) return { state: 'invalid', message: 'ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่' };
+
+  if (state === 'open' && plainText(unit.Status).trim() !== OPEN_STATUS) {
+    return { state: 'closed', message: 'งานซ่อมนี้ถูกปิดไปแล้ว — ติดต่อเจ้าหน้าที่ถ้ายังมีงานค้าง' };
+  }
+
+  const out = {
+    state,
+    expiresAt: plainText(link.ExpiresAt),
+    unit: {
+      AirCode: plainText(unit.AirCode), NodeName: plainText(unit.NodeName),
+      Province: plainText(unit.Province), Brand: plainText(unit.Brand), BTU: plainText(unit.BTU),
+      IndoorSN: plainText(unit.IndoorSN), OutdoorSN: plainText(unit.OutdoorSN),
+      // อาการที่แจ้งไว้ตอนเปิดงาน ใช้เติมช่องอาการเสียให้
+      Note: state === 'open' ? plainText(unit.Note) : ''
+    }
+  };
+  if (state === 'done') {
+    out.docNo = plainText(link.DocNo);
+    out.photos = ctx.photos ? Object.keys(ctx.photos.readAll(REPAIR_KIND, out.docNo)) : [];
+    out.readableUntil = readableUntil(link);
+  }
+  return out;
+}
+
+/**
+ * ส่งเอกสารซ่อมผ่านลิงก์ = ปิดงานซ่อม
+ *
+ * ตรวจสถานะลิงก์ในล็อก ไม่ใช่ก่อนล็อก — ถ้ากดส่งซ้ำสองครั้งติดกัน
+ * (เน็ตช้าแล้วกดอีกที) ครั้งที่สองต้องเห็นว่าลิงก์ถูกใช้ไปแล้ว ไม่ใช่ได้ใบซ้ำ
+ */
+export async function submitRepairLink(ctx, token, record) {
+  record = record || {};
+  if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ซ่อมเสร็จ');
+  if (!plainText(record.Symptom).trim()) throw new Error('กรุณากรอกอาการเสีย');
+  if (!plainText(record.Fix).trim()) throw new Error('กรุณากรอกการแก้ไข');
+
+  const saved = await ctx.withLockNoAuth(async () => {
+    const link = await requireLink(ctx, token, 'open');
+
+    const unit = unitByCode(ctx, link.AirCode);
+    if (!unit) throw new Error('ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่');
+    if (plainText(unit.Status).trim() !== OPEN_STATUS) {
+      throw new Error('งานซ่อมนี้ถูกปิดไปแล้ว — ติดต่อเจ้าหน้าที่ถ้ายังมีงานค้าง');
+    }
+
+    // เครื่องมาจากลิงก์เสมอ ไม่ใช่จากที่ส่งมา — คนถือลิงก์ปิดงานของเครื่องอื่นไม่ได้
+    const row = await writeRepairForm(ctx, unit, { ...record, AirCode: unit.AirCode }, linkRecorder(link));
+
+    ctx.ss.writeByHeaders(SHEETS.REPAIRLINK, link._row, { UsedAt: ymdhms(new Date()), DocNo: row.DocNo });
+    await ctx.ss.flush();
+    return { docNo: row.DocNo };
+  });
+
+  await storeRepairPdf(ctx, saved.docNo);
+  return saved;
+}
+
+/**
+ * แนบรูปหนึ่งช่องของใบที่ส่งผ่านลิงก์แล้ว
+ *
+ * รูปส่งทีละใบหลังบันทึก (เหมือนในระบบ) เพราะเลขที่เอกสารซึ่งใช้เป็นที่เก็บรูป
+ * เพิ่งมีตอนส่ง และถ้าส่งทั้ง 9 รูปก้อนเดียว สัญญาณมือถือหน้างานมักไม่ไหว
+ */
+export async function saveRepairLinkPhoto(ctx, token, index, dataUrl) {
+  if (!ctx.photos) throw new Error('ระบบที่รันอยู่ตอนนี้ไม่รองรับการเก็บรูป');
+  const docNo = await ctx.withLockNoAuth(async () => {
+    const link = await requireLink(ctx, token, 'done');
+    const doc = plainText(link.DocNo);
+    // ใบซ่อมมีเครื่องเดียว รูปอยู่ช่องของเครื่องที่ 1 เสมอ (ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง)
+    ctx.photos.save(REPAIR_KIND, doc, 1, Number(index), dataUrl);
+    return doc;
+  });
+  // สร้างไฟล์ PDF ใหม่ให้ตรงกับรูปล่าสุด (หน่วงไว้ รวบรูปหลายใบเป็นรอบเดียว)
+  scheduleDocPdf(ctx, docNo, () => storeRepairPdf(ctx, docNo));
+  return { ok: true, photos: Object.keys(ctx.photos.readAll(REPAIR_KIND, docNo)) };
+}
+
+/** ไฟล์ PDF ของใบที่ส่งผ่านลิงก์แล้ว — สร้างสดทุกครั้ง จะได้มีรูปล่าสุดเสมอ */
+export async function getRepairLinkPdf(ctx, token) {
+  const link = await requireLink(ctx, token, 'done');
+  if (!ctx.pdf) {
+    throw new Error('เครื่องที่รันระบบอยู่สร้างไฟล์ PDF ไม่ได้ — เอกสารบันทึกเรียบร้อยแล้ว ขอไฟล์ได้จากเจ้าหน้าที่');
+  }
+  const docNo = plainText(link.DocNo);
+  const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === docNo);
+  if (!form) throw new Error('ไม่พบเอกสารเลขที่ ' + docNo + ' — อาจถูกลบไปแล้ว ติดต่อเจ้าหน้าที่');
+
+  const { base64 } = await renderRepairPdf(ctx, form);
+  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
+}
+
+/* ==================== สำหรับเจ้าหน้าที่ ==================== */
+
+/** สิทธิ์จัดการลิงก์ = เจ้าหน้าที่ที่แก้เอกสารซ่อมได้ ในขอบเขตของเครื่องนั้น */
+async function assertCanManage(ctx, airCode) {
+  await ctx.assertStaff('จัดการลิงก์งานซ่อม');
+  await ctx.assertModuleEdit('repairform');
+  const nc = normalizeCode(airCode);
+  const unit = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
+  if (!unit) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' หรือไม่มีสิทธิ์เข้าถึง');
+  return unit;
+}
+
+/**
+ * สร้างลิงก์ของงานซ่อมหนึ่งงาน — คืนรหัสให้ครั้งเดียว (ระบบเก็บแค่แฮช)
+ *
+ * ลิงก์เก่าของเครื่องเดียวกันที่ยังไม่ได้ใช้ ถูกยกเลิกให้อัตโนมัติ
+ * งานหนึ่งจึงมีลิงก์ที่ใช้ได้แค่อันเดียวเสมอ ไม่มีลิงก์เก่าลอยอยู่ในไลน์กลุ่มไหน
+ */
+export async function createRepairLink(ctx, airCode, days) {
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    const unit = await assertCanManage(ctx, airCode);
+    if (plainText(unit.Status).trim() !== OPEN_STATUS) {
+      throw new Error('สร้างลิงก์ได้เฉพาะงานที่อนุมัติซ่อมแล้ว (สถานะ "' + OPEN_STATUS + '")');
+    }
+
+    const now = new Date();
+    const by = await ctx.currentUser();
+    const nc = normalizeCode(unit.AirCode);
+    for (const old of ctx.ss.objects(SHEETS.REPAIRLINK)) {
+      if (normalizeCode(old.AirCode) !== nc || stateOf(old) !== 'open') continue;
+      ctx.ss.writeByHeaders(SHEETS.REPAIRLINK, old._row, {
+        RevokedAt: ymdhms(now), RevokedBy: by + ' (สร้างลิงก์ใหม่แทน)'
+      });
+    }
+
+    const d = LINK_DAYS.includes(Number(days)) ? Number(days) : DEFAULT_DAYS;
+    const token = newToken();
+    const link = {
+      ID: 'RL' + Date.now(),
+      TokenHash: await hashToken(token),
+      AirCode: plainText(unit.AirCode),
+      CreatedAt: ymdhms(now),
+      CreatedBy: by,
+      ExpiresAt: ymdhms(new Date(now.getTime() + d * DAY))
+    };
+    const headers = ctx.ss.headers(SHEETS.REPAIRLINK);
+    ctx.ss.appendRow(SHEETS.REPAIRLINK, headers.map(h => (link[h] !== undefined ? link[h] : '')));
+    await ctx.ss.flush();
+
+    return { id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt };
+  });
+}
+
+/** ลิงก์ทั้งหมดของเครื่องที่อยู่ในขอบเขตของผู้ใช้ (ไม่มีรหัส ไม่มีแฮช) — ใหม่ก่อน */
+export async function getRepairLinks(ctx) {
+  await ctx.assertStaff('ดูลิงก์งานซ่อม');
+  if (!(await ctx.canView('repairform'))) return [];
+  await ctx.ensureBase();
+
+  const scope = new Set((await unitsInScope(ctx)).map(u => normalizeCode(u.AirCode)));
+  const now = ymdhms(new Date());
+  return ctx.ss.objects(SHEETS.REPAIRLINK)
+    .filter(l => scope.has(normalizeCode(l.AirCode)))
+    .map(l => ({
+      ID: plainText(l.ID), AirCode: plainText(l.AirCode),
+      CreatedAt: plainText(l.CreatedAt), CreatedBy: plainText(l.CreatedBy),
+      ExpiresAt: plainText(l.ExpiresAt), UsedAt: plainText(l.UsedAt), DocNo: plainText(l.DocNo),
+      RevokedAt: plainText(l.RevokedAt), RevokedBy: plainText(l.RevokedBy),
+      state: stateOf(l, now)
+    }))
+    .sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+}
+
+/** ยกเลิกลิงก์ที่ยังไม่ได้ใช้ — ลิงก์ที่ส่งไปแล้วยกเลิกไม่ได้ (งานปิดไปแล้ว) */
+export async function revokeRepairLink(ctx, id) {
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    const link = ctx.ss.objects(SHEETS.REPAIRLINK).find(l => plainText(l.ID) === plainText(id));
+    if (!link) throw new Error('ไม่พบลิงก์นี้ กรุณารีเฟรชหน้าจอ');
+    await assertCanManage(ctx, link.AirCode);
+
+    const state = stateOf(link);
+    if (state === 'done' || state === 'closed') throw new Error('ลิงก์นี้ส่งเอกสารไปแล้ว ยกเลิกไม่ได้');
+    if (state !== 'open') return getRepairLinks(ctx);
+
+    ctx.ss.writeByHeaders(SHEETS.REPAIRLINK, link._row, {
+      RevokedAt: ymdhms(new Date()), RevokedBy: await ctx.currentUser()
+    });
+    await ctx.ss.flush();
+    return getRepairLinks(ctx);
+  });
+}
