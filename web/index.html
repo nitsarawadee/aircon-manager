@@ -453,7 +453,7 @@
               </h3>
               <button onclick="openPlanCalendar()" class="text-xs text-[#1153a1] hover:underline font-medium whitespace-nowrap flex items-center gap-1"><i class="ph ph-calendar-blank"></i> ดูปฏิทินทั้งเดือน</button>
             </div>
-            <div id="upcomingPlanContainer" class="dash-scroll grid grid-cols-1 gap-2 pr-1">
+            <div id="upcomingPlanContainer" class="dash-scroll grid grid-cols-1 auto-rows-max content-start gap-2 pr-1">
               <!-- จะถูก Inject ผ่าน JavaScript -->
             </div>
           </div>
@@ -2162,7 +2162,16 @@
               <h2 class="text-2xl font-bold text-gray-800">ปฏิทินงานล้างของฉัน</h2>
               <p class="text-sm text-gray-500">นัดล้างแอร์ที่มอบหมายให้ ${esc(currentUserInfo.contractorName || '')} · ปิดงานได้ที่เมนูแผนล้างแอร์ (กดที่ช่องรอบ)</p>
             </div>
-            <div id="myWorkCalendar" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>`;
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              <!-- มือถือ: นัดที่ใกล้ถึงขึ้นก่อน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
+                  <i class="ph ph-calendar-check text-[#1153a1]"></i> นัดหมาย 30 วัน
+                </h3>
+                <div id="myUpcoming" class="grid grid-cols-1 auto-rows-max gap-2"></div>
+              </div>
+              <div id="myWorkCalendar" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>
+            </div>`;
         }
       }
 
@@ -2519,6 +2528,7 @@
       if (isContractor()) {
         if (calTarget === 'myWorkCalendar') renderPlanCalendar();
         else openPlanCalendar(null, null, 'myWorkCalendar');
+        renderUpcomingPlans(document.getElementById('myUpcoming'), (await call('getUpcomingCleanings')) || []);
         return;
       }
       const sel = document.getElementById('dashYearSelect');
@@ -2628,13 +2638,20 @@
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
 
-      // เรนเดอร์ ปฏิทินแผนล้างแอร์ 30 วันล่วงหน้า
-      const calContainer = document.getElementById('upcomingPlanContainer');
-      if(s.upcomingPlans && s.upcomingPlans.length > 0) {
+      renderUpcomingPlans(document.getElementById('upcomingPlanContainer'), s.upcomingPlans);
+    }
+
+    /**
+     * การ์ดนัดหมาย 30 วันข้างหน้า — ใช้ทั้งแดชบอร์ดของเจ้าหน้าที่และของผู้รับเหมา
+     * กดการ์ดแล้วไปหน้าแผนล้าง กรองไว้ที่ Node นั้น
+     */
+    function renderUpcomingPlans(calContainer, upcoming) {
+      if (!calContainer) return;
+      if (upcoming && upcoming.length > 0) {
          const todayRaw = new Date();
          todayRaw.setHours(0,0,0,0);
 
-         calContainer.innerHTML = s.upcomingPlans.map(up => {
+         calContainer.innerHTML = upcoming.map(up => {
             const pDate = new Date(up.PlanDate);
             const isToday = pDate.getTime() === todayRaw.getTime();
             
@@ -2651,7 +2668,7 @@
                   </div>
                   <div class="flex-1 min-w-0">
                      <div class="text-sm font-bold text-gray-800 truncate" title="${esc(up.NodeName)}">${esc(up.NodeName)}</div>
-                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-snowflake text-gray-400"></i> ${airCodeBtn(up.AirCode, 'text-gray-500 hover:text-[#1153a1] underline decoration-dotted underline-offset-2')}</div>
+                     <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><i class="ph-fill ph-snowflake text-gray-400"></i> ${isContractor() ? esc(up.AirCode) : airCodeBtn(up.AirCode, 'text-gray-500 hover:text-[#1153a1] underline decoration-dotted underline-offset-2')}</div>
                   </div>
                </div>
                <div class="text-xs font-medium text-gray-600 bg-gray-50 rounded-lg px-2.5 py-2 flex items-center justify-between group-hover:bg-blue-50 group-hover:text-[#1153a1] transition-colors border border-gray-100 group-hover:border-blue-100">

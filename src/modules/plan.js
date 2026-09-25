@@ -1,5 +1,5 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
-import { formatDate, isRetiredStatus, normalizeCode } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode, safeParseDate, todayStart } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { jobKey } from '../context.js';
 
@@ -369,6 +369,72 @@ export async function getPlanCalendar(ctx, year, month) {
   }
 
   return planCalendar(rows, year, month);
+}
+
+/* ==================== นัดหมาย 30 วันข้างหน้า ==================== */
+
+/** แสดงกี่รายการ — เกินนี้หน้าจอรก คนดูต่อในปฏิทินทั้งเดือนได้ */
+export const UPCOMING_LIMIT = 12;
+
+/**
+ * นัดล้างที่ยังไม่เสร็จ ในช่วง 30 วันข้างหน้า จากแผนปีเดียว
+ *
+ * ใช้ร่วมกันระหว่างแดชบอร์ดของเจ้าหน้าที่กับของผู้รับเหมา
+ * ถ้าต่างคนต่างนับ วันหนึ่งสองหน้าจะบอกนัดไม่ตรงกัน
+ *
+ * @param {Array}  plan  แถวจาก getCleaningPlan (กรองตามสิทธิ์มาแล้ว)
+ * @param {string} py    ปีของแผน
+ * @param {Date}   today เที่ยงคืนของวันนี้ตามเวลาไทย
+ */
+export function upcomingFromPlan(plan, py, today) {
+  const futureLimit = new Date(today.getTime() + 30 * 86400000 + 86399999);
+  const out = [];
+
+  for (const p of plan || []) {
+    // เครื่องที่รื้อถอน/Write off หรือถูกลบออกจากทะเบียนไปแล้ว ต้องไม่ขึ้นเป็นนัดหมาย
+    // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ไม่มีอยู่แล้ว
+    if (p.Retired || p.Removed) continue;
+
+    for (const r of [1, 2, 3]) {
+      // บัญชีผู้รับเหมา: รอบของเจ้าอื่นไม่ใช่นัดของตัวเอง
+      if (p['R' + r + '_Mine'] === false) continue;
+      const status = p['R' + r + '_Status'];
+      if (status === 'ล้างเสร็จสิ้น' || status === 'ยกเลิก') continue;
+      if (!p['R' + r + '_PlanDate']) continue;
+
+      const pDate = safeParseDate(p['R' + r + '_PlanDate']);
+      if (pDate && pDate >= today && pDate <= futureLimit) {
+        out.push({
+          AirCode: p.AirCode,
+          NodeName: p.NodeName,
+          Round: r,
+          PlanYear: py,
+          PlanDate: p['R' + r + '_PlanDate'],
+          RawDate: pDate.getTime()
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * นัดหมาย 30 วันข้างหน้าจากทุกแผน — สำหรับแดชบอร์ดของผู้รับเหมา
+ * (แดชบอร์ดของเจ้าหน้าที่ได้รายการเดียวกันนี้มากับ getDashboardSummary)
+ *
+ * ต้องมองทุกแผน ไม่ใช่แค่ปีล่าสุด เพราะแผนปีหน้ามักลงนัดตั้งแต่ปลายปีนี้
+ */
+export async function getUpcomingCleanings(ctx) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('plan'))) return [];
+
+  const today = todayStart();
+  const out = [];
+  for (const name of await getPlanYears(ctx)) {
+    const py = name.replace('Plan_', '');
+    out.push(...upcomingFromPlan(await getCleaningPlan(ctx, py), py, today));
+  }
+  return out.sort((a, b) => a.RawDate - b.RawDate).slice(0, UPCOMING_LIMIT);
 }
 
 /** สรุปการล้างแอร์ของปีที่ระบุ สำหรับแสดงหัวหน้าตารางแผน */

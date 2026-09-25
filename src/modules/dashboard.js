@@ -1,6 +1,6 @@
 import { SHEETS } from '../schema.js';
 import { isRetiredStatus, partsOf, safeParseDate, todayStart } from '../values.js';
-import { getPlanYears, getCleaningPlan, summarizeCleaning } from './plan.js';
+import { getPlanYears, getCleaningPlan, summarizeCleaning, upcomingFromPlan, UPCOMING_LIMIT } from './plan.js';
 import { getHistory } from './history.js';
 
 /**
@@ -69,7 +69,6 @@ export async function getDashboardSummary(ctx, year) {
   let upcomingPlans = []; // กำหนดการล้างแอร์ใน 30 วันล่วงหน้า
 
   if (years.length > 0) {
-    const futureLimit = new Date(today.getTime() + 30 * 86400000 + 86399999);
 
     // นัดหมายต้องมองทุกแผน ไม่ใช่แค่แผนปีล่าสุด
     // เพราะแผนคนละปีลงนัดคาบเกี่ยวกันได้ (แผนปี 2027 มีนัดตั้งแต่ปลายปี 2026)
@@ -79,29 +78,7 @@ export async function getDashboardSummary(ctx, year) {
       const py = name.replace('Plan_', '');
       const plan = await getCleaningPlan(ctx, py); // กรองตามภูมิภาคมาแล้ว
 
-      plan.forEach(p => {
-        // เครื่องที่รื้อถอน/Write off หรือถูกลบออกจากทะเบียนไปแล้ว ต้องไม่ขึ้นเป็นนัดหมาย
-        // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ไม่มีอยู่แล้ว
-        if (p.Retired || p.Removed) return;
-
-        [1, 2, 3].forEach(r => {
-          if (p['R' + r + '_Status'] === 'ล้างเสร็จสิ้น') return;
-          if (!p['R' + r + '_PlanDate']) return;
-
-          // ดึงเฉพาะแผนที่ยังไม่เสร็จ และอยู่ในช่วง 30 วันข้างหน้า
-          const pDate = safeParseDate(p['R' + r + '_PlanDate']);
-          if (pDate && pDate >= today && pDate <= futureLimit && p['R' + r + '_Status'] !== 'ยกเลิก') {
-            upcomingPlans.push({
-              AirCode: p.AirCode,
-              NodeName: p.NodeName,
-              Round: r,
-              PlanYear: py,
-              PlanDate: p['R' + r + '_PlanDate'],
-              RawDate: pDate.getTime()
-            });
-          }
-        });
-      });
+      upcomingPlans.push(...upcomingFromPlan(plan, py, today));
 
       // ความคืบหน้าคิดจากแผนของปีที่เลือกปีเดียว การ์ดบอกชัดอยู่แล้วว่าเป็นของปีไหน
       //
@@ -116,7 +93,7 @@ export async function getDashboardSummary(ctx, year) {
 
     // เรียงตามวันที่ใกล้สุดก่อน และแสดงแค่ 12 รายการแรกเพื่อไม่ให้หน้าจอรก
     upcomingPlans.sort((a, b) => a.RawDate - b.RawDate);
-    upcomingPlans = upcomingPlans.slice(0, 12);
+    upcomingPlans = upcomingPlans.slice(0, UPCOMING_LIMIT);
   }
 
   const hList = await getHistory(ctx); // กรองตามภูมิภาคมาแล้ว

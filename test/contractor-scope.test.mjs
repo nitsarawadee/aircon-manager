@@ -471,3 +471,19 @@ test('ปฏิทินของผู้รับเหมา มีเฉพ�
   const boss = await getPlanCalendar(as(db, 'boss'), 2026, 9);
   assert.equal(boss.total, 5, 'เจ้าหน้าที่เห็นนัดครบทุกเจ้า');
 });
+
+test('นัดหมาย 30 วันของผู้รับเหมา มีเฉพาะรอบของตัวเองที่ยังไม่เสร็จ', async () => {
+  const { getUpcomingCleanings } = await import('../src/modules/plan.js');
+  const { ymd } = await import('../src/values.js');
+  const db = freshDb();
+  const soon = ymd(new Date(Date.now() + 5 * 86400000));
+  db.prepare('UPDATE plans SET R2_PlanDate = ?, R3_PlanDate = ?').run(soon, soon);
+
+  const codes = list => list.map(u => u.AirCode + '/' + u.Round).sort();
+  assert.deepEqual(codes(await getUpcomingCleanings(as(db, 'ctA'))), ['ATG-PMK-AIR-1/2', 'ATG-PMK-AIR-2/2']);
+  assert.deepEqual(codes(await getUpcomingCleanings(as(db, 'ctB'))), ['ATG-PMK-AIR-1/3', 'AYA-WNI-AIR-1/2']);
+
+  // ปิดงานไปแล้ว ต้องหายจากรายการนัด
+  await saveCleaningForm(as(db, 'ctA'), cleaning('ATG-PMK-AIR-1', { Date: soon }));
+  assert.deepEqual(codes(await getUpcomingCleanings(as(db, 'ctA'))), ['ATG-PMK-AIR-2/2']);
+});
