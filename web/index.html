@@ -8768,7 +8768,27 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   /** ที่อยู่เต็มของลิงก์ — รหัสอยู่หลัง # (ดู repairLinkTokenFromUrl) */
-  const repairLinkUrl = token => location.origin + '/#rl=' + token;
+  const repairLinkUrl = created => repairLinkBase(created) + '/#rl=' + created.token;
+
+  /** เปิดระบบด้วยชื่อเครื่องตัวเอง (localhost) — ที่อยู่นี้คนอื่นเปิดไม่ได้ */
+  const isLocalHost = () => /^(localhost|127\.|\[?::1\]?$)/.test(location.hostname);
+
+  /**
+   * ที่อยู่ต้นลิงก์ที่คนอื่นเปิดได้
+   *
+   * เดิมใช้ที่อยู่ของหน้าที่เปิดอยู่เสมอ พอเจ้าหน้าที่เปิดระบบบนเครื่อง server ด้วย localhost
+   * ลิงก์ก็ออกมาเป็น http://localhost:8787/... ส่งไปแล้วเปิดบนมือถือช่างไม่ได้
+   * (localhost ของมือถือคือตัวมือถือเอง ไม่ใช่เครื่อง server)
+   *
+   *   PUBLIC_URL ใน .env (ที่อยู่จริงตอนขึ้นคลาวด์) → ใช้อันนั้นเสมอ
+   *   เปิดด้วย localhost → ใช้ที่อยู่ในวงแลนของเครื่อง server แทน
+   *   เปิดด้วยที่อยู่อื่นอยู่แล้ว → ใช้ที่อยู่นั้น (คนเปิดเข้ามาได้ คนอื่นก็เข้าได้)
+   */
+  function repairLinkBase(created) {
+    if (created.publicUrl) return created.publicUrl;
+    if (isLocalHost() && created.lanUrl) return created.lanUrl;
+    return location.origin;
+  }
 
   /**
    * หน้าต่างลิงก์ของงานซ่อมหนึ่งงาน
@@ -8784,14 +8804,16 @@ const CLEANING_CHECKLIST_ITEMS = [
     const body = created ? `
       <p class="text-sm text-gray-600 mb-2">ส่งลิงก์นี้ให้ช่างทางไลน์ได้เลย — คนที่ได้ลิงก์กรอกได้โดยไม่ต้องล็อกอิน</p>
       <div class="flex gap-2">
-        <input id="rl_url" readonly value="${esc(repairLinkUrl(created.token))}"
+        <input id="rl_url" readonly value="${esc(repairLinkUrl(created))}"
           class="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none">
         <button onclick="copyRepairLink()" class="px-3 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg whitespace-nowrap"><i class="ph ph-copy"></i> คัดลอก</button>
       </div>
       <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
         <i class="ph ph-warning"></i> ลิงก์นี้แสดงได้ครั้งเดียว — ปิดหน้าต่างแล้วดูซ้ำไม่ได้ ต้องสร้างใหม่ (ลิงก์นี้จะถูกยกเลิกให้)
       </p>
-      <p class="text-xs text-gray-500 mt-2">ใช้ได้ถึง ${esc(fmtDate(created.expiresAt.slice(0, 10)))} · ส่งได้ครั้งเดียว · ส่งแล้วงานนี้ปิดทันที</p>`
+      <p class="text-xs text-gray-500 mt-2">ใช้ได้ถึง ${esc(fmtDate(created.expiresAt.slice(0, 10)))} · ส่งได้ครั้งเดียว · ส่งแล้วงานนี้ปิดทันที</p>
+      ${created.publicUrl ? '' : `<p class="text-xs text-gray-500 mt-1"><i class="ph ph-wifi-high"></i>
+        ลิงก์นี้เปิดได้เฉพาะเครื่องที่ต่อเน็ตวงเดียวกับออฟฟิศ — ช่างที่อยู่หน้างานจะเปิดได้เมื่อระบบขึ้นคลาวด์แล้ว</p>`}`
     : `
       ${open ? `<div class="text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
           มีลิงก์ที่ยังไม่มีคนกรอก (สร้างโดย ${esc(l.CreatedBy)} · ใช้ได้ถึง ${esc(fmtDate(l.ExpiresAt.slice(0, 10)))})

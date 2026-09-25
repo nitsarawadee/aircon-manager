@@ -305,3 +305,15 @@ test('คำสั่งของลิงก์เรียกได้ทา�
   const opened = await handleApi({ pathname: '/api/public', body: { fn: 'getRepairLink', args: [made.payload.result.token] }, env: {}, state: st, db });
   assert.equal(opened.payload.result.state, 'open');
 });
+
+test('ลิงก์ที่สร้าง บอกที่อยู่ที่คนอื่นเปิดได้ (PUBLIC_URL ก่อน แล้วค่อยที่อยู่ในวงแลน)', async () => {
+  const db = freshDb();
+  const withEnv = env => { const c = new Ctx(env, state, db, {}); c.username = 'boss'; return c; };
+
+  const lan = await createRepairLink(withEnv({ LAN_URL: 'http://192.168.1.20:8787' }), 'AYA-WNI-AIR-1');
+  assert.equal(lan.lanUrl, 'http://192.168.1.20:8787');
+  assert.equal(lan.publicUrl, '');
+
+  const cloud = await createRepairLink(withEnv({ PUBLIC_URL: 'https://aircon.example.com/', LAN_URL: 'http://192.168.1.20:8787' }), 'AYA-WNI-AIR-1');
+  assert.equal(cloud.publicUrl, 'https://aircon.example.com', 'ตัด / ท้ายออก ไม่งั้นลิงก์จะมี // ซ้อน');
+});

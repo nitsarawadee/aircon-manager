@@ -280,7 +280,13 @@ export async function createRepairLink(ctx, airCode, days) {
     ctx.ss.appendRow(SHEETS.REPAIRLINK, headers.map(h => (link[h] !== undefined ? link[h] : '')));
     await ctx.ss.flush();
 
-    return { id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt };
+    return {
+      id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt,
+      // ที่อยู่ที่คนอื่นเปิดได้ — หน้าเว็บใช้แทนที่อยู่ของตัวเองเมื่อเปิดระบบด้วย localhost
+      // (ดู lanUrl ใน platform/node.js) PUBLIC_URL คือที่อยู่จริงตอนขึ้นคลาวด์ ชนะเสมอ
+      publicUrl: String((ctx.env && ctx.env.PUBLIC_URL) || '').replace(/\/+$/, ''),
+      lanUrl: String((ctx.env && ctx.env.LAN_URL) || '')
+    };
   });
 }
 

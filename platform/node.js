@@ -223,6 +223,29 @@ const fileEnv = await loadEnvFile(join(ROOT, '.env'));
 const env = { ...fileEnv, ...process.env };
 const PATHS = dataPaths(env);
 
+/**
+ * ที่อยู่ของเครื่องนี้ในวงแลน — ใช้ทำลิงก์ที่ส่งให้คนอื่น (เช่นลิงก์กรอกเอกสารซ่อม)
+ *
+ * เจ้าหน้าที่ที่เปิดระบบบนเครื่อง server เองมักเข้าด้วย localhost ลิงก์ที่สร้างจึงออกมาเป็น
+ * http://localhost:8787/... ซึ่งเปิดบนมือถือของช่างไม่ได้เลย (localhost ของมือถือคือตัวมือถือเอง)
+ * ตอนขึ้นคลาวด์ให้ตั้ง PUBLIC_URL ใน .env แทน ค่านั้นชนะเสมอ
+ *
+ * เลือก 192.168.x ก่อน แล้วค่อย 10.x / 172.x — การ์ดเครือข่ายเสมือน (VirtualBox, Hyper-V)
+ * มักได้ 172.x หรือ 192.168.56.x ซึ่งเครื่องอื่นเข้าไม่ได้
+ */
+function lanUrl(port) {
+  const ips = [];
+  for (const list of Object.values(networkInterfaces())) {
+    for (const net of list || []) {
+      if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
+    }
+  }
+  const rank = ip => (ip.startsWith('192.168.56.') ? 9 : ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : 2);
+  ips.sort((a, b) => rank(a) - rank(b));
+  return ips.length ? 'http://' + ips[0] + ':' + port : '';
+}
+env.LAN_URL = env.LAN_URL || lanUrl(Number(env.PORT) || 8787);
+
 /* ---------------------------- เปิดฐานข้อมูล ----------------------------
    src/ ห้ามเปิดไฟล์เอง การเปิดฐานข้อมูลจึงต้องทำที่นี่แล้วส่งเข้าไปให้
    ------------------------------------------------------------------------ */
