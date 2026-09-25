@@ -1103,6 +1103,8 @@
     // ปีที่ถูกขอมาจากการ์ดคืบหน้าบนแดชบอร์ด ต้องชนะค่าเริ่มต้นของหน้าแผน (ปีล่าสุด)
     // ด้วยเหตุผลเดียวกับข้างบน คือกดแท็บแล้ว loadPlanYears จะไปตั้งปีทับให้เอง
     let pendingPlanYear = null;
+    // คำค้นที่ฝากมาให้หน้าแผน (จากการ์ดนัดหมาย) — เหตุผลเดียวกัน: loadPlan ล้างช่องค้นหาทุกครั้ง
+    let pendingPlanSearch = null;
     let pendingBudgetYear = null;
     let currentConfig = {};
     let currentYear = null;
@@ -2688,22 +2690,15 @@
      *
      * ต้องสลับปีให้ตรงกับแผนที่นัดใบนั้นสังกัดด้วย เพราะนัดของแผนปีหน้า
      * โผล่ในช่วง 30 วันข้างหน้าได้ ถ้าไม่สลับปีจะเปิดตารางผิดปีแล้วหา Node ไม่เจอ
+     *
+     * ฝากปีกับคำค้นไว้ให้หน้าแผนหยิบไปใช้ตอนโหลด ไม่ใช่ตั้งเองหลังกดแท็บ
+     * เดิมตั้งช่องค้นหาทันทีหลังกดแท็บ แต่การกดแท็บสั่งโหลดแผนใหม่ (ต้องรอเซิร์ฟเวอร์)
+     * พอโหลดเสร็จ loadPlan ล้างช่องค้นหาทิ้ง การ์ดจึงพาไปหน้าแผนที่ไม่ได้กรองอะไรเลย
      */
-    async function goToPlan(nodeName, planYear) {
+    function goToPlan(nodeName, planYear) {
+      pendingPlanYear = planYear || null;
+      pendingPlanSearch = nodeName || '';
       document.querySelector('[data-tab="plan"]').click();
-
-      const yearSel = document.getElementById('planYearSelect');
-      if (planYear && yearSel && yearSel.value !== String(planYear) &&
-          [...yearSel.options].some(o => o.value === String(planYear))) {
-        yearSel.value = String(planYear);
-        await loadPlan();
-      }
-
-      const box = document.getElementById('planSearch');
-      if (box) {
-        box.value = nodeName || '';
-        renderPlanTable(nodeName || '');
-      }
     }
 
     /**
@@ -4900,9 +4895,12 @@
       if (!currentYear) return;
       currentPlan = (await call('getCleaningPlan', currentYear)) || [];
       
+      // เปลี่ยนปีแล้วเริ่มค้นใหม่ เว้นแต่มีคำค้นฝากมาจากหน้าอื่น (ดู goToPlan)
+      const query = pendingPlanSearch || '';
+      pendingPlanSearch = null;
       const searchInput = document.getElementById('planSearch');
-      if(searchInput) searchInput.value = '';
-      planLastQuery = '';
+      if(searchInput) searchInput.value = query;
+      planLastQuery = query;
       planPage = 1;
 
       renderPlanTable();
