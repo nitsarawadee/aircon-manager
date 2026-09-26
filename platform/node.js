@@ -42,7 +42,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
 const { backupDatabase, pruneBackups } = await import('./backup.js');
-const { addMissingTables, addMissingColumns } = await import('../src/db/migrate.js');
+const { addMissingTables, addMissingColumns, repairShiftedPlanRows } = await import('../src/db/migrate.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -258,6 +258,15 @@ const addedCols = addMissingColumns(db);
 if (addedCols.length) console.log('เพิ่มคอลัมน์ใหม่ในฐานข้อมูล: ' + addedCols.join(', '));
 
 startAutoBackup(db, resolve(ROOT, PATHS.backups));
+
+// ซ่อมแผนที่ค่าเลื่อนคอลัมน์จากบั๊กเดิมตอนสร้างแผนปีใหม่ (ดู repairShiftedPlanRows)
+// ทำหลังสำรองข้อมูลตอนเปิดเซิร์ฟเวอร์ ไฟล์สำรองรอบนี้จึงมีข้อมูลก่อนซ่อมเก็บไว้เสมอ
+try {
+  const fixedRounds = repairShiftedPlanRows(db);
+  if (fixedRounds) console.log('ซ่อมแผนล้างที่ค่าเลื่อนคอลัมน์: ' + fixedRounds + ' รอบ');
+} catch (err) {
+  console.error('⚠️  ซ่อมแผนล้างไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
+}
 
 /**
  * ตัวเก็บรูปถ่ายประกอบเอกสาร ที่ส่งเข้าไปให้ src/ ใช้

@@ -83,3 +83,68 @@ export function addMissingColumns(db) {
 
   return added;
 }
+
+/**
+ * ซ่อมแผนล้างที่ค่าเลื่อนคอลัมน์ — ผลของบั๊กเดิมใน createCleaningPlan
+ *
+ * ============================================================================
+ * เกิดอะไรขึ้น
+ * ============================================================================
+ * createCleaningPlan เขียนแถวเป็น "ลำดับช่อง" ตามแบบชีตเดิม ซึ่งรอบหนึ่งมี 6 ช่อง
+ * แต่ตาราง plans มี R*_FormUrl ต่อท้ายทุกรอบ (รอบละ 7 ช่อง) ค่าจึงเลื่อน:
+ * รอบ 1 ตรง · รอบ 2 เลื่อนไป 1 ช่อง · รอบ 3 เลื่อนไป 2 ช่อง
+ *
+ *   ช่องจริง        ได้ค่าอะไรไป
+ *   R2_ActualDate   ราคาของรอบ 2
+ *   R2_Technician   "รอดำเนินการ" (สถานะ)
+ *   R3_PlanDate     ราคาของรอบ 3
+ *   R3_Price        "รอดำเนินการ" (ตัวเลขรับไม่ได้ กลายเป็นว่าง)
+ *   R3_Status       ชื่อคนสร้างแผน
+ *
+ * แผนที่ย้ายมาจากชีตเดิมไม่โดน เพราะไม่ได้สร้างผ่านฟังก์ชันนั้น
+ *
+ * ============================================================================
+ * ซ่อมอย่างไร
+ * ============================================================================
+ * ย้ายค่ากลับที่เดิม เฉพาะแถวที่ยังเป็นรูปแบบที่เลื่อนแน่ๆ และยังไม่มีใครแตะรอบนั้น
+ * แยกซ่อมทีละรอบ รอบไหนมีคนแก้ไปแล้ว (มีวันที่จริง / สถานะจริง) ไม่แตะรอบนั้น
+ * รันซ้ำได้ทุกครั้งที่เปิดเซิร์ฟเวอร์ แถวที่ซ่อมแล้วไม่เข้าเงื่อนไขอีก
+ *
+ * @returns {number} จำนวนรอบที่ซ่อม
+ */
+export function repairShiftedPlanRows(db) {
+  const STATUSES = new Set(['', 'รอดำเนินการ', 'นัดหมายแล้ว', 'ยกเลิก', 'ล้างเสร็จสิ้น']);
+  const text = v => (v == null ? '' : String(v).trim());
+  const isPrice = v => /^\d+(\.\d+)?$/.test(text(v));
+  const num = v => (isPrice(v) ? Number(text(v)) : null);
+
+  let fixed = 0;
+  const rows = db.prepare('SELECT * FROM plans').all();
+  const fixR2 = db.prepare(`UPDATE plans SET R2_ActualDate = '', R2_Price = ?, R2_Technician = '',
+    R2_Status = 'รอดำเนินการ' WHERE row_id = ?`);
+  const fixR3 = db.prepare(`UPDATE plans SET R3_PlanDate = '', R3_Price = ?, R3_Status = 'รอดำเนินการ',
+    UpdatedBy = CASE WHEN COALESCE(UpdatedBy, '') = '' THEN ? ELSE UpdatedBy END WHERE row_id = ?`);
+
+  db.exec('BEGIN');
+  try {
+    for (const r of rows) {
+      // รอบ 2: สถานะไปอยู่ช่องชื่อช่าง ช่องสถานะว่าง ยังไม่มีวันตามแผน และช่องวันที่จริงเป็นราคา (หรือว่าง)
+      if (text(r.R2_Technician) === 'รอดำเนินการ' && !text(r.R2_Status) && !text(r.R2_PlanDate) &&
+          (isPrice(r.R2_ActualDate) || !text(r.R2_ActualDate)) && r.R2_Price == null) {
+        fixR2.run(num(r.R2_ActualDate), r.row_id);
+        fixed++;
+      }
+      // รอบ 3: ช่องสถานะไม่ใช่สถานะที่มีจริง (เป็นชื่อคน) ยังไม่มีวันที่จริง และช่องวันตามแผนเป็นราคา (หรือว่าง)
+      if (!STATUSES.has(text(r.R3_Status)) && !text(r.R3_ActualDate) && r.R3_Price == null &&
+          (isPrice(r.R3_PlanDate) || !text(r.R3_PlanDate)) && !text(r.R3_Technician)) {
+        fixR3.run(num(r.R3_PlanDate), text(r.R3_Status), r.row_id);
+        fixed++;
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return fixed;
+}
