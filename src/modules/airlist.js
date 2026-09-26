@@ -1,7 +1,7 @@
 import { SHEETS } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
 import { HEADERS as IMPORT_HEADERS } from '../import-spec.js';
-import { formatDate, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
@@ -212,48 +212,121 @@ export async function saveAirUnit(ctx, unit) {
 }
 
 /**
- * ย้ายเครื่องปรับอากาศจาก Node เดิมไปยัง Node ปลายทาง
- * อัปเดตตำแหน่งใน AirList และบันทึกประวัติ EventType 'ย้าย' ให้อัตโนมัติ
+ * ย้ายเครื่องไปแทนตำแหน่งอื่น — เช่นย้ายแอร์จาก BKK-LPA-AIR-1 ไปแทน BKK-LKB-AIR-1
+ *
+ * ============================================================================
+ * ทำไมไม่เปลี่ยนแค่ชื่อ Node แบบเดิม
+ * ============================================================================
+ * รหัสเครื่องคือชื่อของ "ตำแหน่ง" (ดู replaceAirUnit) แบบเดิมเปลี่ยนแค่ Node กับ Site
+ * ของแถวเดิม ผลคือได้ BKK-LPA-AIR-1 ที่ไปตั้งอยู่ใน Node ของ LKB — รหัสบอกที่หนึ่ง
+ * ข้อมูลบอกอีกที่ แผนล้าง เอกสาร และการค้นหาตามรหัสพาไปผิดที่หมด
+ *
+ * ============================================================================
+ * ทำอย่างไร (ตามที่เจ้าของงานกำหนด)
+ * ============================================================================
+ * เหมือน "เปลี่ยนเครื่อง" ทั้งสองฝั่ง
+ *
+ *   ปลายทาง  ตำแหน่งเดิมคงไว้ทุกอย่าง (รหัส Node Site ภูมิภาค จังหวัด ที่อยู่ พิกัด)
+ *            ข้อมูลของตัวเครื่องมาจากเครื่องที่ย้ายมา (MACHINE_FIELDS + สถานะ หมายเหตุ)
+ *            ประวัติ "เปลี่ยนเครื่อง" เก็บสเปกของเครื่องที่ถูกแทนไว้ และบอกว่าย้ายมาจากไหน
+ *   ต้นทาง   แถวยังอยู่ ล้างข้อมูลตัวเครื่องออก สถานะ "รื้อถอน/ปลดระวาง" = รอเครื่องใหม่
+ *            (หน้างานซ่อมโชว์เป็น "รอเครื่องใหม่มาแทน" พร้อมปุ่มเปลี่ยนเครื่อง)
+ *            ประวัติ "เปลี่ยนเครื่อง" เก็บสเปกของเครื่องที่ย้ายออกไป และบอกว่าไปไหน
+ *
+ * ใช้ "เปลี่ยนเครื่อง" เป็นประเภทประวัติทั้งสองฝั่ง เพราะหน้าของเครื่องใช้ใบนี้เป็นเส้นแบ่ง
+ * ว่ารายการไหนเป็นของเครื่องตัวเก่า — หลังย้าย ประวัติการล้าง/ซ่อมเก่าของทั้งสองตำแหน่ง
+ * เป็นของเครื่องคนละตัวกับที่อยู่ตรงนั้นตอนนี้แล้ว
+ *
+ * ย้ายได้เฉพาะเครื่องที่ไม่มีงานซ่อมค้าง และยังไม่ถูกรื้อถอน — เครื่องที่ติดเคสอยู่
+ * ถ้าย้ายไป เคสจะค้างอยู่ที่ตำแหน่งที่ไม่มีเครื่องนั้นแล้ว
+ *
+ * @param {number} row       แถวของเครื่องที่จะย้าย
+ * @param {string} destCode  รหัสตำแหน่งปลายทาง (ต้องมีอยู่ในทะเบียนแล้ว)
+ * @param {string} note      หมายเหตุ เช่นเหตุผลที่ย้าย
+ * @param {string} expectCode รหัสที่หน้าเว็บเชื่อว่าอยู่ในแถวนั้น (กันแก้ผิดแถว)
  */
-export async function moveAirUnit(ctx, row, dest, note, expectCode) {
+export async function moveAirUnit(ctx, row, destCode, note, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
-    if (!dest || !dest.NodeName) throw new Error('กรุณาระบุ Node ปลายทาง');
     await ctx.ensureBase();
     ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 
     const headers = ctx.ss.headers(SHEETS.AIRLIST);
-    const unit = {};
-    headers.forEach((h, i) => { if (h) unit[h] = ctx.ss.cell(SHEETS.AIRLIST, row, i + 1); });
+    const src = {};
+    headers.forEach((h, i) => { if (h) src[h] = ctx.ss.cell(SHEETS.AIRLIST, row, i + 1); });
 
-    await ctx.assertRegionAccess(unit.Region);
-    if (dest.Region) await ctx.assertRegionAccess(dest.Region);
+    const want = normalizeCode(destCode);
+    if (!want) throw new Error('กรุณาเลือกตำแหน่งปลายทาง');
+    if (want === normalizeCode(src.AirCode)) throw new Error('ตำแหน่งปลายทางต้องเป็นคนละตำแหน่งกับเครื่องที่จะย้าย');
+    const dest = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === want);
+    if (!dest) throw new Error('ไม่พบตำแหน่งรหัส ' + destCode + ' ในทะเบียนเครื่อง');
 
-    const oldNode = unit.NodeName || '-';
-    const oldSite = unit.SiteCode || '-';
+    await ctx.assertRegionAccess(src.Region);
+    await ctx.assertRegionAccess(dest.Region);
 
-    const payload = {
-      NodeName: dest.NodeName,
-      SiteCode: dest.SiteCode || '',
-      UpdatedAt: ymdhms(new Date()),
-      UpdatedBy: await ctx.currentUser()
+    const srcStatus = String(src.Status || '').trim();
+    if (isRepairStatus(srcStatus) || isRetiredStatus(srcStatus)) {
+      throw new Error('เครื่อง ' + src.AirCode + ' สถานะ "' + srcStatus + '" ย้ายไม่ได้ — ' +
+                      'ต้องเป็นเครื่องที่ใช้งานได้และไม่มีงานซ่อมค้าง');
+    }
+
+    const now = ymdhms(new Date());
+    const today = ymd(new Date());
+    const me = await ctx.currentUser();
+    const why = String(note || '').trim();
+    const place = u => u.AirCode + ' (Node "' + (u.NodeName || '-') + '")';
+
+    // ---------- ปลายทาง: ตำแหน่งเดิม + ตัวเครื่องที่ย้ายมา ----------
+    const destPrevNote = String(dest.Note || '').trim();
+    const toDest = { Status: srcStatus || 'ใช้งานปกติ', Note: src.Note || '', UpdatedAt: now, UpdatedBy: me };
+    for (const f of MACHINE_FIELDS) toDest[f] = src[f] === undefined ? '' : src[f];
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, dest._row, toDest);
+
+    // ---------- ต้นทาง: ตำแหน่งว่าง รอเครื่องใหม่ ----------
+    const toSrc = {
+      Status: 'รื้อถอน/ปลดระวาง',
+      Note: 'ย้ายเครื่องไปแทน ' + dest.AirCode + ' เมื่อ ' + today.split('-').reverse().join('/') + ' — รอเครื่องใหม่',
+      UpdatedAt: now, UpdatedBy: me
     };
-    if (dest.Region) payload.Region = dest.Region;
-    if (dest.Province) payload.Province = dest.Province;
-    ctx.ss.writeByHeaders(SHEETS.AIRLIST, row, payload);
+    for (const f of MACHINE_FIELDS) toSrc[f] = '';
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, row, toSrc);
+
+    // ---------- ประวัติทั้งสองฝั่ง ----------
+    const history = ctx.ss.objects(SHEETS.HISTORY);
+    // ปลายทางที่มีเคสค้าง (เช่นรอเครื่องใหม่มาแทนอยู่พอดี) — เครื่องที่ย้ายมาคือตัวปิดเคสนั้น
+    const destCase = openCaseOf(history, dest.AirCode);
+    // ต้นทางไม่เปิดเคสงานซ่อม — เครื่องไม่ได้เสีย แค่ย้ายออกไป หน้างานซ่อมยังโชว์ตำแหน่งนี้
+    // เป็น "รอเครื่องใหม่มาแทน" จากสถานะอยู่แล้ว และ "เปลี่ยนเครื่อง" ทีหลังใช้ได้โดยไม่ต้องมีเคส
+    // (ถ้าผูกเลขเคสกับใบนี้ เคสจะปิดทันที เพราะ "เปลี่ยนเครื่อง" คือเหตุการณ์ที่ปิดเคส)
 
     await addHistoryRaw(ctx, {
-      AirCode: unit.AirCode,
-      Date: ymd(new Date()),
-      EventType: 'ย้าย',
-      Detail: `ย้ายจาก Node "${oldNode}" (${oldSite}) ไปยัง Node "${dest.NodeName}" (${dest.SiteCode || '-'})` +
-              (note ? ` — หมายเหตุ: ${note}` : ''),
+      CaseID: destCase ? destCase.caseId : '',
+      AirCode: dest.AirCode,
+      Date: today,
+      EventType: 'เปลี่ยนเครื่อง',
+      Detail: 'ย้ายเครื่องมาจาก ' + place(src) +
+              ' — เครื่องเดิม: ' + describeMachine(dest) +
+              ' → เครื่องใหม่: ' + describeMachine(src) +
+              (why ? ' | เหตุผล: ' + why : '') +
+              (destPrevNote ? ' | หมายเหตุเดิมของเครื่องเก่า: ' + destPrevNote : ''),
+      Cost: '',
+      Technician: ''
+    });
+
+    await addHistoryRaw(ctx, {
+      AirCode: src.AirCode,
+      Date: today,
+      EventType: 'เปลี่ยนเครื่อง',
+      Detail: 'ย้ายเครื่องออกไปแทน ' + place(dest) +
+              ' — เครื่องเดิม: ' + describeMachine(src) +
+              ' → ตำแหน่งว่าง รอเครื่องใหม่' +
+              (why ? ' | เหตุผล: ' + why : ''),
       Cost: '',
       Technician: ''
     });
 
     await ctx.ss.flush();
-    return { air: await getAirList(ctx), history: await getHistory(ctx) };
+    return { air: await getAirList(ctx), history: await getHistory(ctx), destCode: dest.AirCode };
   });
 }
 
