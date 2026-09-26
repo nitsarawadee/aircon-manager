@@ -4118,27 +4118,52 @@
       } catch(e) {}
     }
 
-    /* ---------- ย้ายเครื่อง (ย้ายจาก Node หนึ่งไปอีก Node หนึ่ง) ---------- */
+    /* ---------- ย้ายเครื่อง (ไปแทนตำแหน่งอื่น — เหมือนเปลี่ยนเครื่องทั้งสองฝั่ง) ---------- */
+
+    /** สเปกเครื่องแบบสั้น สำหรับโชว์ในหน้าต่างย้ายเครื่อง */
+    function machineSummary(a) {
+      const spec = [a.Brand, a.BTU ? Number(a.BTU).toLocaleString() + ' BTU' : ''].filter(Boolean).join(' ');
+      const sn = [a.IndoorSN, a.OutdoorSN].filter(Boolean).join(' / ');
+      return [spec, sn ? 'S/N ' + sn : ''].filter(Boolean).join(' · ') || 'ไม่มีข้อมูลเครื่อง';
+    }
+
+    /**
+     * ย้ายเครื่องไปแทนตำแหน่งอื่น
+     *
+     * เลือก "ตำแหน่งปลายทาง" จากรายการเครื่อง ไม่ใช่พิมพ์ชื่อ Node แบบเดิม — แบบเดิมเปลี่ยนแค่
+     * Node ของแถวเดิม รหัสจึงยังเป็นของที่เก่า (BKK-LPA-AIR-1 ไปตั้งอยู่ที่ LKB)
+     * ตอนนี้ข้อมูลตัวเครื่องไปอยู่ในรหัสของปลายทาง ตำแหน่งเดิมรอเครื่องใหม่ (ดู moveAirUnit)
+     */
     function openMoveModal(data) {
-      const content = `
+      const status = String(data.Status || '').trim();
+      // ฝั่งเซิร์ฟเวอร์ปฏิเสธอยู่แล้ว แต่บอกตั้งแต่เปิดหน้าต่าง ดีกว่าให้เลือกจนจบแล้วค่อยเจอ
+      if (['ชำรุด', 'รอซ่อม'].includes(status) || isRetiredStatus(status)) {
+        showToast('เครื่องสถานะ "' + status + '" ย้ายไม่ได้ — ต้องเป็นเครื่องที่ใช้งานได้และไม่มีงานซ่อมค้าง', 'error');
+        return;
+      }
+      const targets = (currentAirList || []).filter(a => !sameCode(a.AirCode, data.AirCode));
+
+      document.getElementById('modalRoot').innerHTML = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative z-10 animate-[fadeIn_0.2s_ease]">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-arrows-left-right text-teal-600"></i> ย้ายเครื่อง: ${esc(data.AirCode)}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition"><i class="ph ph-x text-2xl"></i></button>
             </div>
             <div class="p-6 space-y-4">
               <div class="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-gray-600">
-                ตำแหน่งปัจจุบัน: <span class="font-semibold text-gray-800">${esc(data.NodeName) || '-'}</span> (${esc(data.SiteCode) || '-'})
+                <div>เครื่องที่จะย้าย: <span class="font-semibold text-gray-800">${esc(machineSummary(data))}</span></div>
+                <div class="text-xs mt-0.5">ตอนนี้อยู่ที่ ${esc(data.NodeName) || '-'} (${esc(data.SiteCode) || '-'})</div>
               </div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">Node ปลายทาง <span class="text-red-500">*</span></label>
-              <input id="m_NodeName" list="nodeNameOptionsMove" autocomplete="off" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
-              <datalist id="nodeNameOptionsMove">${Object.keys(nodeLookup).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">Site Code ปลายทาง</label>
-              <input id="m_SiteCode" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">Region ปลายทาง (ถ้ามีการเปลี่ยนภูมิภาค)</label>
-              <input id="m_Region" value="${esc(data.Region)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">ย้ายไปแทนตำแหน่ง <span class="text-red-500">*</span></label>
+                ${airPickerInput({
+                  id: 'm_dest', units: targets, oninput: 'syncMovePreview()',
+                  focusCls: 'focus:border-teal-500 focus:ring-1 focus:ring-teal-500',
+                  note: 'เลือกรหัสเครื่องที่ปลายทาง เช่น BKK-LKB-AIR-1'
+                })}
+              </div>
+              <div id="m_preview"></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
               <textarea id="m_Note" rows="2" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none resize-none" placeholder="เช่น เหตุผลที่ย้าย"></textarea></div>
             </div>
@@ -4148,25 +4173,44 @@
             </div>
           </div>
         </div>`;
-      document.getElementById('modalRoot').innerHTML = content;
-
-      // Auto-fill: ถ้าเลือก Node ปลายทางที่มีอยู่แล้วในระบบ ให้เติม Site/Region ให้อัตโนมัติ
-      document.getElementById('m_NodeName').addEventListener('input', function() {
-        const match = nodeLookup[this.value];
-        if (!match) return;
-        document.getElementById('m_SiteCode').value = match.SiteCode || '';
-        document.getElementById('m_Region').value = match.Region || '';
-      });
+      moveFromCode = data.AirCode;
     }
 
+    /** เครื่องที่กำลังจะย้าย (ของหน้าต่างย้ายเครื่องที่เปิดอยู่) */
+    let moveFromCode = '';
+
+    /** สรุปให้เห็นก่อนกดยืนยัน ว่าแต่ละตำแหน่งจะเป็นยังไงหลังย้าย */
+    function syncMovePreview() {
+      const box = document.getElementById('m_preview');
+      if (!box) return;
+      const from = (currentAirList || []).find(a => sameCode(a.AirCode, moveFromCode));
+      const code = airPickerCode(document.getElementById('m_dest').value);
+      const dest = code ? (currentAirList || []).find(a => sameCode(a.AirCode, code)) : null;
+      if (!dest || !from) { box.innerHTML = ''; return; }
+
+      const hasMachine = dest.Brand || dest.IndoorSN || dest.OutdoorSN;
+      box.innerHTML = `
+        <div class="border border-teal-200 bg-teal-50/60 rounded-lg p-3 text-xs text-gray-700 space-y-2">
+          <div class="font-semibold text-teal-800">หลังย้าย</div>
+          <div><b>${esc(dest.AirCode)}</b> · ${esc(dest.NodeName) || '-'} (${esc(dest.SiteCode) || '-'}${dest.Region ? ' · ' + esc(regionLabel(dest.Region)) : ''})<br>
+            เครื่องเป็น <b>${esc(machineSummary(from))}</b> — สถานที่ติดตั้งยังเป็นของ ${esc(dest.NodeName || dest.AirCode)}
+            ${hasMachine
+              ? `<br><span class="text-amber-700">เครื่องที่อยู่ตรงนั้นตอนนี้ (${esc(machineSummary(dest))}) จะถูกแทน — ข้อมูลเก็บไว้ในประวัติ</span>` : ''}</div>
+          <div><b>${esc(from.AirCode)}</b> · ${esc(from.NodeName) || '-'}<br>
+            ตำแหน่งว่าง รอเครื่องใหม่ (ขึ้นในหน้างานซ่อมเป็น "รอเครื่องใหม่มาแทน")</div>
+          <div class="text-gray-500">ประวัติทั้งสองตำแหน่งบันทึกเป็น "เปลี่ยนเครื่อง"</div>
+        </div>`;
+    }
+    window.syncMovePreview = syncMovePreview;
+
     async function moveAir(row, code) {
-      const dest = {
-        NodeName: document.getElementById('m_NodeName').value.trim(),
-        SiteCode: document.getElementById('m_SiteCode').value.trim(),
-        Region: document.getElementById('m_Region').value.trim()
-      };
+      const typed = document.getElementById('m_dest').value.trim();
+      const dest = airPickerCode(typed);
       const note = document.getElementById('m_Note').value.trim();
-      if (!dest.NodeName) { showToast('กรุณาระบุ Node ปลายทาง', 'error'); return; }
+      if (!dest) {
+        showToast(typed ? `ไม่พบตำแหน่ง "${typed}" กรุณาเลือกจากรายการ` : 'กรุณาเลือกตำแหน่งปลายทาง', 'error');
+        return;
+      }
       try {
         const result = await call('moveAirUnit', row, dest, note, code);
         currentAirList = result.air;
@@ -4174,7 +4218,7 @@
         renderAirTable(currentAirList);
         if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
         closeModal();
-        showToast('ย้ายเครื่องสำเร็จ', 'success');
+        showToast('ย้ายเครื่องไปแทน ' + (result.destCode || dest) + ' แล้ว — ' + code + ' รอเครื่องใหม่', 'success');
         loadDashboard();
       } catch (e) {}
     }
