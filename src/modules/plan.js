@@ -473,14 +473,22 @@ export async function createCleaningPlan(ctx, year) {
 
     await ctx.ss.ensureSheet(name, PLAN_HEADERS);
 
+    // เขียนตาม "ชื่อคอลัมน์" ไม่ใช่ลำดับช่อง
+    //
+    // เดิมเรียงค่าเป็นลำดับตามแบบชีตเก่า (รอบละ 6 ช่อง) แต่ตาราง plans มีช่อง R*_FormUrl
+    // ต่อท้ายทุกรอบ ค่าจึงเลื่อน — รอบ 2 เลื่อน 1 ช่อง รอบ 3 เลื่อน 2 ช่อง ราคาไปโผล่ในช่อง
+    // วันที่ และชื่อคนสร้างไปอยู่ในช่องสถานะ (เจอจริงตอนสร้างแผนปี 2028, 2029)
+    // เขียนตามชื่อแล้ว ลำดับคอลัมน์ในฐานข้อมูลจะเปลี่ยนยังไงก็ไม่เลื่อนอีก
     const me = await ctx.currentUser();
-    const rows = airList.map(a => [
-      a.AirCode, a.NodeName, a.SiteCode, a.BTU,
-      '', '', a.CleaningPricePerRound || '', '', 'รอดำเนินการ', '',
-      '', '', a.CleaningPricePerRound || '', '', 'รอดำเนินการ', '',
-      '', '', a.CleaningPricePerRound || '', '', 'รอดำเนินการ', '',
-      me
-    ]);
+    const headers = ctx.ss.headers(name);
+    const rows = airList.map(a => {
+      const rec = { AirCode: a.AirCode, NodeName: a.NodeName, SiteCode: a.SiteCode, BTU: a.BTU, UpdatedBy: me };
+      for (const r of [1, 2, 3]) {
+        rec['R' + r + '_Price'] = a.CleaningPricePerRound || '';
+        rec['R' + r + '_Status'] = 'รอดำเนินการ';
+      }
+      return headers.map(h => (rec[h] !== undefined ? rec[h] : ''));
+    });
     ctx.ss.setValues(name, 2, 1, rows);
 
     await ctx.ss.flush();
