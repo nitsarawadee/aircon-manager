@@ -585,7 +585,7 @@
               </button>
 
               <input type="file" id="fileImportPlan" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
-              <button onclick="document.getElementById('fileImportPlan').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+              <button data-admin-only onclick="document.getElementById('fileImportPlan').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                 <i class="ph ph-upload-simple"></i> นำเข้า (Excel/CSV)
               </button>
 
@@ -2064,6 +2064,10 @@
       // ลบแผนทั้งปีเป็นสิทธิ์ Admin คนเดียว (เซิร์ฟเวอร์กันอยู่แล้ว ซ่อนไว้แค่กันกดพลาด)
       const deletePlanBtn = document.getElementById('deletePlanBtn');
       if (deletePlanBtn) deletePlanBtn.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
+      // นำเข้า Excel/CSV เป็นของ Infrastructure เท่านั้น (เซิร์ฟเวอร์กันอยู่แล้ว ซ่อนไว้ไม่ให้เห็นปุ่มที่กดไม่ได้)
+      document.querySelectorAll('[data-admin-only]').forEach(el => {
+        el.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
+      });
 
       applyModulePermissionsUI();
       // ล็อกปุ่มแก้ข้อมูลที่ไม่มีสิทธิ์ ทุกหน้า ทุกครั้งที่ถูกวาด (ดู EDIT_ACTIONS)
@@ -2273,7 +2277,7 @@
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
       fileImportAir: 'airlist', confirmAirImport: 'airlist',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
-      openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'plan',
+      openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'admin',
       openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
       // ประวัติ
       openHistoryModal: 'history', saveHistory: 'history', deleteHistory: 'history', addHistoryForUnit: 'history',

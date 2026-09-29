@@ -16,6 +16,7 @@ import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
 import { getAirList, saveAirUnit } from '../src/modules/airlist.js';
 import { saveUser, getUsers } from '../src/modules/users.js';
+import { updatePlanBulk } from '../src/modules/plan.js';
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -100,4 +101,12 @@ test('ชื่อบทบาทในหน้าเว็บ ตรงกั�
   assert.deepEqual(new Function('return ' + web)(), ROLE_TITLES);
   const regional = html.match(/const REGIONAL_ROLES = (\[[^\]]*\]);/)[1];
   assert.deepEqual(new Function('return ' + regional)(), REGIONAL_ROLES);
+});
+
+test('นำเข้าแผนล้างจาก Excel/CSV — เฉพาะ Infrastructure', async () => {
+  const db = freshDb();
+  // sup ในชุดนี้ตั้งไว้แค่ airlist:view จึงโดนปฏิเสธจากสิทธิ์รายเมนูก่อน — ใช้สองคนที่แก้แผนได้
+  for (const u of ['reg', 'staff']) {
+    await assert.rejects(() => updatePlanBulk(as(db, u), 2026, []), /Infrastructure/, u);
+  }
 });

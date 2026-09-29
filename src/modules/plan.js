@@ -747,6 +747,8 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
 export async function updatePlanBulk(ctx, year, importedData) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('plan');
+    // นำเข้า Excel/CSV เป็นของ Infrastructure เท่านั้น — เจ้าของงานปิดไม่ให้ Regional / Staff / Supervisor ใช้
+    await ctx.assertAdmin();
 
     const name = planSheet(year);
     await ctx.connect();
