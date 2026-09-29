@@ -320,6 +320,9 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="repair">
         <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อมและติดตั้ง</span>
       </button>
+      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="approvals">
+        <i class="ph ph-seal-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>เอกสารรออนุมัติ</span>
+      </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="cleaningform">
         <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แบบฟอร์มเอกสาร</span>
       </button>
@@ -477,6 +480,47 @@
             <div id="watchlistContainer" class="dash-scroll space-y-2 pr-1"></div>
           </div>
 
+        </div>
+      </section>
+
+      <!-- ============================ VIEW: เอกสารรออนุมัติ ============================
+           งานซ่อมที่ Infrastructure เท่านั้นกดอนุมัติได้ — ทุกคนที่เห็นงานซ่อมเห็นหน้านี้ แต่ปุ่มอนุมัติมีแค่ Infrastructure -->
+      <section id="view-approvals" class="view">
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
+          <p class="text-sm text-gray-500">งานซ่อมที่รอ Infrastructure อนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
+        </div>
+
+        <div class="mb-8">
+          <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-warning-circle"></i> เคสรออนุมัติซ่อม</h3>
+          <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="apvCaseTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                  <tr class="bg-rose-50 border-b border-rose-200 text-rose-900 font-semibold">
+                    <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขเคส</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node/Site</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-file-text"></i> ใบซ่อมรออนุมัติขั้นสุดท้าย (Infrastructure)</h3>
+          <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="apvDocTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                  <tr class="bg-rose-50 border-b border-rose-200 text-rose-900 font-semibold">
+                    <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1931,6 +1975,7 @@
         else if (btn.dataset.tab === 'plan') loadPlanYears();
         else if (btn.dataset.tab === 'cleaningform') loadCleaningForm();
         else if (btn.dataset.tab === 'repair') loadRepair();
+        else if (btn.dataset.tab === 'approvals') loadApprovals();
       });
     });
 
@@ -2200,6 +2245,12 @@
           if (section) section.remove();
         }
       });
+
+      // เอกสารรออนุมัติเป็นเรื่องของงานซ่อม — ไม่เห็นงานซ่อมก็ไม่เห็นหน้านี้
+      if (moduleLevel('repair') === 'none') {
+        document.querySelector('[data-tab="approvals"]')?.remove();
+        document.getElementById('view-approvals')?.remove();
+      }
 
       // ผู้รับเหมา: แดชบอร์ดเหลือแค่ปฏิทินงานล้างของตัวเอง
       // การ์ดตัวเลขภาพรวมเป็นของเจ้าหน้าที่ (งบ ค่าใช้จ่าย เครื่องทั้งภาค) ส่วนผู้รับเหมาเปิดมา
@@ -4050,6 +4101,7 @@
       // หน้าแผนล้างทำแบบนี้อยู่แล้ว (ล็อกท้าย renderPlanTable)
       lockViewOnlySection('airlist');
       if(typeof renderRepairView === 'function') renderRepairView(document.getElementById('repairSearch').value);
+      if (typeof renderApprovalsView === 'function') renderApprovalsView();
     }
 
     function statusBadge(s) {
@@ -6148,6 +6200,72 @@
       document.querySelector('[data-tab="history"]').click();
     }
     window.clearHistoryUnitFilter = clearHistoryUnitFilter;
+
+    /* ============== เอกสารรออนุมัติ (งานซ่อมที่ Infrastructure ต้องอนุมัติ) ============== */
+
+    async function loadApprovals() {
+      try {
+        const [air, hist, repairs] = await Promise.all([
+          call('getAirList'), call('getHistory', null), call('getRepairForms')
+        ]);
+        if (Array.isArray(air)) currentAirList = air;
+        if (Array.isArray(hist)) currentHistory = hist;
+        if (Array.isArray(repairs)) currentRepairForms = repairs;
+      } catch (e) { /* call() แจ้ง error ให้ผู้ใช้แล้ว */ }
+      renderApprovalsView();
+    }
+
+    /** รหัสเครื่องที่กดแล้วไปหน้างานซ่อมและติดตั้ง (แบบเดียวกับการ์ดในแดชบอร์ด) */
+    const apvCodeBtn = code => `<button type="button" onclick="viewAirRepair('${jsStr(code)}')"
+      title="ไปดูที่หน้างานซ่อมและติดตั้ง"
+      class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2 font-medium">${esc(code)}</button>`;
+    const apvWaiting = '<span class="text-slate-400 px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-dashed border-slate-300 rounded-lg"><i class="ph ph-hourglass"></i> รอ Infrastructure อนุมัติ</span>';
+
+    function renderApprovalsView() {
+      const caseTb = document.querySelector('#apvCaseTable tbody');
+      const docTb = document.querySelector('#apvDocTable tbody');
+      if (!caseTb || !docTb) return;   // ไม่มีสิทธิ์เห็นหน้านี้
+
+      // 1) เคสที่แจ้งชำรุดแล้ว รอ Infrastructure อนุมัติซ่อม (ปุ่มเดียวกับหน้างานซ่อม)
+      const cases = (currentAirList || []).filter(a => String(a.Status || '').trim() === 'ชำรุด')
+        .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th'));
+      caseTb.innerHTML = cases.length ? cases.map(a => `
+        <tr class="hover:bg-rose-50/40 align-top">
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(openCaseIdOf(a.AirCode)) || '-'}</td>
+          <td class="px-4 py-3">${apvCodeBtn(a.AirCode)}</td>
+          <td class="px-4 py-3"><div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
+            <div class="text-[11px] text-gray-400">${esc(a.SiteCode)}</div></td>
+          <td class="px-4 py-3 text-red-600 whitespace-normal max-w-xs">${esc(a.Note) || '-'}</td>
+          <td class="px-4 py-3 text-right">${isAdmin()
+            ? `<button onclick="approveRepair('${jsStr(a.AirCode)}')"
+                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
+            : apvWaiting}</td>
+        </tr>`).join('')
+        : '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">ไม่มีเคสที่รออนุมัติซ่อม</td></tr>';
+
+      // 2) ใบซ่อมที่ผ่าน Staff กับ Supervisor/Regional แล้ว รอ Infrastructure อนุมัติขั้นสุดท้าย
+      const docs = (currentRepairForms || []).filter(f => f.Approval && f.Approval.next === 4);
+      docTb.innerHTML = docs.length ? docs.map(f => `
+        <tr class="hover:bg-rose-50/40 align-top">
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(f.DocNo || f.ID)}</td>
+          <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
+          <td class="px-4 py-3">${apvCodeBtn(f.AirCode)}</td>
+          <td class="px-4 py-3">${esc(f.NodeName)}</td>
+          <td class="px-4 py-3 whitespace-normal max-w-xs">${esc(f.Symptom) || '-'}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดูก่อนอนุมัติ"
+              class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+            ${f.Approval.canApprove
+              ? `<button onclick="approveDocRow('repair', '${jsStr(f.ID)}', '${jsStr(f.DocNo || f.ID)}')"
+                  class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
+                  <i class="ph ph-check"></i> อนุมัติ</button>`
+              : apvWaiting}
+          </td>
+        </tr>`).join('')
+        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบซ่อมที่รออนุมัติขั้นสุดท้าย</td></tr>';
+    }
 
     /** ไปหน้างานซ่อมและติดตั้ง ค้นหาเครื่องตัวนี้ไว้ให้ (การ์ดเครื่องที่ควรจับตาในแดชบอร์ด) */
     function viewAirRepair(code) {
@@ -8344,6 +8462,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     } catch (e) {}
     // โหลดใหม่ทั้งแท็บ ทั้งตอนสำเร็จและไม่สำเร็จ — อาจมีคนอื่นกดขั้นนี้ไปก่อนแล้ว
     await loadCleaningForm();
+    renderApprovalsView();   // กดจากหน้าเอกสารรออนุมัติ ใบที่อนุมัติแล้วต้องหายไปจากตารางนั้นด้วย
   }
   window.approveDocRow = approveDocRow;
 
