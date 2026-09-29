@@ -33,7 +33,9 @@ const CLOSING_EVENTS = new Set(['ซ่อมแล้ว', 'เปลี่ย�
 export const CASE_OPEN_EVENT = 'แจ้งซ่อม';
 
 /**
- * ออกเลขเคสใหม่ — RC + ปี 2 หลัก + เดือน 2 หลัก + ลำดับในเดือนนั้น
+ * ออกเลขเคสใหม่ — IC + ปี 2 หลัก + เดือน 2 หลัก + ลำดับในเดือนนั้น
+ *
+ * เดิมขึ้นต้นด้วย RC เจ้าของงานให้เปลี่ยนเป็น IC (เคสเก่าที่เป็น RC อยู่แล้วคงไว้ตามเดิม)
  *
  * รูปแบบเดียวกับเลขที่เอกสารในประวัติ (PM/CM) เพื่อให้คนอ่านคุ้นตา
  * แต่ใช้อักษรนำต่างกันเพื่อไม่ให้สับสนว่าอันไหนเลขใบ อันไหนเลขเคส
@@ -43,7 +45,7 @@ export const CASE_OPEN_EVENT = 'แจ้งซ่อม';
  */
 export function makeCaseId(existingIds, now = new Date()) {
   const { y, m } = partsOf(now);
-  const stem = 'RC' + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
+  const stem = 'IC' + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
 
   let max = 0;
   for (const id of existingIds || []) {

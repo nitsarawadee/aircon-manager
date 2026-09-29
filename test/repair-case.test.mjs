@@ -50,16 +50,16 @@ const setStatus = async (db, status) => {
 
 /* ==================== การออกเลขเคส ==================== */
 
-test('เลขเคสรันต่อกันในเดือนเดียวกัน และขึ้นต้นด้วย RC', () => {
+test('เลขเคสรันต่อกันในเดือนเดียวกัน และขึ้นต้นด้วย IC', () => {
   const at = new Date('2026-09-15T03:00:00Z');
-  assert.equal(makeCaseId([], at), 'RC2609-01');
-  assert.equal(makeCaseId(['RC2609-01'], at), 'RC2609-02');
-  assert.equal(makeCaseId(['RC2609-01', 'RC2609-09'], at), 'RC2609-10');
+  assert.equal(makeCaseId([], at), 'IC2609-01');
+  assert.equal(makeCaseId(['IC2609-01'], at), 'IC2609-02');
+  assert.equal(makeCaseId(['IC2609-01', 'IC2609-09'], at), 'IC2609-10');
 });
 
 test('เลขเคสของเดือนอื่นไม่กวนกัน', () => {
   const sep = new Date('2026-09-15T03:00:00Z');
-  assert.equal(makeCaseId(['RC2608-07'], sep), 'RC2609-01', 'ของเดือนสิงหาไม่ควรดันเลขเดือนกันยา');
+  assert.equal(makeCaseId(['IC2608-07'], sep), 'IC2609-01', 'ของเดือนสิงหาไม่ควรดันเลขเดือนกันยา');
 });
 
 /* ==================== เส้นทางปกติ: เปิด -> เริ่มซ่อม -> ปิด ==================== */
@@ -73,7 +73,7 @@ test('แจ้งซ่อมต้องเปิดเคสใหม่ แ�
   const rows = await hist(db);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].EventType, 'แจ้งซ่อม');
-  assert.ok(/^RC\d{4}-\d+$/.test(rows[0].CaseID), 'ต้องได้เลขเคส: ' + rows[0].CaseID);
+  assert.ok(/^IC\d{4}-\d+$/.test(rows[0].CaseID), 'ต้องได้เลขเคส: ' + rows[0].CaseID);
 });
 
 test('เริ่มซ่อมต้องอยู่ในเคสเดิม และเครื่องเป็น "รอซ่อม"', async () => {
@@ -185,7 +185,7 @@ test('เครื่องที่ค้างสถานะซ่อมม�
   assert.equal((await unit(db)).Status, 'รอซ่อม');
   const withCase = (await hist(db)).filter(h => String(h.CaseID || '').trim());
   assert.equal(withCase.length, 1, 'ใบใหม่ต้องได้เลขเคส');
-  assert.ok(/^RC\d{4}-\d+$/.test(withCase[0].CaseID));
+  assert.ok(/^IC\d{4}-\d+$/.test(withCase[0].CaseID));
 });
 
 test('openCaseOf ต้องคืนเฉพาะเคสที่ยังเปิดของเครื่องตัวนั้น', async () => {
