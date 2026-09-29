@@ -1,9 +1,9 @@
 /**
  * ตั้งวันราย Node — เลือกเครื่องที่จะล้างได้รายรอบ
  *
- * เจ้าของงานกำหนด: ติ๊กเลือกเครื่องเอง · เครื่องที่ไม่ได้เลือก รอบนั้นเป็น "ยกเลิก"
+ * เจ้าของงานกำหนด: ติ๊กเลือกเครื่องเอง · เครื่องที่ไม่ได้เลือก รอบนั้นเป็น "รอดำเนินการ" (ไม่ใช่ยกเลิก)
  * ลงวันแล้ว = นัดหมายแล้ว
- * กันไว้: รอบที่ล้างไปแล้วไม่ถูกยกเลิกย้อนหลัง · ไม่ส่งรายการเครื่อง = ทุกเครื่องแบบเดิม
+ * กันไว้: รอบที่ล้างไปแล้วหรือยกเลิกไว้ไม่ถูกแตะ · ไม่ส่งรายการเครื่อง = ทุกเครื่องแบบเดิม
  */
 
 import { strict as assert } from 'node:assert';
@@ -36,7 +36,7 @@ const state = { async acquireLock() { return true; }, async releaseLock() {} };
 const boss = db => { const c = new Ctx({}, state, db, {}); c.username = 'boss'; return c; };
 const row = (db, code) => db.prepare('SELECT * FROM plans WHERE AirCode = ?').get(code);
 
-test('เลือกล้าง 2 จาก 3 เครื่อง — ตัวที่เลือกได้วันและผู้รับเหมา ตัวที่ไม่เลือกรอบนั้นเป็นยกเลิก', async () => {
+test('เลือกล้าง 2 จาก 3 เครื่อง — ตัวที่เลือกได้วันและผู้รับเหมา ตัวที่ไม่เลือกเป็นรอดำเนินการ', async () => {
   const db = freshDb();
   await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', { r2: '2026-10-05' }, { r2: 'CT001' },
     { r2: ['ATG-PMK-AIR-1', 'ATG-PMK-AIR-3'] });
@@ -47,31 +47,36 @@ test('เลือกล้าง 2 จาก 3 เครื่อง — ตั
     assert.equal(row(db, code).R2_Status, 'นัดหมายแล้ว', 'ลงวันแล้ว = นัดหมายแล้ว');
   }
   const skipped = row(db, 'ATG-PMK-AIR-2');
-  assert.equal(skipped.R2_Status, 'ยกเลิก');
+  assert.equal(skipped.R2_Status, 'รอดำเนินการ', 'ตัวที่ไม่ติ๊กต้องไม่เป็นยกเลิก');
   assert.equal(skipped.R2_PlanDate, '', 'ตัวที่ไม่ล้างต้องไม่ได้วัน');
   assert.equal(skipped.R2_ContractorID, '', 'ตัวที่ไม่ล้างต้องไม่ได้ผู้รับเหมา');
   assert.equal(row(db, 'AYA-WNI-AIR-1').R2_Status, 'รอดำเนินการ', 'Node อื่นต้องไม่ถูกแตะ');
 });
 
-test('ติ๊กกลับเครื่องที่เคยยกเลิก — กลับเป็นรอดำเนินการ', async () => {
+test('ไม่ติ๊กเครื่องที่นัดหมายไว้แล้ว — กลับเป็นรอดำเนินการ', async () => {
   const db = freshDb();
+  db.exec("UPDATE plans SET R2_Status = 'นัดหมายแล้ว' WHERE AirCode = 'ATG-PMK-AIR-2'");
   await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', {}, {}, { r2: ['ATG-PMK-AIR-1'] });
-  assert.equal(row(db, 'ATG-PMK-AIR-2').R2_Status, 'ยกเลิก');
-
-  await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', {}, {},
-    { r2: ['ATG-PMK-AIR-1', 'ATG-PMK-AIR-2', 'ATG-PMK-AIR-3'] });
   assert.equal(row(db, 'ATG-PMK-AIR-2').R2_Status, 'รอดำเนินการ');
 });
 
-test('รอบที่ล้างไปแล้ว — ไม่ติ๊กก็ไม่ถูกยกเลิกย้อนหลัง', async () => {
+test('ติ๊กเครื่องที่เคยยกเลิกไว้ — กลับเป็นรอดำเนินการ · ไม่ติ๊กก็คงยกเลิกไว้ตามเดิม', async () => {
+  const db = freshDb();
+  db.exec("UPDATE plans SET R2_Status = 'ยกเลิก' WHERE AirCode IN ('ATG-PMK-AIR-2', 'ATG-PMK-AIR-3')");
+  await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', {}, {}, { r2: ['ATG-PMK-AIR-1', 'ATG-PMK-AIR-2'] });
+  assert.equal(row(db, 'ATG-PMK-AIR-2').R2_Status, 'รอดำเนินการ');
+  assert.equal(row(db, 'ATG-PMK-AIR-3').R2_Status, 'ยกเลิก');
+});
+
+test('รอบที่ล้างไปแล้ว — ไม่ติ๊กก็ไม่ถูกแตะ', async () => {
   const db = freshDb();
   db.exec("UPDATE plans SET R2_Status = 'ล้างเสร็จสิ้น', R2_ActualDate = '2026-09-01' WHERE AirCode = 'ATG-PMK-AIR-2'");
   await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', {}, {}, { r2: ['ATG-PMK-AIR-1'] });
   assert.equal(row(db, 'ATG-PMK-AIR-2').R2_Status, 'ล้างเสร็จสิ้น');
-  assert.equal(row(db, 'ATG-PMK-AIR-3').R2_Status, 'ยกเลิก');
+  assert.equal(row(db, 'ATG-PMK-AIR-3').R2_Status, 'รอดำเนินการ');
 });
 
-test('ไม่ส่งรายการเครื่อง — ทุกเครื่องใน Node ได้วันและเป็นนัดหมายแล้ว ไม่มีใครถูกยกเลิก', async () => {
+test('ไม่ส่งรายการเครื่อง — ทุกเครื่องใน Node ได้วันและเป็นนัดหมายแล้ว', async () => {
   const db = freshDb();
   await updatePlanDatesByNode(boss(db), 2026, 'ป่าโมก', { r2: '2026-10-05' }, {});
   for (const n of [1, 2, 3]) {
