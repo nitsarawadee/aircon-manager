@@ -1878,6 +1878,8 @@
     /* --- NAVIGATION --- */
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        // สิทธิ์อาจถูก Admin เปลี่ยนระหว่างที่เปิดหน้าค้างไว้ (ดู checkPermissionChange)
+        checkPermissionChange();
         document.querySelectorAll('.tab-btn').forEach(b => {
           b.classList.remove('active', 'bg-gradient-to-r', 'from-blue-50', 'to-orange-50', 'text-[#1153a1]', 'border', 'border-[#f47920]/30', 'shadow-sm');
           b.classList.add('text-slate-500', 'hover:bg-slate-50');
@@ -2054,6 +2056,8 @@
       if (usersTabBtn) usersTabBtn.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
 
       applyModulePermissionsUI();
+      // ล็อกปุ่มแก้ข้อมูลที่ไม่มีสิทธิ์ ทุกหน้า ทุกครั้งที่ถูกวาด (ดู EDIT_ACTIONS)
+      startEditGuard();
       renderUserBadge();
 
       try {
@@ -2226,6 +2230,160 @@
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
       });
+    }
+
+    /* ============== ตัวกันปุ่มแก้ไข ตามสิทธิ์ (ทั้งหน้าเว็บ) ============== */
+
+    /**
+     * ปุ่ม/คำสั่งที่ "แก้ข้อมูล" → สิทธิ์ที่ต้องเป็น "แก้ไขได้"
+     *
+     * ============================================================================
+     * ทำไมต้องมีตัวนี้ (lockViewOnlySection อย่างเดียวไม่พอ)
+     * ============================================================================
+     * lockViewOnlySection ล็อกปุ่มในหน้าของโมดูลนั้น "ตอนที่มีคนเรียกมัน" เท่านั้น
+     * เจอรั่วจริงหลายทาง:
+     *   - ค้นหา/กรอง/เปลี่ยนหน้า วาดแถวใหม่โดยไม่ล็อกซ้ำ (แก้ไปแล้วหนึ่งจุด แต่มีอีกหลายหน้า)
+     *   - หน้าของเครื่อง (กดรหัสเครื่อง) มีปุ่มแก้ไข/ลบประวัติ/แจ้งซ่อมของตัวเอง
+     *     อยู่นอกทุกหน้าที่ถูกล็อก จึงกดได้เสมอ
+     *   - หน้าต่างที่เปิดข้ามหน้า (เช่นเปิดฟอร์มจากหน้าอื่น)
+     * เจ้าของงานเห็นเป็น "ตั้งว่าแก้ไขไม่ได้ แต่ไปกดทางอื่นก็ยังได้อยู่ดี"
+     *
+     * ตัวนี้ผูกสิทธิ์กับ "คำสั่ง" ไม่ใช่กับ "หน้า" — ปุ่มไหนเรียกคำสั่งในรายการนี้
+     * ไม่ว่าจะอยู่หน้าไหน ถูกวาดตอนไหน ถูกล็อกเหมือนกันหมด (ดู startEditGuard)
+     * และตัวคำสั่งเองก็ตรวจซ้ำตอนถูกเรียก เผื่อมีทางเรียกที่ไม่ผ่านปุ่ม
+     *
+     * ด่านจริงยังอยู่ที่เซิร์ฟเวอร์เหมือนเดิม — ตัวนี้มีไว้ไม่ให้หน้าจอหลอกว่ากดได้
+     *
+     * ⚠️ เพิ่มปุ่มแก้ข้อมูลใหม่ ต้องใส่ชื่อคำสั่งไว้ที่นี่ด้วย (มีเทสต์ตรวจว่าชื่อมีอยู่จริง)
+     * 'admin' = เฉพาะผู้ดูแลระบบ
+     */
+    const EDIT_ACTIONS = {
+      // รายการเครื่อง
+      openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
+      openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
+      fileImportAir: 'airlist', confirmAirImport: 'airlist',
+      // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
+      openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'plan',
+      openCreatePlanModal: 'admin', createPlan: 'admin',
+      // ประวัติ
+      openHistoryModal: 'history', saveHistory: 'history', deleteHistory: 'history', addHistoryForUnit: 'history',
+      // งานซ่อม
+      openReportRepairModal: 'repair', submitReportRepair: 'repair', approveRepair: 'repair',
+      openCannotRepairModal: 'repair', submitCannotRepair: 'repair',
+      // เอกสารล้าง
+      openCleaningFormModal: 'cleaningform', submitCleaningForm: 'cleaningform', openFormForPlanUnit: 'cleaningform',
+      openAttachFromPlan: 'cleaningform', submitAttachFromPlan: 'cleaningform', openAttachDocsDialog: 'cleaningform',
+      submitAttachDocs: 'cleaningform', deleteCleaningFormRow: 'cleaningform',
+      // เอกสารซ่อม + ลิงก์งานซ่อม
+      openRepairFormPicker: 'repairform', startRepairFormFromPicker: 'repairform', openRepairForm: 'repairform',
+      submitRepairForm: 'repairform', deleteRepairFormRow: 'repairform',
+      openRepairLinkModal: 'repairform', createRepairLinkFor: 'repairform', revokeRepairLinkRow: 'repairform',
+      // เอกสารติดตั้ง
+      openInstallFormPicker: 'installform', startInstallFormFromPicker: 'installform',
+      submitInstallForm: 'installform', deleteInstallFormRow: 'installform',
+      // งบประมาณ
+      openBudgetModal: 'budget', saveBudget: 'budget',
+      // จัดการผู้ใช้
+      openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin'
+    };
+
+    /** ทำคำสั่งของสิทธิ์นี้ได้ไหม */
+    function editAllowed(mod) {
+      if (mod === 'admin') return !!currentUserInfo && currentUserInfo.role === 'Admin';
+      return moduleLevel(mod) === 'edit';
+    }
+
+    /** ป้ายภาษาไทยของสิทธิ์ สำหรับข้อความแจ้ง */
+    const editLabel = mod => mod === 'admin' ? 'ผู้ดูแลระบบ'
+      : ((PERMISSION_MODULES.find(m => m.key === mod) || {}).label || mod);
+
+    /**
+     * สิทธิ์ที่ปุ่มนี้ต้องใช้ — อ่านจากโค้ดใน onclick ของปุ่ม
+     * ไม่ใช่คำสั่งแก้ข้อมูล = null
+     */
+    function editModuleOf(onclick) {
+      const oc = String(onclick || '');
+      // แก้รูปของเอกสาร — สิทธิ์ขึ้นกับชนิดเอกสาร (อาร์กิวเมนต์ตัวที่ 3: 'repair' / 'install' / ไม่ส่ง = ใบล้าง)
+      const photo = /openPhotoEditor\([^,)]*,[^,)]*(?:,\s*'(\w+)')?/.exec(oc);
+      if (photo) return DOC_PERM_KEY[photo[1] || 'cleaning'] || 'cleaningform';
+      for (const name of Object.keys(EDIT_ACTIONS)) {
+        if (new RegExp('\\b' + name + '\\b').test(oc)) return EDIT_ACTIONS[name];
+      }
+      return null;
+    }
+
+    /** ล็อกปุ่มแก้ข้อมูลที่ผู้ใช้คนนี้ไม่มีสิทธิ์ ใน root และทุกอย่างข้างใน */
+    function lockEditButtons(root) {
+      // หน้าลิงก์กรอกเอกสารซ่อม (ไม่ได้ล็อกอิน) ไม่มีสิทธิ์ให้ตรวจ — ลิงก์เองคือสิทธิ์
+      if (!currentUserInfo || !root || !root.querySelectorAll) return;
+      const els = root.matches && root.matches('[onclick]') ? [root] : [];
+      els.push(...root.querySelectorAll('[onclick]'));
+      for (const el of els) {
+        const mod = editModuleOf(el.getAttribute('onclick'));
+        if (!mod || editAllowed(mod)) continue;
+        el.style.pointerEvents = 'none';
+        el.style.opacity = '0.45';
+        el.title = 'ไม่มีสิทธิ์แก้ไขข้อมูลส่วน "' + editLabel(mod) + '"';
+        if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
+      }
+    }
+
+    /**
+     * ครอบคำสั่งแก้ข้อมูลให้ตรวจสิทธิ์ก่อนทำงาน — ด่านที่สอง เผื่อมีทางเรียกที่ไม่ผ่านปุ่ม
+     * ครอบเฉพาะชื่อบน window (ที่ onclick ใช้) การเรียกกันเองภายในโค้ดไม่ถูกแตะ
+     */
+    function installEditGuards() {
+      for (const [fn, mod] of Object.entries(EDIT_ACTIONS)) {
+        const orig = window[fn];
+        if (typeof orig !== 'function' || orig.__editGuarded) continue;
+        const guarded = function (...args) {
+          if (currentUserInfo && !editAllowed(mod)) {
+            showToast('คุณไม่มีสิทธิ์แก้ไขข้อมูลส่วน "' + editLabel(mod) + '"', 'error');
+            return;
+          }
+          return orig.apply(this, args);
+        };
+        guarded.__editGuarded = true;
+        window[fn] = guarded;
+      }
+    }
+
+    let editGuardObserver = null;
+
+    /**
+     * เริ่มกันปุ่มแก้ไขทั้งหน้าเว็บ — เรียกครั้งเดียวหลังรู้สิทธิ์ของผู้ใช้
+     *
+     * ใช้ MutationObserver ดูทุกอย่างที่ถูกวาดเพิ่ม (ตาราง หน้าของเครื่อง หน้าต่าง)
+     * แล้วล็อกปุ่มทันที จึงไม่ต้องจำว่าต้องเรียกล็อกหลังวาดทุกจุด ซึ่งเป็นต้นเหตุที่รั่วมาตลอด
+     */
+    function startEditGuard() {
+      installEditGuards();
+      lockEditButtons(document.body);
+      if (editGuardObserver) return;
+      editGuardObserver = new MutationObserver(mutations => {
+        for (const m of mutations) {
+          for (const n of m.addedNodes) if (n.nodeType === 1) lockEditButtons(n);
+        }
+      });
+      editGuardObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    /**
+     * สิทธิ์ถูกเปลี่ยนระหว่างที่ผู้ใช้เปิดหน้าค้างไว้หรือเปล่า
+     *
+     * หน้าเว็บอ่านสิทธิ์ครั้งเดียวตอนเปิด ถ้า Admin ตั้งให้ใครแก้ไขไม่ได้ระหว่างที่เขาเปิดค้างอยู่
+     * หน้าของเขายังเป็นสิทธิ์เก่าจนกว่าจะรีเฟรช (เซิร์ฟเวอร์ปฏิเสธทันทีก็จริง แต่ปุ่มยังดูกดได้)
+     * ตรวจทุกครั้งที่เปลี่ยนเมนู ถ้าเปลี่ยนก็โหลดหน้าใหม่ ให้ทุกอย่างตรงกับสิทธิ์ล่าสุด
+     */
+    async function checkPermissionChange() {
+      if (!currentUserInfo) return;
+      let now;
+      try { now = await callQuiet('getCurrentUserInfo'); } catch (e) { return; }
+      // ไม่นับรายการงานของผู้รับเหมา — เปลี่ยนบ่อยตามการมอบหมาย ไม่ใช่การเปลี่ยนสิทธิ์
+      const sig = u => JSON.stringify(u ? [u.role, u.permissions, u.regions, u.contractorId || ''] : null);
+      if (sig(now) === sig(currentUserInfo)) return;
+      showToast('สิทธิ์การใช้งานของคุณเพิ่งถูกเปลี่ยน — กำลังโหลดหน้าใหม่ให้ตรงกับสิทธิ์ล่าสุด');
+      setTimeout(() => location.reload(), 1200);
     }
 
     function renderUserBadge() {
