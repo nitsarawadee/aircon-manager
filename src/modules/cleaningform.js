@@ -301,7 +301,7 @@ function unitsBySlot(record) {
  */
 async function assertOwnJob(ctx, year, round, airCode) {
   if (!plainText(year).trim() || !plainText(round).trim()) {
-    throw new Error('บัญชีผู้รับเหมาต้องปิดงานจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
+    throw new Error('บัญชี Subcontract (ผู้รับเหมา) ต้องปิดงานจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
   }
   if (!(await ctx.ownsJob(year, round, airCode))) {
     throw new Error('งานล้างรอบที่ ' + round + '/' + year + ' ของเครื่อง ' + airCode + ' ไม่ได้มอบหมายให้คุณ');
@@ -1299,7 +1299,7 @@ export async function uploadNodeDocuments(ctx, payload) {
       }
     } else if (isContractor) {
       // แนบเก็บไว้เฉยๆ โดยไม่ผูกกับงานไหน = ไม่มีอะไรบอกว่าเป็นงานของใคร
-      throw new Error('บัญชีผู้รับเหมาต้องแนบเอกสารจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
+      throw new Error('บัญชี Subcontract (ผู้รับเหมา) ต้องแนบเอกสารจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');
     }
 
     if (!ctx.attachments) {

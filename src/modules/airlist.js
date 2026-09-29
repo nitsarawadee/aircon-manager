@@ -155,7 +155,7 @@ async function assertCanSetStatus(ctx, status) {
   const info = await ctx.userInfo();
   if (info.role !== 'Admin') {
     throw new Error(
-      'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่เปลี่ยนสถานะเป็น "' + s + '" ได้ ' +
+      'เฉพาะบทบาท Infrastructure (ผู้ดูแลระบบ) เท่านั้นที่เปลี่ยนสถานะเป็น "' + s + '" ได้ ' +
       'เพราะเป็นการยืนยันว่าอนุมัติค่าใช้จ่ายแล้ว'
     );
   }

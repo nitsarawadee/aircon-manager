@@ -1,4 +1,4 @@
-import { SHEETS, MODULES } from '../schema.js';
+import { SHEETS, MODULES, REGIONAL_ROLES } from '../schema.js';
 import { formatDate, ymdhms } from '../values.js';
 import { findOrCreateContractor } from './contractors.js';
 
@@ -318,7 +318,9 @@ export async function saveUser(ctx, user) {
     //
     // ภูมิภาคกับสิทธิ์รายเมนูล้างทิ้ง เพราะผู้รับเหมาใช้สิทธิ์ตายตัว (CONTRACTOR_PERMISSIONS)
     // ถ้าเก็บค่าเก่าค้างไว้ วันที่เปลี่ยนบัญชีกลับเป็นเจ้าหน้าที่ สิทธิ์เก่าจะกลับมาเองโดยไม่มีใครตั้ง
-    const role = ['Admin', 'Contractor'].includes(user.Role) ? user.Role : 'RegionAdmin';
+    // Staff / Supervisor เก็บค่าของตัวเอง แต่ตรวจสิทธิ์แบบ Regional (ดู ROLE_TITLES ใน schema.js)
+    // ค่าอื่นที่ไม่รู้จัก ถือเป็น Regional — ปลอดภัยกว่าเดาให้เป็นบทบาทที่เห็นมากกว่า
+    const role = ['Admin', 'Contractor', ...REGIONAL_ROLES].includes(user.Role) ? user.Role : 'RegionAdmin';
     let contractorId = '';
     if (role === 'Contractor') {
       contractorId = String(user.ContractorID || '').trim();

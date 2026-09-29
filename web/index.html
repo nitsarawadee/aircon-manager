@@ -997,9 +997,9 @@
         <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800 flex items-start gap-2">
           <i class="ph-fill ph-info text-lg flex-shrink-0 mt-0.5"></i>
           <div>
-            <strong>Admin</strong> เห็นและแก้ไขข้อมูลได้ทุกภูมิภาค รวมถึงจัดการผู้ใช้งานหน้านี้ได้ &nbsp;|&nbsp;
-            <strong>RegionAdmin</strong> จะเห็น/แก้ไขได้เฉพาะเครื่องปรับอากาศในภูมิภาคที่กำหนดไว้เท่านั้น &nbsp;|&nbsp;
-            <strong>ผู้รับเหมา</strong> เห็นเฉพาะรอบที่เลือกบริษัทของตัวเองไว้ในช่อง "ผู้รับเหมา" ของแผนล้าง และกรอกได้แค่ใบล้างกับใบติดตั้ง
+            <strong>Infrastructure</strong> ทำได้ทุกอย่าง ทุกภูมิภาค รวมถึงจัดการผู้ใช้งานหน้านี้ &nbsp;|&nbsp;
+            <strong>Regional / Staff / Supervisor</strong> ดูแลเฉพาะภูมิภาคที่กำหนด ตามสิทธิ์รายเมนูที่ตั้งไว้ (ทั้งสามบทบาททำงานเหมือนกัน) &nbsp;|&nbsp;
+            <strong>Subcontract</strong> เห็นเฉพาะงานที่ได้รับมอบหมาย (รอบที่เลือกบริษัทของตัวเองไว้ในช่อง "ผู้รับเหมา" ของแผนล้าง)
           </div>
         </div>
 
@@ -2294,7 +2294,7 @@
     }
 
     /** ป้ายภาษาไทยของสิทธิ์ สำหรับข้อความแจ้ง */
-    const editLabel = mod => mod === 'admin' ? 'ผู้ดูแลระบบ'
+    const editLabel = mod => mod === 'admin' ? 'Infrastructure'
       : ((PERMISSION_MODULES.find(m => m.key === mod) || {}).label || mod);
 
     /**
@@ -2390,9 +2390,10 @@
       const el = document.getElementById('userBadge');
       if (!el || !currentUserInfo) return;
       const displayName = currentUserInfo.name || currentUserInfo.username || '';
-      const roleLabel = currentUserInfo.role === 'Admin' ? 'ผู้ดูแลระบบ (ทุกภูมิภาค)'
-        : isContractor() ? `ผู้รับเหมา: ${currentUserInfo.contractorName || '-'} · ${(currentUserInfo.jobs || []).length} งาน`
-        : `RegionAdmin: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนดภูมิภาค'}`;
+      const title = currentUserInfo.title || ROLE_TITLES[currentUserInfo.role] || currentUserInfo.role;
+      const roleLabel = currentUserInfo.role === 'Admin' ? title + ' (ทุกภูมิภาค)'
+        : isContractor() ? `${title}: ${currentUserInfo.contractorName || '-'} · ${(currentUserInfo.jobs || []).length} งาน`
+        : `${title}: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนดภูมิภาค'}`;
       const roleColor = currentUserInfo.role === 'Admin' ? 'text-[#1153a1] bg-blue-50'
         : isContractor() ? 'text-amber-800 bg-amber-50' : 'text-teal-700 bg-teal-50';
       el.innerHTML = `
@@ -2415,6 +2416,26 @@
     }
 
     /* ============== USER MANAGEMENT (Admin only) ============== */
+
+    /**
+     * ชื่อบทบาทที่โชว์ — ต้องตรงกับ ROLE_TITLES ใน src/schema.js
+     * ค่าที่เก็บในคอลัมน์ Role ไม่เปลี่ยน (ดูเหตุผลที่นั่น) เปลี่ยนแค่ชื่อที่คนเห็น
+     */
+    const ROLE_TITLES = {
+      Admin: 'Infrastructure', RegionAdmin: 'Regional', Staff: 'Staff',
+      Supervisor: 'Supervisor', Contractor: 'Subcontract'
+    };
+    /** ค่าในคอลัมน์ Role ที่ดูแลเฉพาะภูมิภาคที่กำหนด (ตั้งภูมิภาคและสิทธิ์รายเมนูได้) */
+    const REGIONAL_ROLES = ['RegionAdmin', 'Staff', 'Supervisor'];
+    const isRegionalRole = r => REGIONAL_ROLES.includes(r);
+
+    /** บทบาทของแถวผู้ใช้ ตามกติกาเดียวกับเซิร์ฟเวอร์ — ผูกผู้รับเหมาไว้ = Subcontract เสมอ */
+    function roleOfUser(u) {
+      if (u.ContractorID) return 'Contractor';
+      if (u.Role === 'Admin' || u.Role === 'Contractor') return u.Role;
+      return isRegionalRole(u.Role) ? u.Role : 'RegionAdmin';
+    }
+
     let currentUsersList = [];
     /** รายชื่อผู้รับเหมา — ใช้ร่วมกันระหว่างหน้าจัดการผู้ใช้กับหน้าผู้รับเหมา */
     let contractorList = [];
@@ -2451,8 +2472,8 @@
     /** สลับกล่องในหน้าต่างผู้ใช้ตามบทบาท — ภูมิภาค/สิทธิ์รายเมนูใช้กับ RegionAdmin เท่านั้น */
     function syncUserRoleBoxes() {
       const role = document.getElementById('u_Role').value;
-      document.getElementById('u_regionBox').classList.toggle('hidden', role !== 'RegionAdmin');
-      document.getElementById('u_permBox').classList.toggle('hidden', role !== 'RegionAdmin');
+      document.getElementById('u_regionBox').classList.toggle('hidden', !isRegionalRole(role));
+      document.getElementById('u_permBox').classList.toggle('hidden', !isRegionalRole(role));
       document.getElementById('u_contractorBox').classList.toggle('hidden', role !== 'Contractor');
     }
 
@@ -2479,7 +2500,7 @@
           <td class="px-4 py-3 text-gray-600">${esc(u.Name) || '-'}</td>
           <td class="px-4 py-3 text-gray-500 text-xs">${esc(u.Email) || '-'}</td>
           <td class="px-4 py-3">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${u.ContractorID ? 'bg-amber-100 text-amber-800' : u.Role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'}">${u.ContractorID ? 'ผู้รับเหมา' : u.Role === 'Admin' ? 'Admin (ทุกภูมิภาค)' : 'RegionAdmin'}</span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${u.ContractorID ? 'bg-amber-100 text-amber-800' : u.Role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'}">${esc(ROLE_TITLES[roleOfUser(u)])}</span>
           </td>
           <td class="px-4 py-3 text-gray-600 text-sm max-w-[220px]">${
             u.ContractorID ? esc(contractorNameOf(u.ContractorID))
@@ -2543,7 +2564,7 @@
     function openUserModal(data = {}) {
       const isEdit = !!data._row;
       // บัญชีที่ผูกผู้รับเหมาไว้ คือผู้รับเหมาเสมอ (กติกาเดียวกับเซิร์ฟเวอร์ ดู Ctx.userInfo)
-      const role = data.ContractorID ? 'Contractor' : (data.Role === 'Admin' ? 'Admin' : 'RegionAdmin');
+      const role = roleOfUser(data);
       // ผู้รับเหมาที่ปิดไปแล้วไม่ให้เลือกใหม่ แต่ถ้าบัญชีนี้สังกัดอยู่ ต้องยังเห็นชื่อเดิม
       const contractorOpts = contractorList
         .filter(c => c.Active || c.ID === data.ContractorID)
@@ -2596,9 +2617,11 @@
               <input id="u_Email" value="${esc(data.Email)}" placeholder="name@company.com" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">บทบาท</label>
               <select id="u_Role" onchange="syncUserRoleBoxes()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">
-                <option value="RegionAdmin" ${role === 'RegionAdmin' ? 'selected' : ''}>RegionAdmin (จำกัดเฉพาะภูมิภาคที่กำหนด)</option>
-                <option value="Admin" ${role === 'Admin' ? 'selected' : ''}>Admin (ทุกภูมิภาค + จัดการผู้ใช้)</option>
-                <option value="Contractor" ${role === 'Contractor' ? 'selected' : ''}>ผู้รับเหมา (เห็นเฉพาะงานที่มอบหมายในแผนล้าง)</option>
+                <option value="Admin" ${role === 'Admin' ? 'selected' : ''}>Infrastructure (ทำได้ทุกอย่าง ทุกภูมิภาค + จัดการผู้ใช้)</option>
+                <option value="RegionAdmin" ${role === 'RegionAdmin' ? 'selected' : ''}>Regional (ดูแลเฉพาะภูมิภาคที่กำหนด)</option>
+                <option value="Staff" ${role === 'Staff' ? 'selected' : ''}>Staff (เหมือน Regional)</option>
+                <option value="Supervisor" ${role === 'Supervisor' ? 'selected' : ''}>Supervisor (เหมือน Regional)</option>
+                <option value="Contractor" ${role === 'Contractor' ? 'selected' : ''}>Subcontract (เห็นเฉพาะงานที่ได้รับมอบหมาย)</option>
               </select></div>
               <div id="u_contractorBox" class="${role === 'Contractor' ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">บริษัทผู้รับเหมา <span class="text-red-500">*</span></label>
@@ -2612,11 +2635,11 @@
                   class="${contractorList.length ? 'hidden' : ''} mt-2 w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none">
                 <p class="text-xs text-gray-400 mt-1">ชื่อบริษัทนี้จะขึ้นเป็นตัวเลือกในช่อง "ผู้รับเหมา" ของแผนล้าง — เลือกให้รอบไหน บัญชีนี้จะเห็นเฉพาะรอบนั้น · ช่างหลายคนของบริษัทเดียวกันเลือกบริษัทเดิม จะเห็นงานชุดเดียวกัน</p>
               </div>
-              <div id="u_regionBox" class="${role === 'RegionAdmin' ? '' : 'hidden'}">
+              <div id="u_regionBox" class="${isRegionalRole(role) ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">ภูมิภาคที่รับผิดชอบ</label>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">${regionOpts || '<p class="text-xs text-gray-400 col-span-2 px-2">ยังไม่มีรายชื่อภูมิภาคใน Config</p>'}</div>
               </div>
-              <div id="u_permBox" class="${role === 'RegionAdmin' ? '' : 'hidden'}">
+              <div id="u_permBox" class="${isRegionalRole(role) ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งานรายเมนู</label>
                 <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">${permRows}</div>
                 <p class="text-xs text-gray-400 mt-1">สิทธิ์นี้จะถูกจำกัดร่วมกับภูมิภาคด้านบนด้วย (เช่น เลือก "แก้ไขได้" แต่จะแก้ไขได้เฉพาะภูมิภาคของตัวเองเท่านั้น)</p>
@@ -2650,8 +2673,8 @@
       if (role === 'Contractor' && !contractorId && !newCompany) {
         showToast('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมา', 'error'); return;
       }
-      const regions = role === 'RegionAdmin' ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
-      if (role === 'RegionAdmin' && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 ภูมิภาคสำหรับ RegionAdmin', 'error'); return; }
+      const regions = isRegionalRole(role) ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
+      if (isRegionalRole(role) && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 ภูมิภาคสำหรับบทบาท ' + ROLE_TITLES[role], 'error'); return; }
       const permissions = {};
       document.querySelectorAll('.u_perm_select').forEach(sel => { permissions[sel.getAttribute('data-module')] = sel.value; });
       const user = {
@@ -6022,7 +6045,7 @@
                     class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                     <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
                 : `<span class="text-slate-400 px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-dashed border-slate-300 rounded-lg">
-                    <i class="ph ph-hourglass"></i> รอผู้ดูแลระบบอนุมัติ</span>`);
+                    <i class="ph ph-hourglass"></i> รอ Infrastructure อนุมัติ</span>`);
             }
             if (status === 'รอซ่อม') {
               // ปิดงานซ่อมได้ทางเดียวคือออกเอกสารตามแบบฟอร์มควบคุม ซึ่งลงประวัติ

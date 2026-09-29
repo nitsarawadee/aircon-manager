@@ -286,11 +286,23 @@ new Ctx(env, state, db, { photos, pdf, docs, attachments, backup, forms })
 
 ## 6. สิทธิ์ผู้ใช้
 
-- **Admin** — เห็นทุกภูมิภาค จัดการผู้ใช้ได้ และเป็นคนเดียวที่ **อนุมัติซ่อม**
+ชื่อที่โชว์ในหน้าเว็บต่างจากค่าที่เก็บในคอลัมน์ `Role` — ดู `ROLE_TITLES` ใน `src/schema.js`
+(เปลี่ยนแค่ชื่อ ไม่เปลี่ยนค่าที่เก็บ เพราะโค้ดตรวจสิทธิ์ใช้รหัสเดิมหลายสิบจุด)
+
+| เก็บใน `Role` | ชื่อที่โชว์ | ตรวจสิทธิ์แบบ |
+|---|---|---|
+| `Admin` | Infrastructure | Admin |
+| `RegionAdmin` | Regional | RegionAdmin |
+| `Staff` | Staff | RegionAdmin |
+| `Supervisor` | Supervisor | RegionAdmin |
+| `Contractor` | Subcontract | Contractor |
+
+- **Admin (Infrastructure)** — เห็นทุกภูมิภาค จัดการผู้ใช้ได้ และเป็นคนเดียวที่ **อนุมัติซ่อม**
   (เปลี่ยนสถานะเป็น "รอซ่อม") ได้
-- **RegionAdmin** — เห็นเฉพาะภูมิภาคที่ได้รับมอบหมาย สิทธิ์รายเมนูตั้งได้
-  (`edit` / `view` / `none` ต่อโมดูล)
-- **Contractor (ผู้รับเหมา)** — บัญชีที่มี `ContractorID` (รหัสบริษัทในตาราง `contractors`)
+- **RegionAdmin (Regional / Staff / Supervisor)** — เห็นเฉพาะภูมิภาคที่ได้รับมอบหมาย สิทธิ์รายเมนูตั้งได้
+  (`edit` / `view` / `none` ต่อโมดูล) · Staff กับ Supervisor เก็บค่าของตัวเองไว้เผื่อวันหน้าให้สิทธิ์ต่างกัน
+  แต่ตอนนี้ `userInfo().role` เป็น `RegionAdmin` เหมือนกันทุกอย่าง (`REGIONAL_ROLES`)
+- **Contractor (Subcontract / ผู้รับเหมา)** — บัญชีที่มี `ContractorID` (รหัสบริษัทในตาราง `contractors`)
   เห็นเฉพาะ **รอบในแผนล้างที่เลือกบริษัทตัวเองไว้** (`R1/R2/R3_ContractorID` ในแผน)
   สิทธิ์ตายตัว (`CONTRACTOR_PERMISSIONS`): ดูแผนล้าง · กรอกใบล้าง · กรอกใบติดตั้ง ที่เหลือปิดหมด
   ลบเอกสารไม่ได้ · ใบล้างต้องผูกกับรอบของตัวเองเสมอ (ปิดงานจากหน้าแผนเท่านั้น)

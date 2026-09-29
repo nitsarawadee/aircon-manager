@@ -3,7 +3,8 @@ import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
   CONTRACTOR_HEADERS, REPAIRLINK_HEADERS,
-  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS
+  CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS,
+  ROLE_TITLES, REGIONAL_ROLES
 } from './schema.js';
 import { normalizeCode, normalizeRegion } from './values.js';
 
@@ -198,12 +199,15 @@ export class Ctx {
 
     const regions = u.Regions ? String(u.Regions).split(',').map(normalizeRegion).filter(Boolean) : [];
     const role = String(u.Role || '').trim().toLowerCase() === 'admin' ? 'Admin' : 'RegionAdmin';
+    // Staff / Supervisor ทำงานเป็น RegionAdmin ทุกอย่าง ต่างกันแค่ชื่อที่โชว์ (ดู ROLE_TITLES)
+    const stored = REGIONAL_ROLES.find(r => r.toLowerCase() === String(u.Role || '').trim().toLowerCase());
 
     this._userInfo = {
       email: u.Email || '',
       username: u.Username || '',
       name: u.Name || '',
       role,
+      title: role === 'Admin' ? ROLE_TITLES.Admin : ROLE_TITLES[stored || 'RegionAdmin'],
       regions,
       permissions: role === 'Admin' ? allEditPermissions() : parsePermissions(u.Permissions)
     };
@@ -259,6 +263,7 @@ export class Ctx {
     return {
       ...base,
       role: 'Contractor',
+      title: ROLE_TITLES.Contractor,
       contractorId: String(c.ID).trim(),
       contractorName: String(c.Name || '').trim(),
       // ส่งเป็นอาร์เรย์ เพราะ Set แปลงเป็น JSON ไม่ได้ (ค่านี้ไปถึงหน้าเว็บด้วย)
@@ -326,7 +331,7 @@ export class Ctx {
     await this.requireAccess();
     const info = await this.userInfo();
     if (info.role !== 'Admin' && info.role !== 'RegionAdmin') {
-      throw new Error('บัญชีผู้รับเหมา' + (action || 'ทำรายการนี้') + 'ไม่ได้ กรุณาติดต่อเจ้าหน้าที่');
+      throw new Error('บัญชี Subcontract (ผู้รับเหมา)' + (action || 'ทำรายการนี้') + 'ไม่ได้ กรุณาติดต่อเจ้าหน้าที่');
     }
   }
 
@@ -411,7 +416,7 @@ export class Ctx {
   async assertAdmin() {
     const info = await this.userInfo();
     if (info.role !== 'Admin') {
-      throw new Error('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่จัดการผู้ใช้งานส่วนนี้ได้');
+      throw new Error('เฉพาะบทบาท Infrastructure (ผู้ดูแลระบบ) เท่านั้นที่ทำรายการนี้ได้');
     }
   }
 

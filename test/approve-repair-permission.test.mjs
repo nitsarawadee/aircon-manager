@@ -69,7 +69,7 @@ test('RegionAdmin ที่มีสิทธิ์แก้ไขครบ ย�
 
   await assert.rejects(
     () => saveAirUnit(ctxAs(db, 'somchai'), unit),
-    /Admin/,
+    /Infrastructure/,
     'ต้องถูกปฏิเสธ ถึงจะมีสิทธิ์ airlist:edit และอยู่ในภูมิภาคของตัวเองก็ตาม'
   );
 });
@@ -80,7 +80,7 @@ test('ถูกปฏิเสธแล้วต้องไม่มีอะ�
   const unit = await unitWithStatus(db, 'somchai', 'รอซ่อม');
   unit.Note = 'แก้หมายเหตุไปด้วยพร้อมกัน';
 
-  await assert.rejects(() => saveAirUnit(ctxAs(db, 'somchai'), unit), /Admin/);
+  await assert.rejects(() => saveAirUnit(ctxAs(db, 'somchai'), unit), /Infrastructure/);
 
   const [after] = await getAirList(ctxAs(db, 'boss'));
   assert.equal(after.Status, 'ชำรุด', 'สถานะต้องเป็นค่าเดิม');
