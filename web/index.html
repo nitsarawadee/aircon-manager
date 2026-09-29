@@ -2212,8 +2212,10 @@
         // ปุ่มที่ไม่ได้แก้ข้อมูลของโมดูลนี้ ต้องไม่ถูกปิดไปด้วย
         // แจ้งซ่อมใช้สิทธิ์ของโมดูล repair ไม่ใช่ airlist คนที่ดูรายการเครื่องได้อย่างเดียว
         // แต่มีสิทธิ์ซ่อม จึงต้องกดแจ้งซ่อมจากหน้านี้ได้
+        // ดูประวัติของเครื่อง (ปุ่มลูกศรวงกลม) แค่พาไปหน้าประวัติ ไม่ได้แก้อะไร
         if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
-            oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(')) return;
+            oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(') ||
+            oc.includes('viewAirHistory(')) return;
         // ช่องรอบในแผนต้องกดได้ ถ้ากรอกใบล้างได้ — ปิดงานล้างทำผ่านหน้านั้น
         // (หน้าต่างรอบจะแสดงแบบอ่านอย่างเดียว เหลือแค่ปุ่มกรอกฟอร์ม/แนบเอกสาร ดู openRoundModal)
         if (mod === 'plan' && oc.includes('openRoundModal(') && docLevel('cleaning') === 'edit') return;
