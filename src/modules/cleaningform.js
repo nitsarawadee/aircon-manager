@@ -15,7 +15,7 @@ import { jobKey } from '../context.js';
 import { closePlanRound } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
-  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
 } from './approval.js';
 
 /**
@@ -747,6 +747,7 @@ export async function saveCleaningForm(ctx, record) {
     } else {
       // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
       record.DocType = 'cleaning';
+      record.ID = freshFormId(ctx, SHEETS.CLEANFORM, 'CF');
       assignDocNumbers(ctx, record, record.Date);
 
       const headers = ctx.ss.headers(SHEETS.CLEANFORM);

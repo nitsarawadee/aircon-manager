@@ -4,7 +4,7 @@ import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './his
 import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
-  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
 } from './approval.js';
 
 /**
@@ -185,7 +185,7 @@ export async function saveInstallForm(ctx, record) {
     await ctx.ensureBase();
 
     const row = {
-      ID: 'IF' + Date.now(),
+      ID: freshFormId(ctx, SHEETS.INSTALLFORM, 'IF'),
       Date: plainText(record.Date),
       NodeName: first.NodeName,
       SiteCode: first.SiteCode,

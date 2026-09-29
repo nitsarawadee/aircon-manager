@@ -58,6 +58,19 @@ export const FINAL_STAGE = 4;
 const stageOf = n => APPROVAL_STAGES.find(s => s.stage === n);
 const rolesText = n => stageOf(n).roles.map(r => ROLE_TITLES[r]).join(' หรือ ');
 
+/**
+ * ID ของเอกสารใบใหม่ ('CF' / 'RF' / 'IF' + เวลาเป็นมิลลิวินาที) ที่ไม่ซ้ำกับใบที่มีอยู่ — เรียกในล็อก
+ *
+ * เดิมใช้เวลาตรงๆ สองใบที่บันทึกในมิลลิวินาทีเดียวกันจึงได้ ID ซ้ำ
+ * ตั้งแต่มีขั้นอนุมัติ (ผูกกับ ID ของใบ และห้ามซ้ำ) ใบที่สองจะบันทึกไม่ได้เลย จึงขยับเลขหนีให้
+ */
+export function freshFormId(ctx, sheet, prefix) {
+  const used = new Set(ctx.ss.objects(sheet).map(f => plainText(f.ID)));
+  let n = Date.now();
+  while (used.has(prefix + n)) n++;
+  return prefix + n;
+}
+
 /** แถวขั้นอนุมัติของเอกสารใบหนึ่ง — ไม่มี = ใบเก่า ไม่ต้องอนุมัติ */
 export function approvalRowOf(ctx, kind, formId) {
   const id = plainText(formId).trim();

@@ -120,3 +120,31 @@ test('ลำดับเครื่องแปลกๆ (คี่ / ติด
     await assert.rejects(() => saveInstallForm(boss(db), { ...installDoc('KKN-CPE-AIR-1'), SlotBase: bad }), /ลำดับเครื่อง/);
   }
 });
+
+test('บันทึกเอกสารสองใบในมิลลิวินาทีเดียวกัน — ได้ ID ไม่ซ้ำ ทั้งสองใบบันทึกได้', async () => {
+  // ขั้นอนุมัติผูกกับ ID ของใบและห้ามซ้ำ ถ้า ID ชนกัน ใบที่สองจะบันทึกไม่ได้
+  const db = freshDb();
+  const realNow = Date.now;
+  Date.now = () => 1790000000000;
+  try {
+    await saveInstallForm(boss(db), installDoc('KKN-CPE-AIR-1'));
+    await saveInstallForm(boss(db), installDoc('KKN-MNG-AIR-1'));
+  } finally {
+    Date.now = realNow;
+  }
+  const ids = db.prepare('SELECT ID FROM install_forms').all().map(r => r.ID);
+  assert.equal(new Set(ids).size, 2);
+});
+
+test('ฟอร์มติดตั้งเปล่า Excel ของเครื่องที่ 3–4 — ป้ายเลขเครื่องเป็น 3/4 · ใบแรกไม่แตะป้ายของแม่แบบ', async () => {
+  const { installXlsxValues } = await import('../src/modules/install-xlsx.js');
+  const v = installXlsxValues({ SlotBase: 2, AirCode1: 'KKN-CPE-AIR-3' });
+  const main = v['xl/worksheets/sheet1.xml'];
+  assert.equal(main.F8, 'เครื่องที่ 3 (AIR 3)');
+  assert.equal(main.G8, 'เครื่องที่ 4 (AIR 4)');
+  assert.equal(main.D35, 'เครื่องที่ 4');
+  assert.match(v['xl/worksheets/sheet2.xml'].A1, /เครื่องที่ 3 \(AIR 3\)/);
+
+  const first = installXlsxValues({ AirCode1: 'KKN-CPE-AIR-1' })['xl/worksheets/sheet1.xml'];
+  assert.equal(first.F8, undefined, 'ใบแรกใช้ป้ายของแม่แบบตามเดิม');
+});

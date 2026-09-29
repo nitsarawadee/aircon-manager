@@ -5,7 +5,7 @@ import { unitsInScope } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
-  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
 } from './approval.js';
 
 /**
@@ -136,7 +136,7 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
   const reported = plainText(unit.Note).trim();
 
   const row = {
-    ID: 'RF' + Date.now(),
+    ID: freshFormId(ctx, SHEETS.REPAIRFORM, 'RF'),
     Date: plainText(record.Date),
     NodeName: unit.NodeName,
     SiteCode: unit.SiteCode,
