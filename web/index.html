@@ -720,7 +720,7 @@
               <i class="ph ph-wrench"></i> แจ้งซ่อมแอร์ใหม่
             </button>
             <!-- ติดตั้งเครื่องใหม่ = ฟอร์มเพิ่มเครื่องใหม่ (ลงทะเบียน) แล้วเปิดฟอร์มเอกสารติดตั้งต่อทันที -->
-            <button onclick="openAirModalForInstall()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+            <button onclick="openAirModal()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
               title="กรอกฟอร์มเพิ่มเครื่องใหม่ บันทึกแล้วเปิดฟอร์มเอกสารติดตั้งต่อทันที">
               <i class="ph ph-plus-circle"></i> ติดตั้งเครื่องใหม่
             </button>
@@ -2299,7 +2299,7 @@
      */
     const EDIT_ACTIONS = {
       // รายการเครื่อง
-      openAirModal: 'airlist', openAirModalForInstall: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
+      openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
       fileImportAir: 'airlist', confirmAirImport: 'airlist',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
@@ -4096,19 +4096,7 @@
 
     document.getElementById('airSearch').addEventListener('input', () => refreshAirTable());
 
-    /**
-     * ติดตั้งเครื่องใหม่ (ปุ่มในหน้างานซ่อมและติดตั้ง) = ฟอร์มเพิ่มเครื่องใหม่ แล้วเปิดฟอร์มติดตั้งต่อทันที
-     * ปิดฟอร์มติดตั้งไปก่อนได้ เครื่องยังรออยู่ในตาราง "งานติดตั้งที่รอเอกสาร"
-     */
-    let airModalThenInstall = false;
-    function openAirModalForInstall() {
-      openAirModal();
-      airModalThenInstall = true;
-    }
-    window.openAirModalForInstall = openAirModalForInstall;
-
     function openAirModal(data = {}) {
-      airModalThenInstall = false;   // เปิดจากทางอื่น = เพิ่ม/แก้เครื่องอย่างเดียว
       const opt = (arr, val) => (arr || []).map(o => `<option value="${esc(o)}" ${o===val?'selected':''}>${esc(o)}</option>`).join('');
       const isEdit = !!data.AirCode;
       
@@ -4214,10 +4202,10 @@
         closeModal();
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
         loadDashboard();
-        if (airModalThenInstall && !row) {
-          airModalThenInstall = false;
-          await openInstallFormFor(unit.AirCode);
-        }
+        // เพิ่มเครื่องใหม่ (ทั้งจากหน้ารายการเครื่องและปุ่มติดตั้งเครื่องใหม่) = ติดตั้งใหม่
+        // เปิดฟอร์มเอกสารติดตั้งต่อทันที ไม่ต้องไปกดจากตารางงานติดตั้งที่รอเอกสารอีกรอบ
+        // ปิดไปก่อนได้ เครื่องยังรออยู่ในตารางนั้น · คนที่กรอกเอกสารติดตั้งไม่ได้ ไม่ต้องเปิด
+        if (!row && docLevel('install') === 'edit') await openInstallFormFor(unit.AirCode);
       } catch (e) {}
     }
 
