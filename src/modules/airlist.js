@@ -135,6 +135,45 @@ async function insertAirUnitRaw(ctx, unit) {
 }
 
 /**
+ * เพิ่มเครื่องใหม่เข้าทะเบียน + ลงประวัติ "ติดตั้ง" (ยังไม่ flush) — ต้องเรียกในล็อก หลัง ensureBase
+ *
+ * ใช้ทั้งเพิ่มเครื่องอย่างเดียว (saveAirUnit) และเพิ่มเครื่องพร้อมเอกสารติดตั้ง (installNewAirUnit)
+ * ประวัติติดป้ายรอเอกสาร — ถ้าออกเอกสารติดตั้งในคำสั่งเดียวกัน ป้ายจะถูกเปลี่ยนเป็นเลขเอกสารทันที
+ */
+export async function addNewAirUnitRaw(ctx, unit) {
+  await ctx.assertRegionAccess(unit.Region);
+  await insertAirUnitRaw(ctx, unit);
+  await addHistoryRaw(ctx, {
+    AirCode: unit.AirCode,
+    Date: unit.InstallDate || ymd(new Date()),
+    EventType: 'ติดตั้ง',
+    Detail: `ติดตั้งเครื่องใหม่ที่ Node "${unit.NodeName || '-'}" (${unit.SiteCode || '-'})`,
+    Cost: '',
+    Technician: '',
+    // รอกรอกเอกสารติดตั้งที่หน้างานซ่อมและติดตั้ง (ดู INSTALL_PENDING_NOTE)
+    Note: INSTALL_PENDING_NOTE
+  });
+}
+
+/**
+ * ตรวจเครื่องใหม่ก่อนเปิดฟอร์มติดตั้ง — กติกาเดียวกับตอนบันทึกจริง แต่ไม่เขียนอะไร
+ *
+ * เพิ่มเครื่องพร้อมเอกสารติดตั้งบันทึกตอนท้ายทีเดียว ถ้าไม่ตรวจก่อน รหัสซ้ำหรือภูมิภาคผิด
+ * จะเพิ่งรู้หลังช่างกรอกฟอร์มติดตั้งและแนบรูปครบแล้ว
+ */
+export async function checkNewAirUnit(ctx, unit) {
+  await ctx.assertModuleEdit('airlist');
+  await ctx.ensureBase();
+  if (!unit || !unit.AirCode) throw new Error('กรุณาระบุรหัสเครื่อง');
+  await ctx.assertRegionAccess(unit.Region);
+  const code = normalizeCode(unit.AirCode);
+  if (ctx.ss.objects(SHEETS.AIRLIST).some(o => normalizeCode(o.AirCode) === code)) {
+    throw new Error('มีรหัสเครื่อง ' + unit.AirCode + ' อยู่แล้วในระบบ');
+  }
+  return { ok: true };
+}
+
+/**
  * สถานะที่เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่ตั้งได้
  *
  * "รอซ่อม" ไม่ใช่แค่คำบอกสถานะ แต่แปลว่า "ค่าใช้จ่ายได้รับอนุมัติแล้ว"
@@ -218,19 +257,7 @@ export async function saveAirUnit(ctx, unit) {
         });
       }
     } else {
-      await ctx.assertRegionAccess(unit.Region);
-      await insertAirUnitRaw(ctx, unit);
-      // บันทึกประวัติ "ติดตั้ง" อัตโนมัติทุกครั้งที่เพิ่มเครื่องใหม่เข้าระบบ
-      await addHistoryRaw(ctx, {
-        AirCode: unit.AirCode,
-        Date: unit.InstallDate || ymd(new Date()),
-        EventType: 'ติดตั้ง',
-        Detail: `ติดตั้งเครื่องใหม่ที่ Node "${unit.NodeName || '-'}" (${unit.SiteCode || '-'})`,
-        Cost: '',
-        Technician: '',
-        // รอกรอกเอกสารติดตั้งที่หน้างานซ่อมและติดตั้ง (ดู INSTALL_PENDING_NOTE)
-        Note: INSTALL_PENDING_NOTE
-      });
+      await addNewAirUnitRaw(ctx, unit);
     }
 
     await ctx.ss.flush();

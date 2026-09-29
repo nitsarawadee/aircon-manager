@@ -65,9 +65,10 @@ test('ปุ่มลัดเรียกคำสั่งเดียวก�
   assert.deepEqual(calls, ['saveAirUnit'],
     'ปุ่มลัดต้องเรียก saveAirUnit ตัวเดียว เหมือนที่ฟอร์มแก้ไขเรียก');
 
+  // checkNewAirUnit แค่ตรวจเครื่องใหม่ก่อนเปิดฟอร์มติดตั้ง (ไม่เขียนอะไร) — การบันทึกยังเป็น saveAirUnit ตัวเดียว
   assert.deepEqual(
     [...sourceOf('saveAir').matchAll(/call\(\s*'([^']+)'/g)].map(m => m[1]),
-    ['saveAirUnit'],
+    ['checkNewAirUnit', 'saveAirUnit'],
     'ฟอร์มแก้ไขต้องเรียก saveAirUnit เหมือนเดิม'
   );
 });

@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
-import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { unitsInScope } from './airlist.js';
+import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { unitsInScope, addNewAirUnitRaw, getAirList } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -138,9 +138,11 @@ async function unitOf(ctx, airCode) {
  *
  * ติดตั้งได้ทีละ 1–2 เครื่องต่อใบ ตามช่องที่แบบฟอร์มกระดาษมีให้
  */
-export async function saveInstallForm(ctx, record) {
-  await ctx.assertModuleEdit('installform');
-
+/**
+ * ตรวจข้อมูลและดึงเครื่องจากทะเบียน ก่อนเขียนเอกสารติดตั้ง (ยังไม่แตะฐานข้อมูล)
+ * @returns {{units, first, slotBase, companyName}}
+ */
+async function prepareInstall(ctx, record) {
   const codes = [1, 2]
     .map(slot => plainText(record['AirCode' + slot]).trim())
     .filter(Boolean);
@@ -181,111 +183,168 @@ export async function saveInstallForm(ctx, record) {
   const info = await ctx.userInfo();
   const companyName = info.role === 'Contractor' ? info.contractorName : plainText(record.CompanyName);
 
+  return { units, first, slotBase, companyName };
+}
+
+/**
+ * เขียนเอกสารติดตั้ง + ขั้นอนุมัติ + ประวัติ (ยังไม่ flush) — ต้องเรียกในล็อก หลัง ensureBase
+ * @returns {Promise<Object>} แถวที่เขียนลงไป
+ */
+async function writeInstallForm(ctx, record, { units, first, slotBase, companyName }) {
+  const row = {
+    ID: freshFormId(ctx, SHEETS.INSTALLFORM, 'IF'),
+    Date: plainText(record.Date),
+    NodeName: first.NodeName,
+    SiteCode: first.SiteCode,
+    Region: first.Region,
+    Province: first.Province,
+    LocationType: first.LocationType,
+    AirCode1: units[1] ? units[1].AirCode : '',
+    AirCode2: units[2] ? units[2].AirCode : '',
+    TimeStart: plainText(record.TimeStart),
+    TimeEnd: plainText(record.TimeEnd),
+    TotalTime: plainText(record.TotalTime),
+    ChecklistJSON: JSON.stringify(record.Checklist || []),
+    AcceptResult1: plainText(record.AcceptResult1),
+    AcceptResult2: plainText(record.AcceptResult2),
+    AdditionalNote: plainText(record.AdditionalNote),
+    CompanyName: companyName,
+    TechnicianName: plainText(record.TechnicianName),
+    SupervisorName: plainText(record.SupervisorName),
+    Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
+    CreatedAt: ymdhms(new Date()),
+    RecordedBy: await ctx.currentUser(),
+    SlotBase: slotBase
+  };
+
+  // ข้อมูลเครื่องมาจากทะเบียนล้วนๆ ไม่รับจากหน้าเว็บ เพื่อไม่ให้มีความจริงสองชุด
+  // เครื่องตัวใหม่ต้องถูกเปลี่ยนในหน้ารายการเครื่องก่อนออกเอกสาร (ดูหัวไฟล์)
+  //
+  // ⚠️ ทะเบียนเก็บชื่อคอลัมน์ว่า IndoorSN/OutdoorSN แต่แบบฟอร์มเขียนว่า Serial
+  // ต้องแปลงชื่อตรงนี้ ไม่งั้นช่อง Serial บนเอกสารจะว่างทั้งที่ทะเบียนมีข้อมูลอยู่
+  for (const slot of [1, 2]) {
+    const unit = units[slot];
+    const p = 'Unit' + slot + '_';
+    row[p + 'Brand'] = unit ? plainText(unit.Brand) : '';
+    row[p + 'BTU'] = unit ? plainText(unit.BTU) : '';
+    row[p + 'IndoorSerial'] = unit ? plainText(unit.IndoorSN) : '';
+    row[p + 'IndoorAsset'] = unit ? plainText(unit.IndoorAsset) : '';
+    row[p + 'OutdoorSerial'] = unit ? plainText(unit.OutdoorSN) : '';
+    row[p + 'OutdoorAsset'] = unit ? plainText(unit.OutdoorAsset) : '';
+  }
+
+  // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+  assignDocNumbers(ctx, row, row.Date);
+
+  const headers = ctx.ss.headers(SHEETS.INSTALLFORM);
+  ctx.ss.appendRow(SHEETS.INSTALLFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
+  await startApproval(ctx, KIND, row.ID);
+
+  // ลงประวัติ "ติดตั้ง" ของเครื่องแต่ละตัว
+  for (const slot of [1, 2]) {
+    const unit = units[slot];
+    if (!unit) continue;
+
+    const docNo = plainText(row[slot === 2 ? 'DocNo2' : 'DocNo']);
+    const accept = plainText(row['AcceptResult' + slot]).trim();
+
+    // เครื่องที่เพิ่ม / เปลี่ยน / ย้ายมา มีประวัติที่รอเอกสารอยู่แล้ว — ใส่เลขเอกสารลงแถวนั้น
+    // ไม่ลงประวัติ "ติดตั้ง" ซ้ำอีกแถว (เดิมเครื่องเดียวมีประวัติติดตั้งสองแถว)
+    const pending = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
+      normalizeCode(h.AirCode) === normalizeCode(unit.AirCode) &&
+      plainText(h.Note).trim() === INSTALL_PENDING_NOTE);
+    if (pending.length) {
+      const last = pending[pending.length - 1];
+      for (const h of pending) {
+        const patch = { Note: 'เอกสาร ' + docNo };
+        if (h === last) {
+          if (accept) patch.Detail = plainText(h.Detail) + ' — ผลตรวจรับ: ' + accept;
+          if (!plainText(h.Technician).trim()) patch.Technician = row.TechnicianName;
+        }
+        ctx.ss.writeByHeaders(SHEETS.HISTORY, h._row, patch);
+      }
+      continue;
+    }
+
+    await addHistoryRaw(ctx, {
+      AirCode: unit.AirCode,
+      Date: row.Date,
+      EventType: EVENT,
+      Detail: ['ติดตั้งเครื่องใหม่', accept && 'ผลตรวจรับ: ' + accept].filter(Boolean).join(' — '),
+      Cost: '',
+      Technician: row.TechnicianName,
+      Note: 'เอกสาร ' + docNo
+    });
+  }
+
+  return row;
+}
+
+/** ผลที่ส่งกลับหน้าเว็บหลังบันทึกเอกสารติดตั้ง */
+async function installSavedOf(ctx, row) {
+  return {
+    // เลขที่คืนกลับไปคือเลขที่ใช้เป็นชื่อไฟล์จริง ไม่ใช่เลขของช่องที่ 1 เสมอไป
+    // (ติดตั้งเฉพาะเครื่องที่ 2 ใบนั้นมีแต่ DocNo2)
+    docNo: docNoOf(row),
+    // เลขรายช่อง เผื่อหน้าเว็บอยากบอกผู้ใช้ว่าเครื่องไหนได้เลขอะไร
+    docNo1: plainText(row.DocNo),
+    docNo2: plainText(row.DocNo2),
+    // หาแถวที่เพิ่งบันทึกด้วย ID เสมอ ห้ามใช้เลขที่เอกสาร เพราะช่อง DocNo
+    // ว่างได้จริงเมื่อติดตั้งเฉพาะเครื่องที่ 2
+    id: row.ID,
+    forms: await getInstallForms(ctx)
+  };
+}
+
+/**
+ * บันทึกเอกสารติดตั้งหนึ่งใบ
+ *
+ * ติดตั้งได้ทีละ 1–2 เครื่องต่อใบ ตามช่องที่แบบฟอร์มกระดาษมีให้
+ */
+export async function saveInstallForm(ctx, record) {
+  await ctx.assertModuleEdit('installform');
+  const prep = await prepareInstall(ctx, record);
+
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
-
-    const row = {
-      ID: freshFormId(ctx, SHEETS.INSTALLFORM, 'IF'),
-      Date: plainText(record.Date),
-      NodeName: first.NodeName,
-      SiteCode: first.SiteCode,
-      Region: first.Region,
-      Province: first.Province,
-      LocationType: first.LocationType,
-      AirCode1: units[1] ? units[1].AirCode : '',
-      AirCode2: units[2] ? units[2].AirCode : '',
-      TimeStart: plainText(record.TimeStart),
-      TimeEnd: plainText(record.TimeEnd),
-      TotalTime: plainText(record.TotalTime),
-      ChecklistJSON: JSON.stringify(record.Checklist || []),
-      AcceptResult1: plainText(record.AcceptResult1),
-      AcceptResult2: plainText(record.AcceptResult2),
-      AdditionalNote: plainText(record.AdditionalNote),
-      CompanyName: companyName,
-      TechnicianName: plainText(record.TechnicianName),
-      SupervisorName: plainText(record.SupervisorName),
-      Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
-      CreatedAt: ymdhms(new Date()),
-      RecordedBy: await ctx.currentUser(),
-      SlotBase: slotBase
-    };
-
-    // ข้อมูลเครื่องมาจากทะเบียนล้วนๆ ไม่รับจากหน้าเว็บ เพื่อไม่ให้มีความจริงสองชุด
-    // เครื่องตัวใหม่ต้องถูกเปลี่ยนในหน้ารายการเครื่องก่อนออกเอกสาร (ดูหัวไฟล์)
-    //
-    // ⚠️ ทะเบียนเก็บชื่อคอลัมน์ว่า IndoorSN/OutdoorSN แต่แบบฟอร์มเขียนว่า Serial
-    // ต้องแปลงชื่อตรงนี้ ไม่งั้นช่อง Serial บนเอกสารจะว่างทั้งที่ทะเบียนมีข้อมูลอยู่
-    for (const slot of [1, 2]) {
-      const unit = units[slot];
-      const p = 'Unit' + slot + '_';
-      row[p + 'Brand'] = unit ? plainText(unit.Brand) : '';
-      row[p + 'BTU'] = unit ? plainText(unit.BTU) : '';
-      row[p + 'IndoorSerial'] = unit ? plainText(unit.IndoorSN) : '';
-      row[p + 'IndoorAsset'] = unit ? plainText(unit.IndoorAsset) : '';
-      row[p + 'OutdoorSerial'] = unit ? plainText(unit.OutdoorSN) : '';
-      row[p + 'OutdoorAsset'] = unit ? plainText(unit.OutdoorAsset) : '';
-    }
-
-    // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
-    assignDocNumbers(ctx, row, row.Date);
-
-    const headers = ctx.ss.headers(SHEETS.INSTALLFORM);
-    ctx.ss.appendRow(SHEETS.INSTALLFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
-    await startApproval(ctx, KIND, row.ID);
-
-    // ลงประวัติ "ติดตั้ง" ของเครื่องแต่ละตัว
-    for (const slot of [1, 2]) {
-      const unit = units[slot];
-      if (!unit) continue;
-
-      const docNo = plainText(row[slot === 2 ? 'DocNo2' : 'DocNo']);
-      const accept = plainText(row['AcceptResult' + slot]).trim();
-
-      // เครื่องที่เพิ่ม / เปลี่ยน / ย้ายมา มีประวัติที่รอเอกสารอยู่แล้ว — ใส่เลขเอกสารลงแถวนั้น
-      // ไม่ลงประวัติ "ติดตั้ง" ซ้ำอีกแถว (เดิมเครื่องเดียวมีประวัติติดตั้งสองแถว)
-      const pending = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
-        normalizeCode(h.AirCode) === normalizeCode(unit.AirCode) &&
-        plainText(h.Note).trim() === INSTALL_PENDING_NOTE);
-      if (pending.length) {
-        const last = pending[pending.length - 1];
-        for (const h of pending) {
-          const patch = { Note: 'เอกสาร ' + docNo };
-          if (h === last) {
-            if (accept) patch.Detail = plainText(h.Detail) + ' — ผลตรวจรับ: ' + accept;
-            if (!plainText(h.Technician).trim()) patch.Technician = row.TechnicianName;
-          }
-          ctx.ss.writeByHeaders(SHEETS.HISTORY, h._row, patch);
-        }
-        continue;
-      }
-
-      await addHistoryRaw(ctx, {
-        AirCode: unit.AirCode,
-        Date: row.Date,
-        EventType: EVENT,
-        Detail: ['ติดตั้งเครื่องใหม่', accept && 'ผลตรวจรับ: ' + accept].filter(Boolean).join(' — '),
-        Cost: '',
-        Technician: row.TechnicianName,
-        Note: 'เอกสาร ' + docNo
-      });
-    }
-
+    const row = await writeInstallForm(ctx, record, prep);
     await ctx.ss.flush();
-    return {
-      // เลขที่คืนกลับไปคือเลขที่ใช้เป็นชื่อไฟล์จริง ไม่ใช่เลขของช่องที่ 1 เสมอไป
-      // (ติดตั้งเฉพาะเครื่องที่ 2 ใบนั้นมีแต่ DocNo2)
-      docNo: docNoOf(row),
-      // เลขรายช่อง เผื่อหน้าเว็บอยากบอกผู้ใช้ว่าเครื่องไหนได้เลขอะไร
-      docNo1: plainText(row.DocNo),
-      docNo2: plainText(row.DocNo2),
-      // หาแถวที่เพิ่งบันทึกด้วย ID เสมอ ห้ามใช้เลขที่เอกสาร เพราะช่อง DocNo
-      // ว่างได้จริงเมื่อติดตั้งเฉพาะเครื่องที่ 2
-      id: row.ID,
-      forms: await getInstallForms(ctx)
-    };
+    return installSavedOf(ctx, row);
   });
 
   // เก็บสำเนา PDF ไว้บนเซิร์ฟเวอร์ (นอกล็อก เพราะต้องรอเบราว์เซอร์แปลงไฟล์)
+  await storeInstallPdf(ctx, saved.docNo);
+  return saved;
+}
+
+/**
+ * เพิ่มเครื่องใหม่เข้าทะเบียน + ออกเอกสารติดตั้ง "ทีเดียว" (เจ้าของงานสั่ง)
+ *
+ * กด "เพิ่มเครื่องใหม่" / "ติดตั้งเครื่องใหม่" แล้วกรอกฟอร์มติดตั้งต่อ — เครื่องเข้าทะเบียนก็ต่อเมื่อ
+ * บันทึกเอกสารติดตั้งสำเร็จ เขียนทั้งสองอย่างใน flush เดียว พลาดตรงไหนไม่มีอะไรถูกบันทึกเลย
+ * (ไม่มีเครื่องที่เข้าทะเบียนแล้วแต่ไม่มีเอกสารติดตั้งค้างอยู่)
+ *
+ * @param {Object} unit   ข้อมูลเครื่องจากฟอร์มเพิ่มเครื่องใหม่ (เหมือนที่ส่งให้ saveAirUnit)
+ * @param {Object} record ข้อมูลฟอร์มติดตั้ง (เหมือนที่ส่งให้ saveInstallForm)
+ */
+export async function installNewAirUnit(ctx, unit, record) {
+  await ctx.assertModuleEdit('airlist');
+  await ctx.assertModuleEdit('installform');
+
+  const saved = await ctx.withLock(async () => {
+    await ctx.ensureBase();
+    await addNewAirUnitRaw(ctx, unit);
+    // เครื่องอยู่ในทะเบียนของคำสั่งนี้แล้ว (ยังไม่ flush) หาเจอด้วยตัวตรวจเดียวกับเครื่องเดิม
+    const prep = await prepareInstall(ctx, record);
+    const row = await writeInstallForm(ctx, record, prep);
+    await ctx.ss.flush();
+    return {
+      ...(await installSavedOf(ctx, row)),
+      air: await getAirList(ctx),
+      history: await getHistory(ctx)
+    };
+  });
+
   await storeInstallPdf(ctx, saved.docNo);
   return saved;
 }
