@@ -162,7 +162,9 @@ export const TABLES = {
       CompanyName: S, TechnicianName: S, SupervisorName: S,
       Cost: N,
       CreatedAt: DT, RecordedBy: S,
-      DocNo: S, DocNo2: S
+      DocNo: S, DocNo2: S,
+      // เครื่องคู่ไหนของ Node (ดู INSTALLFORM_HEADERS)
+      SlotBase: N
     },
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },

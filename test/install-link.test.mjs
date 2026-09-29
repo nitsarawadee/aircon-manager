@@ -90,3 +90,33 @@ test('ป้าย "รอเอกสารติดตั้ง" ในหน�
   const web = html.match(/const INSTALL_PENDING_NOTE = '([^']*)';/)[1];
   assert.equal(web, INSTALL_PENDING_NOTE);
 });
+
+/* ==================== เครื่องที่ 3 ขึ้นไป — ใบแยก หน้าตาเดิม ==================== */
+
+test('เครื่องที่ 3 — ออกใบแยก ลงช่องที่ 1 ของใบ แต่เอกสารเขียนว่าเครื่องที่ 3 (AIR 3)', async () => {
+  const db = freshDb();
+  db.prepare(`INSERT INTO air_units (AirCode, NodeName, SiteCode, Region, Province, Status, Brand, BTU, IndoorSN)
+    VALUES ('KKN-CPE-AIR-3','ชุมแพ','KKN-CPE','3','ขอนแก่น','ใช้งานปกติ','LG',12000,'IN-3')`).run();
+
+  await saveInstallForm(boss(db), { ...installDoc('KKN-CPE-AIR-3'), SlotBase: 2 });
+  const form = db.prepare("SELECT * FROM install_forms WHERE AirCode1 = 'KKN-CPE-AIR-3'").get();
+  assert.equal(form.SlotBase, 2);
+
+  const { buildInstallDocHtml } = await import('../src/modules/install-doc.js');
+  const html = buildInstallDocHtml({ ...form, ChecklistJSON: '[]' });
+  assert.ok(html.includes('เครื่องที่ 3 (AIR 3)'), 'หัวคอลัมน์ต้องเป็นเครื่องที่ 3');
+  assert.ok(!html.includes('เครื่องที่ 1 (AIR 1)'), 'ต้องไม่เขียนว่าเครื่องที่ 1');
+});
+
+test('ใบเก่า (ไม่มี SlotBase) — ยังเป็นเครื่องที่ 1–2 เหมือนเดิม', async () => {
+  const { buildInstallDocHtml } = await import('../src/modules/install-doc.js');
+  const html = buildInstallDocHtml({ AirCode1: 'KKN-CPE-AIR-1', ChecklistJSON: '[]' });
+  assert.ok(html.includes('เครื่องที่ 1 (AIR 1)'));
+});
+
+test('ลำดับเครื่องแปลกๆ (คี่ / ติดลบ / ไม่ใช่ตัวเลข) — ไม่รับ', async () => {
+  const db = freshDb();
+  for (const bad of [1, -2, 'x']) {
+    await assert.rejects(() => saveInstallForm(boss(db), { ...installDoc('KKN-CPE-AIR-1'), SlotBase: bad }), /ลำดับเครื่อง/);
+  }
+});

@@ -6310,12 +6310,9 @@
       for (const node of cleaningFormNodes) {
         const i = (node.units || []).findIndex(u => sameCode(u.AirCode, airCode));
         if (i < 0) continue;
-        // ช่องในเอกสารตามตำแหน่งจริงใน Node (กติกาเดียวกับ startInstallFormFromPicker) — ใบหนึ่งมี 2 ช่อง
-        if (i + 1 > 2) {
-          showToast('เอกสารติดตั้งมีช่องเครื่องที่ 1–2 ของ Node เท่านั้น — ' + airCode + ' เป็นเครื่องที่ ' + (i + 1), 'error');
-          return;
-        }
-        openInstallForm(node, [{ slot: i + 1, unit: node.units[i] }]);
+        // ช่องในเอกสารตามตำแหน่งจริงใน Node (กติกาเดียวกับ startInstallFormFromPicker) — ใบละ 2 ช่อง
+        const { slot, base } = installSlotOf(i + 1);
+        openInstallForm(node, [{ slot, unit: node.units[i] }], base);
         return;
       }
       showToast('ไม่พบเครื่อง ' + airCode + ' ในทะเบียน หรือไม่มีสิทธิ์เข้าถึง', 'error');
@@ -7323,7 +7320,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </td>
         <td class="px-4 py-3">
           ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
-          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot}</span>`}
+          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot + (isInstall ? Number(f.SlotBase) || 0 : 0)}</span>`}
         </td>
         <td class="px-4 py-3">${
           // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
@@ -9593,7 +9590,8 @@ const CLEANING_CHECKLIST_ITEMS = [
      ==================================================================== */
 
   let ifNode = null;        // Node ที่เลือก
-  let ifUnits = [];         // [{slot, unit}] — slot คือตำแหน่งจริงใน Node ไม่ใช่ลำดับที่ติ๊ก
+  let ifUnits = [];         // [{slot, unit}] — slot คือช่องในใบ (1/2) ตามตำแหน่งจริงใน Node ไม่ใช่ลำดับที่ติ๊ก
+  let ifBase = 0;           // ใบนี้เป็นเครื่องคู่ไหน — เครื่องที่ = slot + ifBase (ดู SlotBase ใน src/schema.js)
   let ifPhotos = {};        // '<ช่อง>-<ลำดับ>' -> dataUrl
   let ifPickTarget = 1;     // ช่องรูปที่กำลังเลือกไฟล์อยู่
 
@@ -9738,6 +9736,12 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.toggleInstallUnit = toggleInstallUnit;
 
+  /** เครื่องตัวที่ pos ของ Node อยู่ช่องไหนของใบไหน — ใบละ 2 ช่อง (1–2, 3–4, 5–6 ...) */
+  const installSlotOf = pos => {
+    const slot = ((pos - 1) % 2) + 1;
+    return { slot, base: pos - slot };
+  };
+
   function startInstallFormFromPicker() {
     const node = (cleaningFormNodes || []).find(n => n.NodeName === ifSelectedNode);
     if (!node) { showToast('กรุณาเลือก Node', 'error'); return; }
@@ -9750,12 +9754,18 @@ const CLEANING_CHECKLIST_ITEMS = [
     // ไม่ใช่เลื่อนขึ้นมาช่องแรก เพราะคนอ่านเอกสารดูจากตำแหน่งว่าเป็นแอร์ตัวไหนของ Node
     // (กติกาเดียวกับใบล้าง ดู pfSlots)
     const picked = units
-      .map((u, i) => ({ slot: i + 1, unit: u }))
-      .filter(e => ifPickedUnits[e.unit.AirCode] && e.slot <= 2);
+      .map((u, i) => ({ ...installSlotOf(i + 1), unit: u }))
+      .filter(e => ifPickedUnits[e.unit.AirCode]);
 
     if (!picked.length) { showToast('กรุณาติ๊กเครื่องที่ติดตั้งอย่างน้อย 1 ตัว', 'error'); return; }
 
-    openInstallForm(node, picked);
+    // ใบหนึ่งมีเครื่องได้คู่เดียว (1–2 หรือ 3–4 ...) เลือกข้ามคู่ต้องกรอกทีละใบ
+    if (new Set(picked.map(e => e.base)).size > 1) {
+      showToast('เอกสารติดตั้ง 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณากรอกทีละใบ', 'error');
+      return;
+    }
+
+    openInstallForm(node, picked.map(e => ({ slot: e.slot, unit: e.unit })), picked[0].base);
   }
   window.startInstallFormFromPicker = startInstallFormFromPicker;
 
@@ -9789,9 +9799,10 @@ const CLEANING_CHECKLIST_ITEMS = [
    *   เก็บ slot มาด้วยเสมอ ไม่ใช่ใช้ลำดับในอาร์เรย์ เพราะติ๊กเฉพาะตัวที่ 2
    *   ข้อมูลต้องลงช่องที่ 2 ไม่ใช่เลื่อนขึ้นมาช่องแรก
    */
-  function openInstallForm(node, picked) {
+  function openInstallForm(node, picked, base = 0) {
     ifNode = node;
     ifUnits = picked || [];
+    ifBase = base;
     ifPhotos = {};
 
     const card = inner => `<section class="bg-white rounded-xl border border-gray-200 p-4">${inner}</section>`;
@@ -9807,7 +9818,7 @@ const CLEANING_CHECKLIST_ITEMS = [
      */
     const unitCard = ({ slot, unit: u }, i) => `
       <div class="border border-gray-200 rounded-lg p-3 ${i ? 'mt-3' : ''}">
-        <div class="font-bold text-teal-700 text-sm mb-2">เครื่องที่ ${slot} · ${esc(u.AirCode)}</div>
+        <div class="font-bold text-teal-700 text-sm mb-2">เครื่องที่ ${slot + ifBase} · ${esc(u.AirCode)}</div>
         <dl class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
           ${[['ยี่ห้อ', u.Brand], ['BTU', u.BTU],
              ['Indoor Serial', u.IndoorSerial], ['Indoor Asset', u.IndoorAsset],
@@ -9972,7 +9983,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     box.innerHTML = INSTALL_CHECKLIST_ITEMS.map(item => {
       const cells = ifUnits.map(({ slot }) => `
         <div class="flex-1">
-          <div class="text-[10px] text-gray-400 mb-0.5">เครื่องที่ ${slot}</div>
+          <div class="text-[10px] text-gray-400 mb-0.5">เครื่องที่ ${slot + ifBase}</div>
           ${item.type === 'check'
             ? `<select id="if_c${item.no}_${slot}"
                  class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">
@@ -10028,7 +10039,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       return `
         <div class="${i ? 'mt-4' : ''}">
           <div class="flex items-center justify-between mb-1.5">
-            <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${slot} · ${esc(u.AirCode)}</div>
+            <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${slot + ifBase} · ${esc(u.AirCode)}</div>
             <div class="flex items-center gap-2">
               <span class="text-[11px] ${done === 9 ? 'text-teal-700' : 'text-red-600'}">${done}/9</span>
               <button type="button" onclick="ifPickManyPhotos(${slot})"
@@ -10109,7 +10120,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   async function closeInstallForm() {
     closeModal();
-    ifNode = null; ifUnits = []; ifPhotos = {};
+    ifNode = null; ifUnits = []; ifBase = 0; ifPhotos = {};
   }
   window.closeInstallForm = closeInstallForm;
 
@@ -10175,6 +10186,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     // ส่งไปแค่รหัสเครื่องกับผลตรวจรับ
     // ข้อมูลเครื่อง (Serial/Asset/ยี่ห้อ/BTU) ไม่ต้องส่ง เพราะเซิร์ฟเวอร์คัดจากทะเบียนเอง
     // ถ้าส่งไปก็จะถูกทิ้ง — ส่งของที่ปลายทางไม่ใช้ทำให้คนอ่านโค้ดเข้าใจผิดว่าแก้ได้
+    record.SlotBase = ifBase;
     ifUnits.forEach(({ slot, unit }) => {
       record['AirCode' + slot] = unit.AirCode;
       const picked = document.querySelector('input[name="if_accept' + slot + '"]:checked');

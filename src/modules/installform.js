@@ -171,6 +171,12 @@ export async function saveInstallForm(ctx, record) {
 
   const first = units[1] || units[2];
 
+  // เครื่องคู่ไหนของ Node (0 = เครื่องที่ 1–2, 2 = 3–4 ...) — ไม่ส่งมา = ใบแรกแบบเดิม
+  const slotBase = record.SlotBase === undefined || record.SlotBase === '' ? 0 : Number(record.SlotBase);
+  if (!Number.isInteger(slotBase) || slotBase < 0 || slotBase % 2) {
+    throw new Error('ลำดับเครื่องในเอกสารไม่ถูกต้อง');
+  }
+
   // ผู้รับเหมา: ชื่อบริษัทใช้ชื่อที่ Admin ตั้งไว้ ไม่ให้พิมพ์เอง (ข้อมูลเก่ามีชื่อเดียวกันถึง 7 แบบ)
   const info = await ctx.userInfo();
   const companyName = info.role === 'Contractor' ? info.contractorName : plainText(record.CompanyName);
@@ -200,7 +206,8 @@ export async function saveInstallForm(ctx, record) {
       SupervisorName: plainText(record.SupervisorName),
       Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
       CreatedAt: ymdhms(new Date()),
-      RecordedBy: await ctx.currentUser()
+      RecordedBy: await ctx.currentUser(),
+      SlotBase: slotBase
     };
 
     // ข้อมูลเครื่องมาจากทะเบียนล้วนๆ ไม่รับจากหน้าเว็บ เพื่อไม่ให้มีความจริงสองชุด
