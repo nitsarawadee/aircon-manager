@@ -497,6 +497,52 @@ export async function createCleaningPlan(ctx, year) {
 }
 
 /**
+ * ลบแผนล้างทั้งปี — มีไว้แก้กรณีกดสร้างแผนผิดปี
+ *
+ * ลบได้เฉพาะแผนที่ยังไม่มีงานจริงเกิดขึ้นเลย รอบไหนล้างไปแล้ว (มีวันที่ล้างจริง
+ * หรือสถานะเสร็จ) หรือมีใบบันทึกผลการล้างผูกกับปีนั้น ถือเป็นงานที่จ่ายเงินไปจริง
+ * ลบทิ้งแล้วค่าใช้จ่ายที่เคยรายงานจะหายไปเฉยๆ จึงไม่ยอมเด็ดขาด
+ *
+ * confirmYear ต้องตรงกับปี — กันหน้าเว็บส่งปีผิด เช่นกล่องเลือกปีเปลี่ยนระหว่างที่ยืนยันอยู่
+ */
+export async function deleteCleaningPlan(ctx, year, confirmYear) {
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    // แผนหนึ่งปีครอบคลุมเครื่องทุกภูมิภาค คนเดียวกับที่สร้างได้เท่านั้นที่ลบได้
+    await ctx.assertAdmin();
+
+    const y = String(year == null ? '' : year).trim();
+    if (!/^\d{4}$/.test(y)) throw new Error('ปีของแผนไม่ถูกต้อง');
+    if (String(confirmYear == null ? '' : confirmYear).trim() !== y) {
+      throw new Error('ปีที่พิมพ์ยืนยันไม่ตรงกับแผนที่จะลบ กรุณาลองใหม่');
+    }
+
+    const name = planSheet(y);
+    if (!(await ctx.ss.hasSheet(name))) throw new Error('ไม่พบแผนล้างแอร์ปี ' + y);
+
+    await ctx.ss.load(name);
+    const done = ctx.ss.objects(name).reduce((n, row) =>
+      n + [1, 2, 3].filter(r => roundState(row, r, false) === 'done').length, 0);
+    if (done > 0) {
+      throw new Error('แผนปี ' + y + ' มีรอบที่ล้างไปแล้ว ' + done + ' รอบ ลบไม่ได้ ' +
+        'เพราะเป็นงานที่ทำและจ่ายเงินไปจริง');
+    }
+    const forms = ctx.ss.objects(SHEETS.CLEANFORM)
+      .filter(f => String(f.PlanYear == null ? '' : f.PlanYear).trim() === y).length;
+    if (forms > 0) {
+      throw new Error('แผนปี ' + y + ' มีใบบันทึกผลการล้างผูกอยู่ ' + forms + ' ใบ ลบไม่ได้');
+    }
+
+    // สำรองก่อนลบเสมอ — ลบทีเดียวหายหลายร้อยแถว ถ้าสำรองไม่ได้ต้องหยุด ไม่ใช่ลบต่อ
+    let backupName = '';
+    if (ctx.backup) backupName = ctx.backup('ก่อนลบแผนล้างปี ' + y);
+
+    const deleted = ctx.ss.deletePlanYear(y);
+    return { year: y, deleted, backupName };
+  });
+}
+
+/**
  * มีเอกสารของการล้างครั้งนั้นอยู่จริงหรือยัง
  *
  * "ครั้งนั้น" = เครื่องตัวนี้ ปีนี้ รอบนี้ ซึ่งตรงกับที่ฟอร์มบันทึกผลการล้าง

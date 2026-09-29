@@ -592,6 +592,9 @@
               <button onclick="exportPlanTemplate()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดฟอร์มไปกรอกข้อมูลนำเข้า">
                 <i class="ph ph-download-simple"></i> Template
               </button>
+              <button id="deletePlanBtn" onclick="deletePlan()" style="display:none" class="bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="ลบแผนของปีที่เลือกอยู่ (เฉพาะแผนที่ยังไม่มีงานล้างจริง)">
+                <i class="ph ph-trash"></i> ลบแผน
+              </button>
               <button onclick="openCreatePlanModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                 <i class="ph ph-folder-plus"></i> สร้างแผน
               </button>
@@ -2058,6 +2061,9 @@
       // ซ่อนเมนู "ผู้ใช้งาน" สำหรับคนที่ไม่ใช่ Admin (ใช้ display แทนการลบทิ้ง เผื่อสลับผู้ใช้ในหน้าเดียวกัน)
       const usersTabBtn = document.querySelector('[data-tab="users"]');
       if (usersTabBtn) usersTabBtn.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
+      // ลบแผนทั้งปีเป็นสิทธิ์ Admin คนเดียว (เซิร์ฟเวอร์กันอยู่แล้ว ซ่อนไว้แค่กันกดพลาด)
+      const deletePlanBtn = document.getElementById('deletePlanBtn');
+      if (deletePlanBtn) deletePlanBtn.style.display = currentUserInfo.role === 'Admin' ? '' : 'none';
 
       applyModulePermissionsUI();
       // ล็อกปุ่มแก้ข้อมูลที่ไม่มีสิทธิ์ ทุกหน้า ทุกครั้งที่ถูกวาด (ดู EDIT_ACTIONS)
@@ -2268,7 +2274,7 @@
       fileImportAir: 'airlist', confirmAirImport: 'airlist',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
       openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'plan',
-      openCreatePlanModal: 'admin', createPlan: 'admin',
+      openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
       // ประวัติ
       openHistoryModal: 'history', saveHistory: 'history', deleteHistory: 'history', addHistoryForUnit: 'history',
       // งานซ่อม
@@ -5554,6 +5560,82 @@
         await loadPlanYears();
         document.getElementById('planYearSelect').value = year;
         await loadPlan();
+      } catch (e) {}
+    }
+
+    // ยืนยันสองชั้น: เห็นว่าจะลบอะไร แล้วต้องพิมพ์ปีให้ตรงก่อนปุ่มลบจะกดได้
+    // ปีที่พิมพ์ส่งไปให้เซิร์ฟเวอร์เทียบซ้ำอีกรอบด้วย
+    function confirmDeletePlan(year, rowCount) {
+      return new Promise(resolve => {
+        document.getElementById('modalRoot').innerHTML = `
+          <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+              <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                  <i class="ph-fill ph-trash text-lg"></i>
+                </span>
+                <h3 class="text-lg font-bold text-gray-800">ลบแผนล้างแอร์ปี ${esc(year)}</h3>
+              </div>
+
+              <div class="p-6 space-y-4">
+                <div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3">
+                  <p class="font-medium">แผนทั้งปีจะหายไป ${rowCount} เครื่อง × 3 รอบ</p>
+                  <ul class="list-disc list-inside mt-1.5 text-[13px] space-y-0.5">
+                    <li>วันตามแผน ราคา และผู้รับเหมาที่ตั้งไว้จะหายไปด้วย</li>
+                    <li>ถ้ามีรอบที่ล้างไปแล้วหรือมีใบบันทึกผลการล้าง ระบบจะไม่ยอมลบ</li>
+                    <li>ระบบสำรองฐานข้อมูลไว้ให้ก่อนลบ</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">พิมพ์ปี <b>${esc(year)}</b> เพื่อยืนยัน</label>
+                  <input id="delPlanInput" autocomplete="off" inputmode="numeric" placeholder="${esc(year)}"
+                         class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm font-mono">
+                </div>
+              </div>
+
+              <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+                <button id="delPlanNo" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
+                <button id="delPlanYes" disabled
+                        class="px-4 py-2 text-sm font-medium text-white bg-rose-300 rounded-lg cursor-not-allowed">ลบแผน</button>
+              </div>
+            </div>
+          </div>`;
+
+        const input = document.getElementById('delPlanInput');
+        const yes = document.getElementById('delPlanYes');
+        const no = document.getElementById('delPlanNo');
+        const sync = () => {
+          const ok = input.value.trim() === String(year);
+          yes.disabled = !ok;
+          yes.className = ok
+            ? 'px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 shadow-sm'
+            : 'px-4 py-2 text-sm font-medium text-white bg-rose-300 rounded-lg cursor-not-allowed';
+        };
+        input.addEventListener('input', sync);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter' && !yes.disabled) yes.click(); });
+        input.focus();
+
+        const done = v => { closeModal(); resolve(v); };
+        yes.addEventListener('click', () => { if (!yes.disabled) done(input.value.trim()); });
+        no.addEventListener('click', () => done(null));
+      });
+    }
+
+    async function deletePlan() {
+      // จำปีไว้ตั้งแต่ตอนกด ไม่อ่านจากกล่องเลือกปีอีกหลังยืนยัน
+      const year = document.getElementById('planYearSelect').value;
+      if (!year) { showToast('ยังไม่มีแผนให้ลบ', 'error'); return; }
+
+      const typed = await confirmDeletePlan(year, (currentPlan || []).length);
+      if (!typed) return;
+      try {
+        const res = await call('deleteCleaningPlan', year, typed);
+        showToast(`ลบแผนปี ${year} แล้ว (${res.deleted} เครื่อง)`);
+        currentYear = null;
+        currentPlan = [];
+        await loadPlanYears();
       } catch (e) {}
     }
 

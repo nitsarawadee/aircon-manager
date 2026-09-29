@@ -4,7 +4,7 @@ import {
   getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
   getAirUnitImportFile, planAirUnitImport, applyAirUnitImport
 } from './modules/airlist.js';
-import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
+import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
   getHistory, addHistoryRecord, deleteHistoryRecord,
   reportRepair, markCannotRepair
@@ -92,6 +92,7 @@ const API_FUNCTIONS = {
   getPlanCalendar,
   getUpcomingCleanings,
   createCleaningPlan,
+  deleteCleaningPlan,
   updateCleaningRound,
   updatePlanBulk,
   updatePlanDatesByNode,
