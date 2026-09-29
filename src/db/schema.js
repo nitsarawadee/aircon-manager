@@ -106,7 +106,9 @@ export const TABLES = {
       // ผลประเมินของเครื่องที่ 2 — ของเครื่องที่ 1 ยังใช้คอลัมน์ EquipmentCondition เดิม
       EquipmentCondition2: S,
       // เลขที่ของเครื่องตัวที่สองในใบเดียวกัน — ของตัวแรกใช้คอลัมน์ DocNo เดิม
-      DocNo2: S
+      DocNo2: S,
+      // เครื่องคู่ไหนของ Node (ดู CLEANFORM_HEADERS)
+      SlotBase: N
     },
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },

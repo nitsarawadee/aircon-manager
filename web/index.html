@@ -7336,7 +7336,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </td>
         <td class="px-4 py-3">
           ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
-          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot + (isInstall ? Number(f.SlotBase) || 0 : 0)}</span>`}
+          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}
         </td>
         <td class="px-4 py-3">${
           // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
@@ -7458,24 +7458,43 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ที่เครื่องปรากฏในรายการ ไม่งั้นรูปจะถูกเก็บลงช่องของเครื่องอีกตัว
    * (ไซต์ BKK-MBI มี AIR-2 มาก่อน AIR-1 ในรายการ)
    */
-  function unitSlotOfCode(airCode) {
-    const tail = String(airCode == null ? '' : airCode).trim().split('-').pop();
-    return Number(tail) === 2 ? 2 : 1;
+  function unitNoOfCode(airCode) {
+    const n = Number(String(airCode == null ? '' : airCode).trim().split('-').pop());
+    return Number.isInteger(n) && n >= 1 ? n : 1;
+  }
+  // ใบละ 2 ช่อง: AIR-1/2 ใบแรก · AIR-3/4 ใบที่สอง (ช่อง 1/2 ของใบนั้น) ...
+  function unitSlotOfCode(airCode) { return ((unitNoOfCode(airCode) - 1) % 2) + 1; }
+  function unitBaseOfCode(airCode) { return unitNoOfCode(airCode) - unitSlotOfCode(airCode); }
+
+  /** โหมดทั้ง Node: เลือกคู่เครื่องไหนอยู่ (0 = เครื่องที่ 1–2, 2 = 3–4 ...) */
+  let cfNodePair = 0;
+
+  /**
+   * เครื่องของฟอร์มล้างตอนนี้ — ช่อง 1/2 ของใบ และคู่เครื่อง (ดู SlotBase)
+   * ใช้ที่เดียวทั้งตอนบันทึก ปริ้นตัวอย่าง รูปถ่าย และป้าย จะได้ไม่ลงช่องไม่ตรงกัน
+   */
+  function cfPickUnits() {
+    const none = { node: null, u1: null, u2: null, base: 0 };
+    if (cfContext) {
+      const found = findUnitByAirCode(cfContext.airCode);
+      if (!found) return none;
+      const slot = unitSlotOfCode(found.unit.AirCode);
+      return { node: found.node, u1: slot === 1 ? found.unit : null, u2: slot === 2 ? found.unit : null,
+               base: unitBaseOfCode(found.unit.AirCode) };
+    }
+    const nodeName = (document.getElementById('cf_node') || {}).value || '';
+    const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
+    if (!node) return none;
+    const inPair = (node.units || []).filter(u => unitBaseOfCode(u.AirCode) === cfNodePair);
+    return { node, base: cfNodePair,
+             u1: inPair.find(u => unitSlotOfCode(u.AirCode) === 1) || null,
+             u2: inPair.find(u => unitSlotOfCode(u.AirCode) === 2) || null };
   }
 
   /** เครื่องที่ฟอร์มนี้กำลังจะบันทึก พร้อมเลขช่องจริงของแต่ละตัว */
   function cfPhotoUnits() {
-    if (cfContext) {
-      const found = findUnitByAirCode(cfContext.airCode);
-      return found ? [{ slot: unitSlotOfCode(found.unit.AirCode), airCode: found.unit.AirCode }] : [];
-    }
-
-    const nodeName = (document.getElementById('cf_node') || {}).value || '';
-    const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
-    if (!node) return [];
-
-    return (node.units || []).slice(0, 2)
-      .map(u => ({ slot: unitSlotOfCode(u.AirCode), airCode: u.AirCode }));
+    const { u1, u2 } = cfPickUnits();
+    return [u1 && { slot: 1, airCode: u1.AirCode }, u2 && { slot: 2, airCode: u2.AirCode }].filter(Boolean);
   }
 
   /**
@@ -7555,7 +7574,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       return `
         <div class="border border-gray-200 rounded-lg p-3 mb-3">
           <div class="flex items-center justify-between mb-2 gap-2">
-            <div class="text-xs font-semibold text-gray-700 truncate">เครื่องที่ ${u.slot} · ${esc(u.airCode)}</div>
+            <div class="text-xs font-semibold text-gray-700 truncate">เครื่องที่ ${u.slot + cfPickUnits().base} · ${esc(u.airCode)}</div>
             <div class="text-[11px] flex-shrink-0 ${done === PHOTO_SLOTS ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/${PHOTO_SLOTS} ช่อง</div>
           </div>
           <button type="button" onclick="cfPickManyPhotos(${u.slot})"
@@ -8478,12 +8497,12 @@ const CLEANING_CHECKLIST_ITEMS = [
                    ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ -->
               <div class="space-y-2">
                 <div class="flex items-center gap-3 flex-wrap">
-                  <span class="text-xs text-gray-500 w-14 ${single ? 'hidden' : ''}">ตัวที่ 1</span>
+                  <span id="cf_cond1Lbl" class="text-xs text-gray-500 w-14 ${single ? 'hidden' : ''}">ตัวที่ 1</span>
                   <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition" value="สภาพเครื่องสมบูรณ์" class="w-5 h-5"> สภาพเครื่องสมบูรณ์</label>
                   <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition" value="สภาพเครื่องควรปรับปรุง" class="w-5 h-5"> ควรปรับปรุง</label>
                 </div>
                 <div id="cf_cond2Row" class="flex items-center gap-3 flex-wrap hidden">
-                  <span class="text-xs text-gray-500 w-14">ตัวที่ 2</span>
+                  <span id="cf_cond2Lbl" class="text-xs text-gray-500 w-14">ตัวที่ 2</span>
                   <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition2" value="สภาพเครื่องสมบูรณ์" class="w-5 h-5"> สภาพเครื่องสมบูรณ์</label>
                   <label class="flex items-center gap-2 text-sm py-1.5"><input type="radio" name="cf_condition2" value="สภาพเครื่องควรปรับปรุง" class="w-5 h-5"> ควรปรับปรุง</label>
                 </div>
@@ -8581,7 +8600,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         return `<input data-no="${item.no}" data-col="${col}" class="${inputCls}" type="number" step="any" inputmode="decimal" placeholder="${esc(item.unit || '')}">`;
       };
 
-      const slotLabel = n => `<div class="text-[11px] text-gray-500 mb-1">${cfContext ? 'ผลตรวจเช็ค' : 'ตัวที่ ' + n}</div>`;
+      const slotLabel = n => `<div class="text-[11px] text-gray-500 mb-1">${cfContext ? 'ผลตรวจเช็ค' : 'ตัวที่ ' + (n + cfPickUnits().base)}</div>`;
 
       return `
         <div class="bg-white rounded-xl border border-gray-200 p-3">
@@ -10503,10 +10522,19 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.downloadBlankRepairXlsx = downloadBlankRepairXlsx;
 
   /** เมื่อเลือก Node แล้ว ดึงเครื่อง 2 ตัวแรกของ Node นั้นมาแสดง (Serial/Asset/Brand/BTU) แบบอ่านอย่างเดียว */
-  function onCleaningFormNodeChange() {
+  /** เลือกคู่เครื่อง (Node ที่มีเกิน 2 เครื่อง) — วาดข้อมูลเครื่อง รูป และป้ายใหม่ */
+  function cfSetPair(base) {
+    cfNodePair = Number(base) || 0;
+    onCleaningFormNodeChange(true);
+  }
+  window.cfSetPair = cfSetPair;
+
+  function onCleaningFormNodeChange(keepPair) {
     const sel = document.getElementById('cf_node');
     const box = document.getElementById('cf_unitInfo');
     if (!sel || !box) return;   // หน้าถูกปิดไปแล้วระหว่างที่ยังมีงานค้างอยู่
+    // เปลี่ยน Node = เริ่มที่คู่แรก (เครื่องที่ 1–2) เสมอ
+    if (keepPair !== true) cfNodePair = 0;
 
     const nodeName = sel.value;
     const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
@@ -10520,11 +10548,25 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div>Serial (Outdoor): ${esc(u.OutdoorSerial || '-')} &nbsp;|&nbsp; Asset: ${esc(u.OutdoorAsset || '-')}</div>
       </div>`;
 
-    box.innerHTML = unitCard(node.units[0], 'ตัวที่ 1') + unitCard(node.units[1], 'ตัวที่ 2');
+    // ใบละ 2 เครื่องตามลำดับ (1–2, 3–4 ...) Node ที่มีเกิน 2 เครื่องเลือกคู่ได้ ใบละคู่
+    const bases = [...new Set((node.units || []).map(u => unitBaseOfCode(u.AirCode)))].sort((a, b) => a - b);
+    const { u1, u2, base } = cfPickUnits();
+    const pairPick = bases.length > 1 ? `
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Node นี้มี ${node.units.length} เครื่อง — ใบละ 2 เครื่อง เลือกชุดเครื่องของใบนี้</label>
+        <select id="cf_pair" onchange="cfSetPair(this.value)" class="w-full rounded-lg border-gray-300 border px-3 py-2 text-sm bg-white">
+          ${bases.map(b => `<option value="${b}" ${b === base ? 'selected' : ''}>เครื่องที่ ${b + 1}–${b + 2}</option>`).join('')}
+        </select>
+      </div>` : '';
+    box.innerHTML = pairPick + unitCard(u1, 'ตัวที่ ' + (base + 1)) + unitCard(u2, 'ตัวที่ ' + (base + 2));
 
-    // แถวผลประเมินของตัวที่ 2 โผล่เฉพาะตอน Node นี้มีเครื่องที่สองจริง
+    const lbl1 = document.getElementById('cf_cond1Lbl');
+    const lbl2 = document.getElementById('cf_cond2Lbl');
+    if (lbl1) lbl1.textContent = 'ตัวที่ ' + (base + 1);
+    if (lbl2) lbl2.textContent = 'ตัวที่ ' + (base + 2);
+    // แถวผลประเมินของตัวที่ 2 โผล่เฉพาะตอนชุดนี้มีเครื่องที่สองจริง
     const cond2 = document.getElementById('cf_cond2Row');
-    if (cond2) cond2.classList.toggle('hidden', !node.units[1]);
+    if (cond2) cond2.classList.toggle('hidden', !u2);
 
     // ช่องใส่รูปยึดตามเครื่องของ Node ที่เพิ่งเลือก จึงต้องวาดใหม่ทุกครั้งที่เปลี่ยน Node
     // ล้างรูปที่เลือกไว้ด้วย เพราะมันเป็นรูปของ Node เดิม
@@ -10532,9 +10574,6 @@ const CLEANING_CHECKLIST_ITEMS = [
     renderCfPhotos();
     updateCfProgress();
 
-    if (node.units.length > 2) {
-      box.innerHTML += `<div class="sm:col-span-2 text-xs text-amber-600 flex items-center gap-1"><i class="ph ph-warning"></i> Node นี้มีมากกว่า 2 เครื่อง ระบบจะบันทึกเฉพาะ 2 เครื่องแรกในฟอร์มนี้ (บันทึกฟอร์มแยกสำหรับเครื่องที่เหลือได้)</div>`;
-    }
     box.dataset.region = node.Region || '';
     box.dataset.province = node.Province || '';
     box.dataset.siteCode = node.SiteCode || '';
@@ -10552,22 +10591,17 @@ const CLEANING_CHECKLIST_ITEMS = [
     // ไม่ใช่ลงคอลัมน์ "ตัวที่ 1" เสมอเหมือนเดิม (ซึ่งทำให้เครื่องตัวที่ 2 ของ Node ขึ้นผิดคอลัมน์)
     let cfUnitSlot = 1;
 
+    // ช่องของเครื่องใช้กติกาเดียวกับเซิร์ฟเวอร์ (เลขท้ายรหัส ใบละคู่) — ดู cfPickUnits
+    const picked = cfPickUnits();
     if (cfContext) {
       // โหมดแยกใบต่อเครื่อง — เครื่องถูกกำหนดมาจากหน้าแผนแล้ว ไม่ต้องเลือก Node
-      const found = findUnitByAirCode(cfContext.airCode);
-      if (!found) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return; }
-      node = found.node;
-      cfUnitSlot = (node.units.indexOf(found.unit) === 1) ? 2 : 1;
-      if (cfUnitSlot === 2) { u2 = found.unit; u1 = null; }
-      else { u1 = found.unit; u2 = null; }
+      if (!picked.node) { showToast('ไม่พบข้อมูลเครื่องนี้', 'error'); return; }
+      cfUnitSlot = picked.u2 ? 2 : 1;
     } else {
-      const nodeName = document.getElementById('cf_node').value;
-      if (!nodeName) { showToast('กรุณาเลือก Node', 'error'); return; }
-      node = cleaningFormNodes.find(n => n.NodeName === nodeName);
-      if (!node || !node.units[0]) { showToast('Node นี้ยังไม่มีเครื่องปรับอากาศในระบบ', 'error'); return; }
-      u1 = node.units[0];
-      u2 = node.units[1] || null;
+      if (!document.getElementById('cf_node').value) { showToast('กรุณาเลือก Node', 'error'); return; }
+      if (!picked.node || (!picked.u1 && !picked.u2)) { showToast('Node นี้ยังไม่มีเครื่องปรับอากาศในระบบ', 'error'); return; }
     }
+    node = picked.node; u1 = picked.u1; u2 = picked.u2;
 
     const date = document.getElementById('cf_date').value;
     if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
@@ -11104,8 +11138,8 @@ const CLEANING_CHECKLIST_ITEMS = [
   /**
    * จับคู่เครื่องเข้ากับช่อง "ตัวที่ 1" และ "ตัวที่ 2" ของฟอร์มกระดาษ
    *
-   * ยึดตามลำดับจริงของเครื่องใน Node ไม่ใช่ลำดับที่ติ๊ก
-   * เครื่องตัวที่ 1 ของ Node ลงช่องที่ 1 เสมอ ตัวที่ 2 ลงช่องที่ 2 เสมอ
+   * ยึดตำแหน่งจริงของเครื่อง ไม่ใช่ลำดับที่ติ๊ก — ใบละคู่ (1–2, 3–4 ...) ช่องที่ 1/2 ของใบ
+   * ใบล้างนับจากเลขท้ายรหัส (AIR-3 = ช่อง 1 ของใบคู่ 3–4) ใบติดตั้งนับตามลำดับเครื่องใน Node
    * ดังนั้นถ้าล้างแค่เครื่องตัวที่ 2 ช่องที่ 1 ในฟอร์มจะเว้นว่างไว้ ไม่เลื่อนขึ้นมาแทน
    * เพราะเอกสารต้องอ่านแล้วรู้ทันทีว่าหมายถึงเครื่องตัวไหนของ Node นั้น
    *
@@ -11117,37 +11151,20 @@ const CLEANING_CHECKLIST_ITEMS = [
     const slots = [null, null];
     const slotOf = {};
 
-    // ใบติดตั้ง: ใบละคู่ตามลำดับเครื่อง (1–2, 3–4 ...) หน้าตาเดิม เลขเครื่องบนใบเป็นเลขจริง
-    // (กติกาเดียวกับฟอร์มกรอกในระบบ ดู installSlotOf) · slotOf เก็บเลขเครื่องจริงไว้โชว์
-    if (pfKind === 'install') {
-      const picked = units.map((u, i) => ({ u, ...installSlotOf(i + 1) })).filter(e => pfPicked[e.u.AirCode]);
-      const bases = [...new Set(picked.map(e => e.base))];
-      const base = bases.length ? bases[0] : 0;
-      for (const e of picked) {
-        if (e.base !== base) continue;
-        slots[e.slot - 1] = e.u;
-        slotOf[e.u.AirCode] = e.slot + base;
-      }
-      return { slots, slotOf, base, crossPair: bases.length > 1 };
+    // ใบละคู่เครื่อง (1–2, 3–4 ...) หน้าตาเดิม เลขเครื่องบนใบเป็นเลขจริง · slotOf เก็บเลขเครื่องจริงไว้โชว์
+    // ใบติดตั้งนับตามลำดับเครื่องใน Node (ดู installSlotOf) · ใบล้างนับจากเลขท้ายรหัส (กติกาเดียวกับเซิร์ฟเวอร์)
+    const at = (u, i) => pfKind === 'install'
+      ? installSlotOf(i + 1)
+      : { slot: unitSlotOfCode(u.AirCode), base: unitBaseOfCode(u.AirCode) };
+    const picked = units.map((u, i) => ({ u, ...at(u, i) })).filter(e => pfPicked[e.u.AirCode]);
+    const bases = [...new Set(picked.map(e => e.base))];
+    const base = bases.length ? bases[0] : 0;
+    for (const e of picked) {
+      if (e.base !== base) continue;
+      slots[e.slot - 1] = e.u;
+      slotOf[e.u.AirCode] = e.slot + base;
     }
-
-    units.forEach((u, i) => {
-      if (!pfPicked[u.AirCode]) return;
-      // เครื่องสองตัวแรกลงช่องตามตำแหน่งตัวเอง
-      if (i < 2 && !slots[i]) {
-        slots[i] = u;
-        slotOf[u.AirCode] = i + 1;
-        return;
-      }
-      // Node ที่มีเกิน 2 เครื่อง (พบไม่บ่อย) ให้ลงช่องแรกที่ยังว่าง
-      const free = slots.indexOf(null);
-      if (free !== -1) {
-        slots[free] = u;
-        slotOf[u.AirCode] = free + 1;
-      }
-    });
-
-    return { slots, slotOf };
+    return { slots, slotOf, base, crossPair: bases.length > 1 };
   }
 
   function renderPrintNodeList() {
@@ -11218,7 +11235,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     // เลือกเครื่องตัวที่ 2 ตัวเดียว ข้อมูลต้องลงช่อง "ตัวที่ 2" และเว้นช่อง "ตัวที่ 1" ว่างไว้
     const { slots, base, crossPair } = pfSlots();
     if (crossPair) {
-      showToast('เอกสารติดตั้ง 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณาทำทีละใบ', 'error');
+      showToast('เอกสาร 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณาทำทีละใบ', 'error');
       return null;
     }
     const [u1, u2] = slots;
@@ -11859,20 +11876,8 @@ const CLEANING_CHECKLIST_ITEMS = [
    * แล้วค่อยถ่ายรูปส่งภายหลัง จึงไม่ต้องมี Node/วันที่ครบก็เรียกได้
    */
   async function printCleaningFormPreview() {
-    let node = null, u1 = null, u2 = null;
-
-    if (cfContext) {
-      const found = findUnitByAirCode(cfContext.airCode);
-      if (found) {
-        node = found.node;
-        if (node.units.indexOf(found.unit) === 1) u2 = found.unit;
-        else u1 = found.unit;
-      }
-    } else {
-      const nodeName = (document.getElementById('cf_node') || {}).value;
-      node = cleaningFormNodes.find(n => n.NodeName === nodeName) || null;
-      if (node) { u1 = node.units[0] || null; u2 = node.units[1] || null; }
-    }
+    // ช่อง/คู่เครื่องเดียวกับตอนบันทึก (ดู cfPickUnits)
+    const { node, u1, u2, base } = cfPickUnits();
 
     const checklist = CLEANING_CHECKLIST_ITEMS.map(item => {
       const val1El = document.querySelector(`.cf_val[data-no="${item.no}"][data-col="val1"]`);
@@ -11886,7 +11891,10 @@ const CLEANING_CHECKLIST_ITEMS = [
     const timeEnd = (document.getElementById('cf_timeEnd') || {}).value || '';
 
     const record = {
+      SlotBase: base,
       NodeName: node ? node.NodeName : '', Province: node ? node.Province : '', LocationType: node ? node.LocationType : '',
+      // เอกสารจัดคอลัมน์ตามรหัสเครื่อง — ไม่ส่งมา = ไม่มีเครื่องในใบ เปิดตัวอย่างไม่ได้
+      AirCode1: u1 ? u1.AirCode : '', AirCode2: u2 ? u2.AirCode : '',
       Date: date, TimeStart: timeStart, TimeEnd: timeEnd,
       TotalTime: (timeStart && timeEnd) ? computeDuration_(timeStart, timeEnd) : '',
       Unit1_Brand: u1 ? u1.Brand : '', Unit1_BTU: u1 ? u1.BTU : '', Unit1_IndoorSerial: u1 ? u1.IndoorSerial : '', Unit1_IndoorAsset: u1 ? u1.IndoorAsset : '',

@@ -234,11 +234,22 @@ function unitsFromRecord(record) {
  *  ข้อมูลของสองเครื่องนี้จะลงสลับคอลัมน์กันบนเอกสารที่ปริ้นออกมา)
  *
  * รหัสที่ไม่ได้ลงท้ายด้วยตัวเลข ให้ถือเป็นเครื่องที่ 1
+ *
+ * ใบหนึ่งมีช่องเครื่อง 2 ช่อง — เครื่องที่ 3 ขึ้นไปออกใบแยก หน้าตาเดิม (ดู SlotBase)
+ * AIR-3 = ช่อง 1 ของใบคู่ 3–4 · AIR-4 = ช่อง 2 ของใบเดียวกัน
  */
+function unitNoOf(airCode) {
+  const n = Number(String(airCode == null ? '' : airCode).trim().split('-').pop());
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
 export function unitSlotOf(airCode) {
-  const tail = String(airCode == null ? '' : airCode).trim().split('-').pop();
-  const n = Number(tail);
-  return n === 2 ? 2 : 1;
+  return ((unitNoOf(airCode) - 1) % 2) + 1;
+}
+
+/** ใบของเครื่องตัวนี้เป็นคู่ไหน — 0 = เครื่องที่ 1–2, 2 = 3–4 ... */
+export function unitBaseOf(airCode) {
+  return unitNoOf(airCode) - unitSlotOf(airCode);
 }
 
 /**
@@ -270,6 +281,15 @@ const slotCols = slot => ({
  */
 function unitsBySlot(record) {
   const out = {};
+
+  // เครื่องในใบเดียวกันต้องอยู่คู่เดียวกัน (1–2 หรือ 3–4 ...) — ข้ามคู่ต้องแยกใบ
+  const bases = new Set([1, 2]
+    .map(s => plainText(record[slotCols(s).code]).trim())
+    .filter(Boolean)
+    .map(unitBaseOf));
+  if (bases.size > 1) {
+    throw new Error('เอกสารล้าง 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณาบันทึกทีละใบ');
+  }
 
   for (const from of [1, 2]) {
     const src = slotCols(from);
@@ -445,6 +465,7 @@ const sameText = (a, b) =>
 function findOpenForm(ctx, record) {
   const year = plainText(record.PlanYear).trim();
   const round = plainText(record.PlanRound).trim();
+  const base = Number(record.SlotBase) || 0;
 
   // ใบที่ไม่ได้ผูกกับรอบไหน รวมกันไม่ได้ เพราะไม่มีอะไรบอกว่าเป็นครั้งเดียวกัน
   if (!year || !round) return null;
@@ -454,7 +475,9 @@ function findOpenForm(ctx, record) {
     sameText(f.SiteCode, record.SiteCode) &&
     sameText(f.PlanYear, year) &&
     sameText(f.PlanRound, round) &&
-    sameText(f.Date, record.Date)
+    sameText(f.Date, record.Date) &&
+    // คนละคู่เครื่อง = คนละใบ (AIR-1 กับ AIR-3 วันเดียวกันก็ยังเป็นสองใบ)
+    (Number(f.SlotBase) || 0) === base
   ) || null;
 }
 
@@ -695,6 +718,8 @@ export async function saveCleaningForm(ctx, record) {
   }
 
   const units = unitsFromRecord(record);
+  // คู่เครื่องของใบนี้ ตัดสินจากรหัสเครื่องที่เซิร์ฟเวอร์จัดช่องให้แล้ว ไม่เชื่อค่าที่หน้าเว็บส่งมา
+  record.SlotBase = units.length ? unitBaseOf(units[0].airCode) : 0;
 
   record.ID = 'CF' + Date.now();
   record.ChecklistJSON = JSON.stringify(record.Checklist || []);

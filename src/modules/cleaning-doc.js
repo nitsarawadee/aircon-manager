@@ -60,11 +60,13 @@ const PHOTO_CAPTIONS = [
 /** เครื่องที่มีข้อมูลอยู่ในใบนี้ เรียงตามเลขเครื่อง */
 function unitsOf(form) {
   const out = [];
+  // ใบของเครื่องที่ 3 ขึ้นไป ใช้แบบฟอร์มเดิม ช่องที่ 1/2 คือเครื่องที่ base+1 / base+2 (ดู SlotBase)
+  const base = Number(form.SlotBase) || 0;
   for (const slot of [1, 2]) {
     const code = plainText(form['AirCode' + slot]).trim();
     if (!code) continue;
     out.push({
-      slot, code,
+      slot, no: slot + base, code,
       brand: form['Unit' + slot + '_Brand'],
       btu: form['Unit' + slot + '_BTU'],
       inSn: form['Unit' + slot + '_IndoorSerial'],
@@ -134,7 +136,7 @@ function sectionNode(form, units) {
 /** ส่วนที่ 2 : ข้อมูลเครื่อง — [1-5 ป้าย] [6 เครื่อง 1] [7 เครื่อง 2] [8 ว่าง] */
 function sectionUnits(units) {
   const head = '<tr><th colspan="5">รายการ / Item</th>' +
-    unitCells(units, u => `เครื่องที่ ${u.slot} (AIR ${u.slot})`, 'ctr hd') +
+    unitCells(units, u => `เครื่องที่ ${u.no} (AIR ${u.no})`, 'ctr hd') +
     '<td></td></tr>';
 
   const lines = [
@@ -153,7 +155,7 @@ function sectionUnits(units) {
 function sectionChecklist(form, units) {
   const head = '<tr>' +
     '<th class="ctr">ข้อ</th><th colspan="3" class="ctr">รายการตรวจสอบ</th><th class="ctr">หน่วย/เกณฑ์</th>' +
-    bySlot(units).map(u => `<th class="ctr">${u ? 'เครื่องที่ ' + u.slot : ''}</th>`).join('') +
+    bySlot(units).map(u => `<th class="ctr">${u ? 'เครื่องที่ ' + u.no : ''}</th>`).join('') +
     '<th class="ctr">หมายเหตุ</th></tr>';
 
   const body = checklistOf(form).map(item =>
@@ -180,7 +182,7 @@ function sectionSummary(form, units) {
   return units.map(u =>
     '<tr>' +
     '<th colspan="3" class="lbl">ผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
-    `<td class="ctr tight">เครื่องที่ ${u.slot}</td>` +
+    `<td class="ctr tight">เครื่องที่ ${u.no}</td>` +
     '<td colspan="4" class="choices">' +
     CONDITIONS.map(c =>
       `<span class="box">${plainText(u.cond).trim() === c ? '☑' : '☐'}</span> ${esc(c)}`
@@ -236,7 +238,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
 </div><div class="code">${FORM_CODE}</div></div>
 
 ${units.map(u => photoPage(photos, opts, {
-  title: 'ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + u.slot + ' (AIR ' + u.slot + ')',
+  title: 'ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + u.no + ' (AIR ' + u.no + ')',
   captions: PHOTO_CAPTIONS,
   slot: u.slot,
   nodeName: form.NodeName,
