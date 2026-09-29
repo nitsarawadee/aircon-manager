@@ -7330,7 +7330,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const isInstall = r.kind === 'install';
       const isAttach = !isRepair && !isInstall && f.Source === 'attach';
 
-      // ปุ่มแก้รูปกับปุ่มลบ ขึ้นเฉพาะคนที่แก้ไขเอกสารแบบนั้นได้
+      // ปุ่มลบ ขึ้นเฉพาะคนที่แก้ไขเอกสารแบบนั้นได้ (ปุ่มแก้รูปเอาออกแล้ว — รูปใส่ได้ตอนกรอกฟอร์มเท่านั้น)
       // ตัดสินรายแถวตามแบบเอกสารของแถวนั้น ไม่ใช่ล็อกทั้งหน้าด้วยสิทธิ์ใบล้างแบบเดิม
       const canEditRow = docLevel(r.kind) === 'edit';
 
@@ -7375,17 +7375,11 @@ const CLEANING_CHECKLIST_ITEMS = [
           isRepair
             ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
                  class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
-               <button onclick="openPhotoEditor(${f._row}, 1, 'repair')" title="เปลี่ยนหรือเพิ่มรูปของใบซ่อมนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
-                 class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
           : isInstall
             ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
-               <button onclick="openPhotoEditor(${f._row}, ${r.slot}, 'install')" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
-                 class="text-slate-500 hover:text-white hover:bg-teal-700 px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
           : isAttach
             ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
@@ -7394,10 +7388,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
             : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>${canEditRow ? `
-               <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
-                 class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
-                 <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
         }</td>
         <td class="px-4 py-3 whitespace-nowrap">${
           // ขั้นอนุมัติเป็นของ "ใบ" ไม่ใช่ของเครื่อง จึงโชว์แถวแรกของใบเท่านั้น
@@ -8802,8 +8793,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       const left = Object.keys(cfPhotos).length;
       const ok = await showConfirm(
         'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + left + ' ใบที่ส่งไม่ขึ้น' + '\n' +
-        'ปิดตอนนี้ก็ได้ แล้วค่อยไปเพิ่มจากปุ่ม "แก้รูป" ในตารางเอกสารทีหลัง' + '\n' +
-        'แต่ถ้ายังอยู่ตรงนี้จะกดส่งซ้ำได้เลย ไม่ต้องไปตามหาใบในตาราง' + '\n\n' +
+        'ถ้าปิดตอนนี้ รูปที่ยังไม่ขึ้นจะหายและเพิ่มทีหลังไม่ได้ (ไม่มีปุ่มแก้รูปแล้ว)' + '\n' +
+        'อยู่ตรงนี้แล้วกดส่งซ้ำเมื่อสัญญาณดีขึ้นได้เลย' + '\n\n' +
         'ยืนยันจะปิดเลยมั้ย?'
       );
       if (!ok) return;
@@ -9308,7 +9299,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (rfSavedRow) {
       const ok = await showConfirm(
         'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + Object.keys(rfPhotos).length + ' ใบที่ส่งไม่ขึ้น\n' +
-        'ปิดตอนนี้ก็ได้ แล้วค่อยไปเพิ่มจากปุ่ม "แก้รูป" ในตารางเอกสารทีหลัง\n\n' +
+        'ถ้าปิดตอนนี้ รูปที่ยังไม่ขึ้นจะหายและเพิ่มทีหลังไม่ได้ (ไม่มีปุ่มแก้รูปแล้ว)\n' +
+        'อยู่ตรงนี้แล้วกดส่งซ้ำเมื่อสัญญาณดีขึ้นได้เลย\n\n' +
         'ยืนยันจะปิดเลยมั้ย?'
       );
       if (!ok) return;
@@ -9860,6 +9852,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   let ifNewUnit = null;
 
   function openInstallForm(node, picked, base = 0, newUnit = null) {
+    ifSavedRow = null;   // ใบใหม่ — ไม่ใช่การส่งรูปค้างของใบก่อน
     ifNode = node;
     ifUnits = picked || [];
     ifBase = base;
@@ -10186,8 +10179,17 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   async function closeInstallForm() {
+    // เอกสารบันทึกไปแล้ว แต่รูปยังค้าง — ปิดแล้วรูปหายถาวร (ไม่มีปุ่มแก้รูปแล้ว)
+    if (ifSavedRow) {
+      const ok = await showConfirm(
+        'เอกสารบันทึกเรียบร้อยแล้ว แต่ยังมีรูป ' + Object.keys(ifPhotos).length + ' ใบที่ส่งไม่ขึ้น\n' +
+        'ถ้าปิดตอนนี้ รูปที่ยังไม่ขึ้นจะหายและเพิ่มทีหลังไม่ได้ (ไม่มีปุ่มแก้รูปแล้ว)\n' +
+        'อยู่ตรงนี้แล้วกดส่งซ้ำเมื่อสัญญาณดีขึ้นได้เลย\n\nยืนยันจะปิดเลยมั้ย?'
+      );
+      if (!ok) return;
+    }
     closeModal();
-    ifNode = null; ifUnits = []; ifBase = 0; ifPhotos = {}; ifNewUnit = null;
+    ifNode = null; ifUnits = []; ifBase = 0; ifPhotos = {}; ifNewUnit = null; ifSavedRow = null;
   }
   window.closeInstallForm = closeInstallForm;
 
@@ -10208,7 +10210,34 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   let ifSavedRow = null;
 
+  /** ส่งรูปที่ค้างของใบที่บันทึกไปแล้ว — ห้ามบันทึกเอกสารซ้ำ (เดิมกดส่งซ้ำแล้วได้เอกสารใบที่สอง) */
+  async function retryIfPhotos() {
+    const btn = document.getElementById('if_submitBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังส่ง...'; }
+
+    const up = await uploadIfPhotos(ifSavedRow);
+    up.done.forEach(k => delete ifPhotos[k]);
+    renderIfPhotos();
+
+    if (!up.failed.length) {
+      ifSavedRow = null;
+      ifPhotos = {};
+      closeModal();
+      renderCleaningFormTable();
+      showToast('ส่งรูปครบแล้ว');
+      return;
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + up.failed.length + ' ใบ)';
+    }
+    showToast('ยังส่งไม่ขึ้น ' + up.failed.length + ' ใบ — ลองใหม่อีกครั้งเมื่อสัญญาณดีขึ้น', 'error');
+  }
+
   async function submitInstallForm() {
+    // บันทึกเอกสารไปแล้ว เหลือแค่รูปที่ยังส่งไม่ขึ้น — ปุ่มเดิมกลายเป็นปุ่มส่งรูปซ้ำ (เหมือนใบล้าง)
+    if (ifSavedRow) return retryIfPhotos();
+
     const val = id => (document.getElementById(id) || {}).value || '';
 
     const date = val('if_date');
