@@ -2217,6 +2217,9 @@
         // ช่องรอบในแผนต้องกดได้ ถ้ากรอกใบล้างได้ — ปิดงานล้างทำผ่านหน้านั้น
         // (หน้าต่างรอบจะแสดงแบบอ่านอย่างเดียว เหลือแค่ปุ่มกรอกฟอร์ม/แนบเอกสาร ดู openRoundModal)
         if (mod === 'plan' && oc.includes('openRoundModal(') && docLevel('cleaning') === 'edit') return;
+        // ปุ่มเปลี่ยนหน้าตาราง (goToAirPage / goToPlanPage / ...) แค่เลื่อนดู ไม่ได้แก้อะไร
+        // ถ้าล็อกไว้ คนที่ดูได้อย่างเดียวจะเห็นแค่หน้าแรกของตาราง
+        if (/^goTo\w*Page\(/.test(oc)) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -3800,6 +3803,11 @@
         }).join('');
         renderTablePager('airPaginationBar', airLastList.length, airPage, 'goToAirPage');
       }
+      // ล็อกปุ่มแก้ไขทุกครั้งที่วาดตารางใหม่ — ค้นหา กรอง และเปลี่ยนหน้า วาดแถวใหม่ทั้งหมด
+      // เดิมล็อกแค่ตอนโหลดครั้งแรก (loadAirList) พอค้นหาปุ่มแก้ไข/ย้าย/ลบ ของสิทธิ์
+      // ดูอย่างเดียวจึงกลับมากดได้ (เซิร์ฟเวอร์ปฏิเสธอยู่ดี แต่คนกดจะงงว่าทำไมกดแล้วไม่ได้)
+      // หน้าแผนล้างทำแบบนี้อยู่แล้ว (ล็อกท้าย renderPlanTable)
+      lockViewOnlySection('airlist');
       if(typeof renderRepairView === 'function') renderRepairView(document.getElementById('repairSearch').value);
     }
 
