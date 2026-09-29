@@ -7030,6 +7030,14 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   /** หาแถวของเอกสารที่เพิ่งบันทึก จากเลขที่ที่เซิร์ฟเวอร์ส่งกลับมา */
   function rowOfSavedDoc(res) {
+    // หาด้วย ID ของแถวก่อน — ใบที่มีแค่เครื่องที่ 2 ไม่มีเลขช่องที่ 1 (DocNo ว่าง)
+    // เดิมหาด้วยเลขที่อย่างเดียวจึงหาไม่เจอ แล้วรูปทั้ง 9 ใบไม่ถูกส่งขึ้นไปเลย
+    const id = String((res && res.id) || '').trim();
+    if (id) {
+      const byId = (res.forms || []).find(f => String(f.ID || '').trim() === id);
+      if (byId) return byId._row;
+    }
+    // เซิร์ฟเวอร์รุ่นเก่าที่ยังไม่ส่ง id มา
     const want = String((res && res.docNo) || '').trim();
     if (!want) return null;
     const hit = (res.forms || []).find(f => String(f.DocNo || f.ID || '').trim() === want);
