@@ -2479,9 +2479,25 @@
       try { contractorList = (await callQuiet('getContractors')) || []; } catch (e) {}
     }
 
-    /** สลับกล่องในหน้าต่างผู้ใช้ตามบทบาท — ภูมิภาค/สิทธิ์รายเมนูใช้กับ RegionAdmin เท่านั้น */
+    /**
+     * สิทธิ์รายเมนูตั้งต้นของ Regional / Staff / Supervisor — ตามที่เจ้าของงานกำหนด
+     * ใส่ให้ตอนสร้างผู้ใช้ใหม่ และตอนกดเลือกบทบาทเหล่านี้ แก้ทีละช่องเองได้ก่อนบันทึก
+     * (ภูมิภาคไม่ตั้งให้ Admin ต้องเลือกเอง)
+     */
+    const REGIONAL_DEFAULT_PERMS = {
+      airlist: 'view', plan: 'edit', history: 'edit', repair: 'edit',
+      cleaningform: 'edit', repairform: 'edit', installform: 'edit', budget: 'none'
+    };
+
+    /** สลับกล่องในหน้าต่างผู้ใช้ตามบทบาท — ภูมิภาค/สิทธิ์รายเมนูใช้กับบทบาทภูมิภาคเท่านั้น */
     function syncUserRoleBoxes() {
       const role = document.getElementById('u_Role').value;
+      // เรียกจากการกดเลือกบทบาทเท่านั้น (ไม่ใช่ตอนเปิดหน้าต่าง) สิทธิ์เดิมของผู้ใช้จึงไม่ถูกทับตอนแค่เปิดดู
+      if (isRegionalRole(role)) {
+        document.querySelectorAll('.u_perm_select').forEach(sel => {
+          sel.value = REGIONAL_DEFAULT_PERMS[sel.getAttribute('data-module')] || 'none';
+        });
+      }
       document.getElementById('u_regionBox').classList.toggle('hidden', !isRegionalRole(role));
       document.getElementById('u_permBox').classList.toggle('hidden', !isRegionalRole(role));
       document.getElementById('u_contractorBox').classList.toggle('hidden', role !== 'Contractor');
@@ -2589,10 +2605,11 @@
           <input type="checkbox" class="u_region_chk" value="${esc(r)}" ${checked ? 'checked' : ''}> ${esc(regionLabel(r))}
         </label>`;
       }).join('');
-      const currentPerms = parsePermStringToObj(data.Permissions);
+      // ผู้ใช้ใหม่เริ่มจากสิทธิ์ตั้งต้น · ผู้ใช้เดิมแสดงสิทธิ์ที่ตั้งไว้จริง
+      const currentPerms = isEdit ? parsePermStringToObj(data.Permissions) : { ...REGIONAL_DEFAULT_PERMS };
       const permRows = PERMISSION_MODULES.map(m => {
         // ค่าที่แสดงต้องตรงกับที่เซิร์ฟเวอร์ใช้จริง ไม่งั้นกดบันทึกแล้วสิทธิ์เปลี่ยนเอง
-        // (บัญชีใหม่ที่ยังไม่มีข้อมูลสิทธิ์ ได้ "แก้ไขได้" ทุกช่องจาก parsePermStringToObj)
+        // (บัญชีใหม่ได้ค่าตั้งต้นจาก REGIONAL_DEFAULT_PERMS)
         const level = currentPerms[m.key];
         return `
         <div class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50">
