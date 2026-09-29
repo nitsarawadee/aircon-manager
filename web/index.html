@@ -2468,8 +2468,8 @@
       const hint = contractorList.length ? ''
         : '<p class="text-[11px] text-gray-400 mt-1">ยังไม่มีรายชื่อ — สร้างบัญชีผู้รับเหมาที่เมนูจัดการผู้ใช้ก่อน</p>';
       return `<select id="${id}" class="${cls}">
-          ${keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>' : ''}
-          <option value="" ${!keep && !cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>${opts}
+          ${keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>'
+                 : `<option value="" ${!cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>`}${opts}
         </select>${hint}`;
     }
 
@@ -5671,9 +5671,14 @@
               <button onclick="closeModal()" class="text-gray-400"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="p-6 space-y-4">
-              <div class="bg-indigo-50 text-indigo-700 text-xs p-3 rounded-lg flex gap-2"><i class="ph ph-magic-wand text-lg shrink-0"></i><p>อัปเดตแผนล้างให้แอร์<b>ทุกตัว</b>ใน Node (วันที่ที่เว้นว่าง และผู้รับเหมาที่เลือก "ไม่เปลี่ยน" จะไม่ถูกแก้ไข)</p></div>
+              <div class="bg-indigo-50 text-indigo-700 text-xs p-3 rounded-lg flex gap-2"><i class="ph ph-magic-wand text-lg shrink-0"></i><p>อัปเดตแผนล้างให้แอร์<b>ที่ติ๊กไว้</b>ใน Node — ตัวที่ไม่ติ๊ก รอบนั้นเป็น "ยกเลิก" (วันที่ที่เว้นว่าง และผู้รับเหมาที่เลือก "ไม่เปลี่ยน" จะไม่ถูกแก้ไข)</p></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">เลือก Node</label>
-                <select id="nd_node" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2 bg-white font-medium outline-none">
+                <div class="relative mb-2">
+                  <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                  <input id="nd_search" oninput="filterNodeDateNodes()" autocomplete="off" placeholder="ค้นหา Node..."
+                    class="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <select id="nd_node" onchange="renderNodeUnitPicks()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2 bg-white font-medium outline-none">
                   ${nodes.map(n => `<option value="${esc(n)}" ${n===curFilter?'selected':''}>${esc(n)}</option>`).join('')}
                 </select>
               </div>
@@ -5681,17 +5686,20 @@
                 <div class="grid grid-cols-2 gap-2">
                   ${dateField('nd_r1', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}
                   ${contractorSelect('nd_c1', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 text-sm bg-white outline-none', true)}
-                </div></div>
+                </div>
+                <div id="nd_u1" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1"></div></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รอบที่ 2</label>
                 <div class="grid grid-cols-2 gap-2">
                   ${dateField('nd_r2', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}
                   ${contractorSelect('nd_c2', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 text-sm bg-white outline-none', true)}
-                </div></div>
+                </div>
+                <div id="nd_u2" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1"></div></div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รอบที่ 3</label>
                 <div class="grid grid-cols-2 gap-2">
                   ${dateField('nd_r3', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500')}
                   ${contractorSelect('nd_c3', '', 'w-full rounded-lg border-gray-300 border px-3 py-2 text-sm bg-white outline-none', true)}
-                </div></div>
+                </div>
+                <div id="nd_u3" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1"></div></div>
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
@@ -5700,6 +5708,57 @@
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
+      nodeDateAllNodes = nodes;
+      renderNodeUnitPicks();
+    }
+
+    /** รายชื่อ Node ทั้งหมดของหน้าต่างราย Node — ช่องค้นหากรองจากชุดนี้ */
+    let nodeDateAllNodes = [];
+    /** สถานะติ๊กตอนเปิด Node นั้น — ใช้ดูว่าผู้ใช้เปลี่ยนเครื่องที่จะล้างหรือเปล่า */
+    let nodeUnitPicksInitial = '';
+
+    /** ช่องค้นหา Node — กรองตัวเลือก ถ้า Node ที่เลือกอยู่หลุดจากผลค้นหา เลือกตัวแรกที่เจอแทน */
+    function filterNodeDateNodes() {
+      const q = (document.getElementById('nd_search').value || '').trim().toLowerCase();
+      const sel = document.getElementById('nd_node');
+      const cur = sel.value;
+      const hits = nodeDateAllNodes.filter(n => String(n).toLowerCase().includes(q));
+      sel.innerHTML = hits.length
+        ? hits.map(n => `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')
+        : '<option value="">ไม่พบ Node ที่ค้นหา</option>';
+      if (sel.value !== cur) renderNodeUnitPicks();
+    }
+    window.filterNodeDateNodes = filterNodeDateNodes;
+
+    /**
+     * ช่องติ๊กเครื่องที่จะล้างของแต่ละรอบ — ตั้งต้นตามแผนตอนนี้ (รอบที่ยกเลิกไว้ = ไม่ติ๊ก)
+     * รอบที่ล้างไปแล้วติ๊กไว้และล็อก เพราะเซิร์ฟเวอร์ไม่ยกเลิกย้อนหลังให้อยู่แล้ว
+     */
+    function renderNodeUnitPicks() {
+      const node = document.getElementById('nd_node').value;
+      const rows = currentPlan.filter(p => p.NodeName === node)
+        .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode)));
+      for (const r of [1, 2, 3]) {
+        const box = document.getElementById('nd_u' + r);
+        if (!box) continue;
+        box.innerHTML = rows.map(p => {
+          const status = String(p['R' + r + '_Status'] || '').trim();
+          const done = status === 'ล้างเสร็จสิ้น' || String(p['R' + r + '_ActualDate'] || '').trim();
+          const on = done || status !== 'ยกเลิก';
+          return `<label class="inline-flex items-center gap-1 text-xs text-gray-600 ${done ? 'opacity-60' : 'cursor-pointer'}" title="${done ? 'รอบนี้ล้างไปแล้ว' : ''}">
+            <input type="checkbox" class="nd_pick" data-round="${r}" value="${esc(p.AirCode)}" ${on ? 'checked' : ''} ${done ? 'disabled' : ''}>
+            ${esc(p.AirCode)}${done ? ' (ล้างแล้ว)' : ''}</label>`;
+        }).join('');
+      }
+      nodeUnitPicksInitial = JSON.stringify(nodeUnitPicks());
+    }
+    window.renderNodeUnitPicks = renderNodeUnitPicks;
+
+    /** เครื่องที่ติ๊กไว้รายรอบ { r1: [...], r2: [...], r3: [...] } */
+    function nodeUnitPicks() {
+      const out = { r1: [], r2: [], r3: [] };
+      document.querySelectorAll('.nd_pick:checked').forEach(c => out['r' + c.dataset.round].push(c.value));
+      return out;
     }
 
     async function saveNodeDates() {
@@ -5711,11 +5770,14 @@
         const v = document.getElementById('nd_c' + r).value;
         if (v !== '__keep') contractors['r' + r] = v;
       }
-      if (!dates.r1 && !dates.r2 && !dates.r3 && !Object.keys(contractors).length) {
-        showToast('กรุณาระบุวันที่หรือผู้รับเหมาอย่างน้อย 1 รอบ', 'error'); return;
+      const units = nodeUnitPicks();
+      const picksChanged = JSON.stringify(units) !== nodeUnitPicksInitial;
+      if (!nodeName) { showToast('กรุณาเลือก Node', 'error'); return; }
+      if (!dates.r1 && !dates.r2 && !dates.r3 && !Object.keys(contractors).length && !picksChanged) {
+        showToast('กรุณาระบุวันที่ ผู้รับเหมา หรือเครื่องที่จะล้าง อย่างน้อย 1 รอบ', 'error'); return;
       }
       try {
-        currentPlan = await call('updatePlanDatesByNode', currentYear, nodeName, dates, contractors);
+        currentPlan = await call('updatePlanDatesByNode', currentYear, nodeName, dates, contractors, units);
 
         // ค้นหาด้วยชื่อ Node ที่เพิ่งตั้งวันให้ เพื่อให้เห็นผลทันทีว่าลงวันครบไหม
         const box = document.getElementById('planSearch');

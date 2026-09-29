@@ -642,8 +642,12 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
  *
  * @param {Object} [contractors] ผู้รับเหมารายรอบ { r1, r2, r3 } — ไม่ส่งรอบไหน = ไม่แตะรอบนั้น
  *   ค่าว่าง = ยกเลิกการมอบหมาย (มอบหมายทั้ง Node ทีเดียว แทนการกดทีละเครื่องทีละรอบ)
+ * @param {Object} [units] เครื่องที่จะล้างรายรอบ { r1: [รหัสเครื่อง], ... } — ไม่ส่งรอบไหน = ทุกเครื่องเหมือนเดิม
+ *   รอบที่ส่งมา: เครื่องที่เลือกได้วัน/ผู้รับเหมา (ถ้าเคยยกเลิกไว้ กลับเป็นรอดำเนินการ)
+ *   เครื่องที่ไม่ได้เลือก = รอบนั้นเป็น "ยกเลิก" (ไม่นับเป็นงานค้างและค่าใช้จ่าย)
+ *   ยกเว้นรอบที่ล้างไปแล้ว ไม่ถูกแตะ — เป็นงานที่ทำจริงแล้ว ยกเลิกย้อนหลังไม่ได้
  */
-export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contractors) {
+export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contractors, units) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('plan');
 
@@ -668,8 +672,20 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
       c1: headers.indexOf('R1_ContractorID'),
       c2: headers.indexOf('R2_ContractorID'),
       c3: headers.indexOf('R3_ContractorID'),
+      s1: headers.indexOf('R1_Status'),
+      s2: headers.indexOf('R2_Status'),
+      s3: headers.indexOf('R3_Status'),
+      a1: headers.indexOf('R1_ActualDate'),
+      a2: headers.indexOf('R2_ActualDate'),
+      a3: headers.indexOf('R3_ActualDate'),
       by: headers.indexOf('UpdatedBy')
     };
+    // เครื่องที่เลือกล้างรายรอบ — null = รอบนั้นไม่ได้ส่งมา ใช้ทุกเครื่อง (แบบเดิม)
+    const picked = {};
+    for (const r of [1, 2, 3]) {
+      const list = units && units['r' + r];
+      picked[r] = Array.isArray(list) ? new Set(list.map(normalizeCode)) : null;
+    }
     // ตรวจรหัสผู้รับเหมาทุกตัวก่อนแตะแถวไหน
     const cids = {};
     for (const r of [1, 2, 3]) {
@@ -687,10 +703,20 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
       if (allowed && !allowed.has(normalizeCode(row[idx.code]))) continue;
 
       matched++;
-      if (dates.r1) row[idx.r1] = dates.r1;
-      if (dates.r2) row[idx.r2] = dates.r2;
-      if (dates.r3) row[idx.r3] = dates.r3;
-      for (const r of [1, 2, 3]) if (cids[r] !== undefined) row[idx['c' + r]] = cids[r];
+      const code = normalizeCode(row[idx.code]);
+      for (const r of [1, 2, 3]) {
+        const status = String(row[idx['s' + r]] || '').trim();
+        if (picked[r] && !picked[r].has(code)) {
+          // ไม่ล้างรอบนี้ = ยกเลิก — แต่รอบที่ล้างไปแล้วต้องคงไว้ตามจริง
+          const done = status === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
+          if (!done) row[idx['s' + r]] = ROUND_CANCELLED;
+          continue;
+        }
+        // เลือกล้างรอบนี้ แต่เคยยกเลิกไว้ = กลับมาเป็นงานที่ต้องทำ
+        if (picked[r] && status === ROUND_CANCELLED) row[idx['s' + r]] = 'รอดำเนินการ';
+        if (dates['r' + r]) row[idx['r' + r]] = dates['r' + r];
+        if (cids[r] !== undefined) row[idx['c' + r]] = cids[r];
+      }
       if (idx.by > -1) row[idx.by] = me;
       values[i] = row;
     }
@@ -701,7 +727,8 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
 
     writeBackColumns(ctx, name, values, [
       [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String],
-      [idx.c1, String], [idx.c2, String], [idx.c3, String]
+      [idx.c1, String], [idx.c2, String], [idx.c3, String],
+      [idx.s1, String], [idx.s2, String], [idx.s3, String]
     ]);
 
     await ctx.ss.flush();
