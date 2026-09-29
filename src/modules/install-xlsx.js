@@ -63,6 +63,24 @@ export const INSTALL_XLSX_UNIT_ROWS = {
 /** คอลัมน์ของเครื่องแต่ละตัวในส่วนที่ 2 */
 const UNIT_COLUMN = { 1: 'F', 2: 'G' };
 
+/**
+ * ป้ายเลขเครื่องในแม่แบบ — เขียนตายตัวว่าเครื่องที่ 1/2
+ * ใบของเครื่องที่ 3 ขึ้นไป (SlotBase > 0) เขียนทับด้วยเลขจริง หน้าตาเดิมทุกช่อง
+ */
+const UNIT_LABELS = {
+  [SHEET_MAIN]: { F8: n => `เครื่องที่ ${n[0]} (AIR ${n[0]})`, G8: n => `เครื่องที่ ${n[1]} (AIR ${n[1]})`,
+                  F14: n => 'เครื่องที่ ' + n[0], G14: n => 'เครื่องที่ ' + n[1],
+                  D34: n => 'เครื่องที่ ' + n[0], D35: n => 'เครื่องที่ ' + n[1] },
+  [SHEET_PHOTO_1]: { A1: n => `ภาพถ่ายประกอบการติดตั้งเครื่องปรับอากาศ — เครื่องที่ ${n[0]} (AIR ${n[0]})` },
+  [SHEET_PHOTO_2]: { A1: n => `ภาพถ่ายประกอบการติดตั้งเครื่องปรับอากาศ — เครื่องที่ ${n[1]} (AIR ${n[1]})` }
+};
+
+/** ใบนี้เป็นเครื่องคู่ไหน (ดู SlotBase ใน src/schema.js) — ค่าแปลกถือเป็นใบแรก */
+const slotBaseOf = r => {
+  const b = Number(r && r.SlotBase);
+  return Number.isInteger(b) && b > 0 && b % 2 === 0 ? b : 0;
+};
+
 /** หัวกระดาษของหน้ารูปทั้งสองหน้า — เติมให้จะได้ไม่ต้องพิมพ์ซ้ำสองหน้า */
 const PHOTO_HEADER_CELLS = { C2: 'NodeName', H2: 'Date' };
 
@@ -93,11 +111,20 @@ export function installXlsxValues(record) {
     photoHeader[cell] = field === 'Date' ? date : (r[field] == null ? '' : String(r[field]));
   }
 
-  return {
+  const out = {
     [SHEET_MAIN]: main,
     [SHEET_PHOTO_1]: { ...photoHeader },
     [SHEET_PHOTO_2]: { ...photoHeader }
   };
+
+  const base = slotBaseOf(r);
+  if (base) {
+    const nos = [base + 1, base + 2];
+    for (const [sheet, cells] of Object.entries(UNIT_LABELS)) {
+      for (const [cell, label] of Object.entries(cells)) out[sheet][cell] = label(nos);
+    }
+  }
+  return out;
 }
 
 /**
@@ -112,7 +139,12 @@ export async function buildInstallXlsx(template, record) {
 
   // บังคับสีดำเฉพาะช่องที่ระบบเติม ด้วยเหตุผลเดียวกับอีกสองฟอร์ม
   // (ไฟล์ฟอร์มต้นฉบับทำสีช่องกรอกไม่ครบ พอเติมข้อมูลจริงสีเลยปนกัน)
-  return fillXlsx(template, installXlsxValues(record), { fontColor: 'FF000000' });
+  const base = slotBaseOf(record);
+  // แท็บชีตรูปในแม่แบบชื่อ "รูปภาพ_เครื่องที่ 1/2" — ใบของเครื่องที่ 3 ขึ้นไปเปลี่ยนตาม
+  const sheetNames = base
+    ? { 'รูปภาพ_เครื่องที่ 1': 'รูปภาพ_เครื่องที่ ' + (base + 1), 'รูปภาพ_เครื่องที่ 2': 'รูปภาพ_เครื่องที่ ' + (base + 2) }
+    : {};
+  return fillXlsx(template, installXlsxValues(record), { fontColor: 'FF000000', sheetNames });
 }
 
 /**

@@ -246,5 +246,14 @@ export async function fillXlsx(template, sheets, opts = {}) {
     p.entry.data = encode(xml);
   }
 
+  // เปลี่ยนชื่อแท็บชีต { ชื่อเดิม: ชื่อใหม่ } — ชื่ออยู่ใน workbook.xml (รวมช่วงพิมพ์ที่อ้างชื่อชีต)
+  // และรายชื่อใน docProps/app.xml ต้องเปลี่ยนทุกที่พร้อมกัน ไม่งั้น Excel ฟ้องว่าไฟล์เสีย
+  for (const [from, to] of Object.entries(opts.sheetNames || {})) {
+    for (const name of ['xl/workbook.xml', 'docProps/app.xml']) {
+      const entry = entries.find(e => e.name === name);
+      if (entry) entry.data = encode(decode(entry.data).split(from).join(to));
+    }
+  }
+
   return writeZip(entries);
 }

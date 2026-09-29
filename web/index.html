@@ -11101,6 +11101,20 @@ const CLEANING_CHECKLIST_ITEMS = [
     const slots = [null, null];
     const slotOf = {};
 
+    // ใบติดตั้ง: ใบละคู่ตามลำดับเครื่อง (1–2, 3–4 ...) หน้าตาเดิม เลขเครื่องบนใบเป็นเลขจริง
+    // (กติกาเดียวกับฟอร์มกรอกในระบบ ดู installSlotOf) · slotOf เก็บเลขเครื่องจริงไว้โชว์
+    if (pfKind === 'install') {
+      const picked = units.map((u, i) => ({ u, ...installSlotOf(i + 1) })).filter(e => pfPicked[e.u.AirCode]);
+      const bases = [...new Set(picked.map(e => e.base))];
+      const base = bases.length ? bases[0] : 0;
+      for (const e of picked) {
+        if (e.base !== base) continue;
+        slots[e.slot - 1] = e.u;
+        slotOf[e.u.AirCode] = e.slot + base;
+      }
+      return { slots, slotOf, base, crossPair: bases.length > 1 };
+    }
+
     units.forEach((u, i) => {
       if (!pfPicked[u.AirCode]) return;
       // เครื่องสองตัวแรกลงช่องตามตำแหน่งตัวเอง
@@ -11186,10 +11200,16 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     // ยึดตำแหน่งจริงของเครื่องใน Node ไม่ใช่ลำดับที่ติ๊ก
     // เลือกเครื่องตัวที่ 2 ตัวเดียว ข้อมูลต้องลงช่อง "ตัวที่ 2" และเว้นช่อง "ตัวที่ 1" ว่างไว้
-    const { slots } = pfSlots();
+    const { slots, base, crossPair } = pfSlots();
+    if (crossPair) {
+      showToast('เอกสารติดตั้ง 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณาทำทีละใบ', 'error');
+      return null;
+    }
     const [u1, u2] = slots;
     if (!u1 && !u2) { showToast('กรุณาเลือกเครื่องอย่างน้อย 1 ตัว', 'error'); return null; }
     return {
+      // ใบติดตั้งของเครื่องที่ 3 ขึ้นไป (ใบล้างไม่ใช้ค่านี้)
+      SlotBase: base || 0,
       NodeName: node.NodeName, SiteCode: node.SiteCode, Region: node.Region,
       Province: node.Province, LocationType: node.LocationType,
       AirCode1: u1 ? u1.AirCode : '', AirCode2: u2 ? u2.AirCode : '',
