@@ -488,10 +488,11 @@
       <section id="view-approvals" class="view">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
-          <p class="text-sm text-gray-500">เคสที่รอ Infrastructure อนุมัติซ่อม และใบซ่อมที่ถึงขั้นที่คุณต้องอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
+          <p class="text-sm text-gray-500">งานซ่อมที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
-        <div class="mb-8">
+        <!-- เคสรออนุมัติซ่อม — เฉพาะ Infrastructure เห็น (ซ่อนที่ renderApprovalsView) -->
+        <div id="apvCaseBox" class="mb-8">
           <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-warning-circle"></i> เคสรออนุมัติซ่อม</h3>
           <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -6225,6 +6226,8 @@
       const caseTb = document.querySelector('#apvCaseTable tbody');
       const docTb = document.querySelector('#apvDocTable tbody');
       if (!caseTb || !docTb) return;   // ไม่มีสิทธิ์เห็นหน้านี้
+      // เคสรออนุมัติซ่อม เจ้าของงานให้เห็นเฉพาะ Infrastructure (คนเดียวที่กดอนุมัติซ่อมได้)
+      document.getElementById('apvCaseBox').classList.toggle('hidden', !isAdmin());
 
       // 1) เคสที่แจ้งชำรุดแล้ว รอ Infrastructure อนุมัติซ่อม (ปุ่มเดียวกับหน้างานซ่อม)
       const cases = (currentAirList || []).filter(a => String(a.Status || '').trim() === 'ชำรุด')
