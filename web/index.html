@@ -2131,6 +2131,9 @@
         // แต่มีสิทธิ์ซ่อม จึงต้องกดแจ้งซ่อมจากหน้านี้ได้
         if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
             oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(')) return;
+        // ปุ่มเปลี่ยนหน้าตาราง (goToAirPage / goToPlanPage / ...) แค่เลื่อนดู ไม่ได้แก้อะไร
+        // ถ้าล็อกไว้ คนที่ดูได้อย่างเดียวจะเห็นแค่หน้าแรกของตาราง
+        if (/^goTo\w*Page\(/.test(oc)) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -3591,6 +3594,11 @@
         }).join('');
         renderTablePager('airPaginationBar', airLastList.length, airPage, 'goToAirPage');
       }
+      // ล็อกปุ่มแก้ไขทุกครั้งที่วาดตารางใหม่ — ค้นหา กรอง และเปลี่ยนหน้า วาดแถวใหม่ทั้งหมด
+      // เดิมล็อกแค่ตอนโหลดครั้งแรก (loadAirList) พอค้นหาปุ่มแก้ไข/ย้าย/ลบ ของสิทธิ์
+      // ดูอย่างเดียวจึงกลับมากดได้ (เซิร์ฟเวอร์ปฏิเสธอยู่ดี แต่คนกดจะงงว่าทำไมกดแล้วไม่ได้)
+      // หน้าแผนล้างทำแบบนี้อยู่แล้ว (ล็อกท้าย renderPlanTable)
+      lockViewOnlySection('airlist');
       if(typeof renderRepairView === 'function') renderRepairView(document.getElementById('repairSearch').value);
     }
 
