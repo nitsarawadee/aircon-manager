@@ -646,6 +646,8 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
  *   รอบที่ส่งมา: เครื่องที่เลือกได้วัน/ผู้รับเหมา (ถ้าเคยยกเลิกไว้ กลับเป็นรอดำเนินการ)
  *   เครื่องที่ไม่ได้เลือก = รอบนั้นเป็น "ยกเลิก" (ไม่นับเป็นงานค้างและค่าใช้จ่าย)
  *   ยกเว้นรอบที่ล้างไปแล้ว ไม่ถูกแตะ — เป็นงานที่ทำจริงแล้ว ยกเลิกย้อนหลังไม่ได้
+ *
+ * รอบที่ลงวันให้ สถานะเป็น "นัดหมายแล้ว" (ยกเว้นรอบที่ล้างไปแล้วหรือยกเลิกไว้)
  */
 export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contractors, units) {
   return ctx.withLock(async () => {
@@ -714,7 +716,12 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
         }
         // เลือกล้างรอบนี้ แต่เคยยกเลิกไว้ = กลับมาเป็นงานที่ต้องทำ
         if (picked[r] && status === ROUND_CANCELLED) row[idx['s' + r]] = 'รอดำเนินการ';
-        if (dates['r' + r]) row[idx['r' + r]] = dates['r' + r];
+        if (dates['r' + r]) {
+          row[idx['r' + r]] = dates['r' + r];
+          const now = String(row[idx['s' + r]] || '').trim();
+          const done = now === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
+          if (!done && now !== ROUND_CANCELLED) row[idx['s' + r]] = 'นัดหมายแล้ว';
+        }
         if (cids[r] !== undefined) row[idx['c' + r]] = cids[r];
       }
       if (idx.by > -1) row[idx.by] = me;
