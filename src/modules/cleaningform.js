@@ -728,11 +728,15 @@ export async function saveCleaningForm(ctx, record) {
     // ยึด "วันเดียวกัน" เป็นเงื่อนไขด้วย เพราะถ้าไปล้างคนละวันคือไปคนละครั้ง
     // ซึ่งตามแบบฟอร์มกระดาษคือคนละใบ (ใบหนึ่งมีช่องวันที่และเวลาเข้า-ออกชุดเดียว)
     const existing = findOpenForm(ctx, record);
-    let mergedInto = '';
+    let savedForm = record;
+    let movedFrom = '';
 
     if (existing) {
       mergeIntoForm(ctx, existing, record, bySlot);
-      mergedInto = plainText(existing.DocNo) || plainText(existing.ID);
+      // อ่านแถวใหม่หลังรวม — การรวมอาจออกเลขช่องที่ 1 ให้ใบที่เดิมมีแค่เครื่องที่ 2
+      // ซึ่งทำให้ชื่อที่เก็บรูปของใบนี้เปลี่ยน (ดู fileKeyOf) รูปเดิมต้องย้ายตามไป
+      savedForm = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === existing._row) || existing;
+      if (fileKeyOf(existing) !== fileKeyOf(savedForm)) movedFrom = fileKeyOf(existing);
     } else {
       // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
       record.DocType = 'cleaning';
@@ -765,10 +769,18 @@ export async function saveCleaningForm(ctx, record) {
     });
 
     await ctx.ss.flush();
+    if (movedFrom) moveDocFiles(ctx, movedFrom, fileKeyOf(savedForm));
 
+    const shown = docNoShown(savedForm);
     return {
-      planClosed, mergedInto,
-      docNo: mergedInto || plainText(record.DocNo),
+      planClosed,
+      mergedInto: existing ? shown : '',
+      // เลขที่ไว้โชว์ — ใบที่มีแค่เครื่องที่ 2 ไม่มีเลขช่องที่ 1 ต้องใช้เลขช่องที่ 2
+      docNo: shown,
+      // หน้าเว็บใช้หาแถวของใบที่เพิ่งบันทึก เพื่อส่งรูปตามขึ้นไป
+      // เดิมหาด้วย docNo ซึ่งว่างเมื่อใบมีแค่เครื่องที่ 2 รูปจึงไม่ถูกส่งเลยสักใบ
+      id: plainText(savedForm.ID),
+      fileKey: fileKeyOf(savedForm),
       forms: await getCleaningForms(ctx),
       history: await getHistory(ctx)
     };
@@ -782,11 +794,51 @@ export async function saveCleaningForm(ctx, record) {
   //
   // ตอนนี้ยังไม่มีรูปถ่าย เพราะรูปแนบทีหลังจากปุ่ม "รูปถ่าย"
   // ไฟล์จะถูกสร้างทับใหม่ทุกครั้งที่แนบหรือลบรูป จึงตามทันเสมอ
-  await storeDocPdf(ctx, saved.docNo);
+  await storeDocPdf(ctx, saved.fileKey);
 
-  // ส่ง docNo กลับไปด้วย หน้าเว็บใช้หาแถวของใบที่เพิ่งบันทึก
+  // ส่ง id กลับไปด้วย หน้าเว็บใช้หาแถวของใบที่เพิ่งบันทึก
   // เพื่อส่งรูปถ่ายที่แนบมากับฟอร์มตามขึ้นไปทันที (รูปผูกกับเอกสาร ไม่ใช่กับการกรอก)
   return saved;
+}
+
+/**
+ * ชื่อที่ใช้เก็บรูปและไฟล์ PDF ของใบ — เลขช่องที่ 1 ถ้ามี ไม่มีใช้ ID ของแถว
+ *
+ * ต้องตรงกับที่ formForPhotos / getCleaningDocHtml / storeDocPdf ใช้ทุกที่
+ * (ไม่เปลี่ยนกติกานี้ เพราะรูปที่เก็บไว้แล้วผูกกับชื่อนี้อยู่)
+ */
+const fileKeyOf = form => plainText(form.DocNo) || plainText(form.ID);
+
+/** เลขที่เอกสารที่ใช้โชว์ — ใบที่มีแค่เครื่องที่ 2 ใช้เลขของเครื่องนั้น */
+const docNoShown = form => plainText(form.DocNo) || plainText(form.DocNo2) || plainText(form.ID);
+
+/**
+ * ย้ายรูปของใบไปไว้ใต้ชื่อใหม่ เมื่อชื่อที่เก็บเปลี่ยน
+ *
+ * เกิดตอนกรอกเครื่องที่ 2 ก่อน (ใบมีแค่เลขช่องที่ 2 รูปจึงเก็บด้วย ID ของแถว)
+ * แล้วกรอกเครื่องที่ 1 ของการไปล้างครั้งเดียวกันตามมา — ระบบรวมเป็นใบเดียวและออกเลข
+ * ช่องที่ 1 ให้ ใบนี้จึงไปหารูปด้วยเลขนั้นแทน ถ้าไม่ย้าย รูปของเครื่องที่ 2 จะหายจากเอกสาร
+ *
+ * ห้ามพัง — ข้อมูลบันทึกไปแล้ว ถ้าย้ายไม่สำเร็จ รูปยังอยู่ที่เดิมครบ (ลบที่เดิมเมื่อคัดลอกครบแล้วเท่านั้น)
+ */
+function moveDocFiles(ctx, from, to) {
+  if (!from || !to || from === to) return;
+  if (ctx.photos) {
+    try {
+      for (const [key, dataUrl] of Object.entries(ctx.photos.readAll(KIND, from))) {
+        const [slot, index] = key.split('-').map(Number);
+        ctx.photos.save(KIND, to, slot, index, dataUrl);
+      }
+      ctx.photos.removeAll(KIND, from);
+    } catch (err) {
+      console.error('[ย้ายรูปใบล้าง ' + from + ' → ' + to + ']', err && err.message ? err.message : err);
+    }
+  }
+  // ไฟล์ PDF ใต้ชื่อเดิมล้าสมัยแล้ว ตัวใหม่จะถูกสร้างใต้ชื่อใหม่หลังบันทึก
+  if (ctx.docs) {
+    cancelDocPdf(from);
+    try { ctx.docs.remove(KIND, from); } catch { /* ไฟล์ค้างดีกว่าบันทึกพัง */ }
+  }
 }
 
 /**
