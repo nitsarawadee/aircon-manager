@@ -3108,7 +3108,8 @@
             <i class="ph ph-wrench"></i>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-semibold text-gray-800 truncate">${airCodeBtn(w.AirCode, 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-semibold')} <span class="text-gray-400 font-normal">· ${esc(w.NodeName)}</span></div>
+            <!-- รหัสเครื่องเป็นข้อความธรรมดา กดแล้วไปหน้างานซ่อมและติดตั้งเหมือนทั้งการ์ด (ไม่ลิงก์ไปหน้าของเครื่อง) -->
+            <div class="text-sm font-semibold text-gray-800 truncate">${esc(w.AirCode)} <span class="text-gray-400 font-normal">· ${esc(w.NodeName)}</span></div>
             <div class="text-xs text-gray-500 truncate" title="${esc(w.Note)}">${esc(w.Note) || 'ไม่ระบุอาการเสีย'}</div>
           </div>
         </div>`).join('');
