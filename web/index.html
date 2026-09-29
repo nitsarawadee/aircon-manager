@@ -2129,8 +2129,10 @@
         // ปุ่มที่ไม่ได้แก้ข้อมูลของโมดูลนี้ ต้องไม่ถูกปิดไปด้วย
         // แจ้งซ่อมใช้สิทธิ์ของโมดูล repair ไม่ใช่ airlist คนที่ดูรายการเครื่องได้อย่างเดียว
         // แต่มีสิทธิ์ซ่อม จึงต้องกดแจ้งซ่อมจากหน้านี้ได้
+        // ดูประวัติของเครื่อง (ปุ่มลูกศรวงกลม) แค่พาไปหน้าประวัติ ไม่ได้แก้อะไร
         if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
-            oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(')) return;
+            oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(') ||
+            oc.includes('viewAirHistory(')) return;
         // ปุ่มเปลี่ยนหน้าตาราง (goToAirPage / goToPlanPage / ...) แค่เลื่อนดู ไม่ได้แก้อะไร
         // ถ้าล็อกไว้ คนที่ดูได้อย่างเดียวจะเห็นแค่หน้าแรกของตาราง
         if (/^goTo\w*Page\(/.test(oc)) return;
