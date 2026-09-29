@@ -1,4 +1,4 @@
-import { SHEETS, cleanFormColKind } from '../schema.js';
+import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
@@ -233,6 +233,24 @@ export async function saveInstallForm(ctx, record) {
 
       const docNo = plainText(row[slot === 2 ? 'DocNo2' : 'DocNo']);
       const accept = plainText(row['AcceptResult' + slot]).trim();
+
+      // เครื่องที่เพิ่ม / เปลี่ยน / ย้ายมา มีประวัติที่รอเอกสารอยู่แล้ว — ใส่เลขเอกสารลงแถวนั้น
+      // ไม่ลงประวัติ "ติดตั้ง" ซ้ำอีกแถว (เดิมเครื่องเดียวมีประวัติติดตั้งสองแถว)
+      const pending = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
+        normalizeCode(h.AirCode) === normalizeCode(unit.AirCode) &&
+        plainText(h.Note).trim() === INSTALL_PENDING_NOTE);
+      if (pending.length) {
+        const last = pending[pending.length - 1];
+        for (const h of pending) {
+          const patch = { Note: 'เอกสาร ' + docNo };
+          if (h === last) {
+            if (accept) patch.Detail = plainText(h.Detail) + ' — ผลตรวจรับ: ' + accept;
+            if (!plainText(h.Technician).trim()) patch.Technician = row.TechnicianName;
+          }
+          ctx.ss.writeByHeaders(SHEETS.HISTORY, h._row, patch);
+        }
+        continue;
+      }
 
       await addHistoryRaw(ctx, {
         AirCode: unit.AirCode,

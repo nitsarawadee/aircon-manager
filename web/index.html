@@ -318,7 +318,7 @@
         <i class="ph ph-clock-counter-clockwise text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>ประวัติ</span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="repair">
-        <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อม</span>
+        <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อมและติดตั้ง</span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="cleaningform">
         <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แบบฟอร์มเอกสาร</span>
@@ -707,8 +707,8 @@
       <section id="view-repair" class="view">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 class="text-2xl font-bold text-gray-800">งานซ่อมบำรุง</h2>
-            <p class="text-sm text-gray-500">ติดตามเครื่องปรับอากาศที่รอซ่อม และประวัติงานซ่อม</p>
+            <h2 class="text-2xl font-bold text-gray-800">งานซ่อมและติดตั้ง</h2>
+            <p class="text-sm text-gray-500">ติดตามเครื่องปรับอากาศที่รอซ่อม งานติดตั้งที่รอเอกสาร และประวัติงานซ่อม</p>
           </div>
           
           <div class="flex flex-wrap items-center gap-3">
@@ -718,6 +718,11 @@
             </div>
             <button onclick="openReportRepairModal()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-wrench"></i> แจ้งซ่อมแอร์ใหม่
+            </button>
+            <!-- ติดตั้งเครื่องใหม่ = กรอกฟอร์มเพิ่มเครื่องใหม่ (ลงทะเบียน) ก่อน แล้วเครื่องจะไปรอเอกสารติดตั้งในตารางด้านล่าง -->
+            <button onclick="openAirModal()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+              title="กรอกฟอร์มเพิ่มเครื่องใหม่ แล้วกรอกเอกสารติดตั้งจากตาราง &quot;งานติดตั้งที่รอเอกสาร&quot;">
+              <i class="ph ph-plus-circle"></i> ติดตั้งเครื่องใหม่
             </button>
           </div>
         </div>
@@ -735,6 +740,27 @@
                     <th class="px-4 py-3 sticky top-0 bg-amber-50 z-10">ขั้นตอน</th>
                     <th class="px-4 py-3 sticky top-0 bg-amber-50 z-10">อาการเสีย</th>
                     <th class="px-4 py-3 sticky top-0 bg-amber-50 z-10 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="installPendingBox" class="mb-8">
+          <h3 class="text-lg font-bold text-teal-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-plus-circle"></i> งานติดตั้งที่รอเอกสาร</h3>
+          <div class="bg-white rounded-xl shadow-sm border border-teal-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="installPendingTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                  <tr class="bg-teal-50 border-b border-teal-200 text-teal-900 font-semibold">
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขที่</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">วันที่</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">รหัสเครื่อง</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">Node/Site</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">งาน</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
@@ -804,7 +830,7 @@
               </button>
               <button id="docBtn_installForm" onclick="openInstallFormPicker()"
                 class="bg-white border border-teal-700 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
-                title="กรอกเอกสารบันทึกผลการติดตั้ง (ITEL-FM-NE-006) — อัปเดตทะเบียนเครื่องและลงประวัติให้เอง">
+                title="กรอกเอกสารบันทึกผลการติดตั้ง (ITEL-FM-NE-006) — ลงเลขเอกสารในประวัติติดตั้งให้เอง">
                 <i class="ph ph-plus-circle"></i> กรอกฟอร์มติดตั้ง
               </button>
             </div>
@@ -2293,7 +2319,7 @@
       submitRepairForm: 'repairform', deleteRepairFormRow: 'repairform',
       openRepairLinkModal: 'repairform', createRepairLinkFor: 'repairform', revokeRepairLinkRow: 'repairform',
       // เอกสารติดตั้ง
-      openInstallFormPicker: 'installform', startInstallFormFromPicker: 'installform',
+      openInstallFormPicker: 'installform', startInstallFormFromPicker: 'installform', openInstallFormFor: 'installform',
       submitInstallForm: 'installform', deleteInstallFormRow: 'installform',
       // งบประมาณ
       openBudgetModal: 'budget', saveBudget: 'budget',
@@ -6216,6 +6242,86 @@
     }
     window.submitCannotRepair = submitCannotRepair;
 
+    /** ต้องตรงกับ INSTALL_PENDING_NOTE ใน src/schema.js — ป้ายในประวัติของงานติดตั้งที่ยังไม่มีเอกสาร */
+    const INSTALL_PENDING_NOTE = 'รอเอกสารติดตั้ง';
+
+    /**
+     * งานติดตั้งที่รอเอกสาร — เพิ่มเครื่องใหม่ / เปลี่ยนเครื่อง / ย้ายเครื่องมาแทน ที่ยังไม่ได้กรอกฟอร์มติดตั้ง
+     * อ่านจากประวัติที่ติดป้าย INSTALL_PENDING_NOTE (เซิร์ฟเวอร์เปลี่ยนป้ายเป็นเลขเอกสารตอนกรอกฟอร์มติดตั้ง)
+     */
+    function renderInstallPending(searchQuery = '') {
+      const box = document.getElementById('installPendingBox');
+      const tb = document.querySelector('#installPendingTable tbody');
+      if (!box || !tb) return;
+      // ไม่มีสิทธิ์ดูเอกสารติดตั้ง = ไม่ต้องเห็นตารางนี้
+      box.classList.toggle('hidden', docLevel('install') === 'none');
+
+      // เครื่องละแถว (แถวล่าสุด) — ประวัติเรียงใหม่ก่อนเก่ามาแล้ว
+      const seen = new Set();
+      let list = (currentHistory || []).filter(h => {
+        if (String(h.Note || '').trim() !== INSTALL_PENDING_NOTE) return false;
+        const k = String(h.AirCode || '').trim().toUpperCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const unitOf = h => (currentAirList || []).find(a => sameCode(a.AirCode, h.AirCode)) || {};
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        list = list.filter(h => searchText({ ...unitOf(h), ...h }).includes(q));
+      }
+
+      if (!list.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ตอนนี้ไม่มีงานติดตั้งที่รอเอกสาร</td></tr>';
+        return;
+      }
+      const JOB = { 'ติดตั้ง': 'ติดตั้งเครื่องใหม่', 'เปลี่ยนเครื่อง': 'เปลี่ยนเครื่อง / ย้ายเครื่องมาแทน' };
+      tb.innerHTML = list.map(h => {
+        const u = unitOf(h);
+        const ev = String(h.EventType || '').trim();
+        return `
+        <tr class="hover:bg-teal-50/40 transition-colors align-top">
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(displayDocId(h)) || '-'}</td>
+          <td class="px-4 py-3">${esc(fmtDate(h.Date))}</td>
+          <td class="px-4 py-3 font-medium text-gray-900">${airCodeBtn(h.AirCode)}</td>
+          <td class="px-4 py-3 text-gray-600">
+            <div class="text-[13px] font-medium text-gray-800">${esc(u.NodeName)}</div>
+            <div class="text-[11px] text-gray-400">${esc(u.SiteCode)}</div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">${esc(JOB[ev] || ev)}</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button onclick="openInstallFormFor('${jsStr(h.AirCode)}')"
+              class="text-white bg-teal-700 hover:bg-teal-800 px-3 py-1.5 rounded-lg transition shadow-sm text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-file-text"></i> กรอกเอกสารติดตั้ง</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    /** เปิดฟอร์มติดตั้งของเครื่องตัวนี้ โดยเลือก Node และเครื่องไว้ให้แล้ว */
+    async function openInstallFormFor(airCode) {
+      try {
+        // โหลดใหม่ทุกครั้ง — เครื่องเพิ่งเพิ่ม/เปลี่ยน ข้อมูลที่โหลดไว้ก่อนหน้าอาจยังไม่มีเครื่องนี้
+        const nodes = await call('getCleaningFormNodes');
+        cleaningFormNodes = Array.isArray(nodes) ? nodes : [];
+      } catch (e) { return; }
+      for (const node of cleaningFormNodes) {
+        const i = (node.units || []).findIndex(u => sameCode(u.AirCode, airCode));
+        if (i < 0) continue;
+        // ช่องในเอกสารตามตำแหน่งจริงใน Node (กติกาเดียวกับ startInstallFormFromPicker) — ใบหนึ่งมี 2 ช่อง
+        if (i + 1 > 2) {
+          showToast('เอกสารติดตั้งมีช่องเครื่องที่ 1–2 ของ Node เท่านั้น — ' + airCode + ' เป็นเครื่องที่ ' + (i + 1), 'error');
+          return;
+        }
+        openInstallForm(node, [{ slot: i + 1, unit: node.units[i] }]);
+        return;
+      }
+      showToast('ไม่พบเครื่อง ' + airCode + ' ในทะเบียน หรือไม่มีสิทธิ์เข้าถึง', 'error');
+    }
+    window.openInstallFormFor = openInstallFormFor;
+
     function renderRepairView(searchQuery = '') {
       const pendingTb = document.querySelector('#repairPendingTable tbody');
       if (pendingTb && currentAirList) {
@@ -6324,6 +6430,8 @@
           }).join('');
         }
       }
+
+      renderInstallPending(searchQuery);
 
       const historyTb = document.querySelector('#repairHistoryTable tbody');
       if (historyTb && currentHistory) {
@@ -9511,8 +9619,8 @@ const CLEANING_CHECKLIST_ITEMS = [
           <div class="p-6 space-y-4">
             <div class="bg-teal-50 text-teal-800 text-xs p-3 rounded-lg flex gap-2">
               <i class="ph ph-info text-lg shrink-0"></i>
-              <p>บันทึกแล้วระบบจะ<b>อัปเดตข้อมูลเครื่องในทะเบียน</b>ตามที่กรอก
-                 และลงประวัติ "ติดตั้ง" ให้เอง</p>
+              <p>ข้อมูลเครื่องดึงจากทะเบียน — เครื่องใหม่ต้อง<b>เพิ่ม/เปลี่ยนเครื่องที่หน้ารายการเครื่องก่อน</b>
+                 บันทึกแล้วระบบลงเลขเอกสารในประวัติติดตั้งให้เอง</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1.5">เลือก Node ที่ติดตั้ง <span class="text-red-500">*</span></label>
@@ -9808,7 +9916,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                 <i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร
               </button>
               <p class="text-[11px] text-gray-500 mt-2 text-center">
-                บันทึกแล้วระบบจะอัปเดตทะเบียนเครื่องและลงประวัติ "ติดตั้ง" ให้เอง
+                บันทึกแล้วระบบลงเลขเอกสารในประวัติติดตั้งให้เอง
               </p>
             </div>
 
@@ -10112,13 +10220,14 @@ const CLEANING_CHECKLIST_ITEMS = [
       ifSavedRow = null;
       closeModal();
       renderCleaningFormTable();
-      showToast('บันทึกเอกสารติดตั้ง ' + res.docNo + ' แล้ว · อัปเดตทะเบียนเครื่องและลงประวัติให้เรียบร้อย');
+      showToast('บันทึกเอกสารติดตั้ง ' + res.docNo + ' แล้ว · ลงประวัติให้เรียบร้อย');
 
       // ทะเบียนเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที
       try {
         const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
         if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
         if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
+        renderRepairView((document.getElementById('repairSearch') || {}).value || '');
       } catch (e) {}
       loadDashboard();
     } catch (e) {

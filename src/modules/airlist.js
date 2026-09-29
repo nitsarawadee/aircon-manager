@@ -1,4 +1,4 @@
-import { SHEETS } from '../schema.js';
+import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
 import { HEADERS as IMPORT_HEADERS } from '../import-spec.js';
 import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
@@ -227,7 +227,9 @@ export async function saveAirUnit(ctx, unit) {
         EventType: 'ติดตั้ง',
         Detail: `ติดตั้งเครื่องใหม่ที่ Node "${unit.NodeName || '-'}" (${unit.SiteCode || '-'})`,
         Cost: '',
-        Technician: ''
+        Technician: '',
+        // รอกรอกเอกสารติดตั้งที่หน้างานซ่อมและติดตั้ง (ดู INSTALL_PENDING_NOTE)
+        Note: INSTALL_PENDING_NOTE
       });
     }
 
@@ -335,7 +337,9 @@ export async function moveAirUnit(ctx, row, destCode, note, expectCode) {
               (why ? ' | เหตุผล: ' + why : '') +
               (destPrevNote ? ' | หมายเหตุเดิมของเครื่องเก่า: ' + destPrevNote : ''),
       Cost: '',
-      Technician: ''
+      Technician: '',
+      // เครื่องถูกติดตั้งที่ปลายทางจริง — รอเอกสารติดตั้ง (ต้นทางไม่ต้อง ไม่มีอะไรถูกติดตั้ง)
+      Note: INSTALL_PENDING_NOTE
     });
 
     await addHistoryRaw(ctx, {
@@ -472,7 +476,9 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
               ' → เครื่องใหม่: ' + describeMachine({ ...oldUnit, ...payload }) +
               (prevNote ? ' | หมายเหตุเดิมของเครื่องเก่า: ' + prevNote : ''),
       Cost: newUnit.ReplaceCost || '',
-      Technician: newUnit.Technician || ''
+      Technician: newUnit.Technician || '',
+      // รอกรอกเอกสารติดตั้งที่หน้างานซ่อมและติดตั้ง (ดู INSTALL_PENDING_NOTE)
+      Note: INSTALL_PENDING_NOTE
     });
 
     await ctx.ss.flush();
