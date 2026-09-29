@@ -14,6 +14,9 @@ import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
 import { closePlanRound } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
+import {
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+} from './approval.js';
 
 /**
  * ฟอร์มบันทึกผลการล้างเครื่องปรับอากาศ
@@ -650,7 +653,7 @@ export async function getCleaningForms(ctx, airCode) {
 
   // เรียงใหม่ก่อนเก่า — ใบที่บันทึกวินาทีเดียวกันตัดสินด้วยลำดับที่เข้ามา
   // (เกิดขึ้นจริงตอนรวมใบ ซึ่งเขียนสองแถวติดกันในคำสั่งเดียว)
-  return list.sort(newestFirst('CreatedAt'));
+  return attachApprovals(ctx, KIND, list.sort(newestFirst('CreatedAt')));
 }
 
 /**
@@ -733,6 +736,10 @@ export async function saveCleaningForm(ctx, record) {
 
     if (existing) {
       mergeIntoForm(ctx, existing, record, bySlot);
+      // เพิ่มเครื่องเข้าใบเดิม = เนื้อเอกสารเปลี่ยน ต้องอนุมัติใหม่ตั้งแต่ขั้น 2
+      // ใบที่ยังไม่มีขั้นอนุมัติ (บันทึกก่อนเปิดใช้) เริ่มให้ตอนนี้ เพราะถูกแก้หลังจากนั้นแล้ว
+      if (approvalRowOf(ctx, KIND, existing.ID)) resetApproval(ctx, KIND, existing.ID);
+      else await startApproval(ctx, KIND, existing.ID);
       // อ่านแถวใหม่หลังรวม — การรวมอาจออกเลขช่องที่ 1 ให้ใบที่เดิมมีแค่เครื่องที่ 2
       // ซึ่งทำให้ชื่อที่เก็บรูปของใบนี้เปลี่ยน (ดู fileKeyOf) รูปเดิมต้องย้ายตามไป
       savedForm = ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === existing._row) || existing;
@@ -744,6 +751,7 @@ export async function saveCleaningForm(ctx, record) {
 
       const headers = ctx.ss.headers(SHEETS.CLEANFORM);
       ctx.ss.appendRow(SHEETS.CLEANFORM, headers.map(h => (record[h] !== undefined ? record[h] : '')));
+      await startApproval(ctx, KIND, record.ID);
     }
 
     // ---------- ปิดงานในแผนล้างแอร์ (เฉพาะกรณีที่รู้ว่าเป็นรอบไหน) ----------
@@ -927,7 +935,7 @@ export async function getCleaningDocHtml(ctx, row) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);
   const photos = ctx.photos ? ctx.photos.readAll(KIND, docNo) : {};
   // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่ (ดู renderDocPdf)
-  return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
+  return buildCleaningDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true, ...signOptsOf(ctx, KIND, form) });
 }
 
 /* ==================== รูปถ่ายประกอบเอกสาร ==================== */
@@ -979,6 +987,8 @@ export async function saveCleaningPhoto(ctx, payload) {
     }
 
     const saved = store.save(KIND, docNo, slot, payload.index, payload.dataUrl);
+    // รูปเปลี่ยน = เอกสารไม่ใช่ใบที่ผู้อนุมัติเห็นแล้ว ต้องอนุมัติใหม่ (ดู approval.js)
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, bytes: saved.bytes, photos: photoIndexOf(store, docNo) };
   }));
 }
@@ -989,8 +999,9 @@ export async function deleteCleaningPhoto(ctx, payload) {
     await ctx.assertModuleEdit('cleaningform');
     const store = requirePhotoStore(ctx);
 
-    const { docNo } = await formForPhotos(ctx, payload && payload.row);
+    const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
     store.remove(KIND, docNo, Number(payload.unitSlot), Number(payload.index));
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, photos: photoIndexOf(store, docNo) };
   }));
 }
@@ -1029,6 +1040,9 @@ async function withFreshDocPdf(ctx, work) {
 }
 
 export { settleDocPdfQueue };
+
+/** approval.js เรียกเก็บฉบับจริงเมื่ออนุมัติครบ */
+export { storeDocPdf as storeCleaningPdf };
 
 /** ช่องไหนมีรูปแล้วบ้าง — ส่งแค่รายชื่อช่อง ไม่ส่งตัวรูป เพื่อให้ response เบา */
 function photoIndexOf(store, docNo) {
@@ -1076,6 +1090,8 @@ export async function getCleaningPhotoIndex(ctx, row) {
  */
 async function renderDocPdf(ctx, form) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);
+  // ชื่อผู้อนุมัติในช่องลงนาม + ลายน้ำ "รออนุมัติ" ถ้ายังไม่ครบ
+  const sign = signOptsOf(ctx, KIND, form);
   const base = ctx.pdf.baseUrl || '';
 
   const { buildCleaningDocHtml } = await import('./cleaning-doc.js');
@@ -1083,10 +1099,11 @@ async function renderDocPdf(ctx, form) {
     // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
     fontHref: base + DOC_ASSETS.fontHref,
     logoHref: base + DOC_ASSETS.logoHref,
-    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {}
+    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {},
+    ...sign
   });
 
-  return { docNo, base64: await ctx.pdf.render(html) };
+  return { docNo, draft: sign.draft, base64: await ctx.pdf.render(html) };
 }
 
 /**
@@ -1112,6 +1129,13 @@ async function storeDocPdf(ctx, docNo) {
     const form = ctx.ss.objects(SHEETS.CLEANFORM)
       .find(f => (plainText(f.DocNo) || plainText(f.ID)) === name);
     if (!form || plainText(form.Source) === 'attach') return false;
+
+    // ยังรออนุมัติ = ไม่เก็บสำเนา (สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับที่อนุมัติครบ ดู approval.js)
+    // ลบฉบับเดิมทิ้งด้วย — ใบที่เคยอนุมัติครบแล้วถูกแก้รูป ต้องไม่เหลือไฟล์เก่าที่ขึ้นชื่อผู้อนุมัติ
+    if (isPending(approvalRowOf(ctx, KIND, form.ID))) {
+      try { ctx.docs.remove(KIND, name); } catch { /* ไม่มีไฟล์เดิมก็ไม่เป็นไร */ }
+      return false;
+    }
 
     const { base64 } = await renderDocPdf(ctx, form);
     ctx.docs.save(KIND, name, plainText(form.Date), base64);
@@ -1154,15 +1178,16 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
     throw new Error('ใบนี้เป็นเอกสารที่แนบเข้ามา ไม่ใช่ฟอร์มที่กรอกในระบบ');
   }
 
-  const { docNo, base64 } = await renderDocPdf(ctx, form);
+  const { docNo, base64, draft } = await renderDocPdf(ctx, form);
 
   // เก็บสำเนาไว้ด้วย แต่เก็บไม่ได้ก็ยังต้องได้ไฟล์ดาวน์โหลดตามที่กดมา
-  if (ctx.docs) {
+  // ฉบับร่าง (ยังรออนุมัติ) ไม่เก็บ — สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับจริง
+  if (ctx.docs && !draft) {
     try { ctx.docs.save(KIND, docNo, plainText(form.Date), base64); }
     catch (err) { console.error('[เก็บไฟล์ PDF ' + docNo + ']', err && err.message ? err.message : err); }
   }
 
-  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
+  return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }
 
 export async function deleteCleaningForm(ctx, row, expectId) {
@@ -1189,8 +1214,10 @@ export async function deleteCleaningForm(ctx, row, expectId) {
     // ไม่งั้นรูปจะค้างอยู่ในดิสก์ตลอดไปโดยไม่มีอะไรอ้างถึง
     const docNo = plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('DocNo') + 1)) ||
                   plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('ID') + 1));
+    const formId = plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('ID') + 1));
 
     await ctx.ss.deleteRow(SHEETS.CLEANFORM, row);
+    await removeApproval(ctx, KIND, formId);
     await ctx.ss.flush();
 
     // ลบรูปหลังลบแถวสำเร็จแล้วเท่านั้น และห้ามให้การลบรูปล้มแล้วทำให้ทั้งคำสั่งพัง

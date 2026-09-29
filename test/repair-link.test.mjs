@@ -262,7 +262,9 @@ test('โหลด PDF ได้หลังส่ง — ก่อนส่ง�
   const { docNo } = await submitRepairLink(publicCtx(db), token, repair());
 
   const file = await getRepairLinkPdf(publicCtx(db, { pdf }), token);
-  assert.equal(file.fileName, docNo + '.pdf');
+  // ยังไม่มีใครอนุมัติ — ได้ฉบับร่าง (ดู approval.js)
+  assert.equal(file.fileName, docNo + '-รออนุมัติ.pdf');
+  assert.ok(rendered.includes('draft-mark'), 'ฉบับร่างต้องมีลายน้ำ');
   assert.equal(file.base64, 'UERG');
   assert.ok(rendered.includes('เชื่อมท่อ เติมน้ำยา'), 'ต้องเป็นเอกสารของใบที่ส่งจริง');
 });

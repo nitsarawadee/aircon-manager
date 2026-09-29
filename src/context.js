@@ -2,7 +2,7 @@ import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
-  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS,
+  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS, APPROVAL_HEADERS,
   CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS,
   ROLE_TITLES, REGIONAL_ROLES
 } from './schema.js';
@@ -100,7 +100,8 @@ export class Ctx {
       [SHEETS.REPAIRFORM, REPAIRFORM_HEADERS],
       [SHEETS.INSTALLFORM, INSTALLFORM_HEADERS],
       [SHEETS.CONTRACTOR, CONTRACTOR_HEADERS],
-      [SHEETS.REPAIRLINK, REPAIRLINK_HEADERS]
+      [SHEETS.REPAIRLINK, REPAIRLINK_HEADERS],
+      [SHEETS.APPROVAL, APPROVAL_HEADERS]
     ];
 
     for (const [name, headers] of specs) {
@@ -208,6 +209,9 @@ export class Ctx {
       name: u.Name || '',
       role,
       title: role === 'Admin' ? ROLE_TITLES.Admin : ROLE_TITLES[stored || 'RegionAdmin'],
+      // ค่าบทบาทที่เก็บจริง — ใช้เฉพาะเรื่องที่ Staff / Supervisor / Regional ต่างกันจริง
+      // คือขั้นอนุมัติเอกสาร (ดู modules/approval.js) ตรวจสิทธิ์อื่นทั้งหมดใช้ role
+      roleKey: role === 'Admin' ? 'Admin' : (stored || 'RegionAdmin'),
       regions,
       permissions: role === 'Admin' ? allEditPermissions() : parsePermissions(u.Permissions)
     };
@@ -264,6 +268,7 @@ export class Ctx {
       ...base,
       role: 'Contractor',
       title: ROLE_TITLES.Contractor,
+      roleKey: 'Contractor',
       contractorId: String(c.ID).trim(),
       contractorName: String(c.Name || '').trim(),
       // ส่งเป็นอาร์เรย์ เพราะ Set แปลงเป็น JSON ไม่ได้ (ค่านี้ไปถึงหน้าเว็บด้วย)

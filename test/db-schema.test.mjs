@@ -19,7 +19,7 @@ import {
   AIRLIST_HEADERS, HISTORY_HEADERS, PLAN_HEADERS,
   BUDGET_HEADERS, USERS_HEADERS, CLEANFORM_HEADERS,
   REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
-  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS
+  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS, APPROVAL_HEADERS
 } from '../src/schema.js';
 
 /** ลำดับคอลัมน์ของตารางนั้น ตามที่ repository ใช้จริง */
@@ -65,7 +65,8 @@ test('ทุกคอลัมน์ที่โค้ดต้องการ �
     ['repair_forms', REPAIRFORM_HEADERS],
     ['install_forms', INSTALLFORM_HEADERS],
     ['contractors', CONTRACTOR_HEADERS],
-    ['repair_links', REPAIRLINK_HEADERS]
+    ['repair_links', REPAIRLINK_HEADERS],
+    ['doc_approvals', APPROVAL_HEADERS]
   ];
 
   for (const [table, headers] of pairs) {
@@ -91,6 +92,7 @@ test('ลำดับคอลัมน์ของตารางเอกส�
     ['install_forms', INSTALLFORM_HEADERS],
     ['contractors', CONTRACTOR_HEADERS],
     ['repair_links', REPAIRLINK_HEADERS],
+    ['doc_approvals', APPROVAL_HEADERS],
     ['users', USERS_HEADERS]
   ];
 

@@ -830,7 +830,10 @@
             class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors">
             <i class="ph ph-plus-circle"></i> ติดตั้ง
           </button>
-          <div class="relative ml-auto w-full sm:w-72 pb-2">
+          <button id="docMineBtn" onclick="toggleDocMine()" type="button"
+            class="hidden ml-auto mb-2 px-3 py-1.5 rounded-lg border text-xs font-medium whitespace-nowrap transition-colors"
+            title="แสดงเฉพาะเอกสารที่รอให้คุณกดอนุมัติ"></button>
+          <div class="relative ml-2 w-full sm:w-72 pb-2">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขที่, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
           </div>
@@ -853,6 +856,7 @@
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ช่าง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right">ค่าใช้จ่าย</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">PDF</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">อนุมัติ</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
                 </tr>
               </thead>
@@ -6845,7 +6849,7 @@
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
-    const all = allDocForms().filter(f => f.kind === docTypeFilter);
+    const all = allDocForms().filter(f => f.kind === docTypeFilter && (!docMineOnly || waitsForMe(f)));
     if (!q) return all;
 
     return all.filter(f =>
@@ -6937,6 +6941,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   function renderCleaningFormTable(keepPage) {
     const tbody = document.querySelector('#cleaningFormTable tbody');
     if (!tbody) return;
+    paintDocMineBtn();
     if (!keepPage) cleaningFormPage = 1;
     cleaningFormLastList = filterCleaningForms();
 
@@ -6947,7 +6952,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const why = (box && box.value.trim())
         ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
         : 'ยังไม่มีการบันทึก' + ofKind;
-      tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">' + why + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">' + why + '</td></tr>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
     }
@@ -7033,6 +7038,10 @@ const CLEANING_CHECKLIST_ITEMS = [
                <button onclick="openPhotoEditor(${f._row}, ${r.slot})" title="เปลี่ยนหรือเพิ่มรูปของเครื่องตัวนี้ — ไฟล์ PDF จะถูกสร้างใหม่ให้เอง"
                  class="text-slate-500 hover:text-white hover:bg-[#f47920] px-2 py-1.5 rounded-lg transition border border-slate-300 bg-white text-xs inline-flex items-center gap-1 ml-1">
                  <i class="ph ph-camera"></i> แก้รูป</button>` : ''}`
+        }</td>
+        <td class="px-4 py-3 whitespace-nowrap">${
+          // ขั้นอนุมัติเป็นของ "ใบ" ไม่ใช่ของเครื่อง จึงโชว์แถวแรกของใบเท่านั้น
+          r.first ? approvalCell(f, r.kind) : ''
         }</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${
@@ -7878,6 +7887,82 @@ const CLEANING_CHECKLIST_ITEMS = [
     return true;
   }
   window.openInstallDoc = openInstallDoc;
+
+  /* ============== ขั้นอนุมัติเอกสาร (ดู src/modules/approval.js) ============== */
+
+  /**
+   * ขั้นอนุมัติ — ต้องตรงกับ APPROVAL_STAGES ฝั่งเซิร์ฟเวอร์ (ใช้แค่โชว์ข้อความ
+   * ส่วนการตัดสินว่ากดได้หรือไม่ มาจาก Approval.canApprove ที่เซิร์ฟเวอร์คำนวณให้)
+   */
+  const APPROVAL_STAGE_WHO = { 2: 'Staff', 3: 'Supervisor / Regional', 4: 'Infrastructure' };
+
+  /** แสดงเฉพาะเอกสารที่รอให้ฉันกดอนุมัติ */
+  let docMineOnly = false;
+  const waitsForMe = f => !!(f.Approval && f.Approval.canApprove);
+
+  function toggleDocMine() {
+    docMineOnly = !docMineOnly;
+    refreshCleaningFormTable();
+  }
+  window.toggleDocMine = toggleDocMine;
+
+  /** ปุ่ม "รอฉันอนุมัติ" — ซ่อนเมื่อไม่มีใบไหนรอเราเลยในแท็บนี้ (และไม่ได้กดกรองค้างไว้) */
+  function paintDocMineBtn() {
+    const btn = document.getElementById('docMineBtn');
+    if (!btn) return;
+    const n = allDocForms().filter(f => f.kind === docTypeFilter && waitsForMe(f)).length;
+    if (!n && docMineOnly) docMineOnly = false;
+    btn.classList.toggle('hidden', !n);
+    btn.innerHTML = '<i class="ph ph-seal-check"></i> รอฉันอนุมัติ ' + n + ' ใบ';
+    btn.className = btn.className
+      .replace(/ ?(bg-emerald-600|text-white|border-emerald-600|bg-white|text-emerald-700|border-emerald-300)/g, '') +
+      (docMineOnly ? ' bg-emerald-600 text-white border-emerald-600' : ' bg-white text-emerald-700 border-emerald-300');
+  }
+
+  /** รายชื่อผู้อนุมัติแต่ละขั้น สำหรับ tooltip */
+  function approvalTrail(a) {
+    const line = (n, st) => 'ขั้น ' + n + ' ' + APPROVAL_STAGE_WHO[n] + ': ' +
+      (st && st.name ? st.name + ' (' + fmtDate(st.at) + ')' : 'รอ');
+    return ['ขั้น 1 ผู้รับเหมา: ' + (a.s1 || 'ชื่อช่างในฟอร์ม'),
+            line(2, a.s2), line(3, a.s3), line(4, a.s4)].join('\n');
+  }
+
+  /** ช่องสถานะ: ใบเก่า = ขีด · ครบแล้ว = ป้ายเขียว · รออยู่ = ขั้นที่รอ (+ปุ่มถ้าถึงคิวเรา) */
+  function approvalCell(f, kind) {
+    const a = f.Approval;
+    if (!a) return '<span class="text-gray-300" title="ใบนี้ออกก่อนมีขั้นอนุมัติ หรือเป็นเอกสารแนบ">-</span>';
+    const trail = esc(approvalTrail(a));
+    if (a.done) {
+      return '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium inline-flex items-center gap-1" title="' + trail + '">' +
+        '<i class="ph ph-seal-check"></i> อนุมัติครบ</span>';
+    }
+    const chip = '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-medium" title="' + trail + '">' +
+      'รอ ' + esc(APPROVAL_STAGE_WHO[a.next]) + ' · ' + (a.next - 1) + '/4</span>';
+    if (!a.canApprove) return chip;
+    return chip + ` <button onclick="approveDocRow('${jsStr(kind)}','${jsStr(f.ID)}', '${jsStr(displayDocNo(f))}')"
+      class="ml-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1"
+      title="อนุมัติขั้น ${a.next} — ชื่อของคุณจะลงในช่องลงนามของเอกสาร">
+      <i class="ph ph-check"></i> อนุมัติ</button>`;
+  }
+
+  async function approveDocRow(kind, id, docNo) {
+    const form = allDocForms().find(f => f.kind === kind && f.ID === id);
+    const a = form && form.Approval;
+    if (!a) return;
+    const confirmed = await showConfirm(
+      'อนุมัติเอกสาร ' + docNo + ' ขั้น ' + a.next + ' (' + APPROVAL_STAGE_WHO[a.next] + ')?\n' +
+      'ชื่อของคุณจะลงในช่องลงนามของเอกสาร พร้อมวันที่วันนี้' +
+      (a.next === 4 ? '\nเป็นขั้นสุดท้าย — หลังจากนี้ PDF จะเป็นฉบับจริง ไม่มีลายน้ำ "รออนุมัติ"' : '')
+    );
+    if (!confirmed) return;
+    try {
+      await call('approveDoc', kind, id);
+      showToast(a.next === 4 ? 'อนุมัติครบทุกขั้นแล้ว — PDF เป็นฉบับจริงแล้ว' : 'อนุมัติขั้น ' + a.next + ' แล้ว');
+    } catch (e) {}
+    // โหลดใหม่ทั้งแท็บ ทั้งตอนสำเร็จและไม่สำเร็จ — อาจมีคนอื่นกดขั้นนี้ไปก่อนแล้ว
+    await loadCleaningForm();
+  }
+  window.approveDocRow = approveDocRow;
 
   async function deleteRepairFormRow(row, id) {
     const confirmed = await showConfirm(

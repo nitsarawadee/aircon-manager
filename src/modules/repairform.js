@@ -4,6 +4,9 @@ import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './his
 import { unitsInScope } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
+import {
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+} from './approval.js';
 
 /**
  * เอกสารบันทึกผลการซ่อม ตามแบบฟอร์มควบคุม ITEL-FM-NE-005
@@ -68,7 +71,7 @@ export async function getRepairForms(ctx, airCode) {
   list = list.filter(await ctx.scopeFilter());
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
-  return list.sort(newestFirst('CreatedAt'));
+  return attachApprovals(ctx, KIND, list.sort(newestFirst('CreatedAt')));
 }
 
 /* ==================== บันทึก ==================== */
@@ -169,6 +172,8 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
 
   const headers = ctx.ss.headers(SHEETS.REPAIRFORM);
   ctx.ss.appendRow(SHEETS.REPAIRFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
+  // ทั้งกรอกในระบบและกรอกผ่านลิงก์ต้องผ่านขั้นอนุมัติเหมือนกัน (ดู approval.js)
+  await startApproval(ctx, KIND, row.ID);
 
   // ลงประวัติ "ซ่อมแล้ว" ซึ่งเป็นตัวปิดเคสตามกติกาเดิมของระบบ
   //
@@ -234,8 +239,10 @@ export async function deleteRepairForm(ctx, row, expectId) {
     // จำเลขที่ไว้ก่อนลบแถว เพื่อตามไปลบรูปและไฟล์ของใบนี้ด้วย
     const docNo = plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('DocNo') + 1)) ||
                   plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('ID') + 1));
+    const formId = plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('ID') + 1));
 
     await ctx.ss.deleteRow(SHEETS.REPAIRFORM, row);
+    await removeApproval(ctx, KIND, formId);
     await ctx.ss.flush();
 
     // ลบไฟล์หลังลบแถวสำเร็จแล้วเท่านั้น และห้ามให้การลบไฟล์ล้มแล้วทำให้ทั้งคำสั่งพัง
@@ -283,9 +290,11 @@ export async function saveRepairPhoto(ctx, payload) {
     await ctx.assertModuleEdit('repairform');
     const store = requirePhotoStore(ctx);
 
-    const { docNo } = await formForPhotos(ctx, payload && payload.row);
+    const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
     // ใบซ่อมมีเครื่องเดียว รูปจึงอยู่ช่องของเครื่องที่ 1 เสมอ
     const saved = store.save(KIND, docNo, 1, payload.index, payload.dataUrl);
+    // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, bytes: saved.bytes, photos: Object.keys(store.readAll(KIND, docNo)) };
   }));
 }
@@ -295,8 +304,9 @@ export async function deleteRepairPhoto(ctx, payload) {
     await ctx.assertModuleEdit('repairform');
     const store = requirePhotoStore(ctx);
 
-    const { docNo } = await formForPhotos(ctx, payload && payload.row);
+    const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
     store.remove(KIND, docNo, 1, Number(payload.index));
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, photos: Object.keys(store.readAll(KIND, docNo)) };
   }));
 }
@@ -327,7 +337,7 @@ export async function getRepairDocHtml(ctx, row) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);
   const photos = ctx.photos ? ctx.photos.readAll(KIND, docNo) : {};
   // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่
-  return buildRepairDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
+  return buildRepairDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true, ...signOptsOf(ctx, KIND, form) });
 }
 
 /** ฟอร์มเปล่าสำหรับปริ้นไปเขียนมือหน้างาน */
@@ -384,6 +394,8 @@ export async function getRepairBlankXlsx(ctx, record) {
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
 export async function renderRepairPdf(ctx, form) {
   const docNo = plainText(form.DocNo) || plainText(form.ID);
+  // ชื่อผู้อนุมัติในช่องลงนาม + ลายน้ำ "รออนุมัติ" ถ้ายังไม่ครบ
+  const sign = signOptsOf(ctx, KIND, form);
   const base = ctx.pdf.baseUrl || '';
 
   const { buildRepairDocHtml } = await import('./repair-doc.js');
@@ -391,10 +403,11 @@ export async function renderRepairPdf(ctx, form) {
     // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
     fontHref: base + DOC_ASSETS.fontHref,
     logoHref: base + DOC_ASSETS.logoHref,
-    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {}
+    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {},
+    ...sign
   });
 
-  return { docNo, base64: await ctx.pdf.render(html) };
+  return { docNo, draft: sign.draft, base64: await ctx.pdf.render(html) };
 }
 
 /**
@@ -412,6 +425,13 @@ export async function storeRepairPdf(ctx, docNo) {
     const form = ctx.ss.objects(SHEETS.REPAIRFORM)
       .find(f => (plainText(f.DocNo) || plainText(f.ID)) === name);
     if (!form) return false;
+
+    // ยังรออนุมัติ = ไม่เก็บสำเนา (สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับที่อนุมัติครบ ดู approval.js)
+    // ลบฉบับเดิมทิ้งด้วย — ใบที่เคยอนุมัติครบแล้วถูกแก้รูป ต้องไม่เหลือไฟล์เก่าที่ขึ้นชื่อผู้อนุมัติ
+    if (isPending(approvalRowOf(ctx, KIND, form.ID))) {
+      try { ctx.docs.remove(KIND, name); } catch { /* ไม่มีไฟล์เดิมก็ไม่เป็นไร */ }
+      return false;
+    }
 
     const { base64 } = await renderRepairPdf(ctx, form);
     ctx.docs.save(KIND, name, plainText(form.Date), base64);
@@ -442,12 +462,13 @@ export async function getRepairDocPdf(ctx, row, expectId) {
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
   await ctx.assertRegionAccess(form.Region);
 
-  const { docNo, base64 } = await renderRepairPdf(ctx, form);
+  const { docNo, base64, draft } = await renderRepairPdf(ctx, form);
 
-  if (ctx.docs) {
+  // ฉบับร่าง (ยังรออนุมัติ) ไม่เก็บ — สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับจริง
+  if (ctx.docs && !draft) {
     try { ctx.docs.save(KIND, docNo, plainText(form.Date), base64); }
     catch (err) { console.error('[เก็บไฟล์ PDF ซ่อม ' + docNo + ']', err && err.message ? err.message : err); }
   }
 
-  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
+  return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }

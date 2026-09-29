@@ -3,6 +3,9 @@ import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } f
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
+import {
+  startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending
+} from './approval.js';
 
 /**
  * เอกสารบันทึกผลการติดตั้ง ตามแบบฟอร์มควบคุม ITEL-FM-NE-006
@@ -78,7 +81,7 @@ export async function getInstallForms(ctx, airCode) {
   list = list.filter(await ctx.scopeFilter());
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
-  return list.sort(newestFirst('CreatedAt'));
+  return attachApprovals(ctx, KIND, list.sort(newestFirst('CreatedAt')));
 }
 
 /* ==================== บันทึก ==================== */
@@ -221,6 +224,7 @@ export async function saveInstallForm(ctx, record) {
 
     const headers = ctx.ss.headers(SHEETS.INSTALLFORM);
     ctx.ss.appendRow(SHEETS.INSTALLFORM, headers.map(h => (row[h] !== undefined ? row[h] : '')));
+    await startApproval(ctx, KIND, row.ID);
 
     // ลงประวัติ "ติดตั้ง" ของเครื่องแต่ละตัว
     for (const slot of [1, 2]) {
@@ -281,8 +285,10 @@ export async function deleteInstallForm(ctx, row, expectId) {
     // จำเลขที่ไว้ก่อนลบแถว เพื่อตามไปลบรูปและไฟล์ของใบนี้ด้วย
     const cell = name => ctx.ss.cell(SHEETS.INSTALLFORM, row, headers.indexOf(name) + 1);
     const docNo = docNoOf({ DocNo: cell('DocNo'), DocNo2: cell('DocNo2'), ID: cell('ID') });
+    const formId = plainText(cell('ID'));
 
     await ctx.ss.deleteRow(SHEETS.INSTALLFORM, row);
+    await removeApproval(ctx, KIND, formId);
     await ctx.ss.flush();
 
     // ลบไฟล์หลังลบแถวสำเร็จแล้วเท่านั้น และห้ามให้การลบไฟล์ล้มแล้วทำให้ทั้งคำสั่งพัง
@@ -347,6 +353,8 @@ export async function saveInstallPhoto(ctx, payload) {
 
     const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
     const saved = store.save(KIND, docNo, slotOf(form, payload), payload.index, payload.dataUrl);
+    // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, bytes: saved.bytes, photos: Object.keys(store.readAll(KIND, docNo)) };
   }));
 }
@@ -358,6 +366,7 @@ export async function deleteInstallPhoto(ctx, payload) {
 
     const { form, docNo } = await formForPhotos(ctx, payload && payload.row);
     store.remove(KIND, docNo, slotOf(form, payload), Number(payload.index));
+    if (resetApproval(ctx, KIND, form.ID)) await ctx.ss.flush();
     return { ok: true, docNo, photos: Object.keys(store.readAll(KIND, docNo)) };
   }));
 }
@@ -388,7 +397,7 @@ export async function getInstallDocHtml(ctx, row) {
   const docNo = docNoOf(form);
   const photos = ctx.photos ? ctx.photos.readAll(KIND, docNo) : {};
   // toolbar ใส่เฉพาะตอนเปิดดูบนจอ ตอนแปลงเป็นไฟล์ PDF ไม่ใส่
-  return buildInstallDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true });
+  return buildInstallDocHtml(form, { ...DOC_ASSETS, photos, toolbar: true, ...signOptsOf(ctx, KIND, form) });
 }
 
 /** ฟอร์มเปล่าสำหรับปริ้นไปเขียนมือหน้างาน */
@@ -437,6 +446,8 @@ export async function getInstallBlankXlsx(ctx, record) {
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
 async function renderPdf(ctx, form) {
   const docNo = docNoOf(form);
+  // ชื่อผู้อนุมัติในช่องลงนาม + ลายน้ำ "รออนุมัติ" ถ้ายังไม่ครบ
+  const sign = signOptsOf(ctx, KIND, form);
   const base = ctx.pdf.baseUrl || '';
 
   const { buildInstallDocHtml } = await import('./install-doc.js');
@@ -444,10 +455,11 @@ async function renderPdf(ctx, form) {
     // ที่อยู่เต็ม เพราะเบราว์เซอร์เปิดหน้านี้จากไฟล์ชั่วคราว ไม่ได้เปิดผ่านเซิร์ฟเวอร์
     fontHref: base + DOC_ASSETS.fontHref,
     logoHref: base + DOC_ASSETS.logoHref,
-    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {}
+    photos: ctx.photos ? ctx.photos.readAll(KIND, docNo) : {},
+    ...sign
   });
 
-  return { docNo, base64: await ctx.pdf.render(html) };
+  return { docNo, draft: sign.draft, base64: await ctx.pdf.render(html) };
 }
 
 /**
@@ -457,7 +469,7 @@ async function renderPdf(ctx, form) {
  * ถ้าเครื่องไม่มีเบราว์เซอร์ หรือดิสก์เต็ม ต้องไม่ทำให้การบันทึกที่ลงไปแล้ว
  * กลายเป็น "ล้มเหลว" ในสายตาผู้ใช้ แล้วเขากดบันทึกซ้ำจนข้อมูลซ้ำ
  */
-async function storeInstallPdf(ctx, docNo) {
+export async function storeInstallPdf(ctx, docNo) {
   const name = plainText(docNo).trim();
   if (!ctx.pdf || !ctx.docs || !name) return false;
 
@@ -465,6 +477,13 @@ async function storeInstallPdf(ctx, docNo) {
     const form = ctx.ss.objects(SHEETS.INSTALLFORM)
       .find(f => docNoOf(f) === name);
     if (!form) return false;
+
+    // ยังรออนุมัติ = ไม่เก็บสำเนา (สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับที่อนุมัติครบ ดู approval.js)
+    // ลบฉบับเดิมทิ้งด้วย — ใบที่เคยอนุมัติครบแล้วถูกแก้รูป ต้องไม่เหลือไฟล์เก่าที่ขึ้นชื่อผู้อนุมัติ
+    if (isPending(approvalRowOf(ctx, KIND, form.ID))) {
+      try { ctx.docs.remove(KIND, name); } catch { /* ไม่มีไฟล์เดิมก็ไม่เป็นไร */ }
+      return false;
+    }
 
     const { base64 } = await renderPdf(ctx, form);
     ctx.docs.save(KIND, name, plainText(form.Date), base64);
@@ -495,12 +514,13 @@ export async function getInstallDocPdf(ctx, row, expectId) {
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
   await ctx.assertInScope(form, 'เอกสารใบนี้');
 
-  const { docNo, base64 } = await renderPdf(ctx, form);
+  const { docNo, base64, draft } = await renderPdf(ctx, form);
 
-  if (ctx.docs) {
+  // ฉบับร่าง (ยังรออนุมัติ) ไม่เก็บ — สำเนาบนเซิร์ฟเวอร์มีเฉพาะฉบับจริง
+  if (ctx.docs && !draft) {
     try { ctx.docs.save(KIND, docNo, plainText(form.Date), base64); }
     catch (err) { console.error('[เก็บไฟล์ PDF ติดตั้ง ' + docNo + ']', err && err.message ? err.message : err); }
   }
 
-  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
+  return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }

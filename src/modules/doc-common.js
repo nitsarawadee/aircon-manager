@@ -96,25 +96,51 @@ const signCell = (company, signer, date) =>
  * สองช่องล่างตั้งใจเว้นว่างไว้
  * ============================================================================
  * "ผู้ตรวจสอบ" กับ "Approve (Infra)" เป็นขั้นอนุมัติที่เกิดขึ้น *หลัง* ช่างส่งงาน
- * ระบบยังไม่มีข้อมูลตรงนั้น ณ ตอนที่ออกเอกสาร จึงต้องเว้นให้เซ็นจริง
+ * ใบเก่า (ก่อนมีขั้นอนุมัติในระบบ) จึงเว้นไว้ให้เซ็นจริง
+ *
+ * ============================================================================
+ * ใบที่มีขั้นอนุมัติ (signers)
+ * ============================================================================
+ * ช่องลงนามทั้งสี่ตรงกับสี่ขั้นใน approval.js พอดี ชื่อมาจากบัญชีของคนที่กดอนุมัติ
+ * วันที่คือวันที่กด ขั้นที่ยังไม่อนุมัติเป็นเส้นประ (ฉบับร่าง)
+ *   ซ้ายบน  ผู้ดำเนินการ   ← ขั้น 1 บัญชี Subcontract ที่กรอก (ไม่มี = ชื่อช่างที่กรอกในฟอร์ม)
+ *   ขวาบน  ผู้ควบคุมงาน   ← ขั้น 2 Staff (แทนชื่อที่พิมพ์ในช่อง "ผู้ควบคุมงาน Interlink")
+ *   ซ้ายล่าง ผู้ตรวจสอบ    ← ขั้น 3 Supervisor / Regional
+ *   ขวาล่าง Approve (Infra) ← ขั้น 4 Infrastructure
  *
  * @param {string} operatorLabel ป้ายช่องซ้ายบน เช่น "ผู้ดำเนินการล้างแอร์ (บ./หจก.)"
  * @param {string} [checkerLabel] ป้ายช่องซ้ายล่าง — ใบติดตั้งใช้คำว่า "ผู้ตรวจรับ"
  *   ส่วนใบล้างกับใบซ่อมใช้ "ผู้ตรวจสอบ" ตามที่พิมพ์บนแบบฟอร์มของแต่ละใบ
+ * @param {Object|null} [signers] ชื่อผู้อนุมัติจาก signOptsOf (approval.js) — null = ใบเก่า
  */
 export function sectionSign(form, operatorLabel,
-  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)') {
+  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', signers = null) {
   const date = thaiDate(form.Date);
+
+  if (signers) {
+    const at = s => [s.name, s.name ? thaiDate(s.date) : ''];
+    return signRows([
+      [[operatorLabel, form.CompanyName, signers.s1 || form.TechnicianName, date],
+       ['ผู้ควบคุมงาน (Interlink)', '', ...at(signers.s2)]],
+      [[checkerLabel, '', ...at(signers.s3)],
+       ['Approve (Infra)', '', ...at(signers.s4)]]
+    ]);
+  }
 
   // ⚠️ ช่องในหน้าเว็บชื่อ "ผู้ควบคุมงาน Interlink" เก็บลงคอลัมน์ SupervisorName
   // ต้องลงช่อง "ผู้ควบคุมงาน (Interlink)" ให้ตรงกับที่คนกรอกเข้าใจ ไม่ใช่ช่อง "ผู้ตรวจสอบ"
   // ตามชื่อคอลัมน์ · ส่วนคนที่ลงชื่อช่องผู้ดำเนินการคือช่าง ไม่ใช่ชื่อบริษัท
-  return [
+  return signRows([
     [[operatorLabel, form.CompanyName, form.TechnicianName, date],
      ['ผู้ควบคุมงาน (Interlink)', '', form.SupervisorName, date]],
     [[checkerLabel, '', '', ''],
      ['Approve (Infra)', '', '', '']]
-  ].map(([left, right]) =>
+  ]);
+}
+
+/** สองแถวของช่องลงนาม — แต่ละช่องคือ [ป้าย, บริษัท, ชื่อ, วันที่] */
+function signRows(rows) {
+  return rows.map(([left, right]) =>
     '<tr>' +
     `<th colspan="5" class="ctr">${esc(left[0])}</th><th colspan="3" class="ctr">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
@@ -221,6 +247,7 @@ ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
 </head><body>
 ${opts.toolbar ? toolbar() : ''}
+${opts.draft ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
 ${o.body}
 </body></html>`;
 }
@@ -274,6 +301,14 @@ tr.sign .who { margin-bottom: 2mm; }
 .fill.dt { min-width: 22mm; }
 
 .ref { text-align: center; font-size: 6.6pt; padding: 1.5mm 4mm; }
+
+/* ---------- ลายน้ำฉบับร่าง (ยังอนุมัติไม่ครบ ดู approval.js) ----------
+   position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */
+.draft-mark { position: fixed; top: 50%; left: 50%; z-index: 50; pointer-events: none;
+              transform: translate(-50%, -50%) rotate(-30deg);
+              font-size: 72pt; font-weight: 700; letter-spacing: 4mm; white-space: nowrap;
+              color: rgba(200, 30, 30, 0.16); border: 3mm solid rgba(200, 30, 30, 0.16);
+              padding: 2mm 10mm; border-radius: 4mm; }
 
 /* ---------- หน้ารูปภาพ ---------- */
 table.info { width: 100%; border-collapse: collapse; }

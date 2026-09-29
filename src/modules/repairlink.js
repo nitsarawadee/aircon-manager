@@ -3,6 +3,7 @@ import { normalizeCode, plainText, ymdhms } from '../values.js';
 import { unitsInScope } from './airlist.js';
 import { writeRepairForm, storeRepairPdf, renderRepairPdf, REPAIR_KIND } from './repairform.js';
 import { scheduleDocPdf } from './doc-pdf-queue.js';
+import { resetApproval } from './approval.js';
 
 /**
  * ลิงก์กรอกเอกสารซ่อม — ส่งให้ใครก็ได้ กรอกได้โดยไม่ต้องมีบัญชี
@@ -209,6 +210,9 @@ export async function saveRepairLinkPhoto(ctx, token, index, dataUrl) {
     const doc = plainText(link.DocNo);
     // ใบซ่อมมีเครื่องเดียว รูปอยู่ช่องของเครื่องที่ 1 เสมอ (ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง)
     ctx.photos.save(REPAIR_KIND, doc, 1, Number(index), dataUrl);
+    // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
+    const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === doc);
+    if (form && resetApproval(ctx, REPAIR_KIND, form.ID)) await ctx.ss.flush();
     return doc;
   });
   // สร้างไฟล์ PDF ใหม่ให้ตรงกับรูปล่าสุด (หน่วงไว้ รวบรูปหลายใบเป็นรอบเดียว)
@@ -226,8 +230,8 @@ export async function getRepairLinkPdf(ctx, token) {
   const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === docNo);
   if (!form) throw new Error('ไม่พบเอกสารเลขที่ ' + docNo + ' — อาจถูกลบไปแล้ว ติดต่อเจ้าหน้าที่');
 
-  const { base64 } = await renderRepairPdf(ctx, form);
-  return { fileName: docNo + '.pdf', mime: 'application/pdf', base64 };
+  const { base64, draft } = await renderRepairPdf(ctx, form);
+  return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }
 
 /* ==================== สำหรับเจ้าหน้าที่ ==================== */

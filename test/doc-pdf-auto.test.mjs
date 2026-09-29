@@ -11,6 +11,8 @@
  * กติกาที่ล็อกไว้
  * ============================================================================
  * - บันทึกฟอร์มแล้วต้องได้ไฟล์เก็บไว้ทันที ไม่ต้องรอใครกดปุ่ม
+ *   (ตั้งแต่มีขั้นอนุมัติ: เก็บทันทีที่อนุมัติครบ — ใบที่ยังรออนุมัติไม่มีสำเนาบนเซิร์ฟเวอร์
+ *    เทสต์กลไกเก็บไฟล์ที่เหลือจึงใช้ "ใบเก่า" ที่ไม่มีขั้นอนุมัติ ดู asLegacy)
  * - แนบหรือลบรูป ไฟล์ต้องถูกสร้างทับใหม่ ไม่งั้นไฟล์ที่เก็บไว้จะเก่ากว่าของจริง
  * - ลบเอกสาร ต้องลบไฟล์ตามไปด้วย ไม่ปล่อยค้างในดิสก์
  * - แปลงไฟล์ไม่ได้ ต้องไม่ทำให้การบันทึกที่ลงฐานข้อมูลแล้วกลายเป็นล้มเหลว
@@ -26,6 +28,7 @@ import {
   saveCleaningForm, getCleaningForms, deleteCleaningForm,
   saveCleaningPhoto, deleteCleaningPhoto, settleDocPdfQueue
 } from '../src/modules/cleaningform.js';
+import { approveDoc } from '../src/modules/approval.js';
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -33,6 +36,9 @@ function freshDb() {
   db.prepare(
     'INSERT INTO users (Username, Name, Role, Regions, Permissions, Active, Password) VALUES (?,?,?,?,?,?,?)'
   ).run('boss', 'ผู้ดูแลระบบ', 'Admin', '', '', 1, 'x');
+  const u = db.prepare('INSERT INTO users (Username, Name, Role, Regions, Permissions, Active, Password) VALUES (?,?,?,?,?,?,?)');
+  u.run('staff', 'สตาฟ', 'Staff', '1', '', 1, 'x');
+  u.run('sup', 'ซุปเปอร์', 'Supervisor', '1', '', 1, 'x');
   db.prepare(`INSERT INTO air_units
       (AirCode, NodeName, SiteCode, Region, Province, Status, Brand, BTU, IndoorSN, OutdoorSN)
       VALUES (?,?,?,?,?,?,?,?,?,?)`)
@@ -78,11 +84,21 @@ function fakePhotos() {
   };
 }
 
-const ctxOf = (db, parts = {}) => {
+const ctxOf = (db, parts = {}, user = 'boss') => {
   const c = new Ctx({}, state, db, parts);
-  c.username = 'boss';
+  c.username = user;
   return c;
 };
+
+/** อนุมัติครบทุกขั้น (Staff → Supervisor → Infrastructure) */
+async function approveAll(db, parts, formId) {
+  for (const u of ['staff', 'sup', 'boss']) await approveDoc(ctxOf(db, parts, u), 'cleaning', formId);
+}
+
+/** ทำให้ใบที่มีอยู่เป็น "ใบเก่า" ที่ไม่มีขั้นอนุมัติ — สำหรับเทสต์กลไกเก็บไฟล์ล้วนๆ */
+const asLegacy = db => db.exec('DELETE FROM doc_approvals');
+
+const saves = docs => docs.calls.filter(c => c[0] === 'save');
 
 const oneUnit = (over = {}) => ({
   NodeName: 'วังน้อย', SiteCode: 'AYA-WNI', Region: '1', Province: 'อยุธยา',
@@ -98,22 +114,29 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 
 /* ==================== เก็บไฟล์ให้เอง ==================== */
 
-test('บันทึกฟอร์มแล้ว ต้องได้ไฟล์ PDF เก็บไว้ทันทีโดยไม่ต้องกดปุ่ม', async () => {
+test('อนุมัติครบแล้ว ต้องได้ไฟล์ PDF เก็บไว้ทันทีโดยไม่ต้องกดปุ่ม — ระหว่างรอยังไม่เก็บ', async () => {
   const db = freshDb();
   const docs = fakeDocs();
-  await saveCleaningForm(ctxOf(db, { pdf: fakePdf(), docs }), oneUnit());
+  const parts = { pdf: fakePdf(), docs };
+  await saveCleaningForm(ctxOf(db, parts), oneUnit());
 
   const [form] = await getCleaningForms(ctxOf(db));
-  assert.deepEqual(docs.calls, [['save', form.DocNo, '2026-09-15']]);
+  assert.deepEqual(saves(docs), [], 'ยังรออนุมัติ ต้องยังไม่มีสำเนาบนเซิร์ฟเวอร์');
+
+  await approveAll(db, parts, form.ID);
+  assert.deepEqual(saves(docs), [['save', form.DocNo, '2026-09-15']]);
   assert.ok(docs.read('cleaning', form.DocNo), 'ต้องมีเนื้อไฟล์เก็บไว้จริง');
 });
 
 test('ไฟล์ต้องถูกเก็บตามวันที่ในเอกสาร ไม่ใช่วันที่กดบันทึก', async () => {
   const db = freshDb();
   const docs = fakeDocs();
-  await saveCleaningForm(ctxOf(db, { pdf: fakePdf(), docs }), oneUnit({ Date: '2026-08-13' }));
+  const parts = { pdf: fakePdf(), docs };
+  await saveCleaningForm(ctxOf(db, parts), oneUnit({ Date: '2026-08-13' }));
+  const [form] = await getCleaningForms(ctxOf(db));
+  await approveAll(db, parts, form.ID);
 
-  assert.equal(docs.calls[0][2], '2026-08-13');
+  assert.equal(saves(docs)[0][2], '2026-08-13');
 });
 
 test('แนบรูปแล้ว ไฟล์ที่เก็บไว้ต้องถูกสร้างทับใหม่ ไม่ใช่ค้างของเก่า', async () => {
@@ -123,7 +146,11 @@ test('แนบรูปแล้ว ไฟล์ที่เก็บไว้�
   const parts = { pdf: fakePdf(), docs, photos };
 
   await saveCleaningForm(ctxOf(db, parts), oneUnit());
+  asLegacy(db);
   const [form] = await getCleaningForms(ctxOf(db));
+  await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3, dataUrl: PNG });
+  await deleteCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3 });
+  await settleDocPdfQueue();
   const before = docs.read('cleaning', form.DocNo);
 
   await saveCleaningPhoto(ctxOf(db, parts), { row: form._row, unitSlot: 1, index: 3, dataUrl: PNG });
@@ -147,6 +174,7 @@ test('แนบรูปรวดเดียวหลายใบ ต้อง�
   const parts = { pdf: fakePdf(), docs, photos };
 
   await saveCleaningForm(ctxOf(db, parts), oneUnit());
+  asLegacy(db);
   const [form] = await getCleaningForms(ctxOf(db));
   docs.calls.length = 0;
 
@@ -198,7 +226,7 @@ test('แปลงไฟล์ไม่สำเร็จ ต้องไม่�
 
   const res = await saveCleaningForm(ctxOf(db, { pdf, docs }), oneUnit());
   assert.equal(res.forms.length, 1, 'ข้อมูลต้องถูกบันทึกตามปกติ');
-  assert.equal(docs.calls.length, 0, 'ไม่มีไฟล์ถูกเก็บ');
+  assert.equal(saves(docs).length, 0, 'ไม่มีไฟล์ถูกเก็บ');
 });
 
 test('เขียนไฟล์ไม่ได้ (ดิสก์เต็ม) ก็ต้องไม่ทำให้การบันทึกล้มเหลว', async () => {

@@ -209,6 +209,30 @@ export const TABLES = {
     unique: ['ID']
   },
 
+  /**
+   * ขั้นอนุมัติของเอกสาร — หนึ่งแถวต่อเอกสารหนึ่งใบ (ดู modules/approval.js)
+   *
+   * แยกเป็นตารางของตัวเอง ไม่เพิ่มคอลัมน์ในตารางเอกสารทั้งสาม เพราะ:
+   *   - ใบเก่าที่ออกไปก่อนมีขั้นอนุมัติ = ไม่มีแถวที่นี่ = ไม่ต้องอนุมัติ แยกออกง่าย
+   *   - กติกาอนุมัติอยู่ที่เดียว ไม่ต้องไปแก้ตารางเอกสารสามที่พร้อมกัน
+   *
+   * S1 = ผู้รับเหมา (ไม่ต้องกด ใส่ชื่อบัญชีคนกรอกตอนบันทึก) · S2 = Staff
+   * S3 = Supervisor หรือ Regional (S3Role บอกว่าใคร) · S4 = Infrastructure
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ APPROVAL_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  doc_approvals: {
+    sheet: 'DocApproval',
+    columns: {
+      ID: S, DocKind: S, FormID: S, CreatedAt: DT,
+      S1Name: S, S1By: S,
+      S2Name: S, S2By: S, S2At: DT,
+      S3Name: S, S3By: S, S3Role: S, S3At: DT,
+      S4Name: S, S4By: S, S4At: DT
+    },
+    indexes: [['DocKind', 'FormID']],
+    unique: ['ID']
+  },
+
   contractors: {
     sheet: 'Contractor',
     columns: {

@@ -1,4 +1,17 @@
 /**
+ * ขั้นอนุมัติของเอกสาร (ใบล้าง / ใบซ่อม / ใบติดตั้ง) — ดูเหตุผลที่ modules/approval.js
+ * หนึ่งแถวต่อเอกสารหนึ่งใบ ผูกด้วย DocKind + FormID (ID ของแถวเอกสาร ซึ่งไม่เปลี่ยนตอนรวมใบ)
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const APPROVAL_HEADERS = [
+  'ID', 'DocKind', 'FormID', 'CreatedAt',
+  'S1Name', 'S1By',
+  'S2Name', 'S2By', 'S2At',
+  'S3Name', 'S3By', 'S3Role', 'S3At',
+  'S4Name', 'S4By', 'S4At'
+];
+
+/**
  * นิยามโครงสร้างชีตทั้งหมดของระบบ
  *
  * ⚠️ กติกาสำคัญที่ห้ามลืม (ยกมาจากโค้ด Apps Script เดิม):
@@ -17,7 +30,8 @@ export const SHEETS = {
   REPAIRFORM: 'RepairForm',
   INSTALLFORM: 'InstallForm',
   CONTRACTOR: 'Contractor',
-  REPAIRLINK: 'RepairLink'
+  REPAIRLINK: 'RepairLink',
+  APPROVAL: 'DocApproval'
 };
 
 export const AIRLIST_HEADERS = [

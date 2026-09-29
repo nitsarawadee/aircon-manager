@@ -212,7 +212,7 @@ export function buildInstallDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ติดตั้ง (บ./หจก.)', 'ผู้ตรวจรับ (Supervisor / Area / Region Manager)')}
+    ${sectionSign(form, 'ผู้ติดตั้ง (บ./หจก.)', 'ผู้ตรวจรับ (Supervisor / Area / Region Manager)', opts.signers)}
   </tbody></table>
 
   ${REF_LINE}

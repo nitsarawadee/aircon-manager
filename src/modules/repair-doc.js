@@ -185,7 +185,7 @@ export function buildRepairDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.Suggestion)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)')}
+    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers)}
   </tbody></table>
 
   ${REF_LINE}

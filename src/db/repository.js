@@ -38,6 +38,7 @@ const SHEET_TO_TABLE = {
   InstallForm: 'install_forms',
   Contractor: 'contractors',
   RepairLink: 'repair_links',
+  DocApproval: 'doc_approvals',
   Config: 'config_values'
 };
 

@@ -229,7 +229,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ดำเนินการล้างแอร์ (บ./หจก.)')}
+    ${sectionSign(form, 'ผู้ดำเนินการล้างแอร์ (บ./หจก.)', undefined, opts.signers)}
   </tbody></table>
 
   ${REF_LINE}
