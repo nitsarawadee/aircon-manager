@@ -148,3 +148,50 @@ export function repairShiftedPlanRows(db) {
   }
   return fixed;
 }
+
+/**
+ * เปลี่ยนเลขเคสงานซ่อมเก่าจาก RC เป็น IC (เจ้าของงานสั่ง — เคสใหม่ออกเป็น IC แล้ว ดู makeCaseId)
+ *
+ * เลขลำดับคงเดิม RC2609-03 → IC2609-03 เปลี่ยนพร้อมกันทุกที่ที่เก็บเลขเคส
+ * (history กับ repair_forms) ในคำสั่งเดียว ไม่งั้นใบของเคสเดียวกันจะแยกเป็นสองเคส
+ *
+ * ถ้าเลข IC นั้นมีคนใช้ไปแล้ว (เคสใหม่ที่เปิดหลังเปลี่ยนเป็น IC ในเดือนเดียวกัน)
+ * ให้เลขถัดไปที่ว่างของเดือนนั้นแทน — ห้ามชน เพราะสองเคสจะกลายเป็นเคสเดียว
+ *
+ * รันซ้ำได้ทุกครั้งที่เปิดเซิร์ฟเวอร์ ไม่เหลือ RC ก็ไม่ทำอะไร
+ * @returns {number} จำนวนเคสที่เปลี่ยนเลข
+ */
+export function renameRepairCaseIds(db) {
+  const TABLES = ['history', 'repair_forms'];
+  const ids = new Set();
+  for (const t of TABLES) {
+    for (const r of db.prepare(`SELECT DISTINCT CaseID FROM ${t} WHERE CaseID IS NOT NULL AND CaseID <> ''`).all()) {
+      ids.add(String(r.CaseID).trim());
+    }
+  }
+  const old = [...ids].filter(id => /^RC\d{4}-\d+$/.test(id)).sort();
+  if (!old.length) return 0;
+
+  const used = new Set([...ids].filter(id => id.startsWith('IC')));
+  const nextFree = stem => {
+    let n = 1;
+    while (used.has(stem + String(n).padStart(2, '0'))) n++;
+    return stem + String(n).padStart(2, '0');
+  };
+
+  const updates = TABLES.map(t => db.prepare(`UPDATE ${t} SET CaseID = ? WHERE CaseID = ?`));
+  db.exec('BEGIN');
+  try {
+    for (const id of old) {
+      let to = 'IC' + id.slice(2);
+      if (used.has(to)) to = nextFree(to.slice(0, to.indexOf('-') + 1));
+      used.add(to);
+      for (const u of updates) u.run(to, id);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return old.length;
+}

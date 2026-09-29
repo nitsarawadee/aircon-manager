@@ -42,7 +42,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
 const { backupDatabase, pruneBackups } = await import('./backup.js');
-const { addMissingTables, addMissingColumns, repairShiftedPlanRows } = await import('../src/db/migrate.js');
+const { addMissingTables, addMissingColumns, repairShiftedPlanRows, renameRepairCaseIds } = await import('../src/db/migrate.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -289,6 +289,14 @@ try {
   if (fixedRounds) console.log('ซ่อมแผนล้างที่ค่าเลื่อนคอลัมน์: ' + fixedRounds + ' รอบ');
 } catch (err) {
   console.error('⚠️  ซ่อมแผนล้างไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
+}
+
+// เลขเคสงานซ่อมเก่า RC → IC (ดู renameRepairCaseIds) — หลังสำรองข้อมูลเหมือนกัน
+try {
+  const renamedCases = renameRepairCaseIds(db);
+  if (renamedCases) console.log('เปลี่ยนเลขเคสงานซ่อม RC → IC: ' + renamedCases + ' เคส');
+} catch (err) {
+  console.error('⚠️  เปลี่ยนเลขเคส RC → IC ไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
 }
 
 /**
