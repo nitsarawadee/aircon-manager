@@ -488,7 +488,7 @@
       <section id="view-approvals" class="view">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
-          <p class="text-sm text-gray-500">งานซ่อมที่รอ Infrastructure อนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
+          <p class="text-sm text-gray-500">เคสที่รอ Infrastructure อนุมัติซ่อม และใบซ่อมที่ถึงขั้นที่คุณต้องอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
         <div class="mb-8">
@@ -508,7 +508,7 @@
         </div>
 
         <div>
-          <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-file-text"></i> ใบซ่อมรออนุมัติขั้นสุดท้าย (Infrastructure)</h3>
+          <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-file-text"></i> ใบซ่อมที่รอคุณอนุมัติ</h3>
           <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
               <table id="apvDocTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -6244,8 +6244,9 @@
         </tr>`).join('')
         : '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">ไม่มีเคสที่รออนุมัติซ่อม</td></tr>';
 
-      // 2) ใบซ่อมที่ผ่าน Staff กับ Supervisor/Regional แล้ว รอ Infrastructure อนุมัติขั้นสุดท้าย
-      const docs = (currentRepairForms || []).filter(f => f.Approval && f.Approval.next === 4);
+      // 2) ใบซ่อมที่ถึงขั้นของบัญชีนี้ — Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4
+      //    (canApprove มาจากเซิร์ฟเวอร์ ตามบทบาทและภูมิภาค ดู approval.js)
+      const docs = (currentRepairForms || []).filter(f => f.Approval && f.Approval.canApprove);
       docTb.innerHTML = docs.length ? docs.map(f => `
         <tr class="hover:bg-rose-50/40 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(f.DocNo || f.ID)}</td>
@@ -6257,14 +6258,13 @@
             <button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดูก่อนอนุมัติ"
               class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
-            ${f.Approval.canApprove
-              ? `<button onclick="approveDocRow('repair', '${jsStr(f.ID)}', '${jsStr(f.DocNo || f.ID)}')"
-                  class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
-                  <i class="ph ph-check"></i> อนุมัติ</button>`
-              : apvWaiting}
+            <button onclick="approveDocRow('repair', '${jsStr(f.ID)}', '${jsStr(f.DocNo || f.ID)}')"
+              title="อนุมัติขั้น ${f.Approval.next}/4"
+              class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-check"></i> อนุมัติขั้น ${f.Approval.next}</button>
           </td>
         </tr>`).join('')
-        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบซ่อมที่รออนุมัติขั้นสุดท้าย</td></tr>';
+        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบซ่อมที่รอคุณอนุมัติ</td></tr>';
     }
 
     /** ไปหน้างานซ่อมและติดตั้ง ค้นหาเครื่องตัวนี้ไว้ให้ (การ์ดเครื่องที่ควรจับตาในแดชบอร์ด) */
