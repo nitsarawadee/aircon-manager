@@ -5675,10 +5675,11 @@
               <div><label class="block text-sm font-medium text-gray-700 mb-1">เลือก Node</label>
                 <div class="relative">
                   <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <input id="nd_node" list="nd_nodes" value="${esc(curFilter)}" oninput="renderNodeUnitPicks()" autocomplete="off"
-                    placeholder="พิมพ์ชื่อ Node แล้วเลือก..."
-                    class="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm bg-white font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                  <datalist id="nd_nodes">${nodes.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+                  <input id="nd_node" value="${esc(curFilter)}" autocomplete="off" placeholder="พิมพ์ชื่อ Node แล้วเลือก..."
+                    oninput="ndNodeInput()" onfocus="ndNodeOpen()" onblur="ndNodeClose()" onkeydown="ndNodeKey(event)"
+                    class="w-full rounded-lg border-gray-300 border pl-9 pr-9 py-2 text-sm bg-white font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                  <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                  <div id="nd_nodeList" class="hidden absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1"></div>
                 </div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">รอบที่ 1</label>
@@ -5713,6 +5714,75 @@
 
     /** รายชื่อ Node ของหน้าต่างราย Node — ชื่อที่พิมพ์ต้องตรงกับในนี้ถึงจะบันทึกได้ */
     let nodeDateAllNodes = [];
+
+    /* ---------- ช่องเลือก Node: พิมพ์หาแล้วเลือก (ทำเอง ไม่ใช้ datalist ของเบราว์เซอร์ ซึ่งหน้าตาไม่เข้ากับหน้าต่าง) ---------- */
+    let ndNodeActive = -1;
+
+    function ndNodeMatches() {
+      const q = document.getElementById('nd_node').value.trim().toLowerCase();
+      return nodeDateAllNodes.filter(n => String(n).toLowerCase().includes(q));
+    }
+
+    /** ชื่อ Node พร้อมตัวหนาตรงส่วนที่ตรงกับที่พิมพ์ */
+    function ndNodeLabel(n, q) {
+      const i = q ? String(n).toLowerCase().indexOf(q) : -1;
+      if (i < 0) return esc(n);
+      return esc(n.slice(0, i)) + '<b class="text-indigo-700">' + esc(n.slice(i, i + q.length)) + '</b>' + esc(n.slice(i + q.length));
+    }
+
+    function ndNodeRender() {
+      const list = document.getElementById('nd_nodeList');
+      const input = document.getElementById('nd_node');
+      if (!list || !input) return;
+      const q = input.value.trim().toLowerCase();
+      const hits = ndNodeMatches();
+      list.innerHTML = hits.length
+        ? hits.map((n, i) => `<button type="button" data-node="${esc(n)}" onmousedown="event.preventDefault()" onclick="ndNodePick(this.dataset.node)"
+            class="w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${i === ndNodeActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-slate-50'}">
+            <span class="truncate">${ndNodeLabel(n, q)}</span>${n === input.value.trim() ? '<i class="ph ph-check text-indigo-600 shrink-0"></i>' : ''}</button>`).join('')
+        : '<div class="px-3 py-2 text-sm text-gray-400">ไม่พบ Node ที่ค้นหา</div>';
+      const on = list.children[ndNodeActive];
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+
+    function ndNodeOpen() {
+      ndNodeActive = -1;
+      ndNodeRender();
+      document.getElementById('nd_nodeList').classList.remove('hidden');
+    }
+    function ndNodeClose() {
+      const list = document.getElementById('nd_nodeList');
+      if (list) list.classList.add('hidden');
+    }
+    function ndNodeInput() {
+      ndNodeOpen();
+      renderNodeUnitPicks();
+    }
+    function ndNodePick(n) {
+      document.getElementById('nd_node').value = n;
+      ndNodeClose();
+      renderNodeUnitPicks();
+    }
+    function ndNodeKey(e) {
+      const list = document.getElementById('nd_nodeList');
+      const hits = ndNodeMatches();
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (list.classList.contains('hidden')) ndNodeOpen();
+        if (!hits.length) return;
+        ndNodeActive = e.key === 'ArrowDown'
+          ? Math.min(ndNodeActive + 1, hits.length - 1)
+          : Math.max(ndNodeActive - 1, 0);
+        ndNodeRender();
+      } else if (e.key === 'Enter') {
+        // พิมพ์จนเหลือตัวเดียว กด Enter เลือกได้เลย
+        const pick = hits[ndNodeActive] || (hits.length === 1 ? hits[0] : null);
+        if (pick) { e.preventDefault(); ndNodePick(pick); }
+      } else if (e.key === 'Escape') {
+        if (!list.classList.contains('hidden')) { e.stopPropagation(); ndNodeClose(); }
+      }
+    }
+    Object.assign(window, { ndNodeInput, ndNodeOpen, ndNodeClose, ndNodePick, ndNodeKey });
     /** สถานะติ๊กตอนเปิด Node นั้น — ใช้ดูว่าผู้ใช้เปลี่ยนเครื่องที่จะล้างหรือเปล่า */
     let nodeUnitPicksInitial = '';
 
