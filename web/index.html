@@ -7704,6 +7704,8 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ไฟล์ PDF ถูกสร้างใหม่ให้เองหลังหยุดแก้ (ฝั่งเซิร์ฟเวอร์หน่วงไว้ 5 วินาที)
    */
   let peRow = null, peSlot = 1, pePhotos = {}, peDocNo = '', peChanged = 0, peKind = 'cleaning';
+  // เลขเครื่องที่โชว์ = ช่องในใบ + คู่เครื่องของใบ (ใบของเครื่องที่ 3 ขึ้นไป ดู SlotBase)
+  let peNo = 1;
 
   /** ชื่อคำสั่งของเอกสารแต่ละชนิด — สองแบบอยู่คนละตาราง จึงมีคำสั่งของตัวเอง */
   const PE_API = {
@@ -7715,6 +7717,8 @@ const CLEANING_CHECKLIST_ITEMS = [
   async function openPhotoEditor(row, slot, kind) {
     peRow = row; peSlot = Number(slot) || 1; pePhotos = {}; peDocNo = ''; peChanged = 0;
     peKind = PE_API[kind] ? kind : 'cleaning';
+    const peForm = (peKind === 'install' ? currentInstallForms : currentCleaningForms || []).find(f => f._row === row) || {};
+    peNo = peSlot + (Number(peForm.SlotBase) || 0);
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col">
@@ -7725,7 +7729,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <i class="ph ph-arrow-left text-xl"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <h2 class="font-bold text-gray-800 leading-tight truncate">${peKind === 'repair' ? 'แก้รูปเอกสารซ่อม' : 'แก้รูปเครื่องที่ ' + peSlot}</h2>
+              <h2 class="font-bold text-gray-800 leading-tight truncate">${peKind === 'repair' ? 'แก้รูปเอกสารซ่อม' : 'แก้รูปเครื่องที่ ' + peNo}</h2>
               <p id="pe_sub" class="text-xs text-gray-500 leading-tight">กำลังโหลดรูป...</p>
             </div>
           </div>
@@ -7795,7 +7799,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     box.innerHTML = `
       <div class="flex items-center justify-between mb-2 gap-2">
-        <div class="text-xs font-semibold text-gray-700">${peKind === 'repair' ? 'รูปประกอบการซ่อม' : 'เครื่องที่ ' + peSlot}</div>
+        <div class="text-xs font-semibold text-gray-700">${peKind === 'repair' ? 'รูปประกอบการซ่อม' : 'เครื่องที่ ' + peNo}</div>
         <div class="text-[11px] flex-shrink-0 ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
       </div>
       <p class="text-[11px] text-gray-500 mb-2 leading-tight">กดที่รูปเพื่อเปลี่ยน · กดกากบาทเพื่อลบ</p>
@@ -7832,7 +7836,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   async function peRemove(index) {
     const caps = captionsOf(peKind);
-    const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + caps[index - 1] + ')' + (peKind === 'repair' ? '' : ' ของเครื่องที่ ' + peSlot) + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
+    const ok = await showConfirm('ลบรูปช่องที่ ' + index + ' (' + caps[index - 1] + ')' + (peKind === 'repair' ? '' : ' ของเครื่องที่ ' + peNo) + ' ใช่มั้ย?\nลบแล้วเอากลับมาไม่ได้ ต้องเลือกรูปใหม่');
     if (!ok) return;
 
     try {
