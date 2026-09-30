@@ -176,6 +176,29 @@ export function normalizeCode(v) {
 export const normalizeSiteCode = normalizeCode;
 
 /**
+ * เรียงเครื่องให้ Node เดียวกันอยู่ติดกัน และในแต่ละ Node เรียงตามเลขเครื่อง (AIR-1, AIR-2, AIR-3)
+ *
+ * ลำดับของ Node คงไว้ตามที่ Node นั้นโผล่ครั้งแรก (= ลำดับไฟล์ Excel ที่นำเข้ามา) ไม่เรียง A→Z ใหม่
+ * เครื่องที่เพิ่มทีหลังถูกต่อท้ายตาราง ถ้าไม่เรียงจะไปโผล่แถวสุดท้าย ห่างจากเครื่องอื่นใน Node เดียวกัน
+ * (เจ้าของงานขอ — เช่น Node มี 1 กับ 3 แล้วเพิ่ม 2 ต้องได้ 1, 2, 3)
+ * รหัสที่ไม่มีเลขเครื่องอยู่ท้าย Node ตามลำดับเดิม · ไม่แก้ array ที่ส่งมา
+ */
+export function orderByNode(rows) {
+  const text = v => String(v == null ? '' : v).trim();
+  const keyOf = r => normalizeCode(text(r.SiteCode) || text(r.NodeName) || text(r.AirCode).replace(/-AIR-\d+$/i, ''));
+  const noOf = r => {
+    const m = /-AIR-(\d+)$/i.exec(text(r.AirCode));
+    return m ? Number(m[1]) : Infinity;
+  };
+  const first = new Map();
+  rows.forEach((r, i) => { const k = keyOf(r); if (!first.has(k)) first.set(k, i); });
+  return rows
+    .map((r, i) => ({ r, i, g: first.get(keyOf(r)), n: noOf(r) }))
+    .sort((a, b) => a.g - b.g || (a.n === b.n ? 0 : a.n < b.n ? -1 : 1) || a.i - b.i)
+    .map(x => x.r);
+}
+
+/**
  * แปลงค่า Region ให้เป็นข้อความเสมอก่อนเทียบ
  * กัน Google Sheets แปลงค่าที่พิมพ์เป็นตัวเลข (เช่น "6") ให้กลายเป็น Number
  * ซึ่งจะทำให้เทียบกับค่าในชีต Users (ที่เป็นข้อความเสมอ) ไม่ตรงกัน

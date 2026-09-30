@@ -1,7 +1,7 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
 import { HEADERS as IMPORT_HEADERS, COLUMNS as IMPORT_COLUMNS, ALLOWED as IMPORT_ALLOWED } from '../import-spec.js';
-import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, orderByNode, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 import { stockOldMachine } from './warehouse.js';
@@ -710,7 +710,8 @@ export async function getAirUnitImportTemplate(ctx) {
 
 export async function getAirUnitImportFile(ctx) {
   await ctx.assertModuleEdit('airlist');
-  return { headers: IMPORT_HEADERS, rows: toExportRows(await getAirList(ctx)) };
+  // Node เดียวกันเรียงติดกันตามเลขเครื่อง — เครื่องที่เพิ่มทีหลังไม่ไปโผล่ท้ายไฟล์ (ดู orderByNode)
+  return { headers: IMPORT_HEADERS, rows: toExportRows(orderByNode(await getAirList(ctx))) };
 }
 
 /**

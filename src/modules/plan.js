@@ -1,5 +1,5 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
-import { formatDate, isRetiredStatus, normalizeCode, safeParseDate, todayStart } from '../values.js';
+import { formatDate, isRetiredStatus, normalizeCode, orderByNode, safeParseDate, todayStart } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { jobKey } from '../context.js';
 
@@ -75,6 +75,10 @@ export async function getCleaningPlan(ctx, year) {
     const allowed = await ctx.allowedAirCodes();
     list = list.filter(o => allowed.has(normalizeCode(o.AirCode)));
   }
+
+  // เครื่องที่อัปเดตเข้าแผนทีหลังถูกต่อท้ายชีต — เรียงให้อยู่กับ Node ของตัวเอง (ตาราง + ฟอร์มแผนที่โหลดออก)
+  // แค่ลำดับที่ส่งออก แถวในชีตไม่ย้าย การแก้ไขอ้างเลขแถว (_row) เหมือนเดิม
+  list = orderByNode(list);
 
   // ชื่อผู้รับเหมาของแต่ละรอบ — แผนเก็บแค่รหัส หน้าเว็บต้องการชื่อไปแสดง
   const names = contractorNames(ctx);
