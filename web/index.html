@@ -5172,29 +5172,27 @@
         : `<div class="text-lg font-bold text-gray-300 leading-none">—</div><div class="text-[11px] text-gray-400 mt-1">ยังไม่นัด</div>`;
       // รหัสเต็มยาว (ATG-PMK-AIR-1) ในแถวที่บอก Node อยู่แล้ว เหลือแค่ AIR-1 พอ
       const short = code => String(code).replace(new RegExp('^' + String(j.site).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-'), '');
+      // ป้ายเครื่องคือปุ่มของเครื่องนั้นเลย — เดิมมีป้ายเทาซ้ำกับปุ่มส้มทึบด้านขวา แถวละหลายปุ่ม เจ้าของงานว่าขัดตา
       const chips = j.units.map(u => {
-        if (!u.done) return `<span class="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600">${esc(short(u.code))}</span>`;
+        if (!u.done) return `
+          <button onclick="openMyJobForm('${jsStr(u.code)}', ${j.round})" title="กรอกใบล้างของ ${esc(u.code)}"
+            class="px-2.5 py-1 rounded-lg text-xs font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
+            <i class="ph ph-pencil-simple"></i>${esc(short(u.code))} · กรอกใบล้าง</button>`;
         const cls = u.waiting ? 'bg-blue-50 text-[#1153a1] border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
         const label = esc(short(u.code)) + (u.waiting ? ' รออนุมัติ' : ' เสร็จ');
         return u.form
           ? `<button onclick="openCleaningDoc(${Number(u.form._row)}, '${jsStr(u.form.ID)}')" title="เปิดใบล้าง ${esc(displayDocNo(u.form))}"
-               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
-          : `<span class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls}">${label}</span>`;
+               class="px-2.5 py-1 rounded-lg text-xs font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
+          : `<span class="px-2.5 py-1 rounded-lg text-xs font-medium border ${cls}">${label}</span>`;
       }).join('');
-      const pending = j.units.filter(u => !u.done);
-      const actions = pending.map(u => `
-        <button onclick="openMyJobForm('${jsStr(u.code)}', ${j.round})"
-          class="px-3 py-2 rounded-lg bg-[#f47920] hover:bg-[#d96615] text-white text-xs font-medium inline-flex items-center gap-1 shadow-sm whitespace-nowrap">
-          <i class="ph ph-clipboard-text"></i> กรอกใบล้าง${pending.length > 1 ? ' ' + esc(short(u.code)) : ''}</button>`).join('');
       return `
-        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-3">
+        <div class="flex items-center gap-3 px-4 py-3">
           <div class="w-12 text-center flex-shrink-0">${dateBox}</div>
           <div class="flex-1 min-w-0">
             <div class="font-semibold text-gray-800 truncate">${esc(j.node)}
               <span class="text-xs font-normal text-gray-500">${esc(j.site)} · รอบ ${j.round}</span></div>
-            <div class="flex flex-wrap gap-1 mt-1">${chips}</div>
+            <div class="flex flex-wrap gap-1.5 mt-1.5">${chips}</div>
           </div>
-          ${actions ? `<div class="flex flex-wrap gap-1.5 w-full sm:w-auto justify-end">${actions}</div>` : ''}
         </div>`;
     }
 
