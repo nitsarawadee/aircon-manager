@@ -1,6 +1,6 @@
-import { SHEETS } from '../schema.js';
+import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { formatDate, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
-import { ensureCaseId, openCaseOf } from './repair-case.js';
+import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -336,6 +336,37 @@ async function unitWithOpenCase(ctx, airCode, verb) {
   // ต้องเดินต่อได้ ไม่งั้นจะติดค้างถาวร กดปุ่มไหนก็ไม่ได้
   const caseId = ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), found.AirCode);
   return { found, openCase: { caseId } };
+}
+
+/**
+ * ตัวเลขแดงบนเมนู "งานซ่อมและติดตั้ง" — งานที่ค้างให้ลงมือ กันลืมมากรอก (แบบเดียวกับเมนูเอกสารรออนุมัติ)
+ *
+ * นับให้ตรงกับสองตารางบนหน้านั้น:
+ *   repair  = เคสงานซ่อมที่ยังไม่ปิด — เครื่องสถานะ ชำรุด / รอซ่อม / รื้อถอน (รอเครื่องใหม่มาแทน)
+ *   install = งานติดตั้งที่ยังไม่ได้กรอกเอกสาร เครื่องละหนึ่ง — เฉพาะคนที่ดูเอกสารติดตั้งได้
+ *             (คนที่ไม่มีสิทธิ์ไม่เห็นตารางนี้ นับให้ก็กดไปกรอกไม่ได้)
+ */
+export async function getRepairWorkCount(ctx) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('repair'))) return { repair: 0, install: 0, total: 0 };
+  await ctx.ensureBase();
+
+  const inScope = await ctx.scopeFilter();
+  const units = ctx.ss.objects(SHEETS.AIRLIST).filter(inScope);
+  const repair = units.filter(u => isRepairStatus(u.Status)).length;
+
+  let install = 0;
+  if (await ctx.canView('installform')) {
+    const mine = new Set(units.map(u => normalizeCode(u.AirCode)));
+    const waiting = new Set();
+    for (const h of ctx.ss.objects(SHEETS.HISTORY)) {
+      const code = normalizeCode(h.AirCode);
+      if (String(h.Note || '').trim() === INSTALL_PENDING_NOTE && mine.has(code)) waiting.add(code);
+    }
+    install = waiting.size;
+  }
+
+  return { repair, install, total: repair + install };
 }
 
 /**

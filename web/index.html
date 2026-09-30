@@ -322,6 +322,8 @@
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="repair">
         <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อมและติดตั้ง</span>
+        <!-- เคสซ่อมที่ยังไม่ปิด + งานติดตั้งที่รอเอกสาร กันลืมมากรอก ดู refreshRepairBadge -->
+        <span id="repairBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-5 text-center shadow-sm"></span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="approvals">
         <i class="ph ph-seal-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>เอกสารรออนุมัติ</span>
@@ -2926,6 +2928,9 @@
 
     /* ============== DASHBOARD ============== */
     async function loadDashboard() {
+      // ทุกจุดที่บันทึกงาน (แจ้งซ่อม ปิดเคส เปลี่ยน/ย้าย/เพิ่มเครื่อง กรอกใบติดตั้ง) เรียกตัวนี้ต่อท้าย
+      // ตัวเลขบนเมนูงานซ่อมและติดตั้งจึงนับใหม่ตรงนี้ทีเดียว ไม่ต้องไล่ใส่ทุกจุด
+      refreshRepairBadge();
       // หน้านี้ถูกถอดออกไปแล้ว (ผู้รับเหมา) — หลายจุดเรียกตัวนี้ต่อท้ายหลังบันทึกงาน ต้องไม่พัง
       if (!document.getElementById('view-dashboard')) return;
       // ผู้รับเหมาไม่มีการ์ดสรุป มีแต่ปฏิทิน (ดู applyModulePermissionsUI)
@@ -6439,10 +6444,24 @@
      * นับใหม่ตอนเข้าระบบ ตอนเปลี่ยนเมนู หลังกดอนุมัติ และทุก 1 นาที (คนอื่นอนุมัติขั้นก่อนหน้ามาให้เรา)
      */
     async function refreshApprovalBadge() {
+      refreshRepairBadge();   // จุดที่ต้องนับใหม่เป็นชุดเดียวกัน (เปลี่ยนเมนู เปลี่ยนสถานะ ทุก 1 นาที)
       const badge = document.getElementById('apvBadge');
       if (!badge || !currentUserInfo) return;   // ไม่เห็นงานซ่อม = ไม่มีเมนูนี้
       let n = 0;
       try { n = ((await callQuiet('getApprovalCount')) || {}).total || 0; } catch (e) { return; }
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.classList.toggle('hidden', !n);
+    }
+
+    /**
+     * ตัวเลขแดงบนเมนูงานซ่อมและติดตั้ง — เคสซ่อมที่ยังไม่ปิด + งานติดตั้งที่รอเอกสาร (นับที่เซิร์ฟเวอร์ getRepairWorkCount)
+     * ตัวเลขลดเองเมื่อปิดเคสหรือกรอกเอกสารติดตั้งแล้ว ไม่ใช่เมื่อแค่เปิดดูหน้า — จะได้ไม่ลืมงานที่ยังค้าง
+     */
+    async function refreshRepairBadge() {
+      const badge = document.getElementById('repairBadge');
+      if (!badge || !currentUserInfo) return;
+      let n = 0;
+      try { n = ((await callQuiet('getRepairWorkCount')) || {}).total || 0; } catch (e) { return; }
       badge.textContent = n > 99 ? '99+' : String(n);
       badge.classList.toggle('hidden', !n);
     }

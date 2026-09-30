@@ -18,7 +18,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
-import { getHistory, addHistoryRecord } from '../src/modules/history.js';
+import { getHistory, addHistoryRecord, getRepairWorkCount } from '../src/modules/history.js';
 import { getAirList, replaceAirUnit } from '../src/modules/airlist.js';
 import {
   getInstallForms, saveInstallForm, deleteInstallForm,
@@ -120,6 +120,19 @@ test('ติดตั้งสองเครื่องในใบเดี�
   assert.ok(res.docNo, 'เครื่องที่ 1 ต้องมีเลข');
   assert.ok(res.docNo2, 'เครื่องที่ 2 ต้องมีเลข');
   assert.notEqual(res.docNo, res.docNo2, 'เลขสองเครื่องห้ามซ้ำกัน');
+});
+
+test('ตัวเลขบนเมนูงานซ่อมและติดตั้ง = เคสที่ยังไม่ปิด + งานติดตั้งที่รอเอกสาร และลดเมื่อกรอกแล้ว', async () => {
+  const db = freshDb();
+  // ข้อมูลตั้งต้น: AIR-2 ชำรุด = เคสค้าง 1
+  assert.deepEqual(await getRepairWorkCount(ctxOf(db)), { repair: 1, install: 0, total: 1 });
+
+  const [unit] = (await getAirList(ctxOf(db))).filter(a => a.AirCode === 'KKN-CPE-AIR-1');
+  await replaceAirUnit(ctxOf(db), unit._row, { Brand: 'Daikin', IndoorSN: 'ใหม่-IN-1' }, unit.AirCode);
+  assert.deepEqual(await getRepairWorkCount(ctxOf(db)), { repair: 1, install: 1, total: 2 }, 'เปลี่ยนเครื่องแล้วรอเอกสารติดตั้ง');
+
+  await saveInstallForm(ctxOf(db), payload());
+  assert.deepEqual(await getRepairWorkCount(ctxOf(db)), { repair: 1, install: 0, total: 1 }, 'กรอกใบติดตั้งแล้วต้องหายจากตัวเลข');
 });
 
 test('ใบประวัติที่ออกเลขทีหลัง ต้องไม่ได้เลขเดียวกับใบติดตั้ง · ประวัติติดตั้งใช้เลขของใบนั้น', async () => {
