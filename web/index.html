@@ -617,6 +617,19 @@
                   <option value="all">ทั้งหมด</option>
                 </select>
               </div>
+
+              <!-- เรียงลำดับ — ดู sortAirRows -->
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+                <i class="ph ph-sort-ascending text-gray-500"></i>
+                <select id="airSort" onchange="refreshAirTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="code-asc">รหัสเครื่อง A → Z</option>
+                  <option value="code-desc">รหัสเครื่อง Z → A</option>
+                  <option value="age-asc">อายุการใช้งาน น้อย → มาก</option>
+                  <option value="age-desc">อายุการใช้งาน มาก → น้อย</option>
+                  <option value="btu-asc">BTU น้อย → มาก</option>
+                  <option value="btu-desc">BTU มาก → น้อย</option>
+                </select>
+              </div>
             <div class="relative flex-1 sm:w-64">
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm">
@@ -4177,10 +4190,28 @@
      * เรียงตรงนี้ปลอดภัยเพราะ _row ติดไปกับข้อมูลแต่ละตัว สลับที่ยังไงก็ชี้ถูกตัวเดิม
      */
     function sortAirRows(list) {
+      const mode = (document.getElementById('airSort') || {}).value || 'code-asc';
+      const byCode = (a, b) =>
+        String(a.AirCode || '').localeCompare(String(b.AirCode || ''), 'th', { numeric: true, sensitivity: 'base' });
+      const dir = mode.endsWith('-desc') ? -1 : 1;
+
+      // ค่าที่ใช้เรียง — ไม่มีข้อมูล (ไม่กรอกวันติดตั้ง / BTU) คืน null แล้วไปอยู่ท้ายเสมอไม่ว่าเรียงทางไหน
+      // อายุเรียงจากวันติดตั้ง: ติดตั้งทีหลัง = อายุน้อยกว่า จึงกลับเครื่องหมาย
+      const keyOf = mode.startsWith('age-')
+        ? a => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(a.InstallDate || '').trim());
+                 return m ? -Number(m[1] + m[2] + m[3]) : null; }
+        : mode.startsWith('btu-')
+          ? a => { const n = Number(String(a.BTU == null ? '' : a.BTU).replace(/[^\d.]/g, ''));
+                   return n > 0 ? n : null; }
+          : null;
+
       // .slice() ก่อนเสมอ ไม่งั้นจะไปสลับลำดับใน currentAirList ที่หน้าอื่นใช้ร่วมกันอยู่
-      return (list || []).slice().sort((a, b) =>
-        String(a.AirCode || '').localeCompare(String(b.AirCode || ''), 'th', { numeric: true, sensitivity: 'base' })
-      );
+      return (list || []).slice().sort((a, b) => {
+        if (!keyOf) return dir * byCode(a, b);
+        const ka = keyOf(a), kb = keyOf(b);
+        if (ka === null || kb === null) return (ka === null) - (kb === null) || byCode(a, b);
+        return dir * (ka - kb) || byCode(a, b);   // ค่าเท่ากันเรียงตามรหัสเครื่อง ลำดับจะได้ไม่กระโดด
+      });
     }
 
     function renderAirTable(list, keepPage) {
