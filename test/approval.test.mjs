@@ -200,6 +200,18 @@ test('ตัวเลขบนเมนูเอกสารรออนุม�
   assert.equal(await count('staff2'), 0, 'นอกภูมิภาคไม่นับ');
 
   db.exec("UPDATE air_units SET Status = 'ชำรุด' WHERE AirCode = 'AYA-WNI-AIR-1'");
-  assert.deepEqual(await getApprovalCount(as(db, 'infra')), { docs: 0, cases: 1, total: 1 });
+  assert.deepEqual(await getApprovalCount(as(db, 'infra')), { docs: 0, cleaning: 0, cases: 1, total: 1 });
   assert.equal(await count('sup'), 1, 'เคสชำรุดไม่นับให้บทบาทอื่น');
+});
+
+test('ตัวเลขบนเมนูนับใบล้างแอร์ที่รออนุมัติด้วย (แยกจากใบซ่อม)', async () => {
+  const { getApprovalCount } = await import('../src/modules/approval.js');
+  const db = freshDb();
+  await saveCleaningForm(as(db, 'infra'), { NodeName: 'วังน้อย', SiteCode: 'AYA-WNI', Date: '2026-09-20',
+    AirCode1: 'AYA-WNI-AIR-1', TechnicianName: 'ช่าง', Checklist: [] });
+  assert.deepEqual(await getApprovalCount(as(db, 'staff')), { docs: 0, cleaning: 1, cases: 0, total: 1 });
+  const [form] = await getCleaningForms(as(db, 'infra'));
+  await approveDoc(as(db, 'staff'), 'cleaning', form.ID);
+  assert.equal((await getApprovalCount(as(db, 'staff'))).total, 0);
+  assert.equal((await getApprovalCount(as(db, 'sup'))).cleaning, 1);
 });
