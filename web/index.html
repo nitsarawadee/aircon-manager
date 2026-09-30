@@ -2702,19 +2702,15 @@
      *
      * keys = สิทธิ์ที่ช่องนั้นคุม · "แบบฟอร์มเอกสาร" ช่องเดียวคุมทั้งใบล้าง ใบซ่อม และใบติดตั้ง
      * (เซิร์ฟเวอร์ยังเก็บแยกสามค่าเหมือนเดิม แค่ตั้งพร้อมกันเป็นค่าเดียว)
-     * note = เมนูที่ไม่มีให้ตั้ง บอกไว้ว่าใครเห็น
+     * มีเฉพาะเมนูที่ตั้งสิทธิ์ได้ — แดชบอร์ด คลังแอร์ เอกสารรออนุมัติ จัดการผู้ใช้ ไม่มีให้ตั้ง (เจ้าของงานให้เอาแถวข้อความออก)
      */
     const PERMISSION_MENU = [
-      { label: 'แดชบอร์ด', note: 'เห็นทุกคน' },
       { label: 'รายการเครื่อง', keys: ['airlist'] },
-      { label: 'คลังแอร์', note: 'เฉพาะ Infrastructure' },
       { label: 'แผนล้างแอร์', keys: ['plan'] },
       { label: 'ประวัติ', keys: ['history'] },
       { label: 'งานซ่อมและติดตั้ง', keys: ['repair'] },
-      { label: 'เอกสารรออนุมัติ', note: 'ตามงานซ่อมและติดตั้ง' },
       { label: 'แบบฟอร์มเอกสาร', keys: ['cleaningform', 'repairform', 'installform'] },
-      { label: 'งบประมาณ', keys: ['budget'] },
-      { label: 'จัดการผู้ใช้', note: 'เฉพาะ Infrastructure' }
+      { label: 'งบประมาณ', keys: ['budget'] }
     ];
 
     /** ต้องตรงกับ PERMISSION_INHERITS ใน src/schema.js — ดูเหตุผลที่นั่น */
@@ -2774,13 +2770,6 @@
       const currentPerms = isEdit ? parsePermStringToObj(data.Permissions) : { ...REGIONAL_DEFAULT_PERMS };
       const LEVEL_TH = { edit: 'แก้ไขได้', view: 'ดูอย่างเดียว', none: 'ไม่ให้เข้าถึง' };
       const permRows = PERMISSION_MENU.map(m => {
-        if (!m.keys) {
-          return `
-        <div class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg">
-          <span class="text-sm text-gray-700">${m.label}</span>
-          <span class="text-xs text-gray-400">${m.note}</span>
-        </div>`;
-        }
         // ค่าที่แสดงต้องตรงกับที่เซิร์ฟเวอร์ใช้จริง ไม่งั้นกดบันทึกแล้วสิทธิ์เปลี่ยนเอง
         // (บัญชีใหม่ได้ค่าตั้งต้นจาก REGIONAL_DEFAULT_PERMS)
         // ช่องที่คุมหลายสิทธิ์ แสดงค่าของตัวแรก — ผู้ใช้เก่าที่ตั้งแยกไว้ต่างกัน บอกไว้ก่อนบันทึกทับเป็นค่าเดียว
