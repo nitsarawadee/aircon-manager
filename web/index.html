@@ -6612,6 +6612,13 @@
           || docs.find(f => f.kind === 'install' && same(fmtDate(date), fmtDate(f.Date)) &&
                             [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)));
         if (!inst) {
+          // ยังไม่ได้กรอก → พาไปหน้างานซ่อมและติดตั้งของเครื่องนั้น ซึ่งมีปุ่มกรอกเอกสารติดตั้งในตาราง
+          // "งานติดตั้งที่รอเอกสาร" (เจ้าของงานสั่ง) · เฉพาะแถวที่รอเอกสารจริง — ต้นทางของการย้ายเครื่อง
+          // หรือประวัติเก่าก่อนมีป้ายนี้ ไม่มีอะไรให้กรอกที่หน้านั้น
+          if (same(String(note || '').trim(), INSTALL_PENDING_NOTE) && document.querySelector('[data-tab="repair"]')) {
+            viewAirRepair(airCode);
+            return;
+          }
           showToast('ยังไม่ได้กรอกเอกสารติดตั้งของเครื่องใหม่ (' + (caseId || id) + ')', 'error');
           return;
         }
