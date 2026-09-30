@@ -83,7 +83,9 @@ export const TABLES = {
       R3_PlanDate: D, R3_ActualDate: D, R3_Price: N, R3_Technician: S, R3_Status: S, R3_Note: S, R3_FormUrl: S,
       UpdatedBy: S,
       // ผู้รับเหมาที่มอบหมายงานแต่ละรอบ (ดู PLAN_HEADERS ใน src/schema.js)
-      R1_ContractorID: S, R2_ContractorID: S, R3_ContractorID: S
+      R1_ContractorID: S, R2_ContractorID: S, R3_ContractorID: S,
+      // ปีนี้ล้างกี่รอบ (1–3) เลือกตอนสร้างแผน — ว่าง = แผนเก่าก่อนมีตัวเลือกนี้ = 3 รอบ (ดู planRounds)
+      Rounds: N
     },
     indexes: [['Year'], ['Year', 'AirCode'], ['NodeName']],
     unique: ['Year', 'AirCode']

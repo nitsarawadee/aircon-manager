@@ -80,7 +80,9 @@ export const PLAN_HEADERS = [
   'R1_FormUrl', 'R2_FormUrl', 'R3_FormUrl',
   // ผู้รับเหมาที่มอบหมายงานรอบนั้น (รหัสจากตาราง Contractor) — บัญชีผู้รับเหมาเห็นเฉพาะรอบของตัวเอง
   // แยกจาก R*_Technician ซึ่งเป็นข้อความพิมพ์เอง (ข้อมูลเก่ามีชื่อเดียวกันหลายแบบ ใช้ผูกสิทธิ์ไม่ได้)
-  'R1_ContractorID', 'R2_ContractorID', 'R3_ContractorID'
+  'R1_ContractorID', 'R2_ContractorID', 'R3_ContractorID',
+  // ปีนี้ล้างกี่รอบ (1–3) เลือกตอนสร้างแผน — ว่าง = 3 รอบแบบเดิม (ดู planRounds ใน plan.js)
+  'Rounds'
 ];
 
 export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note', 'UpdatedAt', 'UpdatedBy'];

@@ -145,6 +145,35 @@ const ROUND_DONE = 'ล้างเสร็จสิ้น';
 const ROUND_CANCELLED = 'ยกเลิก';
 
 /**
+ * ปีนี้ล้างกี่รอบ (1–3) — เลือกตอนสร้างแผน เพราะบางปีล้างไม่ครบ 3 รอบ (เจ้าของงานขอ)
+ *
+ * เก็บไว้ในทุกแถวของแผนปีนั้น (คอลัมน์ Rounds) แทนตารางตั้งค่าแยก ได้มากับแถวที่ทุกส่วนอ่านอยู่แล้ว
+ * ว่างหรือค่าแปลก = แผนเก่าก่อนมีตัวเลือกนี้ = 3 รอบตามเดิม
+ * รอบที่เกินจำนวนนี้ "ไม่มีอยู่" — ไม่นับในคืบหน้า/งบ ไม่ขึ้นปฏิทิน และตั้งวัน/ปิดงานไม่ได้
+ */
+export function planRounds(row) {
+  const n = Number(row && row.Rounds);
+  return Number.isInteger(n) && n >= 1 && n <= 3 ? n : 3;
+}
+
+/** รอบที่มีอยู่จริงของแถวนี้ เช่น [1, 2] */
+const roundsOf = row => [1, 2, 3].slice(0, planRounds(row));
+
+/**
+ * จำนวนรอบของแถวที่อ่านเป็นช่องๆ (ตอนเขียนแบบรายคอลัมน์ ไม่มี object ในมือ)
+ * @param {Function} cellAt (ตำแหน่งคอลัมน์เริ่มที่ 0) → ค่าในช่อง
+ */
+function roundsInRow(headers, cellAt) {
+  const col = headers.indexOf('Rounds');
+  return planRounds({ Rounds: col > -1 ? cellAt(col) : '' });
+}
+
+/** จำนวนรอบของแผนทั้งปี — ทุกแถวถูกสร้างพร้อมกันจึงเท่ากันหมด เอาค่ามากสุดกันไว้ */
+export function planYearRounds(rows) {
+  return (rows || []).length ? Math.max(...rows.map(planRounds)) : 3;
+}
+
+/**
  * เรียง Node ที่ค้างมากที่สุดไว้บน
  *
  * รายการนี้มีไว้ใช้ตามงาน ไม่ได้มีไว้ดูว่าทำได้ดีแค่ไหน
@@ -192,7 +221,8 @@ export function summarizeCleaning(planRows, airUnits, year) {
   }
 
   const blank = () => ({ done: 0, pending: 0, cancelled: 0, cost: 0 });
-  const rounds = [1, 2, 3].map(r => ({ round: r, ...blank() }));
+  const roundCount = planYearRounds(planRows);
+  const rounds = [1, 2, 3].slice(0, roundCount).map(r => ({ round: r, ...blank() }));
   const byRegion = new Map();
 
   let neverCleaned = 0;
@@ -226,7 +256,7 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
     let doneThisUnit = 0;
 
-    for (const r of [1, 2, 3]) {
+    for (const r of roundsOf(row)) {
       // บัญชีผู้รับเหมา: รอบที่เป็นงานของเจ้าอื่นไม่ใช่งานของตัวเอง ไม่นับทั้งเสร็จและค้าง
       // (ธงนี้มีเฉพาะแถวที่ getCleaningPlan ส่งให้ผู้รับเหมา เจ้าหน้าที่นับครบทุกรอบเหมือนเดิม)
       if (row['R' + r + '_Mine'] === false) continue;
@@ -263,6 +293,7 @@ export function summarizeCleaning(planRows, airUnits, year) {
 
   return {
     year: Number(year),
+    roundCount,
     // นับเฉพาะเครื่องที่ยังใช้งานอยู่ ให้ตรงกับการ์ด "เครื่องทั้งหมด" บนแดชบอร์ด
     units: [...byRegion.values()].reduce((n, r) => n + r.units, 0),
     rounds,
@@ -307,7 +338,7 @@ export function planCalendar(planRows, year, month) {
   let total = 0;
 
   for (const row of planRows || []) {
-    for (const r of [1, 2, 3]) {
+    for (const r of roundsOf(row)) {
       // บัญชีผู้รับเหมา: รอบของเจ้าอื่นไม่ใช่นัดของตัวเอง ไม่ต้องขึ้นในปฏิทิน
       // (ธงนี้มีเฉพาะแถวที่ getCleaningPlan ส่งให้ผู้รับเหมา)
       if (row['R' + r + '_Mine'] === false) continue;
@@ -395,7 +426,7 @@ export function upcomingFromPlan(plan, py, today) {
     // ไม่งั้นพอถึงวันนัด จะมีคนถูกส่งไปล้างเครื่องที่ไม่มีอยู่แล้ว
     if (p.Retired || p.Removed) continue;
 
-    for (const r of [1, 2, 3]) {
+    for (const r of roundsOf(p)) {
       // บัญชีผู้รับเหมา: รอบของเจ้าอื่นไม่ใช่นัดของตัวเอง
       if (p['R' + r + '_Mine'] === false) continue;
       const status = p['R' + r + '_Status'];
@@ -450,12 +481,18 @@ export async function getCleaningSummary(ctx, year) {
   return summarizeCleaning(plan, ctx.ss.objects(SHEETS.AIRLIST), year);
 }
 
-export async function createCleaningPlan(ctx, year) {
+/**
+ * @param {number} [rounds] ปีนี้ล้างกี่รอบ 1–3 (ไม่ส่ง = 3 แบบเดิม) — ดู planRounds
+ */
+export async function createCleaningPlan(ctx, year, rounds = 3) {
   return ctx.withLock(async () => {
     await ctx.ensureBase();
     // การสร้างแผนประจำปีกระทบเครื่องทุกภูมิภาคทั่วบริษัทในครั้งเดียว
     // จึงจำกัดให้เฉพาะ Admin เท่านั้นที่ทำได้
     await ctx.assertAdmin();
+
+    const n = Number(rounds);
+    if (![1, 2, 3].includes(n)) throw new Error('จำนวนรอบต้องเป็น 1, 2 หรือ 3');
 
     const name = planSheet(year);
     if (await ctx.ss.hasSheet(name)) {
@@ -482,8 +519,9 @@ export async function createCleaningPlan(ctx, year) {
     const me = await ctx.currentUser();
     const headers = ctx.ss.headers(name);
     const rows = airList.map(a => {
-      const rec = { AirCode: a.AirCode, NodeName: a.NodeName, SiteCode: a.SiteCode, BTU: a.BTU, UpdatedBy: me };
-      for (const r of [1, 2, 3]) {
+      const rec = { AirCode: a.AirCode, NodeName: a.NodeName, SiteCode: a.SiteCode, BTU: a.BTU, UpdatedBy: me, Rounds: n };
+      // รอบที่ไม่มีในปีนี้ปล่อยว่างทั้งบล็อก — ไม่มีราคา/สถานะให้ถูกนับ
+      for (const r of [1, 2, 3].slice(0, n)) {
         rec['R' + r + '_Price'] = a.CleaningPricePerRound || '';
         rec['R' + r + '_Status'] = 'รอดำเนินการ';
       }
@@ -578,6 +616,8 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
 
     const startCol = headers.indexOf('R' + round + '_PlanDate') + 1;
     if (startCol <= 0) throw new Error('ไม่พบข้อมูลรอบที่ ' + round + ' ในแผนปีนี้');
+    const n = roundsInRow(headers, r => ctx.ss.cell(name, row, r + 1));
+    if (Number(round) > n) throw new Error('แผนปี ' + year + ' ล้าง ' + n + ' รอบ ไม่มีรอบที่ ' + round);
 
     // ผู้รับเหมาของรอบนี้ — ตรวจก่อนเขียนอะไรลงไป
     // หน้าเว็บรุ่นเก่าไม่ส่งค่านี้มา (undefined) ต้องไม่ล้างของเดิมทิ้ง
@@ -706,7 +746,9 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
 
       matched++;
       const code = normalizeCode(row[idx.code]);
+      const n = roundsInRow(headers, c => row[c]);
       for (const r of [1, 2, 3]) {
+        if (r > n) continue;   // รอบที่ปีนี้ไม่มี — ไม่ลงวัน/ผู้รับเหมา/สถานะ
         const status = String(row[idx['s' + r]] || '').trim();
         if (picked[r] && !picked[r].has(code)) {
           // ไม่ล้างรอบนี้ = รอดำเนินการ (เจ้าของงานไม่ให้เป็นยกเลิก) — รอบที่ล้างไปแล้วหรือยกเลิกไว้คงไว้ตามจริง
@@ -792,9 +834,11 @@ export async function updatePlanBulk(ctx, year, importedData) {
       if (!imp) continue;
       if (allowed && !allowed.has(code)) continue; // ข้ามเครื่องนอกภูมิภาคที่ตนดูแล
 
+      // รอบที่ปีนี้ไม่มี ไม่รับวันจากไฟล์
+      const n = roundsInRow(headers, c => row[c]);
       if (imp.R1_PlanDate) row[idx.r1] = imp.R1_PlanDate;
-      if (imp.R2_PlanDate) row[idx.r2] = imp.R2_PlanDate;
-      if (imp.R3_PlanDate) row[idx.r3] = imp.R3_PlanDate;
+      if (imp.R2_PlanDate && n >= 2) row[idx.r2] = imp.R2_PlanDate;
+      if (imp.R3_PlanDate && n >= 3) row[idx.r3] = imp.R3_PlanDate;
       if (idx.by > -1) row[idx.by] = me;
       values[i] = row;
       matchedCodes.add(code);
@@ -874,6 +918,8 @@ export async function closePlanRound(ctx, opts) {
     if (normalizeCode((values[i] || [])[codeIdx]) === want) { row = i + 1; break; }
   }
   if (row === -1) return 0;
+  // รอบที่ปีนี้ไม่มี ไม่มีอะไรให้ปิด (หน้าเว็บไม่ให้เลือกอยู่แล้ว)
+  if (Number(round) > roundsInRow(headers, c => (values[row - 1] || [])[c])) return 0;
 
   // เขียนบล็อก 6 ช่องของรอบนั้น โดยคงวันที่ตามแผนกับหมายเหตุเดิมไว้
   const startCol = headers.indexOf('R' + round + '_PlanDate') + 1;
