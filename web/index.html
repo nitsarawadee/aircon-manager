@@ -2390,7 +2390,7 @@
         // ดูประวัติของเครื่อง (ปุ่มลูกศรวงกลม) แค่พาไปหน้าประวัติ ไม่ได้แก้อะไร
         if (oc.startsWith('exportCSV') || oc.startsWith('closeModal') ||
             oc.includes('openAirDetail(') || oc.includes('openReportRepairModal(') ||
-            oc.includes('viewAirHistory(')) return;
+            oc.includes('viewAirHistory(') || oc.includes('openDocOfHistory(')) return;
         // ช่องรอบในแผนต้องกดได้ ถ้ากรอกใบล้างได้ — ปิดงานล้างทำผ่านหน้านั้น
         // (หน้าต่างรอบจะแสดงแบบอ่านอย่างเดียว เหลือแค่ปุ่มกรอกฟอร์ม/แนบเอกสาร ดู openRoundModal)
         if (mod === 'plan' && oc.includes('openRoundModal(') && docLevel('cleaning') === 'edit') return;
@@ -6238,9 +6238,18 @@
       }
 
       historyPage = clampPage(historyPage, displayHistory.length);
+      // กดเลขที่แล้วไปหน้าแบบฟอร์มเอกสารของเคส/ใบนั้น — เฉพาะคนที่มีเมนูแบบฟอร์มเอกสาร
+      const canOpenDocs = !!document.querySelector('[data-tab="cleaningform"]');
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${
+            !displayDocId(h) ? '-'
+            : canOpenDocs
+              ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
+                  title="ดูเอกสารของ${h.CaseID ? 'เคส' : 'ใบ'}นี้ที่หน้าแบบฟอร์มเอกสาร"
+                  class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
+              : esc(displayDocId(h))
+          }</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
           <td class="px-4 py-3 font-medium text-gray-900">
             ${airCodeBtn(h.AirCode)}
@@ -6536,6 +6545,50 @@
       }).join('')
         : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบล้างแอร์ที่รอคุณอนุมัติ</td></tr>';
     }
+
+    /**
+     * เลขที่ในหน้าประวัติ → หน้าแบบฟอร์มเอกสารของเคส/ใบนั้น (เลือกแท็บชนิดเอกสาร + ค้นหาไว้ให้)
+     *
+     * หาเอกสารก่อนย้ายหน้า เหตุการณ์ที่ไม่มีเอกสาร (เช่นแจ้งซ่อมที่ยังไม่ปิด หรือประวัติที่ลงมือเอง)
+     * จะได้บอกตรงนี้ ไม่ใช่พาไปหน้าที่ตารางว่าง
+     *   เลขเคส IC…  → ใบซ่อมของเคสนั้น
+     *   หมายเหตุ "เอกสาร CM…" → ใบติดตั้ง/ใบซ่อมเลขนั้น
+     *   ประวัติล้างแอร์ → ใบล้างของเครื่องนั้นวันเดียวกัน (ประวัติล้างมีเลขของตัวเอง ไม่ได้เก็บเลขใบไว้
+     *   แต่ใบล้างหนึ่งใบ = เครื่องหนึ่งไปล้างวันหนึ่ง กติกาเดียวกับที่ระบบใช้รวมใบ)
+     */
+    let pendingDocOpen = null;
+    async function openDocOfHistory(caseId, id, note, airCode, date, eventType) {
+      const inNote = (/^เอกสาร\s+(\S+)/.exec(String(note || '').trim()) || [])[1] || '';
+      try {
+        const [forms, repairs, installs] = await Promise.all([
+          call('getCleaningForms'), call('getRepairForms'), call('getInstallForms')
+        ]);
+        if (Array.isArray(forms)) currentCleaningForms = forms;
+        if (Array.isArray(repairs)) currentRepairForms = repairs;
+        if (Array.isArray(installs)) currentInstallForms = installs;
+      } catch (e) { return; }
+
+      const same = (a, b) => !!a && String(a).trim() === String(b || '').trim();
+      const docs = allDocForms();
+      const cleanOf = () => String(eventType || '').includes('ล้าง') && airCode && date
+        ? docs.find(f => f.kind === 'cleaning' && same(fmtDate(date), fmtDate(f.Date)) &&
+                         [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)))
+        : null;
+      const match = (caseId && docs.find(f => same(caseId, f.CaseID)))
+        || docs.find(f => [id, inNote].some(t => same(t, f.DocNo) || same(t, f.DocNo2)))
+        || cleanOf();
+      if (!match) {
+        showToast('ยังไม่มีเอกสารของ ' + (caseId || id) + ' ในแบบฟอร์มเอกสาร', 'error');
+        return;
+      }
+      // ค้นด้วยเลขเคส = เห็นใบซ่อมทุกใบของเคสนั้น · ไม่มีเคส = ค้นด้วยเลขที่ของใบที่เจอ
+      pendingDocOpen = {
+        kind: match.kind,
+        term: (caseId && same(caseId, match.CaseID)) ? caseId : displayDocNo(match)
+      };
+      document.querySelector('[data-tab="cleaningform"]').click();
+    }
+    window.openDocOfHistory = openDocOfHistory;
 
     /** ไปหน้างานซ่อมและติดตั้ง ค้นหาเครื่องตัวนี้ไว้ให้ (การ์ดเครื่องที่ควรจับตาในแดชบอร์ด) */
     function viewAirRepair(code) {
@@ -7613,7 +7666,7 @@
       [displayDocNo(f), f.NodeName, f.SiteCode, f.AirCode1, f.AirCode2, f.AirCode,
        f.TechnicianName, f.EquipmentCondition, f.EquipmentCondition2, f.DocNo2,
        // ของใบซ่อม — คนมักค้นจากอาการเสียมากกว่าเลขที่เอกสาร
-       f.Symptom, f.Cause, f.Fix,
+       f.Symptom, f.Cause, f.Fix, f.CaseID,
        // ของใบติดตั้ง — ค้นจากผลตรวจรับได้ เช่นอยากดูว่าใบไหนยัง "ไม่ผ่าน"
        f.AcceptResult1, f.AcceptResult2,
        DOC_KIND_WORD[f.kind] || 'ล้าง',
@@ -7687,6 +7740,13 @@ const CLEANING_CHECKLIST_ITEMS = [
       currentRepairForms = Array.isArray(repairs) ? repairs : [];
       currentInstallForms = Array.isArray(installs) ? installs : [];
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
+      // มาจากการกดเลขที่ในหน้าประวัติ — เปิดแท็บชนิดเอกสารนั้นและค้นหาไว้ให้ (ดู openDocOfHistory)
+      if (pendingDocOpen) {
+        docTypeFilter = pendingDocOpen.kind;
+        const box = document.getElementById('cleaningFormSearch');
+        if (box) box.value = pendingDocOpen.term;
+        pendingDocOpen = null;
+      }
       paintDocTabs();
       renderCleaningFormTable();
       // ไม่ใช้ lockViewOnlySection ที่หน้านี้แล้ว เพราะตัวนั้นล็อกทั้งหน้าตามสิทธิ์ใบล้างอย่างเดียว
