@@ -612,54 +612,33 @@
 
       <!-- ============================ VIEW: AIR LIST ============================ -->
       <section id="view-airlist" class="view">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <!-- แถวบน: ชื่อหน้า + ปุ่มจัดการ · แถวล่าง: ค้นหา + ตัวกรอง -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">รายการเครื่องปรับอากาศ</h2>
             <p class="text-sm text-gray-500">จัดการข้อมูล Master Data ของเครื่องทั้งหมด</p>
           </div>
-          <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
-                <i class="ph ph-map-pin text-gray-500"></i>
-                <select id="airRegionFilter" onchange="refreshAirTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
-                  <option value="">ทุก Region</option>
-                </select>
+          <div class="flex flex-wrap gap-2">
+            <!-- ปุ่มโหลดไฟล์ 3 แบบรวมเป็นเมนูเดียว — ดู toggleAirDownloadMenu -->
+            <div class="relative" id="airDownloadWrap">
+              <button onclick="toggleAirDownloadMenu()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+                <i class="ph ph-download-simple"></i> ดาวน์โหลด <i class="ph ph-caret-down text-xs text-gray-400"></i>
+              </button>
+              <div id="airDownloadMenu" class="hidden absolute left-0 sm:left-auto sm:right-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1.5 text-sm">
+                <button onclick="closeAirDownloadMenu(); exportAirListCSV()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-start gap-2.5">
+                  <i class="ph ph-file-csv text-lg text-gray-500 mt-0.5"></i>
+                  <span><span class="block font-medium text-gray-800">CSV (รายงาน)</span><span class="block text-xs text-gray-500">ตามที่กรองอยู่ มีอายุเครื่อง · นำเข้ากลับไม่ได้</span></span>
+                </button>
+                <button onclick="closeAirDownloadMenu(); downloadAirImportFile(this)" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-start gap-2.5">
+                  <i class="ph ph-file-arrow-down text-lg text-gray-500 mt-0.5"></i>
+                  <span><span class="block font-medium text-gray-800">ไฟล์สำหรับแก้</span><span class="block text-xs text-gray-500">แก้ใน Excel แล้วกด "นำเข้า" กลับได้ทันที</span></span>
+                </button>
+                <button onclick="closeAirDownloadMenu(); downloadAirTemplate(this)" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-start gap-2.5">
+                  <i class="ph ph-file-xls text-lg text-gray-500 mt-0.5"></i>
+                  <span><span class="block font-medium text-gray-800">Template</span><span class="block text-xs text-gray-500">ไฟล์เปล่าสำหรับกรอกเครื่องใหม่ มีชีตคำอธิบาย</span></span>
+                </button>
               </div>
-
-              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
-                <i class="ph ph-archive text-gray-500"></i>
-                <select id="airLifeFilter" onchange="refreshAirTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
-                  <option value="active">ใช้งานอยู่</option>
-                  <option value="retired">รื้อถอน/Write off</option>
-                  <option value="all">ทั้งหมด</option>
-                </select>
-              </div>
-
-              <!-- เรียงลำดับ — ดู sortAirRows -->
-              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
-                <i class="ph ph-sort-ascending text-gray-500"></i>
-                <select id="airSort" onchange="refreshAirTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
-                  <option value="code-asc">รหัสเครื่อง A → Z</option>
-                  <option value="code-desc">รหัสเครื่อง Z → A</option>
-                  <option value="age-asc">อายุการใช้งาน น้อย → มาก</option>
-                  <option value="age-desc">อายุการใช้งาน มาก → น้อย</option>
-                  <option value="btu-asc">BTU น้อย → มาก</option>
-                  <option value="btu-desc">BTU มาก → น้อย</option>
-                </select>
-              </div>
-            <div class="relative flex-1 sm:w-64">
-              <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-              <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm">
             </div>
-            <button onclick="exportAirListCSV()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดข้อมูลทั้งหมดไปแก้ใน Excel แล้วนำเข้ากลับได้">
-              <i class="ph ph-download-simple"></i> CSV
-            </button>
-
-            <button onclick="downloadAirImportFile(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดไฟล์ในรูปแบบที่นำเข้ากลับได้ทันที สำหรับแก้ข้อมูลเป็นชุด">
-              <i class="ph ph-file-arrow-down"></i> ไฟล์สำหรับแก้
-            </button>
-            <button onclick="downloadAirTemplate(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="ไฟล์เปล่าสำหรับกรอกเครื่องใหม่ แล้วนำเข้า — มีชีตคำอธิบายแต่ละคอลัมน์">
-              <i class="ph ph-file-xls"></i> Template
-            </button>
 
             <input type="file" id="fileImportAir" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
             <button onclick="document.getElementById('fileImportAir').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="นำเข้าไฟล์ที่แก้จาก Excel — ดูผลก่อนยืนยันเสมอ">
@@ -668,6 +647,43 @@
             <button onclick="openAirModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-plus"></i> เพิ่มเครื่องใหม่
             </button>
+          </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-2 mb-6">
+          <div class="relative flex-1 min-w-0">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm shadow-sm">
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:flex">
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-map-pin text-gray-500"></i>
+              <select id="airRegionFilter" onchange="refreshAirTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="">ทุก Region</option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-archive text-gray-500"></i>
+              <select id="airLifeFilter" onchange="refreshAirTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="active">ใช้งานอยู่</option>
+                <option value="retired">รื้อถอน/Write off</option>
+                <option value="all">ทั้งหมด</option>
+              </select>
+            </div>
+
+            <!-- เรียงลำดับ — ดู sortAirRows -->
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-sort-ascending text-gray-500"></i>
+              <select id="airSort" onchange="refreshAirTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="code-asc">รหัสเครื่อง A → Z</option>
+                <option value="code-desc">รหัสเครื่อง Z → A</option>
+                <option value="age-asc">อายุการใช้งาน น้อย → มาก</option>
+                <option value="age-desc">อายุการใช้งาน มาก → น้อย</option>
+                <option value="btu-asc">BTU น้อย → มาก</option>
+                <option value="btu-desc">BTU มาก → น้อย</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -3914,6 +3930,20 @@
       }
     }
     window.exportHistoryCSV = exportHistoryCSV;
+
+    /** เมนูดาวน์โหลดหน้ารายการเครื่อง — คลิกนอกเมนูแล้วปิดเอง */
+    function toggleAirDownloadMenu() {
+      document.getElementById('airDownloadMenu').classList.toggle('hidden');
+    }
+    function closeAirDownloadMenu() {
+      document.getElementById('airDownloadMenu').classList.add('hidden');
+    }
+    window.toggleAirDownloadMenu = toggleAirDownloadMenu;
+    window.closeAirDownloadMenu = closeAirDownloadMenu;
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById('airDownloadWrap');
+      if (wrap && !wrap.contains(e.target)) closeAirDownloadMenu();
+    });
 
     /**
      * ดาวน์โหลดรายการเครื่องตามที่กรองอยู่ ด้วยเหตุผลเดียวกับหน้าประวัติ
