@@ -818,6 +818,13 @@
           </div>
           <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+                <i class="ph ph-calendar-blank text-gray-500"></i>
+                <select id="historyYearFilter" onchange="refreshHistoryTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกปี</option>
+                </select>
+              </div>
+
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
                 <i class="ph ph-map-pin text-gray-500"></i>
                 <select id="historyRegionFilter" onchange="refreshHistoryTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
                   <option value="">ทุก Region</option>
@@ -940,7 +947,7 @@
           <!-- ตัวกรอง + แบ่งหน้า — ดู renderRepairHistory -->
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
             <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph-fill ph-wrench text-[#1153a1]"></i> ประวัติงานซ่อมบำรุงล่าสุด</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:flex">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 md:flex">
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
                 <i class="ph ph-map-pin text-gray-500"></i>
                 <select id="repairHistRegion" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
@@ -949,6 +956,12 @@
               </div>
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
                 <i class="ph ph-calendar-blank text-gray-500"></i>
+                <select id="repairHistYear" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกปี</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-calendar-dots text-gray-500"></i>
                 <select id="repairHistMonth" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
                   <option value="">ทุกเดือน</option>
                 </select>
@@ -1053,6 +1066,12 @@
           <button id="docMineBtn" onclick="toggleDocMine()" type="button"
             class="hidden ml-auto mb-2 px-3 py-1.5 rounded-lg border text-xs font-medium whitespace-nowrap transition-colors"
             title="แสดงเฉพาะเอกสารที่รอให้คุณกดอนุมัติ"></button>
+          <div class="ml-2 mb-2 flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0">
+            <i class="ph ph-calendar-blank text-gray-500"></i>
+            <select id="docYearFilter" onchange="refreshCleaningFormTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+              <option value="">ทุกปี</option>
+            </select>
+          </div>
           <div class="relative ml-2 w-full sm:w-72 pb-2">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขที่, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -1507,6 +1526,34 @@
      *
      * ต้องคงค่าที่เลือกไว้ตอนวาดใหม่ ไม่งั้นพิมพ์ค้นหาทีนึงตัวกรองจะหลุดทุกครั้ง
      */
+    /**
+     * ตัวเลือกปี (หน้าประวัติ · แบบฟอร์มเอกสาร · ประวัติงานซ่อม) — เจ้าของงานขอ
+     *
+     * ข้อมูลไม่ได้แยกเก็บรายปี แค่หน้าจอแสดงทีละปี: ปีที่มีข้อมูลจริง + ปีนี้ ใหม่ก่อนเก่า + "ทุกปี"
+     * เปิดครั้งแรกเป็นปีนี้ รายการจะได้ไม่ยาวขึ้นทุกปี · หลังจากนั้นคงปีที่เลือกไว้
+     */
+    const thisYear = () => String(new Date().getFullYear());
+    function syncYearFilter(selectId, dates) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return '';
+      const years = [...new Set([thisYear(), ...(dates || []).map(d => String(d == null ? '' : d).slice(0, 4))])]
+        .filter(y => /^\d{4}$/.test(y)).sort().reverse();
+      const cur = sel.dataset.ready ? sel.value : thisYear();
+      sel.innerHTML = years.map(y => `<option value="${y}">ปี ${y}</option>`).join('') + '<option value="">ทุกปี</option>';
+      sel.value = cur === '' || years.includes(cur) ? cur : thisYear();
+      sel.dataset.ready = '1';
+      return sel.value;
+    }
+    /** ลิงก์จากหน้าอื่น (ดูประวัติเครื่องนี้ · เลขที่ในหน้าประวัติ) — "ทุกปี" ไม่งั้นของปีก่อนจะถูกซ่อน */
+    function showAllYears(selectId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      if (![...sel.options].some(o => o.value === '')) sel.add(new Option('ทุกปี', ''));
+      sel.value = '';
+      sel.dataset.ready = '1';
+    }
+    const yearOf = d => String(d == null ? '' : d).slice(0, 4);
+
     function syncRegionFilter(selectId, values) {
       const sel = document.getElementById(selectId);
       if (!sel) return '';
@@ -6906,6 +6953,9 @@
       }
       renderHistoryUnitFilterBar();
 
+      const year = syncYearFilter('historyYearFilter', (currentHistory || []).map(h => h.Date));
+      if (year) displayHistory = displayHistory.filter(h => yearOf(h.Date) === year);
+
       const region = syncRegionFilter('historyRegionFilter', (currentHistory || []).map(h => h.Region));
       if (region) displayHistory = displayHistory.filter(h => sameRegion(h.Region, region));
 
@@ -6934,7 +6984,8 @@
             : region && !searchQuery
               ? `${esc(regionLabel(region))} ยังไม่มีประวัติที่บันทึกไว้`
               : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
-        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}</td></tr>`;
+        const inYear = year ? `<div class="text-xs mt-1">แสดงเฉพาะปี ${esc(year)} — เลือก "ทุกปี" เพื่อดูปีอื่น</div>` : '';
+        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}${inYear}</td></tr>`;
         renderTablePager('historyPaginationBar', 0, 1, 'goToHistoryPage');
         lockViewOnlySection('history');
         return;
@@ -7059,6 +7110,7 @@
 
     function viewAirHistory(code) {
       pendingHistorySearch = code;
+      showAllYears('historyYearFilter');   // ประวัติของเครื่องต้องเห็นครบทุกปี
       document.querySelector('[data-tab="history"]').click();
     }
     window.clearHistoryUnitFilter = clearHistoryUnitFilter;
@@ -7784,6 +7836,9 @@
       const regionOf = h => regionByCode.get(String(h.AirCode || '').trim().toUpperCase()) || '';
       // ตัวเลือกสร้างจากข้อมูลจริงทุกครั้ง และคงตัวที่เลือกไว้ถ้ายังมีอยู่
       const region = syncRegionFilter('repairHistRegion', repairHist.map(regionOf));
+      // ปีก่อน แล้วเดือนมีเฉพาะของปีที่เลือก
+      const year = syncYearFilter('repairHistYear', repairHist.map(h => h.Date));
+      if (year) repairHist = repairHist.filter(h => yearOf(h.Date) === year);
       const month = syncRepairHistMonths(repairHist);
       const event = syncEventFilter(repairHist, 'repairHistEvent');
       if (region) repairHist = repairHist.filter(h => sameRegion(regionOf(h), region));
@@ -7795,7 +7850,8 @@
       renderTablePager('repairHistPager', repairHist.length, repairHistPage, 'goToRepairHistPage', REPAIR_HIST_PAGE_SIZE);
 
       if (repairHist.length === 0) {
-        historyTb.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">${hasAny ? 'ไม่พบประวัติที่ตรงกับตัวกรอง' : 'ยังไม่มีประวัติการแจ้งซ่อม'}</td></tr>`;
+        const inYear = hasAny && year ? `<div class="text-xs mt-1">แสดงเฉพาะปี ${esc(year)} — เลือก "ทุกปี" เพื่อดูปีอื่น</div>` : '';
+        historyTb.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">${hasAny ? 'ไม่พบประวัติที่ตรงกับตัวกรอง' : 'ยังไม่มีประวัติการแจ้งซ่อม'}${inYear}</td></tr>`;
         return;
       }
       const startIdx = (repairHistPage - 1) * REPAIR_HIST_PAGE_SIZE;
@@ -8516,7 +8572,13 @@
   function filterCleaningForms() {
     const box = document.getElementById('cleaningFormSearch');
     const q = box ? box.value.trim().toLowerCase() : '';
-    const all = allDocForms().filter(f => f.kind === docTypeFilter && (!docMineOnly || waitsForMe(f)));
+    const docs = allDocForms();
+    // ปีจากทุกแท็บรวมกัน ตัวเลือกจะได้ไม่เปลี่ยนไปมาตอนสลับแท็บ
+    const year = syncYearFilter('docYearFilter', docs.map(d => d.Date));
+    // ใบที่ยังรออนุมัติขึ้นทุกปี — งานค้างข้ามปีต้องไม่หายจากตา
+    const waiting = d => !!(d.Approval && d.Approval.next && !d.Approval.done);
+    const all = docs.filter(f => f.kind === docTypeFilter && (!docMineOnly || waitsForMe(f)) &&
+                                 (!year || yearOf(f.Date) === year || waiting(f)));
     if (!q) return all;
 
     return all.filter(f =>
@@ -8600,6 +8662,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       // มาจากการกดเลขที่ในหน้าประวัติ — เปิดแท็บชนิดเอกสารนั้นและค้นหาไว้ให้ (ดู openDocOfHistory)
       if (pendingDocOpen) {
         docTypeFilter = pendingDocOpen.kind;
+        showAllYears('docYearFilter');   // เอกสารของปีก่อนต้องเจอ
         const box = document.getElementById('cleaningFormSearch');
         if (box) box.value = pendingDocOpen.term;
         pendingDocOpen = null;
@@ -8626,7 +8689,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       const why = (box && box.value.trim())
         ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
         : 'ยังไม่มีการบันทึก' + ofKind;
-      tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">' + why + '</td></tr>';
+      const year = (document.getElementById('docYearFilter') || {}).value || '';
+      const inYear = year ? '<div class="text-xs mt-1">แสดงเฉพาะปี ' + esc(year) + ' — เลือก "ทุกปี" เพื่อดูปีอื่น</div>' : '';
+      tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">' + why + inYear + '</td></tr>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
     }
