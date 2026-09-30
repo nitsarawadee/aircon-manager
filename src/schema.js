@@ -54,7 +54,8 @@ export const SHEETS = {
   CONTRACTOR: 'Contractor',
   REPAIRLINK: 'RepairLink',
   APPROVAL: 'DocApproval',
-  WAREHOUSE: 'Warehouse'
+  WAREHOUSE: 'Warehouse',
+  ASSIGN: 'JobAssign'
 };
 
 export const AIRLIST_HEADERS = [
@@ -109,7 +110,17 @@ export const CONTRACTOR_HEADERS = [
  */
 export const REPAIRLINK_HEADERS = [
   'ID', 'TokenHash', 'AirCode', 'CreatedAt', 'CreatedBy', 'ExpiresAt',
-  'UsedAt', 'DocNo', 'RevokedAt', 'RevokedBy'
+  'UsedAt', 'DocNo', 'RevokedAt', 'RevokedBy',
+  // ลิงก์ของงานอะไร: ว่าง/'repair' = ใบซ่อม (ลิงก์ก่อนมีช่องนี้) · 'install' = ใบติดตั้ง
+  'Kind'
+];
+
+/**
+ * งานซ่อม/ติดตั้งที่มอบหมายให้ผู้รับเหมาประจำ (มีบัญชี) — ดูเหตุผลที่ db/schema.js (job_assignments)
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const ASSIGN_HEADERS = [
+  'ID', 'Kind', 'AirCode', 'RefID', 'ContractorID', 'ApptDate', 'Note', 'AssignedBy', 'AssignedAt'
 ];
 
 export const CONFIG_HEADERS = ['Region', 'LocationType', 'Brand', 'Status', 'Technician', 'EventType'];
@@ -416,6 +427,8 @@ export const REGIONAL_ROLES = ['RegionAdmin', 'Staff', 'Supervisor'];
 export const CONTRACTOR_PERMISSIONS = {
   plan: 'view',
   cleaningform: 'edit',
+  // ใบซ่อม/ใบติดตั้ง: กรอกได้เฉพาะงานที่มอบหมายให้ตัวเอง (ตรวจที่ assign.js · assertOwnAssigned)
+  repairform: 'edit',
   installform: 'edit'
 };
 

@@ -40,6 +40,7 @@ const SHEET_TO_TABLE = {
   RepairLink: 'repair_links',
   DocApproval: 'doc_approvals',
   Warehouse: 'warehouse_units',
+  JobAssign: 'job_assignments',
   Config: 'config_values'
 };
 

@@ -114,7 +114,7 @@ function contractorNames(ctx) {
  * ตรวจรหัสผู้รับเหมาที่จะมอบหมายงาน — ค่าว่าง = ไม่มอบหมายให้ใคร
  * คืนรหัสตามที่เก็บในตาราง (ตัวพิมพ์ตรงกับต้นฉบับ)
  */
-function checkContractorId(ctx, id) {
+export function checkContractorId(ctx, id) {
   const want = String(id == null ? '' : id).trim();
   if (!want) return '';
   const c = ctx.ss.objects(SHEETS.CONTRACTOR)

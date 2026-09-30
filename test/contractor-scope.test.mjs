@@ -24,7 +24,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx, contractorPermissions } from '../src/context.js';
-import { MODULES } from '../src/schema.js';
+import { MODULES, INSTALL_PENDING_NOTE } from '../src/schema.js';
+import { assignJob } from '../src/modules/assign.js';
 import {
   getCleaningFormNodes, getCleaningForms, saveCleaningForm, deleteCleaningForm,
   getCleaningDocHtml, uploadNodeDocuments
@@ -116,8 +117,10 @@ test('สิทธิ์ผู้รับเหมาครบทุกโม�
   assert.deepEqual(Object.keys(p).sort(), [...MODULES].sort());
   assert.equal(p.cleaningform, 'edit');
   assert.equal(p.installform, 'edit');
+  // ใบซ่อม: กรอกได้เฉพาะงานที่มอบหมายให้ (ดู job-assign.test.mjs)
+  assert.equal(p.repairform, 'edit');
   assert.equal(p.plan, 'view');
-  for (const m of ['airlist', 'history', 'repair', 'repairform', 'budget']) {
+  for (const m of ['airlist', 'history', 'repair', 'budget']) {
     assert.equal(p[m], 'none', m + ' ต้องปิดสำหรับผู้รับเหมา');
   }
 });
@@ -268,7 +271,7 @@ test('เมนูที่ปิดไว้ คืนค่าว่างท�
 
   assert.deepEqual(await getAirList(ctx), []);
   assert.deepEqual(await getHistory(ctx), [], 'ประวัติมีราคางานของเจ้าอื่นปนอยู่');
-  assert.deepEqual(await getRepairForms(ctx), []);
+  assert.deepEqual(await getRepairForms(ctx), [], 'ใบซ่อมของคนอื่นบนเครื่องที่ตัวเองมีงานล้าง ต้องไม่เห็น');
   const budget = await getBudgetSummary(ctx, 2026);
   assert.equal(budget.totalExpense, 0, 'งบประมาณเป็นยอดรวมทั้งบริษัท ต้องได้ตัวเลขศูนย์');
   assert.equal(budget.monthly.length, 12, 'แต่รูปร่างข้อมูลต้องครบ ไม่งั้นหน้ากราฟพัง');
@@ -356,14 +359,27 @@ test('แนบเอกสารเขียนมือ — เฉพาะง
   await assert.rejects(() => up(null, 'วังน้อย'), /ไม่พบ Node/);
 });
 
-test('ใบติดตั้ง — กรอกได้เฉพาะเครื่องที่มีงานของตัวเอง', async () => {
+/** งานติดตั้งที่รอเอกสารของเครื่องหนึ่ง แล้วมอบหมายให้ผู้รับเหมา (เจ้าหน้าที่เป็นคนทำ) */
+async function assignInstall(db, code, contractorId) {
+  db.prepare(`INSERT INTO history (ID, AirCode, Date, EventType, Detail, Note)
+              VALUES (?, ?, '2026-09-19', 'เปลี่ยนเครื่อง', 'เปลี่ยนเครื่อง', ?)`)
+    .run('CM2609-' + code.slice(-1) + '9', code, INSTALL_PENDING_NOTE);
+  await assignJob(as(db, 'boss'), 'install', code, contractorId, '2026-09-20', '');
+}
+
+test('ใบติดตั้ง — กรอกได้เฉพาะงานติดตั้งที่มอบหมายให้ตัวเอง (ไม่ใช่ทุกเครื่องที่มีงานล้าง)', async () => {
   const db = freshDb();
 
+  // มีงานล้างบนเครื่องนี้ แต่ไม่ได้มอบหมายงานติดตั้ง → กรอกไม่ได้
+  await assert.rejects(
+    () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'ATG-PMK-AIR-1', Date: '2026-09-20' }), /ไม่ได้มอบหมายให้คุณ/);
+
+  await assignInstall(db, 'ATG-PMK-AIR-1', 'CT001');
   const r = await saveInstallForm(as(db, 'ctA'), { AirCode1: 'ATG-PMK-AIR-1', Date: '2026-09-20', CompanyName: 'พิมพ์เอง' });
   assert.ok(r.docNo);
   assert.equal((await getInstallForms(as(db, 'boss')))[0].CompanyName, 'บริษัท เอ แอร์');
   assert.deepEqual((await getInstallForms(as(db, 'ctA'))).length, 1);
-  assert.deepEqual((await getInstallForms(as(db, 'ctB'))).length, 1, 'เจ้า B ก็มีงานบนเครื่องนี้ (รอบ 3)');
+  assert.deepEqual((await getInstallForms(as(db, 'ctB'))).length, 0, 'ใบของเจ้า A — เจ้า B ต้องไม่เห็น แม้มีงานล้างบนเครื่องนี้');
 
   await assert.rejects(
     () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'AYA-WNI-AIR-1', Date: '2026-09-20' }), /ไม่พบเครื่อง/);
@@ -378,6 +394,7 @@ test('ใบติดตั้งใบเดียว ใส่เครื่�
 test('ผู้รับเหมาลบเอกสารไม่ได้ แม้เป็นใบของตัวเอง', async () => {
   const db = freshDb();
   await saveCleaningForm(as(db, 'ctA'), cleaning('ATG-PMK-AIR-1'));
+  await assignInstall(db, 'ATG-PMK-AIR-1', 'CT001');
   await saveInstallForm(as(db, 'ctA'), { AirCode1: 'ATG-PMK-AIR-1', Date: '2026-09-20' });
   const cf = (await getCleaningForms(as(db, 'ctA')))[0];
   const inf = (await getInstallForms(as(db, 'ctA')))[0];

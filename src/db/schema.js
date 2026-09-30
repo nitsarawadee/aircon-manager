@@ -209,9 +209,30 @@ export const TABLES = {
     sheet: 'RepairLink',
     columns: {
       ID: S, TokenHash: S, AirCode: S, CreatedAt: DT, CreatedBy: S, ExpiresAt: DT,
-      UsedAt: DT, DocNo: S, RevokedAt: DT, RevokedBy: S
+      UsedAt: DT, DocNo: S, RevokedAt: DT, RevokedBy: S,
+      // ว่าง/'repair' = ลิงก์ใบซ่อม · 'install' = ลิงก์ใบติดตั้ง
+      Kind: S
     },
     indexes: [['TokenHash'], ['AirCode']],
+    unique: ['ID']
+  },
+
+  /**
+   * งานซ่อม/ติดตั้งที่มอบหมายให้ผู้รับเหมาประจำ พร้อมวันนัด (ดู modules/assign.js)
+   *
+   * ผูกกับ "งานครั้งนั้น" ไม่ใช่แค่เครื่อง — RefID = เลขเคสซ่อม (IC…) หรือเลขแถวประวัติ
+   * ที่รอเอกสารติดตั้ง พองานนั้นปิด (กรอกเอกสารแล้ว) การมอบหมายก็หมดผลไปเอง
+   * งานครั้งถัดไปของเครื่องเดียวกันต้องมอบหมายใหม่ ไม่ติดไปอัตโนมัติ
+   * ContractorID ว่าง = ยกเลิกการมอบหมาย (เก็บแถวไว้เป็นร่องรอย)
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ ASSIGN_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  job_assignments: {
+    sheet: 'JobAssign',
+    columns: {
+      ID: S, Kind: S, AirCode: S, RefID: S, ContractorID: S, ApptDate: D, Note: S,
+      AssignedBy: S, AssignedAt: DT
+    },
+    indexes: [['ContractorID'], ['AirCode']],
     unique: ['ID']
   },
 

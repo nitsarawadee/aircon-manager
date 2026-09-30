@@ -3,6 +3,7 @@ import { cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
+import { assertOwnAssigned, isOwnDoc } from './assign.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -69,9 +70,22 @@ export async function getRepairForms(ctx, airCode) {
 
   // กรองตามขอบเขตของผู้ใช้เหมือนทุกหน้า
   list = list.filter(await ctx.scopeFilter());
+  // ผู้รับเหมา: เฉพาะใบที่ตัวเองกรอก (ดู isOwnDoc)
+  const info = await ctx.userInfo();
+  if (info.role === 'Contractor') list = list.filter(f => isOwnDoc(info, f));
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
   return attachApprovals(ctx, KIND, list.sort(newestFirst('CreatedAt')));
+}
+
+/** เปิด/แก้รูปใบนี้ได้ไหม — เจ้าหน้าที่ตามภูมิภาค · ผู้รับเหมาเฉพาะใบที่ตัวเองกรอก */
+async function assertDocAccess(ctx, form) {
+  const info = await ctx.userInfo();
+  if (info.role === 'Contractor') {
+    if (!isOwnDoc(info, form)) throw new Error('คุณไม่มีสิทธิ์เข้าถึงเอกสารใบนี้');
+    return;
+  }
+  await ctx.assertRegionAccess(form.Region);
 }
 
 /* ==================== บันทึก ==================== */
@@ -102,10 +116,15 @@ export async function saveRepairForm(ctx, record) {
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ดำเนินการ');
 
   const unit = await unitOf(ctx, record.AirCode);
-  await ctx.assertRegionAccess(unit.Region);
+  const info = await ctx.userInfo();
+  // ผู้รับเหมาไม่มีภูมิภาค — ตรวจว่างานนี้มอบหมายให้เจ้านี้แทน (ในล็อก ด้านล่าง)
+  if (info.role !== 'Contractor') await ctx.assertRegionAccess(unit.Region);
 
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
+    assertOwnAssigned(ctx, info, 'repair', unit.AirCode);
+    // ผู้รับเหมา: ชื่อบริษัทใช้ชื่อที่ Admin ตั้งไว้ ไม่ให้พิมพ์เอง (กติกาเดียวกับใบล้าง/ใบติดตั้ง)
+    if (info.role === 'Contractor') record = { ...record, CompanyName: info.contractorName };
     const row = await writeRepairForm(ctx, unit, record, await ctx.currentUser());
     await ctx.ss.flush();
     return { docNo: row.DocNo, caseId: row.CaseID, forms: await getRepairForms(ctx) };
@@ -266,7 +285,7 @@ async function formForPhotos(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await assertDocAccess(ctx, form);
 
   const docNo = plainText(form.DocNo) || plainText(form.ID);
   if (!docNo) throw new Error('เอกสารใบนี้ยังไม่มีเลขที่ จึงเก็บรูปไม่ได้');
@@ -331,7 +350,7 @@ export async function getRepairDocHtml(ctx, row) {
 
   const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await assertDocAccess(ctx, form);
 
   const { buildRepairDocHtml } = await import('./repair-doc.js');
   const docNo = plainText(form.DocNo) || plainText(form.ID);
@@ -460,7 +479,7 @@ export async function getRepairDocPdf(ctx, row, expectId) {
 
   const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertRegionAccess(form.Region);
+  await assertDocAccess(ctx, form);
 
   const { docNo, base64, draft } = await renderRepairPdf(ctx, form);
 

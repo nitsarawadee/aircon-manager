@@ -2,11 +2,19 @@ import { SHEETS } from '../schema.js';
 import { normalizeCode, plainText, ymdhms } from '../values.js';
 import { unitsInScope } from './airlist.js';
 import { writeRepairForm, storeRepairPdf, renderRepairPdf, REPAIR_KIND } from './repairform.js';
+import {
+  prepareInstall, writeInstallForm, storeInstallPdf, renderInstallPdf, INSTALL_KIND
+} from './installform.js';
 import { scheduleDocPdf } from './doc-pdf-queue.js';
 import { resetApproval } from './approval.js';
+import { ASSIGN_KINDS, openRef } from './assign.js';
 
 /**
- * ลิงก์กรอกเอกสารซ่อม — ส่งให้ใครก็ได้ กรอกได้โดยไม่ต้องมีบัญชี
+ * ลิงก์กรอกเอกสารซ่อม / เอกสารติดตั้ง — ส่งให้ใครก็ได้ กรอกได้โดยไม่ต้องมีบัญชี
+ *
+ * ใช้กับผู้รับเหมาที่ไม่ได้จ้างประจำ (ไม่มีบัญชี) · ผู้รับเหมาประจำใช้การมอบหมายงานแทน (assign.js)
+ * ลิงก์ติดตั้งเพิ่มทีหลัง (เจ้าของงานขอ) — ใช้ตารางเดียวกัน แยกด้วยคอลัมน์ Kind
+ * ลิงก์เก่าก่อนมีคอลัมน์นี้ Kind ว่าง = ลิงก์ใบซ่อม
  *
  * ============================================================================
  * การทำงานตามที่เจ้าของงานกำหนด
@@ -44,6 +52,30 @@ const AFTER_SUBMIT_HOURS = 72;
 
 /** งานที่สร้างลิงก์ได้ = อนุมัติซ่อมแล้ว (เหมือนปุ่ม "ปิดงาน + ออกเอกสาร") */
 const OPEN_STATUS = 'รอซ่อม';
+
+/** ลิงก์นี้ของงานอะไร — ว่าง = ใบซ่อม (ลิงก์ก่อนมีคอลัมน์ Kind) */
+const kindOf = link => (plainText(link.Kind).trim() === 'install' ? 'install' : 'repair');
+
+/** งานของลิงก์ยังเปิดอยู่ไหม — ปิดไปทางอื่นแล้ว (เจ้าหน้าที่กรอกเอง) ลิงก์ก็ใช้ไม่ได้ */
+function jobStillOpen(ctx, kind, unit) {
+  return kind === 'install'
+    ? !!openRef(ctx, 'install', unit.AirCode)
+    : plainText(unit.Status).trim() === OPEN_STATUS;
+}
+
+/**
+ * ช่องและคู่เครื่องของเครื่องนี้ในใบติดตั้ง — จากเลขท้ายรหัส (AIR-3 = คู่ 3–4 ช่องที่ 1)
+ * กติกาเดียวกับใบล้าง (unitSlotOf) · คนถือลิงก์ไม่มีรายการเครื่องทั้ง Node ให้นับตำแหน่ง
+ */
+function installSlotOfCode(airCode) {
+  const n = Number((/-AIR-(\d+)$/i.exec(plainText(airCode)) || [])[1]) || 1;
+  return { slot: ((n - 1) % 2) + 1, base: Math.floor((n - 1) / 2) * 2 };
+}
+
+const JOB_CLOSED_MESSAGE = {
+  repair: 'งานซ่อมนี้ถูกปิดไปแล้ว — ติดต่อเจ้าหน้าที่ถ้ายังมีงานค้าง',
+  install: 'งานติดตั้งนี้กรอกเอกสารไปแล้ว — ติดต่อเจ้าหน้าที่ถ้ายังมีงานค้าง'
+};
 
 /* ==================== รหัสในลิงก์ ==================== */
 
@@ -141,24 +173,31 @@ export async function getRepairLink(ctx, token) {
   const unit = unitByCode(ctx, link.AirCode);
   if (!unit) return { state: 'invalid', message: 'ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่' };
 
-  if (state === 'open' && plainText(unit.Status).trim() !== OPEN_STATUS) {
-    return { state: 'closed', message: 'งานซ่อมนี้ถูกปิดไปแล้ว — ติดต่อเจ้าหน้าที่ถ้ายังมีงานค้าง' };
+  const kind = kindOf(link);
+  if (state === 'open' && !jobStillOpen(ctx, kind, unit)) {
+    return { state: 'closed', message: JOB_CLOSED_MESSAGE[kind] };
   }
 
   const out = {
     state,
+    kind,
     expiresAt: plainText(link.ExpiresAt),
     unit: {
       AirCode: plainText(unit.AirCode), NodeName: plainText(unit.NodeName),
-      Province: plainText(unit.Province), Brand: plainText(unit.Brand), BTU: plainText(unit.BTU),
+      SiteCode: plainText(unit.SiteCode), Province: plainText(unit.Province),
+      LocationType: plainText(unit.LocationType),
+      Brand: plainText(unit.Brand), BTU: plainText(unit.BTU),
       IndoorSN: plainText(unit.IndoorSN), OutdoorSN: plainText(unit.OutdoorSN),
-      // อาการที่แจ้งไว้ตอนเปิดงาน ใช้เติมช่องอาการเสียให้
-      Note: state === 'open' ? plainText(unit.Note) : ''
+      IndoorAsset: plainText(unit.IndoorAsset), OutdoorAsset: plainText(unit.OutdoorAsset),
+      // อาการที่แจ้งไว้ตอนเปิดงาน ใช้เติมช่องอาการเสียให้ (ใบซ่อม)
+      Note: state === 'open' && kind === 'repair' ? plainText(unit.Note) : ''
     }
   };
+  // ใบติดตั้ง: เครื่องนี้ลงช่องไหนของใบ (หน้าเว็บใช้วางช่องกรอกให้ตรงกับที่เซิร์ฟเวอร์จะเขียน)
+  if (kind === 'install') Object.assign(out, installSlotOfCode(unit.AirCode));
   if (state === 'done') {
     out.docNo = plainText(link.DocNo);
-    out.photos = ctx.photos ? Object.keys(ctx.photos.readAll(REPAIR_KIND, out.docNo)) : [];
+    out.photos = ctx.photos ? Object.keys(ctx.photos.readAll(kind === 'install' ? INSTALL_KIND : REPAIR_KIND, out.docNo)) : [];
     out.readableUntil = readableUntil(link);
   }
   return out;
@@ -178,6 +217,7 @@ export async function submitRepairLink(ctx, token, record) {
 
   const saved = await ctx.withLockNoAuth(async () => {
     const link = await requireLink(ctx, token, 'open');
+    if (kindOf(link) !== 'repair') throw new Error(STATE_MESSAGE.invalid);
 
     const unit = unitByCode(ctx, link.AirCode);
     if (!unit) throw new Error('ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่');
@@ -198,26 +238,77 @@ export async function submitRepairLink(ctx, token, record) {
 }
 
 /**
+ * ส่งเอกสารติดตั้งผ่านลิงก์ = ปิดงานติดตั้งที่รอเอกสาร (ลงเลขเอกสารในแถวประวัติที่รออยู่)
+ *
+ * ใบหนึ่งมีแค่เครื่องของลิงก์ — เครื่องมาจากลิงก์เสมอ ไม่ใช่จากที่ส่งมา
+ * ตรวจสถานะลิงก์ในล็อก (เหตุผลเดียวกับ submitRepairLink)
+ */
+export async function submitInstallLink(ctx, token, record) {
+  record = record || {};
+  if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ติดตั้ง');
+
+  const saved = await ctx.withLockNoAuth(async () => {
+    const link = await requireLink(ctx, token, 'open');
+    if (kindOf(link) !== 'install') throw new Error(STATE_MESSAGE.invalid);
+
+    const unit = unitByCode(ctx, link.AirCode);
+    if (!unit) throw new Error('ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่');
+    if (!jobStillOpen(ctx, 'install', unit)) throw new Error(JOB_CLOSED_MESSAGE.install);
+
+    const { slot, base } = installSlotOfCode(unit.AirCode);
+    const rec = {
+      ...record,
+      AirCode1: slot === 1 ? unit.AirCode : '',
+      AirCode2: slot === 2 ? unit.AirCode : '',
+      AcceptResult1: slot === 1 ? plainText(record.AcceptResult) : '',
+      AcceptResult2: slot === 2 ? plainText(record.AcceptResult) : '',
+      SlotBase: base
+    };
+    // ตัวหาเครื่องรู้แค่เครื่องของลิงก์ — คนถือลิงก์ส่งเครื่องอื่นเข้ามาไม่ได้
+    const prep = await prepareInstall(ctx, rec, code => {
+      if (normalizeCode(code) !== normalizeCode(unit.AirCode)) throw new Error(STATE_MESSAGE.invalid);
+      return unit;
+    });
+    const row = await writeInstallForm(ctx, rec, prep, linkRecorder(link));
+    const docNo = plainText(row.DocNo) || plainText(row.DocNo2) || plainText(row.ID);
+
+    ctx.ss.writeByHeaders(SHEETS.REPAIRLINK, link._row, { UsedAt: ymdhms(new Date()), DocNo: docNo });
+    await ctx.ss.flush();
+    return { docNo, slot };
+  });
+
+  await storeInstallPdf(ctx, saved.docNo);
+  return saved;
+}
+
+/**
  * แนบรูปหนึ่งช่องของใบที่ส่งผ่านลิงก์แล้ว
  *
  * รูปส่งทีละใบหลังบันทึก (เหมือนในระบบ) เพราะเลขที่เอกสารซึ่งใช้เป็นที่เก็บรูป
  * เพิ่งมีตอนส่ง และถ้าส่งทั้ง 9 รูปก้อนเดียว สัญญาณมือถือหน้างานมักไม่ไหว
+ * ใบซ่อมมีเครื่องเดียว (ช่อง 1 เสมอ) · ใบติดตั้งใช้ช่องของเครื่องในลิงก์ (ไม่รับจากที่ส่งมา)
  */
 export async function saveRepairLinkPhoto(ctx, token, index, dataUrl) {
   if (!ctx.photos) throw new Error('ระบบที่รันอยู่ตอนนี้ไม่รองรับการเก็บรูป');
+  let kind = 'repair';
   const docNo = await ctx.withLockNoAuth(async () => {
     const link = await requireLink(ctx, token, 'done');
+    kind = kindOf(link);
     const doc = plainText(link.DocNo);
-    // ใบซ่อมมีเครื่องเดียว รูปอยู่ช่องของเครื่องที่ 1 เสมอ (ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง)
-    ctx.photos.save(REPAIR_KIND, doc, 1, Number(index), dataUrl);
+    const docKind = kind === 'install' ? INSTALL_KIND : REPAIR_KIND;
+    const slot = kind === 'install' ? installSlotOfCode(link.AirCode).slot : 1;
+    // ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง
+    ctx.photos.save(docKind, doc, slot, Number(index), dataUrl);
     // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
-    const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === doc);
-    if (form && resetApproval(ctx, REPAIR_KIND, form.ID)) await ctx.ss.flush();
+    const form = kind === 'install'
+      ? ctx.ss.objects(SHEETS.INSTALLFORM).find(f => plainText(f.DocNo) === doc || plainText(f.DocNo2) === doc)
+      : ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === doc);
+    if (form && resetApproval(ctx, docKind, form.ID)) await ctx.ss.flush();
     return doc;
   });
   // สร้างไฟล์ PDF ใหม่ให้ตรงกับรูปล่าสุด (หน่วงไว้ รวบรูปหลายใบเป็นรอบเดียว)
-  scheduleDocPdf(ctx, docNo, () => storeRepairPdf(ctx, docNo));
-  return { ok: true, photos: Object.keys(ctx.photos.readAll(REPAIR_KIND, docNo)) };
+  scheduleDocPdf(ctx, docNo, () => (kind === 'install' ? storeInstallPdf(ctx, docNo) : storeRepairPdf(ctx, docNo)));
+  return { ok: true, photos: Object.keys(ctx.photos.readAll(kind === 'install' ? INSTALL_KIND : REPAIR_KIND, docNo)) };
 }
 
 /** ไฟล์ PDF ของใบที่ส่งผ่านลิงก์แล้ว — สร้างสดทุกครั้ง จะได้มีรูปล่าสุดเสมอ */
@@ -227,19 +318,22 @@ export async function getRepairLinkPdf(ctx, token) {
     throw new Error('เครื่องที่รันระบบอยู่สร้างไฟล์ PDF ไม่ได้ — เอกสารบันทึกเรียบร้อยแล้ว ขอไฟล์ได้จากเจ้าหน้าที่');
   }
   const docNo = plainText(link.DocNo);
-  const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === docNo);
+  const install = kindOf(link) === 'install';
+  const form = install
+    ? ctx.ss.objects(SHEETS.INSTALLFORM).find(f => plainText(f.DocNo) === docNo || plainText(f.DocNo2) === docNo)
+    : ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === docNo);
   if (!form) throw new Error('ไม่พบเอกสารเลขที่ ' + docNo + ' — อาจถูกลบไปแล้ว ติดต่อเจ้าหน้าที่');
 
-  const { base64, draft } = await renderRepairPdf(ctx, form);
+  const { base64, draft } = install ? await renderInstallPdf(ctx, form) : await renderRepairPdf(ctx, form);
   return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }
 
 /* ==================== สำหรับเจ้าหน้าที่ ==================== */
 
-/** สิทธิ์จัดการลิงก์ = เจ้าหน้าที่ที่แก้เอกสารซ่อมได้ ในขอบเขตของเครื่องนั้น */
-async function assertCanManage(ctx, airCode) {
-  await ctx.assertStaff('จัดการลิงก์งานซ่อม');
-  await ctx.assertModuleEdit('repairform');
+/** สิทธิ์จัดการลิงก์ = เจ้าหน้าที่ที่แก้เอกสารแบบนั้นได้ ในขอบเขตของเครื่องนั้น */
+async function assertCanManage(ctx, airCode, kind = 'repair') {
+  await ctx.assertStaff('จัดการลิงก์' + ASSIGN_KINDS[kind].label);
+  await ctx.assertModuleEdit(ASSIGN_KINDS[kind].module);
   const nc = normalizeCode(airCode);
   const unit = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
   if (!unit) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' หรือไม่มีสิทธิ์เข้าถึง');
@@ -252,19 +346,23 @@ async function assertCanManage(ctx, airCode) {
  * ลิงก์เก่าของเครื่องเดียวกันที่ยังไม่ได้ใช้ ถูกยกเลิกให้อัตโนมัติ
  * งานหนึ่งจึงมีลิงก์ที่ใช้ได้แค่อันเดียวเสมอ ไม่มีลิงก์เก่าลอยอยู่ในไลน์กลุ่มไหน
  */
-export async function createRepairLink(ctx, airCode, days) {
+export async function createRepairLink(ctx, airCode, days, kind = 'repair') {
   return ctx.withLock(async () => {
+    if (!ASSIGN_KINDS[kind]) throw new Error('ไม่รู้จักประเภทงาน ' + plainText(kind));
     await ctx.ensureBase();
-    const unit = await assertCanManage(ctx, airCode);
-    if (plainText(unit.Status).trim() !== OPEN_STATUS) {
-      throw new Error('สร้างลิงก์ได้เฉพาะงานที่อนุมัติซ่อมแล้ว (สถานะ "' + OPEN_STATUS + '")');
+    const unit = await assertCanManage(ctx, airCode, kind);
+    if (!jobStillOpen(ctx, kind, unit)) {
+      throw new Error(kind === 'install'
+        ? 'เครื่อง ' + unit.AirCode + ' ไม่มีงานติดตั้งที่รอเอกสาร'
+        : 'สร้างลิงก์ได้เฉพาะงานที่อนุมัติซ่อมแล้ว (สถานะ "' + OPEN_STATUS + '")');
     }
 
     const now = new Date();
     const by = await ctx.currentUser();
     const nc = normalizeCode(unit.AirCode);
     for (const old of ctx.ss.objects(SHEETS.REPAIRLINK)) {
-      if (normalizeCode(old.AirCode) !== nc || stateOf(old) !== 'open') continue;
+      // งานหนึ่งมีลิงก์ที่ใช้ได้อันเดียว — ยกเลิกเฉพาะลิงก์งานแบบเดียวกันของเครื่องนี้
+      if (normalizeCode(old.AirCode) !== nc || kindOf(old) !== kind || stateOf(old) !== 'open') continue;
       ctx.ss.writeByHeaders(SHEETS.REPAIRLINK, old._row, {
         RevokedAt: ymdhms(now), RevokedBy: by + ' (สร้างลิงก์ใหม่แทน)'
       });
@@ -278,14 +376,15 @@ export async function createRepairLink(ctx, airCode, days) {
       AirCode: plainText(unit.AirCode),
       CreatedAt: ymdhms(now),
       CreatedBy: by,
-      ExpiresAt: ymdhms(new Date(now.getTime() + d * DAY))
+      ExpiresAt: ymdhms(new Date(now.getTime() + d * DAY)),
+      Kind: kind
     };
     const headers = ctx.ss.headers(SHEETS.REPAIRLINK);
     ctx.ss.appendRow(SHEETS.REPAIRLINK, headers.map(h => (link[h] !== undefined ? link[h] : '')));
     await ctx.ss.flush();
 
     return {
-      id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt,
+      id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt, kind,
       // ที่อยู่ที่คนอื่นเปิดได้ — หน้าเว็บใช้แทนที่อยู่ของตัวเองเมื่อเปิดระบบด้วย localhost
       // (ดู lanUrl ใน platform/node.js) PUBLIC_URL คือที่อยู่จริงตอนขึ้นคลาวด์ ชนะเสมอ
       publicUrl: String((ctx.env && ctx.env.PUBLIC_URL) || '').replace(/\/+$/, ''),
@@ -297,15 +396,18 @@ export async function createRepairLink(ctx, airCode, days) {
 /** ลิงก์ทั้งหมดของเครื่องที่อยู่ในขอบเขตของผู้ใช้ (ไม่มีรหัส ไม่มีแฮช) — ใหม่ก่อน */
 export async function getRepairLinks(ctx) {
   await ctx.assertStaff('ดูลิงก์งานซ่อม');
-  if (!(await ctx.canView('repairform'))) return [];
+  // เห็นลิงก์ของงานแบบที่ตัวเองดูเอกสารได้เท่านั้น
+  const kinds = new Set();
+  for (const k of Object.keys(ASSIGN_KINDS)) if (await ctx.canView(ASSIGN_KINDS[k].module)) kinds.add(k);
+  if (!kinds.size) return [];
   await ctx.ensureBase();
 
   const scope = new Set((await unitsInScope(ctx)).map(u => normalizeCode(u.AirCode)));
   const now = ymdhms(new Date());
   return ctx.ss.objects(SHEETS.REPAIRLINK)
-    .filter(l => scope.has(normalizeCode(l.AirCode)))
+    .filter(l => scope.has(normalizeCode(l.AirCode)) && kinds.has(kindOf(l)))
     .map(l => ({
-      ID: plainText(l.ID), AirCode: plainText(l.AirCode),
+      ID: plainText(l.ID), AirCode: plainText(l.AirCode), Kind: kindOf(l),
       CreatedAt: plainText(l.CreatedAt), CreatedBy: plainText(l.CreatedBy),
       ExpiresAt: plainText(l.ExpiresAt), UsedAt: plainText(l.UsedAt), DocNo: plainText(l.DocNo),
       RevokedAt: plainText(l.RevokedAt), RevokedBy: plainText(l.RevokedBy),
@@ -320,7 +422,7 @@ export async function revokeRepairLink(ctx, id) {
     await ctx.ensureBase();
     const link = ctx.ss.objects(SHEETS.REPAIRLINK).find(l => plainText(l.ID) === plainText(id));
     if (!link) throw new Error('ไม่พบลิงก์นี้ กรุณารีเฟรชหน้าจอ');
-    await assertCanManage(ctx, link.AirCode);
+    await assertCanManage(ctx, link.AirCode, kindOf(link));
 
     const state = stateOf(link);
     if (state === 'done' || state === 'closed') throw new Error('ลิงก์นี้ส่งเอกสารไปแล้ว ยกเลิกไม่ได้');

@@ -2,7 +2,7 @@ import { Repository } from './db/repository.js';
 import {
   SHEETS, AIRLIST_HEADERS, HISTORY_HEADERS, USERS_HEADERS, CONFIG_HEADERS,
   CLEANFORM_HEADERS, REPAIRFORM_HEADERS, INSTALLFORM_HEADERS,
-  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS, APPROVAL_HEADERS, WAREHOUSE_HEADERS,
+  CONTRACTOR_HEADERS, REPAIRLINK_HEADERS, APPROVAL_HEADERS, WAREHOUSE_HEADERS, ASSIGN_HEADERS,
   CONFIG_DEFAULTS, MODULES, MODULE_LABELS_TH, PERMISSION_INHERITS, CONTRACTOR_PERMISSIONS,
   ROLE_TITLES, REGIONAL_ROLES
 } from './schema.js';
@@ -102,7 +102,8 @@ export class Ctx {
       [SHEETS.CONTRACTOR, CONTRACTOR_HEADERS],
       [SHEETS.REPAIRLINK, REPAIRLINK_HEADERS],
       [SHEETS.APPROVAL, APPROVAL_HEADERS],
-      [SHEETS.WAREHOUSE, WAREHOUSE_HEADERS]
+      [SHEETS.WAREHOUSE, WAREHOUSE_HEADERS],
+      [SHEETS.ASSIGN, ASSIGN_HEADERS]
     ];
 
     for (const [name, headers] of specs) {
@@ -263,6 +264,13 @@ export class Ctx {
           airCodes.add(code);
         }
       }
+    }
+    // งานซ่อม/ติดตั้งที่มอบหมายให้เจ้านี้ (modules/assign.js) — เห็นเครื่องนั้นด้วย ทั้งงานที่ยังเปิด
+    // และที่ทำเสร็จแล้ว (ต้องเปิดดูเอกสารที่ตัวเองกรอกไปได้) ส่วนสิทธิ์ "กรอก" ตรวจแยกที่ assertOwnAssigned
+    for (const a of this.ss.objects(SHEETS.ASSIGN)) {
+      if (String(a.ContractorID || '').trim().toUpperCase() !== want) continue;
+      const code = normalizeCode(a.AirCode);
+      if (code) airCodes.add(code);
     }
 
     return {

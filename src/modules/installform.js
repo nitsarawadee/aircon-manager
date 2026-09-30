@@ -6,6 +6,7 @@ import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
 } from './approval.js';
+import { assertOwnAssigned, isOwnDoc } from './assign.js';
 
 /**
  * เอกสารบันทึกผลการติดตั้ง ตามแบบฟอร์มควบคุม ITEL-FM-NE-006
@@ -46,6 +47,7 @@ const DOC_ASSETS = { fontHref: '/vendor/fonts.css', logoHref: '/assets/form-logo
  * ไฟล์ PDF ไปที่ data/docs/install/ และรูปไปที่ data/photos/install/
  */
 const KIND = 'install';
+export const INSTALL_KIND = KIND;
 
 /** ประเภทเหตุการณ์ที่ใบนี้ลงในประวัติ */
 const EVENT = 'ติดตั้ง';
@@ -79,9 +81,19 @@ export async function getInstallForms(ctx, airCode) {
   }
 
   list = list.filter(await ctx.scopeFilter());
+  // ผู้รับเหมา: เฉพาะใบที่ตัวเองกรอก (ดู isOwnDoc ใน assign.js)
+  const info = await ctx.userInfo();
+  if (info.role === 'Contractor') list = list.filter(f => isOwnDoc(info, f));
 
   // เรียงที่หน้าเว็บไม่ได้ เพราะ _row ต้องติดไปกับข้อมูล — เรียงตรงนี้หลังแปลงแล้ว
   return attachApprovals(ctx, KIND, list.sort(newestFirst('CreatedAt')));
+}
+
+/** ขอบเขตของใบ + ผู้รับเหมาเปิดได้เฉพาะใบที่ตัวเองกรอก */
+async function assertDocAccess(ctx, form) {
+  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  const info = await ctx.userInfo();
+  if (info.role === 'Contractor' && !isOwnDoc(info, form)) throw new Error('คุณไม่มีสิทธิ์เข้าถึงเอกสารใบนี้');
 }
 
 /* ==================== บันทึก ==================== */
@@ -140,9 +152,11 @@ async function unitOf(ctx, airCode) {
  */
 /**
  * ตรวจข้อมูลและดึงเครื่องจากทะเบียน ก่อนเขียนเอกสารติดตั้ง (ยังไม่แตะฐานข้อมูล)
+ * @param {Function} [lookup] รหัสเครื่อง → แถวเครื่อง · ค่าเริ่มต้นหาในขอบเขตของผู้ใช้ที่ล็อกอิน
+ *   ลิงก์ติดตั้ง (ไม่มีผู้ใช้) ส่งตัวหาของตัวเองที่รู้แค่เครื่องของลิงก์ (repairlink.js)
  * @returns {{units, first, slotBase, companyName}}
  */
-async function prepareInstall(ctx, record) {
+export async function prepareInstall(ctx, record, lookup = code => unitOf(ctx, code)) {
   const codes = [1, 2]
     .map(slot => plainText(record['AirCode' + slot]).trim())
     .filter(Boolean);
@@ -160,7 +174,7 @@ async function prepareInstall(ctx, record) {
     const code = plainText(record['AirCode' + slot]).trim();
     if (!code) continue;
     // unitOf หาเฉพาะเครื่องในขอบเขตของผู้ใช้อยู่แล้ว (ภูมิภาค หรือ Node ของผู้รับเหมา)
-    const unit = await unitOf(ctx, code);
+    const unit = await lookup(code);
     units[slot] = unit;
   }
 
@@ -188,9 +202,11 @@ async function prepareInstall(ctx, record) {
 
 /**
  * เขียนเอกสารติดตั้ง + ขั้นอนุมัติ + ประวัติ (ยังไม่ flush) — ต้องเรียกในล็อก หลัง ensureBase
+ * ⚠️ ไม่ตรวจสิทธิ์เอง ผู้เรียกต้องตรวจก่อน (กรอกในระบบ: saveInstallForm · ลิงก์: repairlink.js)
+ * @param {string} [recordedBy] ผู้บันทึก — ไม่ส่ง = ผู้ใช้ที่ล็อกอิน (ลิงก์ส่งคำอธิบายลิงก์มา)
  * @returns {Promise<Object>} แถวที่เขียนลงไป
  */
-async function writeInstallForm(ctx, record, { units, first, slotBase, companyName }) {
+export async function writeInstallForm(ctx, record, { units, first, slotBase, companyName }, recordedBy) {
   const row = {
     ID: freshFormId(ctx, SHEETS.INSTALLFORM, 'IF'),
     Date: plainText(record.Date),
@@ -213,7 +229,7 @@ async function writeInstallForm(ctx, record, { units, first, slotBase, companyNa
     SupervisorName: plainText(record.SupervisorName),
     Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
     CreatedAt: ymdhms(new Date()),
-    RecordedBy: await ctx.currentUser(),
+    RecordedBy: recordedBy === undefined ? await ctx.currentUser() : recordedBy,
     SlotBase: slotBase
   };
 
@@ -304,9 +320,12 @@ async function installSavedOf(ctx, row) {
 export async function saveInstallForm(ctx, record) {
   await ctx.assertModuleEdit('installform');
   const prep = await prepareInstall(ctx, record);
+  const info = await ctx.userInfo();
 
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
+    // ผู้รับเหมา: ทุกเครื่องในใบต้องเป็นงานติดตั้งที่มอบหมายให้เจ้านี้และยังรอเอกสารอยู่
+    for (const u of Object.values(prep.units)) assertOwnAssigned(ctx, info, 'install', u.AirCode);
     const row = await writeInstallForm(ctx, record, prep);
     await ctx.ss.flush();
     return installSavedOf(ctx, row);
@@ -396,7 +415,7 @@ async function formForPhotos(ctx, row) {
   await ctx.ensureBase();
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertDocAccess(ctx, form);
 
   const docNo = docNoOf(form);
   if (!docNo) throw new Error('เอกสารใบนี้ยังไม่มีเลขที่ จึงเก็บรูปไม่ได้');
@@ -475,7 +494,7 @@ export async function getInstallDocHtml(ctx, row) {
 
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertDocAccess(ctx, form);
 
   const { buildInstallDocHtml } = await import('./install-doc.js');
   const docNo = docNoOf(form);
@@ -528,6 +547,10 @@ export async function getInstallBlankXlsx(ctx, record) {
 }
 
 /** แปลงใบหนึ่งเป็นไฟล์ PDF (ยังไม่เก็บ ยังไม่ส่งให้ใคร) */
+export async function renderInstallPdf(ctx, form) {
+  return renderPdf(ctx, form);
+}
+
 async function renderPdf(ctx, form) {
   const docNo = docNoOf(form);
   // ชื่อผู้อนุมัติในช่องลงนาม + ลายน้ำ "รออนุมัติ" ถ้ายังไม่ครบ
@@ -596,7 +619,7 @@ export async function getInstallDocPdf(ctx, row, expectId) {
 
   const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
   if (!form) throw new Error('ไม่พบเอกสารใบนี้');
-  await ctx.assertInScope(form, 'เอกสารใบนี้');
+  await assertDocAccess(ctx, form);
 
   const { docNo, base64, draft } = await renderPdf(ctx, form);
 

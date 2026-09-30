@@ -33,9 +33,10 @@ import {
 } from './modules/installform.js';
 import { getContractors } from './modules/contractors.js';
 import {
-  getRepairLink, submitRepairLink, saveRepairLinkPhoto, getRepairLinkPdf,
+  getRepairLink, submitRepairLink, submitInstallLink, saveRepairLinkPhoto, getRepairLinkPdf,
   createRepairLink, getRepairLinks, revokeRepairLink
 } from './modules/repairlink.js';
+import { assignJob, getJobAssignments, getMyJobs } from './modules/assign.js';
 import { approveDoc, getApprovalCount } from './modules/approval.js';
 import { getWarehouse, writeOffStock } from './modules/warehouse.js';
 
@@ -148,6 +149,10 @@ const API_FUNCTIONS = {
   createRepairLink,
   getRepairLinks,
   revokeRepairLink,
+  // มอบหมายงานซ่อม/ติดตั้งให้ผู้รับเหมาประจำ + วันนัด (ฝั่งผู้รับเหมาอ่านด้วย getMyJobs)
+  assignJob,
+  getJobAssignments,
+  getMyJobs,
 
   // เอกสารติดตั้ง ITEL-FM-NE-006
   getInstallForms,
@@ -184,6 +189,7 @@ const PUBLIC_FUNCTIONS = {
   // รหัสนั้นเปิดได้แค่งานซ่อมงานเดียวที่ผูกไว้ (ดูหัวไฟล์ modules/repairlink.js)
   getRepairLink,
   submitRepairLink,
+  submitInstallLink,
   saveRepairLinkPhoto,
   getRepairLinkPdf
 };
