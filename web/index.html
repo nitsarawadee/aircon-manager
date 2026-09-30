@@ -937,7 +937,30 @@
         </div>
 
         <div>
-          <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2"><i class="ph-fill ph-wrench text-[#1153a1]"></i> ประวัติงานซ่อมบำรุงล่าสุด</h3>
+          <!-- ตัวกรอง + แบ่งหน้า — ดู renderRepairHistory -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph-fill ph-wrench text-[#1153a1]"></i> ประวัติงานซ่อมบำรุงล่าสุด</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:flex">
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-map-pin text-gray-500"></i>
+                <select id="repairHistRegion" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุก Region</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-calendar-blank text-gray-500"></i>
+                <select id="repairHistMonth" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกเดือน</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-funnel text-gray-500"></i>
+                <select id="repairHistEvent" onchange="setRepairHistFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกเหตุการณ์</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
               <table id="repairHistoryTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -955,6 +978,7 @@
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
               </table>
             </div>
+            <div id="repairHistPager" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-slate-50 text-sm text-gray-600"></div>
           </div>
         </div>
       </section>
@@ -1508,8 +1532,8 @@
      * สร้างใหม่ทุกครั้งที่วาดตาราง เพราะประเภทเหตุการณ์เพิ่มได้ตลอดเวลา
      * และคงตัวที่เลือกไว้ถ้ายังมีอยู่ ไม่งั้นตัวกรองจะรีเซ็ตเองทุกครั้งที่โหลดใหม่
      */
-    function syncEventFilter(rows) {
-      const sel = document.getElementById('historyEventFilter');
+    function syncEventFilter(rows, selectId = 'historyEventFilter') {
+      const sel = document.getElementById(selectId);
       if (!sel) return '';
 
       const list = [...new Set((rows || []).map(h => String(h.EventType == null ? '' : h.EventType).trim()).filter(Boolean))]
@@ -3906,15 +3930,15 @@
      * @param {number} page    หน้าปัจจุบัน
      * @param {string} goFn    ชื่อฟังก์ชันที่ปุ่มจะเรียกเมื่อเปลี่ยนหน้า
      */
-    function renderTablePager(barId, total, page, goFn) {
+    function renderTablePager(barId, total, page, goFn, size = TABLE_PAGE_SIZE) {
       const bar = document.getElementById(barId);
       if (!bar) return;
       if (total === 0) { bar.innerHTML = '<span class="text-gray-400">0 รายการ</span>'; return; }
 
-      const totalPages = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
-      const startIdx = (page - 1) * TABLE_PAGE_SIZE;
+      const totalPages = Math.max(1, Math.ceil(total / size));
+      const startIdx = (page - 1) * size;
       const from = startIdx + 1;
-      const to = Math.min(startIdx + TABLE_PAGE_SIZE, total);
+      const to = Math.min(startIdx + size, total);
 
       let btns = '';
       for (let i = 1; i <= totalPages; i++) {
@@ -3940,8 +3964,8 @@
     }
 
     /** ตัดหน้าที่เกินให้กลับมาอยู่ในช่วงที่มีจริง (เช่น กรองแล้วเหลือน้อยลง) */
-    function clampPage(page, total) {
-      const totalPages = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
+    function clampPage(page, total, size = TABLE_PAGE_SIZE) {
+      const totalPages = Math.max(1, Math.ceil(total / size));
       if (page > totalPages) return totalPages;
       if (page < 1) return 1;
       return page;
@@ -7661,47 +7685,101 @@
 
       renderInstallPending(searchQuery);
 
-      const historyTb = document.querySelector('#repairHistoryTable tbody');
-      if (historyTb && currentHistory) {
-        // ห่อ String() ก่อนเสมอ เพราะถ้ามีใครพิมพ์ประเภทเหตุการณ์เป็นตัวเลขในชีต
-        // Google Sheets จะเก็บเป็น Number แล้วการเรียก .includes() จะพังทั้งหน้าจองานซ่อม
-        // เหตุการณ์ที่ถือว่าเป็นเรื่องของงานซ่อม คือทุกอย่างที่เกิดจาก "เครื่องมีปัญหา"
-        // ต้องรวม ชำรุด กับ ปลดระวาง ด้วย เพราะเป็นส่วนหนึ่งของวงจรเดียวกัน
-        // เดิมกรองด้วยคำว่า "ซ่อม" กับ "เปลี่ยน" เท่านั้น ทำให้สองอันนี้หายไป
-        // ทั้งที่หน้าประวัติเห็น แต่หน้างานซ่อมไม่เห็น ซึ่งขัดกันเอง
-        let repairHist = currentHistory.filter(h => {
-          const t = String(h.EventType == null ? '' : h.EventType);
-          return t.includes('ซ่อม') || t.includes('เปลี่ยน') || t.includes('ชำรุด') ||
-                 t.includes('ปลดระวาง') || t.includes('รื้อถอน') || /write\s*off/i.test(t);
-        });
-        if(searchQuery) {
-           const q = searchQuery.toLowerCase();
-           repairHist = repairHist.filter(h => searchText(h).includes(q));
-        }
-
-        if (repairHist.length === 0) {
-          historyTb.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">ยังไม่มีประวัติการแจ้งซ่อม</td></tr>`;
-        } else {
-          historyTb.innerHTML = repairHist.slice(0, 50).map(h => `
-            <tr class="hover:bg-gray-50 transition-colors">
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(fmtDate(h.Date))}</td>
-              <td class="px-4 py-3 font-medium text-gray-900">
-                ${airCodeBtn(h.AirCode)}
-              </td>
-              <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
-              <td class="px-4 py-3 text-gray-600 max-w-xs truncate text-sm" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
-              <td class="px-4 py-3 text-gray-600 text-sm">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
-              <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
-            </tr>`).join('');
-        }
-      }
+      renderRepairHistory(searchQuery);
       lockViewOnlySection('repair');
     }
 
     document.getElementById('repairSearch').addEventListener('input', e => {
+      repairHistPage = 1;
       renderRepairView(e.target.value.trim());
     });
+
+    /* ---------- ประวัติงานซ่อมบำรุงล่าสุด (หน้างานซ่อม) — กรอง Region / เดือน / เหตุการณ์ + แบ่งหน้า ---------- */
+    const REPAIR_HIST_PAGE_SIZE = 10;
+    let repairHistPage = 1;
+    let repairHistList = [];
+    let repairHistQuery = '';
+
+    /** เปลี่ยนตัวกรอง = กลับหน้า 1 (หน้าเดิมอาจเกินจำนวนที่เหลือ) */
+    function setRepairHistFilter() {
+      repairHistPage = 1;
+      renderRepairHistory(repairHistQuery);
+    }
+    window.setRepairHistFilter = setRepairHistFilter;
+
+    function goToRepairHistPage(p) {
+      repairHistPage = p;
+      renderRepairHistory(repairHistQuery);
+    }
+    window.goToRepairHistPage = goToRepairHistPage;
+
+    /** เดือนที่มีประวัติจริง ใหม่ก่อนเก่า — ค่า yyyy-mm ป้าย "ต.ค. 2569" */
+    function syncRepairHistMonths(rows) {
+      const sel = document.getElementById('repairHistMonth');
+      if (!sel) return '';
+      const months = [...new Set(rows.map(h => String(h.Date || '').slice(0, 7)).filter(m => /^\d{4}-\d{2}$/.test(m)))]
+        .sort().reverse();
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">ทุกเดือน</option>' + months.map(m =>
+        `<option value="${m}">${TH_MONTHS_SHORT[Number(m.slice(5)) - 1]} ${Number(m.slice(0, 4)) + 543}</option>`).join('');
+      sel.value = months.includes(cur) ? cur : '';
+      return sel.value;
+    }
+
+    function renderRepairHistory(searchQuery = '') {
+      repairHistQuery = searchQuery;
+      const historyTb = document.querySelector('#repairHistoryTable tbody');
+      if (!historyTb || !currentHistory) return;
+      // ห่อ String() ก่อนเสมอ เพราะถ้ามีใครพิมพ์ประเภทเหตุการณ์เป็นตัวเลขในชีต
+      // Google Sheets จะเก็บเป็น Number แล้วการเรียก .includes() จะพังทั้งหน้าจองานซ่อม
+      // เหตุการณ์ที่ถือว่าเป็นเรื่องของงานซ่อม คือทุกอย่างที่เกิดจาก "เครื่องมีปัญหา"
+      // ต้องรวม ชำรุด กับ ปลดระวาง ด้วย เพราะเป็นส่วนหนึ่งของวงจรเดียวกัน
+      // เดิมกรองด้วยคำว่า "ซ่อม" กับ "เปลี่ยน" เท่านั้น ทำให้สองอันนี้หายไป
+      // ทั้งที่หน้าประวัติเห็น แต่หน้างานซ่อมไม่เห็น ซึ่งขัดกันเอง
+      let repairHist = currentHistory.filter(h => {
+        const t = String(h.EventType == null ? '' : h.EventType);
+        return t.includes('ซ่อม') || t.includes('เปลี่ยน') || t.includes('ชำรุด') ||
+               t.includes('ปลดระวาง') || t.includes('รื้อถอน') || /write\s*off/i.test(t);
+      });
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        repairHist = repairHist.filter(h => searchText(h).includes(q));
+      }
+      const hasAny = repairHist.length > 0;
+
+      // ประวัติไม่ได้เก็บภูมิภาค — อ่านจากเครื่องในรายการ (เหมือนตารางอื่นในหน้านี้)
+      const regionByCode = new Map((currentAirList || []).map(a => [String(a.AirCode || '').trim().toUpperCase(), a.Region]));
+      const regionOf = h => regionByCode.get(String(h.AirCode || '').trim().toUpperCase()) || '';
+      // ตัวเลือกสร้างจากข้อมูลจริงทุกครั้ง และคงตัวที่เลือกไว้ถ้ายังมีอยู่
+      const region = syncRegionFilter('repairHistRegion', repairHist.map(regionOf));
+      const month = syncRepairHistMonths(repairHist);
+      const event = syncEventFilter(repairHist, 'repairHistEvent');
+      if (region) repairHist = repairHist.filter(h => sameRegion(regionOf(h), region));
+      if (month) repairHist = repairHist.filter(h => String(h.Date || '').slice(0, 7) === month);
+      if (event) repairHist = repairHist.filter(h => String(h.EventType == null ? '' : h.EventType).trim() === event);
+      repairHistList = repairHist;
+
+      repairHistPage = clampPage(repairHistPage, repairHist.length, REPAIR_HIST_PAGE_SIZE);
+      renderTablePager('repairHistPager', repairHist.length, repairHistPage, 'goToRepairHistPage', REPAIR_HIST_PAGE_SIZE);
+
+      if (repairHist.length === 0) {
+        historyTb.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">${hasAny ? 'ไม่พบประวัติที่ตรงกับตัวกรอง' : 'ยังไม่มีประวัติการแจ้งซ่อม'}</td></tr>`;
+        return;
+      }
+      const startIdx = (repairHistPage - 1) * REPAIR_HIST_PAGE_SIZE;
+      historyTb.innerHTML = repairHist.slice(startIdx, startIdx + REPAIR_HIST_PAGE_SIZE).map(h => `
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${esc(displayDocId(h)) || '-'}</td>
+          <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-sm">${esc(fmtDate(h.Date))}</td>
+          <td class="px-4 py-3 font-medium text-gray-900">
+            ${airCodeBtn(h.AirCode)}
+          </td>
+          <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
+          <td class="px-4 py-3 text-gray-600 max-w-xs truncate text-sm" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
+          <td class="px-4 py-3 text-gray-600 text-sm">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
+          <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
+        </tr>`).join('');
+    }
 
     /**
      * ฟอร์มแจ้งซ่อม — ขาเปิดเรื่อง คู่กับฟอร์มปิดงานข้างล่าง
