@@ -8892,7 +8892,9 @@ const CLEANING_CHECKLIST_ITEMS = [
                   ${companyInput('cf_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="cf_tech" value="${single ? esc(cfContext.technician || '') : ''}" class="${field}"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                <!-- Subcontract ไม่ต้องกรอก — ช่องผู้ควบคุมงานบนเอกสารใช้ชื่อ Staff ที่กดอนุมัติ (ดู approval.js)
+                     ซ่อนไว้แทนการลบ เพราะโค้ดส่วนบันทึก/ร่างอ่านค่าจากช่องนี้ (ส่งไปเป็นค่าว่าง) -->
+                <div class="${isContractor() ? 'hidden' : ''}"><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
                   <input id="cf_supervisor" class="${field}"></div>
               </div>`)}
 
@@ -10330,7 +10332,8 @@ const CLEANING_CHECKLIST_ITEMS = [
                   ${companyInput('if_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="if_tech" class="${field}"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                <!-- Subcontract ไม่ต้องกรอก — ชื่อผู้ควบคุมงานมาจาก Staff ที่กดอนุมัติ (เหมือนใบล้าง) -->
+                <div class="${isContractor() ? 'hidden' : ''}"><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
                   <input id="if_supervisor" class="${field}"></div>
               </div>`)}
 
