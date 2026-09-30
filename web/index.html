@@ -5681,8 +5681,10 @@
           </div>
         </td>
         <td class="${tdClass}" onclick="openRoundModal(${origIdx},${r})">${price}</td>
-        <td class="${tdClass}" title="${esc(pr)}" onclick="openRoundModal(${origIdx},${r})">${esc(pr)}</td>
-        <td class="${tdClass} border-r ${borderClass}" title="${esc(tech)}" onclick="openRoundModal(${origIdx},${r})">${esc(tech)}</td>
+        <!-- PR / ผู้รับเหมา ยาวได้มาก (PR-NOP2512-00038803, ชื่อบริษัทเต็ม) ช่องไม่ตัดบรรทัด ตารางเลยยืดจนล้นจอ
+             ช่องกว้างคงที่แล้วตัดเป็น … (ตารางทุกปีกว้างเท่ากันไม่ว่าจะกรอกอะไร) — ชี้ดูข้อความเต็มได้จาก title -->
+        <td class="${tdClass}" title="${esc(pr)}" onclick="openRoundModal(${origIdx},${r})"><div class="w-[90px] truncate mx-auto">${esc(pr)}</div></td>
+        <td class="${tdClass} border-r ${borderClass}" title="${esc(tech)}" onclick="openRoundModal(${origIdx},${r})"><div class="w-[90px] truncate mx-auto">${esc(tech)}</div></td>
       `;
     }
 
