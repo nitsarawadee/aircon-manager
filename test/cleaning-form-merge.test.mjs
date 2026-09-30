@@ -217,17 +217,23 @@ test('กรอกทีละเครื่องแล้วรวมใบ �
 test('เลขที่ออกให้เครื่อง ต้องไม่ไปชนกับเลขของใบประวัติ', async () => {
   // เอกสารกับประวัติใช้ชุดเลขเดียวกัน ถ้าตัวออกเลขไม่นับช่องที่สองด้วย
   // รายการถัดไปจะได้เลขซ้ำกับเลขของเครื่องที่ 2
+  // (ประวัติของการล้างใช้เลขเดียวกับเอกสารของเครื่องนั้น — เลขเดียว = การล้างครั้งเดียว)
   const db = freshDb();
   await saveCleaningForm(ctxOf(db), {
     ...oneUnit(1),
     AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier'
   });
+  // ใบถัดไป (คนละวัน = คนละใบ) ต้องได้เลขใหม่ ไม่ซ้ำกับเลขของเครื่องที่ 2 ในใบแรก
+  await saveCleaningForm(ctxOf(db), oneUnit(1, { Date: '2026-09-20' }));
 
-  const [form] = await getCleaningForms(ctxOf(db));
+  const forms = await getCleaningForms(ctxOf(db));
   const hist = await getHistory(ctxOf(db));
 
-  const all = [form.DocNo, form.DocNo2, ...hist.map(h => h.ID)].filter(Boolean);
-  assert.equal(new Set(all).size, all.length, 'ทุกเลขต้องไม่ซ้ำกันเลย: ' + all.join(', '));
+  const docNos = forms.flatMap(f => [f.DocNo, f.DocNo2]).filter(Boolean);
+  assert.equal(new Set(docNos).size, docNos.length, 'เลขเอกสารซ้ำกัน: ' + docNos.join(', '));
+  const ids = hist.map(h => h.ID);
+  assert.equal(new Set(ids).size, ids.length, 'เลขประวัติซ้ำกัน: ' + ids.join(', '));
+  assert.deepEqual([...ids].sort(), [...docNos].sort(), 'ประวัติแต่ละแถวต้องถือเลขเอกสารของเครื่องนั้น');
 });
 
 /* ==================== สิ่งที่ต้องไม่รวม ==================== */

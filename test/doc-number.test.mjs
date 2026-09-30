@@ -65,8 +65,8 @@ test('เอกสารล้างได้เลขขึ้นต้นด�
   assert.match(form.DocNo, /^PM2609-\d{2,}$/, 'ได้เลข ' + form.DocNo);
 });
 
-test('เลขเอกสารไม่ซ้ำกับเลขใบประวัติที่ระบบออกให้เอง', async () => {
-  // บันทึก 3 ใบ แต่ละใบสร้างใบประวัติของตัวเองด้วย เลขทั้งหมดต้องไม่ชนกันเลย
+test('แถวประวัติการล้างใช้เลขเดียวกับเลขเอกสารของเครื่องนั้น และไม่ซ้ำกันเอง', async () => {
+  // การล้างครั้งเดียวต้องมีเลขเดียว — ถือกระดาษเลขไหนค้นในหน้าประวัติก็เจอเลขนั้น
   const db = freshDb();
   for (let i = 0; i < 3; i++) {
     await saveCleaningForm(ctxOf(db), baseRecord({ AirCode2: 'AYA-WNI-AIR-2', Price2: 450 }));
@@ -74,11 +74,19 @@ test('เลขเอกสารไม่ซ้ำกับเลขใบป�
 
   const forms = await getCleaningForms(ctxOf(db));
   const history = await getHistory(ctxOf(db));
-
-  const all = [...forms.map(f => f.DocNo), ...history.map(h => h.ID)].filter(Boolean);
-  assert.equal(new Set(all).size, all.length, 'มีเลขซ้ำ: ' + all.join(', '));
   assert.equal(forms.length, 3);
   assert.equal(history.length, 6, 'สามใบ สองเครื่องต่อใบ = หกใบประวัติ');
+
+  const ids = history.map(h => h.ID);
+  assert.equal(new Set(ids).size, ids.length, 'เลขประวัติซ้ำ: ' + ids.join(', '));
+  const docNos = forms.flatMap(f => [f.DocNo, f.DocNo2]).filter(Boolean);
+  assert.deepEqual([...ids].sort(), [...docNos].sort(), 'เลขประวัติต้องตรงกับเลขเอกสาร');
+
+  // เครื่องที่ 2 ของแต่ละใบได้เลข DocNo2 ของใบนั้น
+  for (const f of forms) {
+    const h2 = history.find(h => h.ID === f.DocNo2);
+    assert.equal(h2 && h2.AirCode, 'AYA-WNI-AIR-2');
+  }
 });
 
 test('เลขเดินขึ้นเสมอ ไม่ย้อนกลับและไม่ซ้ำ แม้บันทึกติดกันหลายใบ', async () => {

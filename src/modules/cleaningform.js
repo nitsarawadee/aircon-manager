@@ -179,6 +179,9 @@ async function closeRoundsForUnits(ctx, units, opts) {
  * (วิธีเดิมกันงบนับซ้ำได้ก็จริง แต่พอดูประวัติรายเครื่องแล้วเห็นราคาเป็นศูนย์
  *  ทั้งที่ล้างจริง ซึ่งอ่านแล้วสับสน) ตอนนี้แต่ละเครื่องลงราคาของตัวเอง
  * ยอดรวมจึงยังเท่าเดิม แต่ดูรายเครื่องแล้วตรงความจริง
+ *
+ * แถวประวัติของแต่ละเครื่องใช้เลขเอกสารของเครื่องนั้น (opts.form = แถวใบล้างที่มี DocNo/DocNo2)
+ * เดิมออกเลขใหม่ให้แถวประวัติ การล้างครั้งเดียวเลยมีสองเลข (ใบ PM2609-01 แต่ประวัติ PM2609-02)
  */
 async function writeCleaningHistory(ctx, units, opts) {
   const roundTxt = (opts.planYear && opts.planRound)
@@ -188,6 +191,11 @@ async function writeCleaningHistory(ctx, units, opts) {
   for (const u of units) {
     // ผลประเมินเป็นของรายเครื่อง ประวัติของแต่ละเครื่องจึงต้องได้ผลของตัวเอง
     const cond = plainText(u.cond);
+    const f = opts.form || {};
+    // หาเลขจากรหัสเครื่อง ไม่ใช่ช่องของ record — ตอนรวมเข้าใบเดิม เครื่องอาจลงคนละช่องกับที่กรอกมา
+    const same = c => plainText(c).trim() === u.airCode;
+    const docNo = same(f.AirCode1) ? f.DocNo
+      : same(f.AirCode2) ? f.DocNo2 : '';
     await addHistoryRaw(ctx, {
       AirCode: u.airCode,
       Date: opts.date,
@@ -197,7 +205,7 @@ async function writeCleaningHistory(ctx, units, opts) {
               (opts.docUrl ? ` — เอกสาร: ${opts.docUrl}` : ''),
       Cost: hasPrice(u.price) ? Number(u.price) : '',
       Technician: opts.technician || ''
-    });
+    }, { docNo: plainText(docNo).trim() });
   }
 }
 
@@ -799,7 +807,8 @@ export async function saveCleaningForm(ctx, record) {
       docUrl: '',
       planYear: record.PlanYear,
       planRound: record.PlanRound,
-      source: 'form'
+      source: 'form',
+      form: savedForm
     });
 
     await ctx.ss.flush();
@@ -1399,7 +1408,8 @@ export async function uploadNodeDocuments(ctx, payload) {
         docUrl,
         planYear: closeout.year,
         planRound: closeout.round,
-        source: 'attach'
+        source: 'attach',
+        form: docNumbers
       });
     }
 

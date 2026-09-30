@@ -181,9 +181,18 @@ export function usedDocNumbers(ctx) {
   return [...ids, ...docNos, ...repairNos].filter(Boolean);
 }
 
-export async function addHistoryRaw(ctx, record) {
+/**
+ * @param {Object} [opts]
+ * @param {string} [opts.docNo] เลขเอกสารที่แถวนี้เป็นบันทึกของมัน (ใบล้างของเครื่องนั้น)
+ *   ใช้เป็นเลขของแถวประวัติเลย คนถือกระดาษเลขไหนค้นในหน้าประวัติก็เจอเลขเดียวกัน
+ *   แยกเป็นพารามิเตอร์ ไม่อ่านจาก record.ID เพราะ record มาจากหน้าเว็บได้ (addHistoryRecord)
+ *   ถ้าเลขนั้นมีแถวประวัติอยู่แล้ว (เช่นบันทึกเครื่องเดิมซ้ำในใบเดิม) ออกเลขใหม่ ไม่ให้ ID ซ้ำ
+ */
+export async function addHistoryRaw(ctx, record, opts = {}) {
   await ctx.ensureBase();
-  const id = makeHistoryId(record.EventType, record.Date, usedDocNumbers(ctx));
+  const docNo = String(opts.docNo || '').trim();
+  const taken = docNo && ctx.ss.objects(SHEETS.HISTORY).some(r => String(r.ID || '').trim() === docNo);
+  const id = (docNo && !taken) ? docNo : makeHistoryId(record.EventType, record.Date, usedDocNumbers(ctx));
   const me = await ctx.currentUser();
 
   const byName = {
