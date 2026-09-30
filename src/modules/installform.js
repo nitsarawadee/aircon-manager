@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
-import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { unitsInScope, addNewAirUnitRaw, getAirList } from './airlist.js';
+import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -332,38 +332,6 @@ export async function saveInstallForm(ctx, record) {
   });
 
   // เก็บสำเนา PDF ไว้บนเซิร์ฟเวอร์ (นอกล็อก เพราะต้องรอเบราว์เซอร์แปลงไฟล์)
-  await storeInstallPdf(ctx, saved.docNo);
-  return saved;
-}
-
-/**
- * เพิ่มเครื่องใหม่เข้าทะเบียน + ออกเอกสารติดตั้ง "ทีเดียว" (เจ้าของงานสั่ง)
- *
- * กด "เพิ่มเครื่องใหม่" / "ติดตั้งเครื่องใหม่" แล้วกรอกฟอร์มติดตั้งต่อ — เครื่องเข้าทะเบียนก็ต่อเมื่อ
- * บันทึกเอกสารติดตั้งสำเร็จ เขียนทั้งสองอย่างใน flush เดียว พลาดตรงไหนไม่มีอะไรถูกบันทึกเลย
- * (ไม่มีเครื่องที่เข้าทะเบียนแล้วแต่ไม่มีเอกสารติดตั้งค้างอยู่)
- *
- * @param {Object} unit   ข้อมูลเครื่องจากฟอร์มเพิ่มเครื่องใหม่ (เหมือนที่ส่งให้ saveAirUnit)
- * @param {Object} record ข้อมูลฟอร์มติดตั้ง (เหมือนที่ส่งให้ saveInstallForm)
- */
-export async function installNewAirUnit(ctx, unit, record) {
-  await ctx.assertModuleEdit('airlist');
-  await ctx.assertModuleEdit('installform');
-
-  const saved = await ctx.withLock(async () => {
-    await ctx.ensureBase();
-    await addNewAirUnitRaw(ctx, unit);
-    // เครื่องอยู่ในทะเบียนของคำสั่งนี้แล้ว (ยังไม่ flush) หาเจอด้วยตัวตรวจเดียวกับเครื่องเดิม
-    const prep = await prepareInstall(ctx, record);
-    const row = await writeInstallForm(ctx, record, prep);
-    await ctx.ss.flush();
-    return {
-      ...(await installSavedOf(ctx, row)),
-      air: await getAirList(ctx),
-      history: await getHistory(ctx)
-    };
-  });
-
   await storeInstallPdf(ctx, saved.docNo);
   return saved;
 }

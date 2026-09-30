@@ -7505,29 +7505,6 @@
       }).join('');
     }
 
-    /**
-     * ฟอร์มติดตั้งของเครื่องใหม่ที่ยังไม่เข้าทะเบียน (ข้อมูลจากฟอร์มเพิ่มเครื่อง)
-     * เครื่องต่อท้าย Node ในทะเบียน ช่องในใบจึงเป็นลำดับถัดจากเครื่องที่มีอยู่ (กติกาเดียวกับ installSlotOf)
-     */
-    async function openInstallFormForNewUnit(unit) {
-      try {
-        const nodes = await call('getCleaningFormNodes');
-        cleaningFormNodes = Array.isArray(nodes) ? nodes : [];
-      } catch (e) { return; }
-      const shown = {
-        AirCode: unit.AirCode, Brand: unit.Brand, BTU: unit.BTU,
-        IndoorSerial: unit.IndoorSN, IndoorAsset: unit.IndoorAsset,
-        OutdoorSerial: unit.OutdoorSN, OutdoorAsset: unit.OutdoorAsset
-      };
-      const had = cleaningFormNodes.find(n => n.NodeName === unit.NodeName);
-      const node = had
-        ? { ...had, units: [...(had.units || []), shown] }
-        : { NodeName: unit.NodeName, SiteCode: unit.SiteCode, Region: unit.Region,
-            Province: unit.Province, LocationType: unit.LocationType, units: [shown] };
-      const { slot, base } = installSlotOf(node.units.length);
-      openInstallForm(node, [{ slot, unit: shown }], base, unit);
-    }
-
     /** เปิดฟอร์มติดตั้งของเครื่องตัวนี้ โดยเลือก Node และเครื่องไว้ให้แล้ว */
     async function openInstallFormFor(airCode) {
       try {
@@ -10595,7 +10572,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         AirCode: u.AirCode, Brand: u.Brand, BTU: u.BTU,
         IndoorSerial: u.IndoorSN, IndoorAsset: u.IndoorAsset, OutdoorSerial: u.OutdoorSN, OutdoorAsset: u.OutdoorAsset
       };
-      openInstallForm(node, [{ slot: Number(info.slot) || 1, unit: shown }], Number(info.base) || 0, null, { token, apptDate: info.apptDate });
+      openInstallForm(node, [{ slot: Number(info.slot) || 1, unit: shown }], Number(info.base) || 0, { token, apptDate: info.apptDate });
       return;
     }
     if (info.state === 'open') {
@@ -11178,18 +11155,14 @@ const CLEANING_CHECKLIST_ITEMS = [
    *   เก็บ slot มาด้วยเสมอ ไม่ใช่ใช้ลำดับในอาร์เรย์ เพราะติ๊กเฉพาะตัวที่ 2
    *   ข้อมูลต้องลงช่องที่ 2 ไม่ใช่เลื่อนขึ้นมาช่องแรก
    */
-  /** เครื่องใหม่ที่จะเข้าทะเบียนพร้อมเอกสารใบนี้ (null = เครื่องที่อยู่ในทะเบียนแล้ว) */
-  let ifNewUnit = null;
-
   /** โหมดลิงก์ (คนถือลิงก์ใบติดตั้ง ไม่ได้ล็อกอิน) — { token } · null = กรอกในระบบ */
   let ifLink = null;
 
-  function openInstallForm(node, picked, base = 0, newUnit = null, link = null) {
+  function openInstallForm(node, picked, base = 0, link = null) {
     ifSavedRow = null;   // ใบใหม่ — ไม่ใช่การส่งรูปค้างของใบก่อน
     ifNode = node;
     ifUnits = picked || [];
     ifBase = base;
-    ifNewUnit = newUnit;
     ifPhotos = {};
     ifLink = link ? { token: link.token } : null;
 
@@ -11249,12 +11222,6 @@ const CLEANING_CHECKLIST_ITEMS = [
           <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
 
             ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
-
-            ${newUnit ? `<div class="bg-teal-50 border border-teal-200 text-teal-800 text-sm rounded-xl px-4 py-3 flex gap-2">
-              <i class="ph ph-info text-lg shrink-0"></i>
-              <p>เครื่องใหม่ <b>${esc(newUnit.AirCode)}</b> จะเข้าทะเบียนพร้อมกับเอกสารนี้ตอนกดบันทึก ·
-                 ปิดก่อนบันทึก = ยังไม่มีอะไรถูกบันทึก</p>
-            </div>` : ''}
 
             ${card(`
               <div class="flex items-start justify-between gap-2 flex-wrap mb-2">
@@ -11527,7 +11494,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       if (!ok) return;
     }
     closeModal();
-    ifNode = null; ifUnits = []; ifBase = 0; ifPhotos = {}; ifNewUnit = null; ifSavedRow = null;
+    ifNode = null; ifUnits = []; ifBase = 0; ifPhotos = {}; ifSavedRow = null;
   }
   window.closeInstallForm = closeInstallForm;
 
@@ -11665,12 +11632,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     }
 
     try {
-      // เครื่องใหม่: เข้าทะเบียนพร้อมเอกสารในคำสั่งเดียว (พลาด = ไม่มีอะไรถูกบันทึก)
-      const res = ifNewUnit
-        ? await call('installNewAirUnit', ifNewUnit, record)
-        : await call('saveInstallForm', record);
-      // บันทึกแล้ว — ห้ามส่งเครื่องใหม่ซ้ำ (เช่นกดส่งรูปที่เหลืออีกครั้ง)
-      ifNewUnit = null;
+      const res = await call('saveInstallForm', record);
       if (res && Array.isArray(res.air)) { currentAirList = res.air; renderAirTable(currentAirList); }
       if (res && Array.isArray(res.history)) currentHistory = res.history;
       if (!res) {

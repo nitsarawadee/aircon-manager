@@ -64,12 +64,18 @@ function jobStillOpen(ctx, kind, unit) {
 }
 
 /**
- * ช่องและคู่เครื่องของเครื่องนี้ในใบติดตั้ง — จากเลขท้ายรหัส (AIR-3 = คู่ 3–4 ช่องที่ 1)
- * กติกาเดียวกับใบล้าง (unitSlotOf) · คนถือลิงก์ไม่มีรายการเครื่องทั้ง Node ให้นับตำแหน่ง
+ * ช่องและคู่เครื่องของเครื่องนี้ในใบติดตั้ง — ตามลำดับเครื่องใน Node (ตัวที่ 3 = คู่ 3–4 ช่องที่ 1)
+ * กติกาเดียวกับใบติดตั้งที่กรอกในระบบ (installSlotOf ในหน้าเว็บ ลำดับเดียวกับ getCleaningFormNodes)
+ * เดิมนับจากเลขท้ายรหัสแบบใบล้าง ถ้ารหัสไม่เรียงต่อกัน (Node มี 2 เครื่องแต่เพิ่ม AIR-7)
+ * ใบจากลิงก์กับใบที่กรอกในระบบจะเขียนเลขเครื่องไม่ตรงกัน
  */
-function installSlotOfCode(airCode) {
-  const n = Number((/-AIR-(\d+)$/i.exec(plainText(airCode)) || [])[1]) || 1;
-  return { slot: ((n - 1) % 2) + 1, base: Math.floor((n - 1) / 2) * 2 };
+function installSlotOfUnit(ctx, unit) {
+  const node = plainText(unit.NodeName);
+  const nc = normalizeCode(unit.AirCode);
+  const units = ctx.ss.objects(SHEETS.AIRLIST).filter(a => plainText(a.NodeName) === node);
+  const pos = units.findIndex(a => normalizeCode(a.AirCode) === nc) + 1 || 1;
+  const slot = ((pos - 1) % 2) + 1;
+  return { slot, base: pos - slot };
 }
 
 const JOB_CLOSED_MESSAGE = {
@@ -196,7 +202,7 @@ export async function getRepairLink(ctx, token) {
     }
   };
   // ใบติดตั้ง: เครื่องนี้ลงช่องไหนของใบ (หน้าเว็บใช้วางช่องกรอกให้ตรงกับที่เซิร์ฟเวอร์จะเขียน)
-  if (kind === 'install') Object.assign(out, installSlotOfCode(unit.AirCode));
+  if (kind === 'install') Object.assign(out, installSlotOfUnit(ctx, unit));
   if (state === 'done') {
     out.docNo = plainText(link.DocNo);
     out.photos = ctx.photos ? Object.keys(ctx.photos.readAll(kind === 'install' ? INSTALL_KIND : REPAIR_KIND, out.docNo)) : [];
@@ -257,7 +263,7 @@ export async function submitInstallLink(ctx, token, record) {
     if (!unit) throw new Error('ไม่พบเครื่องของงานนี้ในระบบแล้ว — ติดต่อเจ้าหน้าที่');
     if (!jobStillOpen(ctx, 'install', unit)) throw new Error(JOB_CLOSED_MESSAGE.install);
 
-    const { slot, base } = installSlotOfCode(unit.AirCode);
+    const { slot, base } = installSlotOfUnit(ctx, unit);
     const rec = {
       ...record,
       AirCode1: slot === 1 ? unit.AirCode : '',
@@ -298,13 +304,15 @@ export async function saveRepairLinkPhoto(ctx, token, index, dataUrl) {
     kind = kindOf(link);
     const doc = plainText(link.DocNo);
     const docKind = kind === 'install' ? INSTALL_KIND : REPAIR_KIND;
-    const slot = kind === 'install' ? installSlotOfCode(link.AirCode).slot : 1;
-    // ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง
-    ctx.photos.save(docKind, doc, slot, Number(index), dataUrl);
-    // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
     const form = kind === 'install'
       ? ctx.ss.objects(SHEETS.INSTALLFORM).find(f => plainText(f.DocNo) === doc || plainText(f.DocNo2) === doc)
       : ctx.ss.objects(SHEETS.REPAIRFORM).find(f => plainText(f.DocNo) === doc);
+    // ใบติดตั้ง: ช่องตามที่ลงไว้จริงในใบ (ไม่นับลำดับใน Node ใหม่ — เครื่องใน Node อาจเพิ่ม/ลบหลังส่งใบ)
+    const slot = kind === 'install' && form &&
+      normalizeCode(form.AirCode2) === normalizeCode(link.AirCode) ? 2 : 1;
+    // ตัวเก็บรูปตรวจเลขช่อง 1-9 เอง
+    ctx.photos.save(docKind, doc, slot, Number(index), dataUrl);
+    // รูปเปลี่ยน = ต้องอนุมัติใหม่ (ดู approval.js)
     if (form && resetApproval(ctx, docKind, form.ID)) await ctx.ss.flush();
     return doc;
   });

@@ -138,8 +138,8 @@ async function insertAirUnitRaw(ctx, unit) {
 /**
  * เพิ่มเครื่องใหม่เข้าทะเบียน + ลงประวัติ "ติดตั้ง" (ยังไม่ flush) — ต้องเรียกในล็อก หลัง ensureBase
  *
- * ใช้ทั้งเพิ่มเครื่องอย่างเดียว (saveAirUnit) และเพิ่มเครื่องพร้อมเอกสารติดตั้ง (installNewAirUnit)
- * ประวัติติดป้ายรอเอกสาร — ถ้าออกเอกสารติดตั้งในคำสั่งเดียวกัน ป้ายจะถูกเปลี่ยนเป็นเลขเอกสารทันที
+ * ใช้ตอนเพิ่มเครื่องใหม่ (saveAirUnit) — ประวัติติดป้ายรอเอกสาร งานไปขึ้นที่หน้างานซ่อมและติดตั้ง
+ * ให้กรอกเอกสารเอง ส่งลิงก์ หรือมอบหมายผู้รับเหมา
  */
 export async function addNewAirUnitRaw(ctx, unit) {
   await ctx.assertRegionAccess(unit.Region);
@@ -154,24 +154,6 @@ export async function addNewAirUnitRaw(ctx, unit) {
     // รอกรอกเอกสารติดตั้งที่หน้างานซ่อมและติดตั้ง (ดู INSTALL_PENDING_NOTE)
     Note: INSTALL_PENDING_NOTE
   });
-}
-
-/**
- * ตรวจเครื่องใหม่ก่อนเปิดฟอร์มติดตั้ง — กติกาเดียวกับตอนบันทึกจริง แต่ไม่เขียนอะไร
- *
- * เพิ่มเครื่องพร้อมเอกสารติดตั้งบันทึกตอนท้ายทีเดียว ถ้าไม่ตรวจก่อน รหัสซ้ำหรือภูมิภาคผิด
- * จะเพิ่งรู้หลังช่างกรอกฟอร์มติดตั้งและแนบรูปครบแล้ว
- */
-export async function checkNewAirUnit(ctx, unit) {
-  await ctx.assertModuleEdit('airlist');
-  await ctx.ensureBase();
-  if (!unit || !unit.AirCode) throw new Error('กรุณาระบุรหัสเครื่อง');
-  await ctx.assertRegionAccess(unit.Region);
-  const code = normalizeCode(unit.AirCode);
-  if (ctx.ss.objects(SHEETS.AIRLIST).some(o => normalizeCode(o.AirCode) === code)) {
-    throw new Error('มีรหัสเครื่อง ' + unit.AirCode + ' อยู่แล้วในระบบ');
-  }
-  return { ok: true };
 }
 
 /**

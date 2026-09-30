@@ -2,7 +2,7 @@ import { Ctx } from './context.js';
 
 import {
   getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
-  getAirUnitImportFile, getAirUnitImportTemplate, planAirUnitImport, applyAirUnitImport, checkNewAirUnit
+  getAirUnitImportFile, getAirUnitImportTemplate, planAirUnitImport, applyAirUnitImport
 } from './modules/airlist.js';
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, syncCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
@@ -27,7 +27,7 @@ import {
   saveRepairPhoto, deleteRepairPhoto, getRepairPhotos
 } from './modules/repairform.js';
 import {
-  getInstallForms, saveInstallForm, deleteInstallForm, installNewAirUnit,
+  getInstallForms, saveInstallForm, deleteInstallForm,
   getInstallDocHtml, getInstallBlankDocHtml, getInstallBlankXlsx, getInstallDocPdf,
   saveInstallPhoto, deleteInstallPhoto, getInstallPhotos
 } from './modules/installform.js';
@@ -157,9 +157,6 @@ const API_FUNCTIONS = {
   // เอกสารติดตั้ง ITEL-FM-NE-006
   getInstallForms,
   saveInstallForm,
-  // เพิ่มเครื่องใหม่ + เอกสารติดตั้งทีเดียว (ตรวจเครื่องก่อนเปิดฟอร์มด้วย checkNewAirUnit)
-  installNewAirUnit,
-  checkNewAirUnit,
   deleteInstallForm,
   getInstallDocHtml,
   getInstallBlankDocHtml,

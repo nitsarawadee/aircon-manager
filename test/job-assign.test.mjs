@@ -165,6 +165,24 @@ test('ลิงก์ใบติดตั้ง — กรอกได้โด
   assert.equal(links[0].Kind, 'install');
 });
 
+test('ลิงก์ใบติดตั้ง — เลขเครื่องในใบนับตามลำดับใน Node เหมือนกรอกในระบบ ไม่ใช่เลขท้ายรหัส', async () => {
+  const db = freshDb();
+  // Node มี 2 เครื่อง แล้วเพิ่ม AIR-7 (รหัสไม่เรียงต่อ) = เครื่องตัวที่ 3 ของ Node → ช่อง 1 ของใบคู่ 3–4
+  db.prepare(`INSERT INTO air_units (AirCode, NodeName, SiteCode, Region, Status) VALUES (?,?,?,?,?)`)
+    .run('ATG-PMK-AIR-7', 'ป่าโมก', 'ATG-PMK', '1', 'ใช้งานปกติ');
+  db.prepare(`INSERT INTO history (ID, AirCode, Date, EventType, Detail, Note) VALUES (?,?,?,?,?,?)`)
+    .run('CM2609-09', 'ATG-PMK-AIR-7', '2026-09-09', 'ติดตั้ง', 'ติดตั้งเครื่องใหม่', INSTALL_PENDING_NOTE);
+
+  const created = await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-7', 7, 'install');
+  const info = await getRepairLink(anon(db), created.token);
+  assert.deepEqual([info.slot, info.base], [1, 2], 'ตัวที่ 3 ของ Node = ช่องที่ 1 ของใบคู่ 3–4 (ไม่ใช่เครื่องที่ 7)');
+
+  await submitInstallLink(anon(db), created.token, { Date: '2026-09-10', AcceptResult: 'ผ่าน' });
+  const form = (await getInstallForms(as(db, 'boss')))[0];
+  assert.equal(form.AirCode1, 'ATG-PMK-AIR-7');
+  assert.equal(Number(form.SlotBase), 2);
+});
+
 test('วันนัดของลิงก์ — เจ้าหน้าที่ใส่ตอนสร้าง ช่างที่เปิดลิงก์เห็น · สร้างลิงก์ใหม่ = วันนัดใหม่', async () => {
   const db = freshDb();
   const first = await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'repair', '2026-10-05');
