@@ -6570,10 +6570,22 @@
 
       const same = (a, b) => !!a && String(a).trim() === String(b || '').trim();
       const docs = allDocForms();
-      const cleanOf = () => String(eventType || '').includes('ล้าง') && airCode && date
-        ? docs.find(f => f.kind === 'cleaning' && same(fmtDate(date), fmtDate(f.Date)) &&
-                         [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)))
-        : null;
+      // เครื่องเดียวล้างวันเดียวกันได้หลายรอบ (คนละใบ) — แยกด้วยรอบที่ลงไว้ในรายละเอียดประวัติ "รอบที่ 3/2026"
+      const hist = (currentHistory || []).find(h => same(id, h.ID) && sameCode(h.AirCode, airCode));
+      const round = /รอบที่\s*(\d+)\s*\/\s*(\d{4})/.exec(String(hist && hist.Detail || ''));
+      const cleanOf = () => {
+        if (!String(eventType || '').includes('ล้าง') || !airCode || !date) return null;
+        const sameDay = docs.filter(f => f.kind === 'cleaning' && same(fmtDate(date), fmtDate(f.Date)) &&
+                                         [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)));
+        return (round && sameDay.find(f => same(round[1], f.PlanRound) && same(round[2], f.PlanYear))) || sameDay[0];
+      };
+      // คำค้น = เลขที่ของเครื่องนี้ในใบ — ใบที่มีแค่เครื่องที่ 2 ไม่มี DocNo ถ้าใช้ displayDocNo จะได้ ID ภายใน (CF…)
+      const numOf = f => {
+        const hit = [id, inNote].find(t => same(t, f.DocNo) || same(t, f.DocNo2));
+        if (hit) return hit;
+        const slot2 = sameCode(f.AirCode2, airCode) && !sameCode(f.AirCode1, airCode);
+        return String((slot2 ? f.DocNo2 : f.DocNo) || f.DocNo || f.DocNo2 || '').trim() || displayDocNo(f);
+      };
       // เปลี่ยนเครื่อง → ใบติดตั้งของเครื่องใหม่ (เจ้าของงานสั่ง) ไม่ใช่ใบซ่อมของเคส
       // หมายเหตุของแถวนี้กลายเป็น "เอกสาร CM…" ตอนบันทึกใบติดตั้ง · ใบเก่ากว่านั้นหาจากเครื่องเดียวกันวันเดียวกัน
       if (String(eventType || '').includes('เปลี่ยนเครื่อง')) {
@@ -6584,7 +6596,7 @@
           showToast('ยังไม่ได้กรอกเอกสารติดตั้งของเครื่องใหม่ (' + (caseId || id) + ')', 'error');
           return;
         }
-        pendingDocOpen = { kind: 'install', term: displayDocNo(inst) };
+        pendingDocOpen = { kind: 'install', term: numOf(inst) };
         document.querySelector('[data-tab="cleaningform"]').click();
         return;
       }
@@ -6598,7 +6610,7 @@
       // ค้นด้วยเลขเคส = เห็นใบซ่อมทุกใบของเคสนั้น · ไม่มีเคส = ค้นด้วยเลขที่ของใบที่เจอ
       pendingDocOpen = {
         kind: match.kind,
-        term: (caseId && same(caseId, match.CaseID)) ? caseId : displayDocNo(match)
+        term: (caseId && same(caseId, match.CaseID)) ? caseId : numOf(match)
       };
       document.querySelector('[data-tab="cleaningform"]').click();
     }
