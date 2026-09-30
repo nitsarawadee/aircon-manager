@@ -6949,7 +6949,7 @@
             !displayDocId(h) ? '-'
             : canOpenDocs
               ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
-                  title="ดูเอกสารของ${h.CaseID ? 'เคส' : 'ใบ'}นี้ที่หน้าแบบฟอร์มเอกสาร"
+                  title="${isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์' : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
                   class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
               : esc(displayDocId(h))
           }</td>
@@ -7303,6 +7303,11 @@
      */
     let pendingDocOpen = null;
     async function openDocOfHistory(caseId, id, note, airCode, date, eventType) {
+      // รื้อถอน/ปลดระวาง · Write off → เครื่องนั้นในคลังแอร์ (เจ้าของงานสั่ง) — เฉพาะคนที่เห็นเมนูคลัง
+      if (isRetiredStatus(eventType) && document.querySelector('[data-tab="warehouse"]')) {
+        await openWarehouseOfHistory(caseId, airCode, date);
+        return;
+      }
       const inNote = (/^เอกสาร\s+(\S+)/.exec(String(note || '').trim()) || [])[1] || '';
       try {
         const [forms, repairs, installs] = await Promise.all([
@@ -7367,6 +7372,33 @@
       document.querySelector('[data-tab="cleaningform"]').click();
     }
     window.openDocOfHistory = openDocOfHistory;
+
+    /**
+     * เคสรื้อถอน/Write off ในหน้าประวัติ → หน้าคลังแอร์ ค้นหาเครื่องของเคสนั้นไว้ให้
+     *   เปลี่ยนเครื่องไปแล้ว → เครื่องเก่าอยู่ "เครื่องในคลัง" ผูกเลขเคสไว้ (stockOldMachine) ค้นด้วยเลขที่ WH…
+     *   ยังไม่เปลี่ยน       → ตำแหน่งยังอยู่ "ตำแหน่งที่เลิกใช้" ค้นด้วยรหัสเครื่อง
+     * รื้อถอนที่ไม่มีเคส แล้วเปลี่ยนเครื่องทีหลัง → เครื่องในคลังของตำแหน่งนี้ที่เข้าคลังตั้งแต่วันนั้น (ตัวแรก)
+     */
+    async function openWarehouseOfHistory(caseId, airCode, date) {
+      try {
+        const res = await call('getWarehouse');
+        if (res) warehouseData = res;
+      } catch (e) { return; }
+      const same = (a, b) => !!a && String(a).trim() === String(b || '').trim();
+      const day = v => String(v || '').slice(0, 10);
+      const mine = (warehouseData.stock || []).filter(o => sameCode(o.AirCode, airCode));
+      const retired = (warehouseData.retired || []).find(o => sameCode(o.AirCode, airCode));
+      const stock = mine.find(o => same(caseId, o.CaseID))
+        || (!retired && mine.filter(o => day(o.InDate) >= day(date))
+             .sort((a, b) => day(a.InDate).localeCompare(day(b.InDate)))[0]);
+      if (!stock && !retired) {
+        showToast('ไม่พบเครื่อง ' + airCode + (caseId ? ' (เคส ' + caseId + ')' : '') + ' ในคลังแอร์', 'error');
+        return;
+      }
+      // ช่องค้นหาต้องตั้งก่อนกดแท็บ — กดแท็บแล้ววาดตารางคลังจากคำค้นทันที
+      document.getElementById('whSearch').value = stock ? stock.ID : airCode;
+      document.querySelector('[data-tab="warehouse"]').click();
+    }
 
     /** ไปหน้างานซ่อมและติดตั้ง ค้นหาเครื่องตัวนี้ไว้ให้ (การ์ดเครื่องที่ควรจับตาในแดชบอร์ด) */
     function viewAirRepair(code) {
