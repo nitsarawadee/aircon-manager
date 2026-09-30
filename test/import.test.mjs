@@ -175,7 +175,7 @@ test('applyImport เขียนครบทั้งแก้และเพ�
   ]);
   const result = await applyImport(ss, plan, { user: 'นิศราวดี', now: '2026-09-03 10:00:00' });
 
-  assert.deepEqual(result, { added: 1, updated: 1, unchanged: 0 });
+  assert.deepEqual(result, { added: 1, updated: 1, unchanged: 0, removed: 0 });
   assert.equal(writes[0].row, 2, 'ต้องแก้ที่แถวเดิมของเครื่องนั้น');
   assert.equal(writes[0].payload.UpdatedBy, 'นิศราวดี');
   assert.equal(appends.length, 1);

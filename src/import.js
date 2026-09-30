@@ -10,10 +10,12 @@
  * กฎความปลอดภัย 3 ข้อที่ฝังไว้ตายตัว
  * ============================================================================
  *
- * 1. การนำเข้า "ไม่ลบ" อะไรทั้งสิ้น
+ * 1. การนำเข้า "ไม่ลบ" อะไรเอง
  *    ถ้าไฟล์มี 5 แถว เครื่องที่เหลืออีก 452 ตัวต้องอยู่ครบเหมือนเดิม
  *    เพราะความผิดพลาดที่คนทำบ่อยที่สุดคืออัปโหลดไฟล์ที่ไม่ครบ
- *    การลบเครื่องต้องไปกดลบทีละตัวในเว็บเท่านั้น ซึ่งมีการบันทึกประวัติไว้
+ *    planImport แค่บอกว่าเครื่องไหนไม่มีในไฟล์ (missing) ให้คนเห็นในหน้าสรุป
+ *    จะลบได้ก็ต่อเมื่อคนนำเข้าติ๊กเลือกเองตอนยืนยัน (plan.removes — ว่างไว้เป็นค่าเริ่มต้น)
+ *    เจ้าของงานขอเพิ่ม หลังนำเข้าไฟล์ทั้งชุดแล้วต้องมาไล่ลบเครื่องเก่าที่ค้างอยู่เอง
  *
  * 2. แตะเฉพาะคอลัมน์ที่มีอยู่ในไฟล์
  *    ตารางจริงมีคอลัมน์ที่ไฟล์นำเข้าไม่มี เช่น พิกัด Lat/Long และที่อยู่
@@ -54,12 +56,32 @@ function same(a, b) {
   return norm(a) === norm(b);
 }
 
+/** ช่องที่ระบุตัวเครื่องจริง ใช้จับว่าเครื่องใหม่ในไฟล์คือเครื่องเดิมที่รหัสเปลี่ยน */
+const IDENTITY_FIELDS = ['IndoorAsset', 'OutdoorAsset', 'IndoorSN', 'OutdoorSN'];
+
+/**
+ * ค่า Asset / S/N ที่ใช้เทียบได้ — ค่าที่คนกรอกแทน "ไม่มี" (-, 0, N/A) ไม่นับ
+ * ไม่งั้นทุกเครื่องที่ใส่ขีดไว้จะถูกมองว่าเป็นเครื่องเดียวกันหมด
+ */
+function identityValue(v) {
+  const s = String(v == null ? '' : v).trim().toUpperCase();
+  if (s.length < 3 || /^[-_.\s0]*$/.test(s)) return '';
+  if (['N/A', 'NA', 'NONE', 'ไม่มี', 'ไม่ทราบ', 'ไม่ระบุ'].includes(s)) return '';
+  return s;
+}
+
 /**
  * คำนวณว่าถ้านำเข้าไฟล์นี้จะเกิดอะไรขึ้น — ไม่เขียนข้อมูลใดๆ ทั้งสิ้น
  *
+ * นอกจากเพิ่ม/แก้ ยังบอกอีกสองอย่างเพื่อกันเครื่องซ้อน (เคยเกิดจริง: ไฟล์แรกใส่ชื่อ Node ไทยในช่อง
+ * SiteCode พอนำเข้าไฟล์ที่แก้แล้ว รหัสเครื่องเปลี่ยนทั้งหมด ระบบเลยเพิ่มซ้ำอีก 517 เครื่อง)
+ *   suspects = เครื่องที่จะเพิ่มใหม่ แต่ Asset/S/N ตรงกับเครื่องที่มีอยู่แล้วคนละรหัส
+ *   missing  = เครื่องที่มีในระบบแต่ไม่มีในไฟล์ (ไม่ลบเอง — ดูกฎข้อ 1)
+ *
  * @param {Array<Object>} existing  ข้อมูลเครื่องที่มีอยู่ในระบบ (จาก ss.objects)
  * @param {Array<Object>} rows      แถวจากไฟล์ (จาก parseCsvObjects)
- * @returns {{adds: Array, updates: Array, unchanged: Array, errors: Array, warnings: Array}}
+ * @returns {{adds: Array, updates: Array, unchanged: Array, errors: Array, warnings: Array,
+ *            suspects: Array, missing: Array}}
  */
 export function planImport(existing, rows) {
   const byCode = new Map();
@@ -138,7 +160,31 @@ export function planImport(existing, rows) {
     else unchanged.push({ line, airCode });
   }
 
-  return { adds, updates, unchanged, errors, warnings };
+  // ---------- เครื่องใหม่ที่ Asset/S/N ตรงกับเครื่องที่มีอยู่แล้ว ----------
+  const owner = new Map();   // ค่า Asset/S/N → เครื่องในระบบที่ถือค่านั้น
+  for (const u of existing) {
+    if (!u.AirCode) continue;
+    for (const f of IDENTITY_FIELDS) {
+      const v = identityValue(u[f]);
+      if (v && !owner.has(v)) owner.set(v, { airCode: String(u.AirCode).trim(), field: f });
+    }
+  }
+  const suspects = [];
+  for (const a of adds) {
+    for (const f of IDENTITY_FIELDS) {
+      const v = identityValue(a.values[f]);
+      const hit = v && owner.get(v);
+      if (!hit) continue;
+      suspects.push({ line: a.line, airCode: a.airCode, matchCode: hit.airCode, field: f, value: a.values[f] });
+      break;   // เครื่องละรายการพอ เจอช่องเดียวก็รู้แล้วว่าน่าสงสัย
+    }
+  }
+
+  // ---------- เครื่องในระบบที่ไม่มีในไฟล์ ----------
+  // นับรหัสที่ไฟล์พูดถึงทั้งหมด รวมแถวที่มีข้อผิดพลาดด้วย — แถวผิดยังตั้งใจหมายถึงเครื่องนั้นอยู่
+  const missing = existing.filter(u => u.AirCode && !seenInFile.has(String(u.AirCode).trim()));
+
+  return { adds, updates, unchanged, errors, warnings, suspects, missing };
 }
 
 /**
@@ -170,9 +216,17 @@ export async function applyImport(ss, plan, opts = {}) {
     ss.appendRow(AIRLIST, headers.map(h => (payload[h] !== undefined ? payload[h] : '')));
   }
 
+  // เครื่องที่ไม่มีในไฟล์ — มีเฉพาะเมื่อคนนำเข้าติ๊กเลือกลบเอง (กฎข้อ 1)
+  // ลบจากแถวล่างขึ้นบน เลขแถวของเครื่องที่ยังรอลบจะได้ไม่เลื่อนก่อนถึงคิว
+  const removes = (plan.removes || []).slice().sort((a, b) => b._row - a._row);
+  for (const r of removes) await ss.deleteRow(AIRLIST, r._row);
+
   await ss.flush();
 
-  return { added: plan.adds.length, updated: plan.updates.length, unchanged: plan.unchanged.length };
+  return {
+    added: plan.adds.length, updated: plan.updates.length,
+    unchanged: plan.unchanged.length, removed: removes.length
+  };
 }
 
 /** เวลาในรูปแบบที่ระบบใช้บันทึกลงคอลัมน์ UpdatedAt */

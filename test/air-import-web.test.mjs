@@ -30,6 +30,7 @@ import { Ctx } from '../src/context.js';
 import {
   planAirUnitImport, applyAirUnitImport, getAirUnitImportFile, getAirList
 } from '../src/modules/airlist.js';
+import { createCleaningPlan } from '../src/modules/plan.js';
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -301,6 +302,69 @@ test('นำเข้าต้องไม่ลบเครื่องที�
   });
 
   assert.deepEqual(codesIn(db), ['ATG-ATG-AIR-1', 'CNX-CNX-AIR-1'], 'เครื่องของภาคอื่นต้องอยู่ครบ');
+});
+
+/* ==================== กันเครื่องซ้อน / เครื่องที่ไม่มีในไฟล์ ==================== */
+
+test('เครื่องใหม่ที่ Asset/S/N ตรงกับเครื่องเดิมคนละรหัส ต้องขึ้นเตือนว่าน่าจะซ้อน · ค่าอย่าง "-" ไม่นับ', async () => {
+  // เคยเกิดจริง: ไฟล์แรกใส่ชื่อ Node ไทยในช่อง SiteCode → รหัสเครื่องเปลี่ยน → เพิ่มซ้ำ 517 เครื่อง
+  const db = freshDb();
+  db.prepare("UPDATE air_units SET IndoorAsset = 'AIR00725', OutdoorSN = '-' WHERE AirCode = 'ATG-ATG-AIR-1'").run();
+
+  const plan = await planAirUnitImport(ctxOf(db), [
+    row({ SiteCode: 'อ่างทอง', IndoorAsset: 'air00725' }),   // เครื่องเดิม รหัสเปลี่ยน
+    row({ SiteCode: 'ATG-XYZ', OutdoorSN: '-' })              // ขีดเหมือนกันแต่ไม่ใช่เครื่องเดียวกัน
+  ]);
+
+  assert.equal(plan.counts.adds, 2);
+  assert.equal(plan.counts.suspects, 1);
+  assert.equal(plan.suspects[0].matchCode, 'ATG-ATG-AIR-1');
+  assert.equal(plan.suspects[0].field, 'IndoorAsset');
+});
+
+test('ดูผลต้องบอกเครื่องในระบบที่ไม่มีในไฟล์ — RegionAdmin เห็นเฉพาะภูมิภาคตัวเอง', async () => {
+  const db = freshDb();
+  const rows = [row({ SiteCode: 'ATG-ATG', AirNo: '2' })];
+
+  const boss = await planAirUnitImport(ctxOf(db), rows);
+  assert.deepEqual(boss.missing.map(m => m.airCode).sort(), ['ATG-ATG-AIR-1', 'CNX-CNX-AIR-1']);
+
+  // ไฟล์ของภาค 1 ไม่ได้แปลว่าเครื่องภาค 2 หายไป
+  const r1 = await planAirUnitImport(ctxOf(db, { user: 'r1' }), rows);
+  assert.deepEqual(r1.missing.map(m => m.airCode), ['ATG-ATG-AIR-1']);
+});
+
+test('ติ๊กลบเครื่องที่ไม่มีในไฟล์ → ลบเครื่อง + แผนล้างของเครื่องนั้น แต่ประวัติยังอยู่ และลงประวัติการลบ', async () => {
+  const db = freshDb();
+  await createCleaningPlan(ctxOf(db), 2030);
+  db.prepare("INSERT INTO history (ID, AirCode, Date, EventType, Detail) VALUES ('CM3001-01','CNX-CNX-AIR-1','2030-01-05','ซ่อมแล้ว','งานเก่า')").run();
+
+  const res = await applyAirUnitImport(ctxOf(db, { services: { backup: () => 'x' } }), {
+    rows: [row({ Brand: 'Mitsubishi' })],
+    removeMissing: true,
+    expect: { adds: 0, updates: 1, removes: 1 }
+  });
+
+  assert.equal(res.removed, 1);
+  assert.deepEqual(codesIn(db), ['ATG-ATG-AIR-1']);
+  const planCodes = db.prepare('SELECT AirCode FROM plans WHERE Year = 2030').all().map(r => r.AirCode);
+  assert.deepEqual(planCodes, ['ATG-ATG-AIR-1'], 'แผนของเครื่องที่ลบต้องหายไปด้วย');
+  const hist = db.prepare("SELECT EventType, Detail FROM history WHERE AirCode = 'CNX-CNX-AIR-1'").all();
+  assert.ok(hist.some(h => h.Detail === 'งานเก่า'), 'ประวัติเดิมต้องอยู่');
+  assert.ok(hist.some(h => /ลบข้อมูลเครื่อง .*ไม่มีในไฟล์นำเข้า/.test(h.Detail)), 'ต้องลงประวัติการลบ');
+});
+
+test('จำนวนที่จะลบไม่ตรงกับที่เห็นตอนติ๊ก ต้องหยุด ไม่ลบอะไรเลย', async () => {
+  const db = freshDb();
+  await assert.rejects(
+    () => applyAirUnitImport(ctxOf(db, { services: { backup: () => 'x' } }), {
+      rows: [row({ Brand: 'Mitsubishi' })],
+      removeMissing: true,
+      expect: { adds: 0, updates: 1, removes: 0 }
+    }),
+    /ข้อมูลในระบบเปลี่ยนไประหว่างที่ดูผลอยู่/
+  );
+  assert.deepEqual(codesIn(db), ['ATG-ATG-AIR-1', 'CNX-CNX-AIR-1']);
 });
 
 test('ช่องที่เว้นว่างในไฟล์ ต้องไม่ล้างค่าเดิมทิ้ง', async () => {

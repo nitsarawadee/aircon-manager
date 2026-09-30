@@ -586,6 +586,9 @@ const withLineNumbers = rows =>
 function guardImportRegions(info, byCode, plan) {
   if (info.role === 'Admin') return plan;
 
+  // เครื่องที่ไม่มีในไฟล์ นับเฉพาะภูมิภาคที่ตัวเองดูแล — ไฟล์ของภูมิภาค 1 ไม่ได้แปลว่าภูมิภาคอื่นหายไป
+  plan = { ...plan, missing: (plan.missing || []).filter(u => canTouchRegion(info, u.Region)) };
+
   const errors = plan.errors.slice();
 
   const allowed = (item, regions) => {
@@ -618,8 +621,14 @@ function summarizeImport(plan) {
       updates: plan.updates.length,
       unchanged: plan.unchanged.length,
       errors: plan.errors.length,
-      warnings: plan.warnings.length
+      warnings: plan.warnings.length,
+      suspects: (plan.suspects || []).length,
+      missing: (plan.missing || []).length
     },
+    suspects: (plan.suspects || []).slice(0, IMPORT_PREVIEW_LIMIT),
+    missing: (plan.missing || []).slice(0, IMPORT_PREVIEW_LIMIT).map(u => ({
+      airCode: u.AirCode, nodeName: u.NodeName || '', status: u.Status || ''
+    })),
     adds: plan.adds.slice(0, IMPORT_PREVIEW_LIMIT).map(a => ({
       line: a.line, airCode: a.airCode, nodeName: a.values.NodeName || ''
     })),
@@ -631,8 +640,11 @@ function summarizeImport(plan) {
   };
 }
 
-/** คำนวณแผนนำเข้าจากแถวที่ส่งมา พร้อมกันสิทธิ์ภูมิภาคแล้ว */
-async function buildImportPlan(ctx, rows) {
+/**
+ * คำนวณแผนนำเข้าจากแถวที่ส่งมา พร้อมกันสิทธิ์ภูมิภาคแล้ว
+ * @param {boolean} [removeMissing] คนนำเข้าติ๊กให้ลบเครื่องที่ไม่มีในไฟล์ → plan.removes = missing
+ */
+async function buildImportPlan(ctx, rows, removeMissing = false) {
   await ctx.ensureBase();
 
   // ต้องใช้ทั้งตาราง ไม่ใช่เฉพาะภูมิภาคของคนนี้ (getAirList กรองให้)
@@ -642,8 +654,47 @@ async function buildImportPlan(ctx, rows) {
     existing.filter(u => u.AirCode).map(u => [String(u.AirCode).trim(), u])
   );
 
-  const plan = planImport(existing, withLineNumbers(rows));
-  return guardImportRegions(await ctx.userInfo(), byCode, plan);
+  const plan = guardImportRegions(await ctx.userInfo(), byCode, planImport(existing, withLineNumbers(rows)));
+  // ไฟล์ว่างทั้งไฟล์ ห้ามแปลว่า "ลบทุกเครื่อง" (หน้าเว็บกันไว้แล้ว แต่คำสั่งนี้เรียกตรงได้)
+  const fileHasRows = Array.isArray(rows) && rows.length > 0;
+  return { ...plan, removes: removeMissing && fileHasRows ? plan.missing : [] };
+}
+
+/**
+ * ก่อนลบเครื่องที่ไม่มีในไฟล์ — ลงประวัติ + เอาแถวในแผนล้างทุกปีของเครื่องนั้นออก
+ *
+ * กติกาเดียวกับที่เจ้าของงานเลือกตอนลบเครื่องค้าง 7 เครื่อง (2026-09-30):
+ * ลบแผนล้างของเครื่องด้วย (ไม่งั้นแผนจะค้างแถวที่ไม่มีเครื่องให้ผูก) แต่เก็บประวัติและเอกสารไว้
+ * เพราะเป็นบันทึกงานที่ทำไปจริง · ประวัติ "ลบข้อมูลเครื่อง" แบบเดียวกับปุ่มลบทีละเครื่อง (deleteAirUnit)
+ *
+ * แตะแค่ตารางอื่น (ประวัติ/แผน) ไม่แตะรายการเครื่อง — แถวเครื่องลบใน applyImport ทีหลัง
+ * ทุกอย่างจึงลงฐานข้อมูลใน flush ครั้งเดียวกัน
+ */
+async function prepareImportRemovals(ctx, removes) {
+  if (!removes.length) return;
+
+  const today = ymd(new Date());
+  for (const u of removes) {
+    await addHistoryRaw(ctx, {
+      AirCode: u.AirCode,
+      Date: today,
+      EventType: 'อื่นๆ',
+      Detail: `ลบข้อมูลเครื่อง "${u.AirCode}" (Node: ${u.NodeName || '-'}) ออกจากระบบ — ไม่มีในไฟล์นำเข้า`,
+      Cost: '',
+      Technician: ''
+    });
+  }
+
+  const gone = new Set(removes.map(u => normalizeCode(u.AirCode)));
+  await ctx.connect();
+  for (const name of (await ctx.ss.sheetNames()).filter(n => /^Plan_\d{4}$/.test(n))) {
+    await ctx.ss.load(name);
+    const rows = ctx.ss.objects(name)
+      .filter(p => gone.has(normalizeCode(p.AirCode)))
+      .map(p => p._row)
+      .sort((a, b) => b - a);   // ล่างขึ้นบน เลขแถวที่เหลือจะได้ไม่เลื่อน
+    for (const r of rows) await ctx.ss.deleteRow(name, r);
+  }
 }
 
 /**
@@ -707,19 +758,22 @@ export async function applyAirUnitImport(ctx, payload) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
 
-    const { rows, expect } = payload || {};
-    const plan = await buildImportPlan(ctx, rows);
+    const { rows, expect, removeMissing } = payload || {};
+    const plan = await buildImportPlan(ctx, rows, !!removeMissing);
 
     if (plan.errors.length) {
       throw new Error('ไฟล์ยังมีข้อผิดพลาด ' + plan.errors.length + ' จุด ต้องแก้ให้หมดก่อนจึงจะนำเข้าได้');
     }
-    if (!plan.adds.length && !plan.updates.length) {
+    if (!plan.adds.length && !plan.updates.length && !plan.removes.length) {
       throw new Error('ไม่มีอะไรต้องเปลี่ยน ข้อมูลในไฟล์ตรงกับในระบบอยู่แล้ว');
     }
-    if (expect && (Number(expect.adds) !== plan.adds.length || Number(expect.updates) !== plan.updates.length)) {
+    // จำนวนที่จะลบต้องตรงกับที่คนเห็นตอนติ๊กเลือกด้วย — ลบคือแก้คืนไม่ได้ (นอกจากไฟล์สำรอง)
+    if (expect && (Number(expect.adds) !== plan.adds.length || Number(expect.updates) !== plan.updates.length ||
+                   Number(expect.removes || 0) !== plan.removes.length)) {
       throw new Error(
         'ข้อมูลในระบบเปลี่ยนไประหว่างที่ดูผลอยู่ ' +
-        '(ตอนนี้จะเพิ่ม ' + plan.adds.length + ' แก้ ' + plan.updates.length + ' รายการ) ' +
+        '(ตอนนี้จะเพิ่ม ' + plan.adds.length + ' แก้ ' + plan.updates.length +
+        (plan.removes.length ? ' ลบ ' + plan.removes.length : '') + ' รายการ) ' +
         'กรุณากดดูผลใหม่อีกครั้งก่อนยืนยัน'
       );
     }
@@ -730,6 +784,7 @@ export async function applyAirUnitImport(ctx, payload) {
     let backupName = '';
     if (ctx.backup) backupName = ctx.backup('ก่อนนำเข้าข้อมูลเครื่อง');
 
+    await prepareImportRemovals(ctx, plan.removes);
     const result = await applyImport(ctx.ss, plan, { user: await ctx.currentUser() });
 
     return { ...result, backupName, air: await getAirList(ctx) };

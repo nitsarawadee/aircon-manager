@@ -4092,6 +4092,25 @@
           <div class="px-3 pb-3 max-h-64 overflow-y-auto">${body}</div>
         </details>`;
 
+      // เครื่องใหม่ที่ Asset/S/N ตรงกับเครื่องเดิมคนละรหัส — อาการของ SiteCode/AirNo ที่เปลี่ยนไป (ดู planImport)
+      const nSuspect = c.suspects || 0;
+      const suspectRows = (plan.suspects || []).map(s => `
+        <div class="text-xs py-1 border-t border-amber-100">
+          <span class="text-gray-400">บรรทัด ${s.line}</span>
+          <span class="font-mono text-emerald-700">${esc(s.airCode)}</span>
+          <span class="text-gray-500">${esc(s.field)} ${esc(s.value)} ตรงกับเครื่องในระบบ</span>
+          <span class="font-mono text-slate-700">${esc(s.matchCode)}</span>
+        </div>`).join('');
+
+      // เครื่องในระบบที่ไม่มีในไฟล์ — ลบได้เฉพาะเมื่อติ๊กเอง (ค่าเริ่มต้นไม่ลบ)
+      const nMissing = c.missing || 0;
+      const missingRows = (plan.missing || []).map(m => `
+        <div class="text-xs py-1 border-t border-gray-100 flex gap-2">
+          <span class="font-mono text-slate-700">${esc(m.airCode)}</span>
+          <span class="text-gray-500">${esc(m.nodeName)}</span>
+          <span class="ml-auto text-gray-400">${esc(m.status)}</span>
+        </div>`).join('');
+
       document.getElementById('modalRoot').innerHTML = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -4119,6 +4138,20 @@
                      แก้ในไฟล์แล้วเลือกไฟล์ใหม่อีกครั้ง</p>
                 </div>` : ''}
 
+              ${nSuspect ? `
+                <div class="bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded-lg p-3">
+                  <div class="flex gap-2">
+                    <i class="ph-fill ph-warning text-lg shrink-0 text-amber-600"></i>
+                    <p><b>${nSuspect.toLocaleString()} เครื่องที่จะเพิ่มใหม่ น่าจะเป็นเครื่องเดียวกับที่มีอยู่แล้วแต่รหัสเปลี่ยน</b>
+                       — Asset หรือ S/N ตรงกับเครื่องในระบบคนละรหัส ถ้ายืนยันจะได้เครื่องซ้อนกัน
+                       ให้ตรวจช่อง SiteCode กับ AirNo ในไฟล์ก่อน</p>
+                  </div>
+                  <details class="mt-2" ${nSuspect <= 20 ? 'open' : ''}>
+                    <summary class="text-xs cursor-pointer text-amber-800">ดูรายการ</summary>
+                    <div class="max-h-48 overflow-y-auto mt-1">${suspectRows}</div>
+                  </details>
+                </div>` : ''}
+
               ${section('ข้อผิดพลาด ต้องแก้ก่อน', c.errors, problemRows(plan.errors))}
               ${section('ข้อควรตรวจสอบ', c.warnings, problemRows(plan.warnings))}
               ${section('เครื่องที่จะเพิ่มใหม่', c.adds,
@@ -4126,8 +4159,22 @@
               ${section('เครื่องที่จะถูกแก้', c.updates,
                 `<table class="w-full text-sm"><tbody>${changeRows}</tbody></table>`)}
 
+              ${nMissing ? `
+                <div class="border border-gray-200 rounded-lg">
+                  <details ${nMissing <= 20 ? 'open' : ''}>
+                    <summary class="px-3 py-2 text-sm font-medium text-gray-700 cursor-pointer">เครื่องในระบบที่ไม่มีในไฟล์ (${nMissing.toLocaleString()})</summary>
+                    <div class="px-3 pb-2 max-h-48 overflow-y-auto">${missingRows}</div>
+                  </details>
+                  <label class="flex items-start gap-2 px-3 py-2 border-t border-gray-200 bg-rose-50/50 cursor-pointer rounded-b-lg">
+                    <input type="checkbox" id="airImportRemove" class="mt-0.5 accent-rose-600"
+                      onchange="document.getElementById('airImportConfirm').disabled = ${blocked} || (!${c.adds} && !${c.updates} && !this.checked)">
+                    <span class="text-xs text-gray-700"><b class="text-rose-700">ลบ ${nMissing.toLocaleString()} เครื่องนี้ออกจากระบบด้วย</b>
+                      — ใช้เมื่อไฟล์นี้คือรายการเครื่องทั้งหมด · ลบแผนล้างของเครื่องนั้นด้วย แต่ประวัติและเอกสารยังอยู่</span>
+                  </label>
+                </div>` : ''}
+
               <div class="bg-blue-50 text-[#1153a1] text-xs p-3 rounded-lg space-y-1">
-                <p><i class="ph ph-info"></i> เครื่องที่ไม่ได้อยู่ในไฟล์จะไม่ถูกแตะและไม่ถูกลบ</p>
+                <p><i class="ph ph-info"></i> เครื่องที่ไม่ได้อยู่ในไฟล์จะไม่ถูกแตะและไม่ถูกลบ เว้นแต่ติ๊กเลือกลบไว้ด้านบน</p>
                 <p><i class="ph ph-info"></i> ช่องที่เว้นว่างในไฟล์ = ไม่ยุ่งกับช่องนั้น ไม่ใช่ล้างค่าเดิมทิ้ง</p>
                 <p><i class="ph ph-info"></i> ระบบสำรองฐานข้อมูลให้อัตโนมัติก่อนเขียนทุกครั้ง</p>
               </div>
@@ -4135,7 +4182,7 @@
 
             <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
               <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ยกเลิก</button>
-              <button id="airImportConfirm" onclick="confirmAirImport(${c.adds}, ${c.updates}, this)"
+              <button id="airImportConfirm" onclick="confirmAirImport(${c.adds}, ${c.updates}, this, ${nMissing}, ${nSuspect})"
                 ${blocked || (!c.adds && !c.updates) ? 'disabled' : ''}
                 class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium">
                 ยืนยันนำเข้า
@@ -4147,13 +4194,25 @@
     window.showAirImportPreview = showAirImportPreview;
 
     /** ยืนยันแล้วเขียนจริง โดยส่งตัวเลขที่เห็นไปให้เซิร์ฟเวอร์ตรวจซ้ำ */
-    async function confirmAirImport(adds, updates, btn) {
+    async function confirmAirImport(adds, updates, btn, missing = 0, suspects = 0) {
       if (!airImportRows) { showToast('กรุณาเลือกไฟล์ใหม่อีกครั้ง', 'error'); return; }
+
+      const removeBox = document.getElementById('airImportRemove');
+      const removes = removeBox && removeBox.checked ? missing : 0;
+      // ถามซ้ำก่อนทำสิ่งที่ย้อนไม่ได้ / เครื่องที่น่าจะซ้อน — เห็นแล้วแต่อาจเลื่อนผ่านไป
+      if (removes && !(await showConfirm(
+        'จะลบ ' + removes.toLocaleString() + ' เครื่องที่ไม่มีในไฟล์ออกจากระบบ พร้อมแผนล้างของเครื่องเหล่านั้น\n' +
+        '(ประวัติและเอกสารยังอยู่ · ระบบสำรองฐานข้อมูลไว้ก่อนเขียน)', 'ยืนยันลบเครื่องที่ไม่มีในไฟล์'))) return;
+      if (suspects && !(await showConfirm(
+        suspects.toLocaleString() + ' เครื่องที่จะเพิ่มใหม่ มี Asset/S/N ตรงกับเครื่องที่มีอยู่แล้ว — ยืนยันแล้วจะได้เครื่องซ้อนกัน\n' +
+        'ถ้าไม่แน่ใจ ให้กดยกเลิกแล้วตรวจช่อง SiteCode กับ AirNo ในไฟล์ก่อน', 'นำเข้าทั้งที่น่าจะมีเครื่องซ้อน?'))) return;
 
       btn.disabled = true;
       btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังนำเข้า...';
       try {
-        const res = await call('applyAirUnitImport', { rows: airImportRows, expect: { adds, updates } });
+        const res = await call('applyAirUnitImport', {
+          rows: airImportRows, removeMissing: removes > 0, expect: { adds, updates, removes }
+        });
         if (!res) throw new Error('ไม่ได้รับผลลัพธ์กลับมา');
 
         currentAirList = res.air || currentAirList;
@@ -4162,6 +4221,7 @@
         refreshAirTable();
         loadDashboard();
         showToast('นำเข้าสำเร็จ — เพิ่ม ' + res.added + ' แก้ ' + res.updated +
+                  (res.removed ? ' ลบ ' + res.removed : '') +
                   ' รายการ' + (res.backupName ? ' (สำรองไว้ที่ ' + res.backupName + ')' : ''));
       } catch (err) {
         // call() แสดงข้อความผิดพลาดให้แล้ว ปล่อยให้กดยืนยันใหม่ได้
