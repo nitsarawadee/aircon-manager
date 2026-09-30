@@ -2304,8 +2304,8 @@
         }
       });
 
-      // คลังแอร์เป็นส่วนหนึ่งของทะเบียนเครื่อง — ไม่เห็นรายการเครื่องก็ไม่เห็นคลัง
-      if (moduleLevel('airlist') === 'none') {
+      // คลังแอร์เห็นเฉพาะ Infrastructure (เซิร์ฟเวอร์ก็กันไว้ ดู warehouse.js)
+      if (currentUserInfo.role !== 'Admin') {
         document.querySelector('[data-tab="warehouse"]')?.remove();
         document.getElementById('view-warehouse')?.remove();
       }
@@ -2416,7 +2416,7 @@
       // รายการเครื่อง
       openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
-      fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist', writeOffStockRow: 'airlist',
+      fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist', writeOffStockRow: 'admin',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
       openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'admin',
       openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
@@ -2640,7 +2640,7 @@
       // เรียกจากการกดเลือกบทบาทเท่านั้น (ไม่ใช่ตอนเปิดหน้าต่าง) สิทธิ์เดิมของผู้ใช้จึงไม่ถูกทับตอนแค่เปิดดู
       if (isRegionalRole(role)) {
         document.querySelectorAll('.u_perm_select').forEach(sel => {
-          sel.value = REGIONAL_DEFAULT_PERMS[sel.getAttribute('data-module')] || 'none';
+          sel.value = REGIONAL_DEFAULT_PERMS[sel.getAttribute('data-modules').split(',')[0]] || 'none';
         });
       }
       document.getElementById('u_regionBox').classList.toggle('hidden', !isRegionalRole(role));
@@ -2690,11 +2690,31 @@
       { key: 'airlist', label: 'รายการเครื่อง' },
       { key: 'plan', label: 'แผนล้างแอร์' },
       { key: 'history', label: 'ประวัติ' },
-      { key: 'repair', label: 'งานซ่อม' },
+      { key: 'repair', label: 'งานซ่อมและติดตั้ง' },
       { key: 'cleaningform', label: 'เอกสารล้างแอร์' },
       { key: 'repairform', label: 'เอกสารซ่อม' },
       { key: 'installform', label: 'เอกสารติดตั้ง' },
       { key: 'budget', label: 'งบประมาณ' }
+    ];
+
+    /**
+     * สิทธิ์รายเมนูในหน้าต่างผู้ใช้ — เรียงและตั้งชื่อตามเมนูด้านซ้าย (เจ้าของงานสั่ง)
+     *
+     * keys = สิทธิ์ที่ช่องนั้นคุม · "แบบฟอร์มเอกสาร" ช่องเดียวคุมทั้งใบล้าง ใบซ่อม และใบติดตั้ง
+     * (เซิร์ฟเวอร์ยังเก็บแยกสามค่าเหมือนเดิม แค่ตั้งพร้อมกันเป็นค่าเดียว)
+     * note = เมนูที่ไม่มีให้ตั้ง บอกไว้ว่าใครเห็น
+     */
+    const PERMISSION_MENU = [
+      { label: 'แดชบอร์ด', note: 'เห็นทุกคน' },
+      { label: 'รายการเครื่อง', keys: ['airlist'] },
+      { label: 'คลังแอร์', note: 'เฉพาะ Infrastructure' },
+      { label: 'แผนล้างแอร์', keys: ['plan'] },
+      { label: 'ประวัติ', keys: ['history'] },
+      { label: 'งานซ่อมและติดตั้ง', keys: ['repair'] },
+      { label: 'เอกสารรออนุมัติ', note: 'ตามงานซ่อมและติดตั้ง' },
+      { label: 'แบบฟอร์มเอกสาร', keys: ['cleaningform', 'repairform', 'installform'] },
+      { label: 'งบประมาณ', keys: ['budget'] },
+      { label: 'จัดการผู้ใช้', note: 'เฉพาะ Infrastructure' }
     ];
 
     /** ต้องตรงกับ PERMISSION_INHERITS ใน src/schema.js — ดูเหตุผลที่นั่น */
@@ -2752,18 +2772,31 @@
       }).join('');
       // ผู้ใช้ใหม่เริ่มจากสิทธิ์ตั้งต้น · ผู้ใช้เดิมแสดงสิทธิ์ที่ตั้งไว้จริง
       const currentPerms = isEdit ? parsePermStringToObj(data.Permissions) : { ...REGIONAL_DEFAULT_PERMS };
-      const permRows = PERMISSION_MODULES.map(m => {
+      const LEVEL_TH = { edit: 'แก้ไขได้', view: 'ดูอย่างเดียว', none: 'ไม่ให้เข้าถึง' };
+      const permRows = PERMISSION_MENU.map(m => {
+        if (!m.keys) {
+          return `
+        <div class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg">
+          <span class="text-sm text-gray-700">${m.label}</span>
+          <span class="text-xs text-gray-400">${m.note}</span>
+        </div>`;
+        }
         // ค่าที่แสดงต้องตรงกับที่เซิร์ฟเวอร์ใช้จริง ไม่งั้นกดบันทึกแล้วสิทธิ์เปลี่ยนเอง
         // (บัญชีใหม่ได้ค่าตั้งต้นจาก REGIONAL_DEFAULT_PERMS)
-        const level = currentPerms[m.key];
+        // ช่องที่คุมหลายสิทธิ์ แสดงค่าของตัวแรก — ผู้ใช้เก่าที่ตั้งแยกไว้ต่างกัน บอกไว้ก่อนบันทึกทับเป็นค่าเดียว
+        const level = currentPerms[m.keys[0]];
+        const mixed = m.keys.some(k => currentPerms[k] !== level);
         return `
-        <div class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50">
-          <span class="text-sm text-gray-700">${m.label}</span>
-          <select class="u_perm_select text-xs rounded-lg border-gray-300 border px-2 py-1 bg-white outline-none" data-module="${m.key}">
-            <option value="edit" ${level === 'edit' ? 'selected' : ''}>แก้ไขได้</option>
-            <option value="view" ${level === 'view' ? 'selected' : ''}>ดูอย่างเดียว</option>
-            <option value="none" ${level === 'none' ? 'selected' : ''}>ไม่ให้เข้าถึง</option>
-          </select>
+        <div class="px-2 py-1.5 rounded-lg hover:bg-slate-50">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm text-gray-700">${m.label}</span>
+            <select class="u_perm_select text-xs rounded-lg border-gray-300 border px-2 py-1 bg-white outline-none" data-modules="${m.keys.join(',')}">
+              <option value="edit" ${level === 'edit' ? 'selected' : ''}>แก้ไขได้</option>
+              <option value="view" ${level === 'view' ? 'selected' : ''}>ดูอย่างเดียว</option>
+              <option value="none" ${level === 'none' ? 'selected' : ''}>ไม่ให้เข้าถึง</option>
+            </select>
+          </div>
+          ${mixed ? `<p class="text-[11px] text-amber-600 mt-1">เดิมตั้งแยกไว้ (${m.keys.map(k => esc((PERMISSION_MODULES.find(p => p.key === k) || {}).label) + ': ' + LEVEL_TH[currentPerms[k]]).join(' · ')}) — บันทึกแล้วจะใช้ค่านี้ทั้งหมด</p>` : ''}
         </div>`;
       }).join('');
       const content = `
@@ -2848,7 +2881,10 @@
       const regions = isRegionalRole(role) ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
       if (isRegionalRole(role) && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 ภูมิภาคสำหรับบทบาท ' + ROLE_TITLES[role], 'error'); return; }
       const permissions = {};
-      document.querySelectorAll('.u_perm_select').forEach(sel => { permissions[sel.getAttribute('data-module')] = sel.value; });
+      // ช่องเดียวอาจคุมหลายสิทธิ์ (แบบฟอร์มเอกสาร = ใบล้าง ใบซ่อม ใบติดตั้ง) ตั้งทุกตัวเป็นค่าเดียวกัน
+      document.querySelectorAll('.u_perm_select').forEach(sel => {
+        sel.getAttribute('data-modules').split(',').forEach(k => { permissions[k] = sel.value; });
+      });
       const user = {
         _row: rowVal || undefined,
         _expectUsername: document.getElementById('u_rowUsername').value,

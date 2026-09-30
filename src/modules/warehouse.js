@@ -91,7 +91,8 @@ export async function stockOldMachine(ctx, unit, reason, caseId = '') {
  */
 export async function getWarehouse(ctx) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('airlist'))) return { stock: [], retired: [] };
+  // คลังแอร์เห็นเฉพาะ Infrastructure (เจ้าของงานกำหนด)
+  await ctx.assertAdmin();
   await ctx.ensureBase();
   const inScope = await ctx.scopeFilter();
 
@@ -108,10 +109,10 @@ export async function getWarehouse(ctx) {
   return { stock, retired };
 }
 
-/** Write off เครื่องในคลัง (ขาย/ทิ้งแล้ว) — สิทธิ์เดียวกับการแก้รายการเครื่อง ในภูมิภาคของตัวเอง */
+/** Write off เครื่องในคลัง (ขาย/ทิ้งแล้ว) — เฉพาะ Infrastructure เหมือนการเห็นคลัง */
 export async function writeOffStock(ctx, id) {
   return ctx.withLock(async () => {
-    await ctx.assertModuleEdit('airlist');
+    await ctx.assertAdmin();
     await ctx.ensureBase();
     const want = plainText(id).trim();
     const row = ctx.ss.objects(SHEETS.WAREHOUSE).find(r => plainText(r.ID) === want);

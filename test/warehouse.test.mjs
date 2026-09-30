@@ -5,7 +5,7 @@
  * - ย้ายเครื่องไปแทน: เครื่องเดิมของปลายทางเข้าคลัง
  * - ตำแหน่งว่าง ไม่มีเครื่องให้เก็บ
  * - ซ่อมไม่ได้ (ยังไม่เปลี่ยนเครื่อง) อยู่ในรายการ "ตำแหน่งที่เลิกใช้" ไม่ใช่ในคลัง
- * - Write off ในคลังได้ · เห็นเฉพาะภูมิภาคตัวเอง
+ * - คลังเห็นและ Write off ได้เฉพาะ Infrastructure
  */
 
 import { strict as assert } from 'node:assert';
@@ -67,19 +67,17 @@ test('ย้ายเครื่องไปแทน — เครื่อง
   assert.equal(w.stock.length, 1);
 });
 
-test('Write off เครื่องในคลัง — ครั้งเดียว · เห็น/Write off ได้เฉพาะภูมิภาคตัวเอง', async () => {
+test('คลังแอร์เฉพาะ Infrastructure — บทบาทอื่นดู/Write off ไม่ได้ · Write off ได้ครั้งเดียว', async () => {
   const db = freshDb();
   await replaceAirUnit(as(db, 'boss'), rowOf(db, 'ATG-PMK-AIR-1'), { IndoorSN: 'NEW' }, 'ATG-PMK-AIR-1');
-  await replaceAirUnit(as(db, 'boss'), rowOf(db, 'CNX-CNX-AIR-1'), { IndoorSN: 'NEW' }, 'CNX-CNX-AIR-1');
+  const [item] = (await getWarehouse(as(db, 'boss'))).stock;
 
-  const mine = (await getWarehouse(as(db, 'r1'))).stock;
-  assert.deepEqual(mine.map(s => s.AirCode), ['ATG-PMK-AIR-1']);
-  const other = (await getWarehouse(as(db, 'boss'))).stock.find(s => s.AirCode === 'CNX-CNX-AIR-1');
-  await assert.rejects(() => writeOffStock(as(db, 'r1'), other.ID), /ภูมิภาค/);
+  await assert.rejects(() => getWarehouse(as(db, 'r1')), /Infrastructure/);
+  await assert.rejects(() => writeOffStock(as(db, 'r1'), item.ID), /Infrastructure/);
 
-  const w = await writeOffStock(as(db, 'r1'), mine[0].ID);
-  const s = w.stock.find(x => x.ID === mine[0].ID);
+  const w = await writeOffStock(as(db, 'boss'), item.ID);
+  const s = w.stock.find(x => x.ID === item.ID);
   assert.equal(s.Status, 'Write off');
   assert.ok(s.WriteOffDate);
-  await assert.rejects(() => writeOffStock(as(db, 'r1'), mine[0].ID), /Write off ไปแล้ว/);
+  await assert.rejects(() => writeOffStock(as(db, 'boss'), item.ID), /Write off ไปแล้ว/);
 });
