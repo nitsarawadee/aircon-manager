@@ -2354,50 +2354,38 @@
       // ผู้รับเหมา: แดชบอร์ดเหลือแค่ปฏิทินงานล้างของตัวเอง
       // การ์ดตัวเลขภาพรวมเป็นของเจ้าหน้าที่ (งบ ค่าใช้จ่าย เครื่องทั้งภาค) ส่วนผู้รับเหมาเปิดมา
       // ต้องการรู้อย่างเดียวว่าวันไหนต้องไปล้างที่ไหน
-      //
-      // เดิมงานของผู้รับเหมากระจายอยู่ 3 เมนู (ปฏิทิน / แผนล้าง / แบบฟอร์มเอกสาร) ต้องดูวันนัดที่หนึ่ง
-      // แล้วไปกรอกใบอีกที่ — รวมเป็นหน้าเดียว "ตารางงาน" (เจ้าของงานสั่ง ไม่ใช้คำว่าแดชบอร์ด)
-      // หน้าแผนกับหน้าเอกสารยังอยู่ (ฟอร์มล้าง/เปิดเอกสารใช้ร่วม) แค่ซ่อนแท็บ
+      // ผู้รับเหมา: แดชบอร์ดเหลือแค่งานล้างของตัวเอง — รายการนัด (ซ้าย) + ปฏิทิน (ขวา)
+      // การ์ดตัวเลขภาพรวมเป็นของเจ้าหน้าที่ (งบ ค่าใช้จ่าย เครื่องทั้งภาค) ส่วนผู้รับเหมาเปิดมา
+      // ต้องการรู้อย่างเดียวว่าวันไหนต้องไปล้างที่ไหน · เรียกว่า "ตารางงาน" (เจ้าของงานสั่ง ไม่ใช้คำว่าแดชบอร์ด)
       if (isContractor()) {
         const dash = document.getElementById('view-dashboard');
         if (dash) {
           dash.innerHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <h2 class="text-2xl font-bold text-gray-800">ตารางงาน</h2>
-                <p class="text-sm text-gray-500">งานล้างแอร์ที่มอบหมายให้ ${esc(currentUserInfo.contractorName || '')} · กดกรอกใบล้างจากรายการได้เลย</p>
-              </div>
-              <div class="flex items-center gap-2 w-full sm:w-auto">
-                <div class="relative flex-1 sm:w-64">
+            <div class="mb-4">
+              <h2 class="text-2xl font-bold text-gray-800">ตารางงาน</h2>
+              <p class="text-sm text-gray-500">นัดล้างแอร์ที่มอบหมายให้ ${esc(currentUserInfo.contractorName || '')} · กดกรอกใบล้างจากรายการได้เลย หรือปิดงานที่เมนูแผนล้างแอร์ (กดที่ช่องรอบ)</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              <!-- มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
+                  <i class="ph ph-calendar-check text-[#1153a1]"></i> งานล้างของฉัน
+                </h3>
+                <div class="relative mb-3">
                   <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                   <input type="text" id="mjSearch" oninput="mjSetQuery(this.value)" placeholder="ค้นหา Node หรือรหัสเครื่อง"
                     class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
                 </div>
-                <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
-                  <i class="ph ph-calendar text-gray-500"></i>
-                  <select id="mjYear" onchange="mjSetYear(this.value)" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700"></select>
-                </div>
+                <div id="mjList" class="space-y-2"></div>
               </div>
-            </div>
-            <div id="mjCounters" class="grid grid-cols-3 gap-2 sm:gap-3 mb-4"></div>
-            <div class="flex gap-1 mb-3">
-              <button id="mjViewList" onclick="mjSetView('list')" class="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5"><i class="ph ph-list-bullets"></i> รายการ</button>
-              <button id="mjViewCal" onclick="mjSetView('calendar')" class="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5"><i class="ph ph-calendar-blank"></i> ปฏิทิน</button>
-            </div>
-            <div id="mjList" class="space-y-3"></div>
-            <div id="myWorkCalendar" class="hidden bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>`;
+              <div id="myWorkCalendar" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>
+            </div>`;
         }
         const dashTab = document.querySelector('[data-tab="dashboard"]');
         if (dashTab) {
           const label = dashTab.querySelector('span');
           if (label) label.textContent = 'ตารางงาน';
-          const icon = dashTab.querySelector('i');
-          if (icon) icon.className = icon.className.replace(/ph-[\w-]+(?=\s|$)/, 'ph-calendar-check');
         }
-        ['plan', 'cleaningform'].forEach(t => {
-          const b = document.querySelector(`[data-tab="${t}"]`);
-          if (b) b.style.display = 'none';
-        });
       }
 
       // ถ้าแท็บที่ active อยู่ตอนนี้ถูกซ่อนไปแล้ว (ไม่มีสิทธิ์) ให้สลับไปแท็บแรกที่ยังเหลืออยู่
@@ -5015,56 +5003,50 @@
      * วาดปฏิทินลงที่ไหน — null = หน้าต่างลอย (เจ้าหน้าที่กดจากแดชบอร์ด)
      * รหัส element = วาดฝังในหน้า (แดชบอร์ดของผู้รับเหมา)
      */
-    /* ============== ตารางงาน (ผู้รับเหมา) ==============
-     * หนึ่งแถว = หนึ่งนัด (Node + รอบ) พร้อมเครื่องในนัดนั้นและปุ่มกรอกใบล้างรายเครื่อง
-     * รายการยาวได้หลายร้อยเครื่อง จึงซ้อนกันหลายชั้น: รวมเป็นรายนัดต่อ Node · กรองด้วยตัวเลขด้านบน
-     * (ต้องทำ / รออนุมัติ / เสร็จแล้ว — ค่าเริ่มต้นต้องทำ) · แบ่งเดือน นัดใกล้สุดขึ้นก่อน เดือนแรกเปิด
-     * ที่เหลือพับ · เดือนละ 10 นัดแรก ที่เหลือกดแสดงเพิ่ม · ค้นหา Node/รหัสเครื่อง
+    /* ============== ตารางงาน (ผู้รับเหมา) — รายการข้างปฏิทิน ==============
+     * เดิมเป็น "นัดหมาย 30 วัน" ทีละเครื่อง รายการยาวจนหาไม่เจอ ปรับตามที่เจ้าของงานเลือก:
+     *   1. รวมเป็นรายนัดต่อ Node (Node + รอบ) พร้อมปุ่มกรอกใบล้างรายเครื่อง
+     *   2. งานที่ล้างครบแล้วพับไว้ท้ายรายการ กดเปิดดูเมื่อต้องการ
+     *   3. แบ่งกลุ่มตามเดือน นัดใกล้สุดขึ้นก่อน — เดือนนี้ (และเดือนที่เลยมาแล้วยังค้าง) เปิดไว้ เดือนถัดไปพับ
+     *   4. แต่ละเดือนแสดง 10 นัดแรก ที่เหลือกด "แสดงอีก N งาน"
+     *   5. ค้นหาชื่อ Node หรือรหัสเครื่อง
+     * รวมทุกแผน เหมือนปฏิทิน (แผนปีหน้ามักลงนัดตั้งแต่ปลายปีนี้)
      */
-    let mjYear = '';
-    let mjPlan = [];
-    let mjFilter = 'todo';
+    let mjJobs = [];
     let mjQuery = '';
-    let mjView = 'list';
-    let mjOpen = null;              // เดือนที่เปิดอยู่ (null = ค่าเริ่มต้น: เปิดเดือนแรกของรายการ)
-    let mjFirstKey = '';            // เดือนแรกของรายการที่เห็นอยู่
-    const mjShowAll = new Set();    // เดือนที่กดแสดงครบแล้ว
+    let mjOpen = null;              // เดือนที่เปิดอยู่ (null = ค่าเริ่มต้น)
+    let mjDefaultOpen = new Set();  // เดือนที่เปิดไว้ตั้งต้น — คำนวณตอนวาด
+    let mjDoneOpen = false;         // กลุ่ม "ล้างครบแล้ว" ท้ายรายการ
+    const mjShowAll = new Set();    // กลุ่มที่กดแสดงครบแล้ว
     const MJ_PER_MONTH = 10;
     // ชื่อเดือนเต็มใช้ TH_MONTHS ของปฏิทิน (ประกาศไว้ด้านบน)
     const TH_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
     async function loadMyJobs() {
       if (!document.getElementById('mjList')) return;
+      // ปฏิทิน: เปิดครั้งแรกที่เดือนปัจจุบัน ครั้งต่อไปคงเดือนที่เลื่อนดูอยู่
+      if (calTarget === 'myWorkCalendar') renderPlanCalendar();
+      else openPlanCalendar(null, null, 'myWorkCalendar');
       try {
-        const years = ((await call('getPlanYears')) || []).map(n => String(n).replace('Plan_', '')).sort().reverse();
-        const sel = document.getElementById('mjYear');
-        // เปิดครั้งแรกที่ปีนี้ถ้ามีแผน ไม่มีก็ปีล่าสุด
-        if (!mjYear || !years.includes(mjYear)) {
-          const now = String(new Date().getFullYear());
-          mjYear = years.includes(now) ? now : (years[0] || '');
-        }
-        if (sel) sel.innerHTML = years.length
-          ? years.map(y => `<option value="${esc(y)}" ${y === mjYear ? 'selected' : ''}>ปี ${esc(y)}</option>`).join('')
-          : '<option value="">ยังไม่มีแผน</option>';
-        const [plan, forms] = await Promise.all([
-          mjYear ? call('getCleaningPlan', mjYear) : [],
+        const years = ((await call('getPlanYears')) || []).map(n => String(n).replace('Plan_', ''));
+        const [plans, forms] = await Promise.all([
+          Promise.all(years.map(y => call('getCleaningPlan', y))),
           call('getCleaningForms')
         ]);
-        mjPlan = Array.isArray(plan) ? plan : [];
         if (Array.isArray(forms)) currentCleaningForms = forms;
+        mjJobs = years.flatMap((y, i) => buildMyJobs(y, Array.isArray(plans[i]) ? plans[i] : []));
       } catch (e) { return; }
       renderMyJobs();
-      mjSetView(mjView);   // สีปุ่มสลับมุมมอง + วาดปฏิทินใหม่ถ้าเปิดอยู่
     }
 
-    /** งานของผู้รับเหมาในแผนปีที่เลือก รวมเป็นรายนัด (Node + รอบ) */
-    function myJobsList() {
-      const y = String(mjYear);
+    /** งานของผู้รับเหมาในแผนปีหนึ่ง รวมเป็นรายนัด (Node + รอบ) */
+    function buildMyJobs(year, rows) {
+      const y = String(year);
       const formOf = (code, r) => (currentCleaningForms || []).find(f =>
         String(f.PlanYear) === y && String(f.PlanRound) === String(r) &&
         [f.AirCode1, f.AirCode2].some(c => sameCode(c, code)));
       const jobs = new Map();
-      for (const p of mjPlan) {
+      for (const p of rows) {
         if (p.Retired || p.Removed) continue;   // ไม่ต้องไปล้างแล้ว
         for (let r = 1; r <= planRoundCount([p]); r++) {
           if (p['R' + r + '_Mine'] !== true) continue;   // รอบของเจ้าอื่น
@@ -5072,20 +5054,20 @@
           if (st === 'ยกเลิก') continue;
           const done = st === 'ล้างเสร็จสิ้น' || !!String(p['R' + r + '_ActualDate'] || '').trim();
           const key = p.NodeName + '|' + r;
-          if (!jobs.has(key)) jobs.set(key, { node: p.NodeName || '-', site: p.SiteCode || '', round: r, planDate: '', doneDate: '', units: [] });
+          if (!jobs.has(key)) jobs.set(key, { year: y, node: p.NodeName || '-', site: p.SiteCode || '', round: r, planDate: '', doneDate: '', units: [] });
           const j = jobs.get(key);
           const pd = String(p['R' + r + '_PlanDate'] || '').slice(0, 10);
           if (pd && (!j.planDate || pd < j.planDate)) j.planDate = pd;   // เครื่องในนัดเดียวกันลงวันต่างกันได้ ยึดวันแรก
           const ad = String(p['R' + r + '_ActualDate'] || '').slice(0, 10);
           if (ad > j.doneDate) j.doneDate = ad;
           const form = done ? formOf(p.AirCode, r) : null;
-          j.units.push({ code: p.AirCode, done, form, waiting: !!(form && form.Approval && !form.Approval.done) });
+          j.units.push({ code: p.AirCode, done, price: p['R' + r + '_Price'] || '', form,
+                         waiting: !!(form && form.Approval && !form.Approval.done) });
         }
       }
       return [...jobs.values()].map(j => {
         j.units.sort((a, b) => String(a.code).localeCompare(String(b.code), 'th', { numeric: true }));
-        // ต้องทำ = ยังมีเครื่องที่ไม่ได้ล้าง · รออนุมัติ = ล้างครบแต่ใบยังอนุมัติไม่ครบขั้น
-        j.state = j.units.some(u => !u.done) ? 'todo' : j.units.some(u => u.waiting) ? 'waiting' : 'done';
+        j.pending = j.units.some(u => !u.done);
         return j;
       });
     }
@@ -5093,112 +5075,100 @@
     function renderMyJobs() {
       const box = document.getElementById('mjList');
       if (!box) return;
-      const all = myJobsList();
-      const count = s => all.filter(j => j.state === s).length;
-
-      const tile = (state, label, tone) => {
-        const on = mjFilter === state;
-        return `<button onclick="mjSetFilter('${jsStr(state)}')" class="text-left rounded-xl px-3 sm:px-4 py-2.5 border transition-colors ${on ? tone : 'bg-white border-gray-200 hover:bg-gray-50'}">
-          <div class="text-xs ${on ? '' : 'text-gray-500'}">${label}</div>
-          <div class="text-2xl font-bold tabular-nums ${on ? '' : 'text-gray-800'}">${count(state).toLocaleString()}</div></button>`;
-      };
-      document.getElementById('mjCounters').innerHTML =
-        tile('todo', 'ต้องทำ', 'bg-amber-50 border-amber-300 text-amber-800') +
-        tile('waiting', 'รออนุมัติ', 'bg-blue-50 border-blue-300 text-[#1153a1]') +
-        tile('done', 'เสร็จแล้ว', 'bg-emerald-50 border-emerald-300 text-emerald-800');
-
-      let list = all.filter(j => j.state === mjFilter);
       const q = mjQuery.trim().toLowerCase();
-      if (q) list = list.filter(j => [j.node, j.site, ...j.units.map(u => u.code)].some(t => String(t || '').toLowerCase().includes(q)));
+      const hit = j => !q || [j.node, j.site, ...j.units.map(u => u.code)].some(t => String(t || '').toLowerCase().includes(q));
+      const byNode = (a, b) => String(a.node).localeCompare(String(b.node), 'th') || a.round - b.round;
 
-      // งานที่ต้องทำเรียงนัดใกล้สุดก่อน (ยังไม่ลงวันไว้ท้าย) · งานที่เสร็จเรียงล่าสุดก่อน
-      const dateOf = j => (j.state === 'todo' ? j.planDate : (j.doneDate || j.planDate));
-      list.sort((a, b) => {
-        const da = dateOf(a), db = dateOf(b);
-        if (!da || !db) return (!da) - (!db) || String(a.node).localeCompare(String(b.node), 'th');
-        const byDate = mjFilter === 'todo' ? da.localeCompare(db) : db.localeCompare(da);
-        return byDate || String(a.node).localeCompare(String(b.node), 'th') || a.round - b.round;
-      });
+      // ต้องทำ: นัดใกล้สุดก่อน ยังไม่ลงวันไว้ท้าย
+      const todo = mjJobs.filter(j => j.pending && hit(j)).sort((a, b) =>
+        (!a.planDate) - (!b.planDate) || String(a.planDate).localeCompare(String(b.planDate)) || byNode(a, b));
+      // ล้างครบแล้ว: ล่าสุดก่อน
+      const done = mjJobs.filter(j => !j.pending && hit(j)).sort((a, b) =>
+        String(b.doneDate).localeCompare(String(a.doneDate)) || byNode(a, b));
 
-      if (!list.length) {
-        const why = q ? 'ไม่พบงานที่ค้นหา'
-          : mjFilter === 'todo' ? 'ไม่มีงานที่ต้องทำในปีนี้'
-          : mjFilter === 'waiting' ? 'ไม่มีใบล้างที่รออนุมัติ' : 'ยังไม่มีงานที่เสร็จ';
-        box.innerHTML = `<div class="bg-white rounded-xl border border-gray-200 px-4 py-10 text-center text-gray-400">
-          <i class="ph ph-clipboard-text text-4xl block mb-2"></i>${why}</div>`;
-        return;
-      }
-
-      // แบ่งกลุ่มตามเดือน
       const groups = [];
-      for (const j of list) {
-        const d = dateOf(j);
-        const key = d ? d.slice(0, 7) : 'none';
+      for (const j of todo) {
+        const key = j.planDate ? j.planDate.slice(0, 7) : 'none';
         let g = groups[groups.length - 1];
         if (!g || g.key !== key) groups.push(g = { key, jobs: [] });
         g.jobs.push(j);
       }
-      const monthLabel = key => key === 'none' ? 'ยังไม่ลงวันนัด'
-        : TH_MONTHS[Number(key.slice(5, 7)) - 1] + ' ' + key.slice(0, 4);
-      // เปิดเดือนแรกไว้ (ค้นหาอยู่ = เปิดทุกเดือน ไม่งั้นผลค้นหาจะซ่อนอยู่ในเดือนที่พับ)
-      mjFirstKey = groups[0].key;
-      const isOpen = key => q || (mjOpen ? mjOpen.has(mjFilter + key) : key === mjFirstKey);
+      // เดือนนี้เปิดไว้ รวมถึงเดือนที่เลยมาแล้วแต่ยังค้าง (งานเลยกำหนด ต้องเห็น) · ไม่มีเลยก็เปิดเดือนแรก
+      const t = new Date();
+      const thisMonth = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+      mjDefaultOpen = new Set(groups.filter(g => g.key !== 'none' && g.key <= thisMonth).map(g => g.key));
+      if (!mjDefaultOpen.size && groups.length) mjDefaultOpen.add(groups[0].key);
+      const isOpen = key => !!q || (mjOpen || mjDefaultOpen).has(key);
 
-      box.innerHTML = groups.map(g => {
-        const open = isOpen(g.key);
-        const limit = mjShowAll.has(mjFilter + g.key) ? g.jobs.length : MJ_PER_MONTH;
-        const more = g.jobs.length - limit;
+      const monthLabel = key => key === 'none' ? 'ยังไม่ลงวันนัด'
+        : TH_MONTHS[Number(key.slice(5, 7)) - 1] + ' ' + key.slice(0, 4) + (key < thisMonth ? ' · เลยกำหนด' : '');
+      const listOf = (key, jobs) => {
+        const limit = mjShowAll.has(key) ? jobs.length : MJ_PER_MONTH;
+        const more = jobs.length - limit;
         return `
-          <div>
-            <button onclick="mjToggleMonth('${jsStr(g.key)}')" class="w-full flex items-center gap-2 text-sm font-semibold text-gray-600 px-1 py-1.5 hover:text-gray-900">
-              <i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'}"></i>${esc(monthLabel(g.key))}
-              <span class="font-normal text-gray-400">· ${g.jobs.length} งาน</span>
-            </button>
-            ${!open ? '' : `
-            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
-              ${g.jobs.slice(0, limit).map(myJobRow).join('')}
-              ${more > 0 ? `<button onclick="mjShowMore('${jsStr(g.key)}')" class="w-full py-2.5 text-sm text-[#1153a1] hover:bg-blue-50/50 font-medium">แสดงอีก ${more} งาน</button>` : ''}
-            </div>`}
+          <div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
+            ${jobs.slice(0, limit).map(myJobRow).join('')}
+            ${more > 0 ? `<button onclick="mjShowMore('${jsStr(key)}')" class="w-full py-2 text-xs text-[#1153a1] hover:bg-blue-50/50 font-medium">แสดงอีก ${more} งาน</button>` : ''}
           </div>`;
+      };
+      const header = (key, label, count, open, onclick, tone = 'text-gray-600') => `
+        <button onclick="${onclick}" class="w-full flex items-center gap-1.5 text-xs font-semibold ${tone} px-1 py-1 hover:text-gray-900">
+          <i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'}"></i>${esc(label)}
+          <span class="font-normal text-gray-400">· ${count} งาน</span>
+        </button>`;
+
+      let html = groups.map(g => {
+        const open = isOpen(g.key);
+        const late = g.key !== 'none' && g.key < thisMonth;
+        return `<div>${header(g.key, monthLabel(g.key), g.jobs.length, open, `mjToggleMonth('${jsStr(g.key)}')`, late ? 'text-rose-600' : 'text-gray-600')}
+          ${open ? listOf(g.key, g.jobs) : ''}</div>`;
       }).join('');
+      if (!todo.length) {
+        html = `<div class="px-3 py-6 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
+          ${q ? 'ไม่พบงานที่ค้นหา' : 'ไม่มีงานที่ต้องทำ'}</div>`;
+      }
+      if (done.length) {
+        const open = mjDoneOpen || !!q;
+        html += `<div class="pt-1 border-t border-gray-100">${header('done', 'ล้างครบแล้ว', done.length, open, 'mjToggleDone()', 'text-emerald-700')}
+          ${open ? listOf('done', done) : ''}</div>`;
+      }
+      box.innerHTML = html;
     }
 
-    /** แถวของนัดหนึ่ง */
+    /** แถวของนัดหนึ่ง (กล่องข้างปฏิทินแคบ — วางเรียงลงล่าง) */
     function myJobRow(j) {
-      const d = j.state === 'todo' ? j.planDate : (j.doneDate || j.planDate);
+      const d = j.pending ? j.planDate : (j.doneDate || j.planDate);
       const dateBox = d
-        ? `<div class="text-xl font-bold text-gray-800 leading-none">${Number(d.slice(8, 10))}</div>
-           <div class="text-[11px] text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(d.slice(5, 7)) - 1]}</div>`
-        : `<div class="text-lg font-bold text-gray-300 leading-none">—</div><div class="text-[11px] text-gray-400 mt-1">ยังไม่นัด</div>`;
+        ? `<div class="text-lg font-bold text-gray-800 leading-none">${Number(d.slice(8, 10))}</div>
+           <div class="text-[10px] text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(d.slice(5, 7)) - 1]}</div>`
+        : `<div class="text-base font-bold text-gray-300 leading-none">—</div><div class="text-[10px] text-gray-400 mt-1">ยังไม่นัด</div>`;
       // รหัสเต็มยาว (ATG-PMK-AIR-1) ในแถวที่บอก Node อยู่แล้ว เหลือแค่ AIR-1 พอ
-      const short = code => String(code).replace(new RegExp('^' + String(j.site).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-'), '');
-      // ป้ายเครื่องคือปุ่มของเครื่องนั้นเลย — เดิมมีป้ายเทาซ้ำกับปุ่มส้มทึบด้านขวา แถวละหลายปุ่ม เจ้าของงานว่าขัดตา
+      const short = code => String(code).startsWith(j.site + '-') ? String(code).slice(j.site.length + 1) : String(code);
       const chips = j.units.map(u => {
         if (!u.done) return `
-          <button onclick="openMyJobForm('${jsStr(u.code)}', ${j.round})" title="กรอกใบล้างของ ${esc(u.code)}"
-            class="px-2.5 py-1 rounded-lg text-xs font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
+          <button onclick="openMyJobForm('${jsStr(u.code)}', '${jsStr(j.year)}', ${j.round})" title="กรอกใบล้างของ ${esc(u.code)}"
+            class="px-2 py-0.5 rounded-md text-[11px] font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
             <i class="ph ph-pencil-simple"></i>${esc(short(u.code))} · กรอกใบล้าง</button>`;
         const cls = u.waiting ? 'bg-blue-50 text-[#1153a1] border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
         const label = esc(short(u.code)) + (u.waiting ? ' รออนุมัติ' : ' เสร็จ');
         return u.form
           ? `<button onclick="openCleaningDoc(${Number(u.form._row)}, '${jsStr(u.form.ID)}')" title="เปิดใบล้าง ${esc(displayDocNo(u.form))}"
-               class="px-2.5 py-1 rounded-lg text-xs font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
-          : `<span class="px-2.5 py-1 rounded-lg text-xs font-medium border ${cls}">${label}</span>`;
+               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
+          : `<span class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls}">${label}</span>`;
       }).join('');
-      // ป้าย/ปุ่มของเครื่องชิดขวา (จอกว้างฝั่งขวาโล่ง — เจ้าของงานขอ) · มือถือลงมาใต้ชื่อ Node
       return `
-        <div class="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          <div class="w-12 text-center flex-shrink-0">${dateBox}</div>
+        <div class="flex gap-3 px-3 py-2.5">
+          <div class="w-9 text-center flex-shrink-0 pt-0.5">${dateBox}</div>
           <div class="flex-1 min-w-0">
-            <div class="font-semibold text-gray-800 truncate">${esc(j.node)}</div>
-            <div class="text-xs text-gray-500">${esc(j.site)} · รอบ ${j.round}</div>
+            <div class="text-sm font-semibold text-gray-800 truncate">${esc(j.node)}</div>
+            <div class="text-[11px] text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}</div>
+            <div class="flex flex-wrap gap-1 mt-1.5">${chips}</div>
           </div>
-          <div class="flex flex-wrap gap-1.5 justify-start sm:justify-end w-full sm:w-auto pl-[60px] sm:pl-0">${chips}</div>
         </div>`;
     }
 
     /** กรอกใบล้างของเครื่องหนึ่งในนัดนั้น — ฟอร์มตัวเดียวกับที่หน้าแผนเปิด (openFormForPlanUnit) */
-    async function openMyJobForm(code, round) {
+    async function openMyJobForm(code, year, round) {
       if (!cleaningFormNodes || cleaningFormNodes.length === 0) {
         try {
           const nodes = await call('getCleaningFormNodes');
@@ -5209,37 +5179,21 @@
         showToast('ไม่พบเครื่อง ' + code + ' ในรายการเครื่อง กรุณาติดต่อเจ้าหน้าที่', 'error');
         return;
       }
-      const p = mjPlan.find(x => sameCode(x.AirCode, code)) || {};
-      openCleaningFormModal({ airCode: code, year: mjYear, round, price: p['R' + round + '_Price'] || '', technician: '' });
+      const j = mjJobs.find(x => x.year === String(year) && x.round === Number(round) && x.units.some(u => sameCode(u.code, code)));
+      const u = j ? j.units.find(x => sameCode(x.code, code)) : null;
+      openCleaningFormModal({ airCode: code, year: String(year), round: Number(round), price: (u && u.price) || '', technician: '' });
     }
 
-    function mjSetFilter(state) { mjFilter = state; mjOpen = null; renderMyJobs(); }
     function mjSetQuery(v) { mjQuery = v || ''; renderMyJobs(); }
-    async function mjSetYear(y) { mjYear = y; mjOpen = null; mjShowAll.clear(); await loadMyJobs(); }
-    function mjShowMore(key) { mjShowAll.add(mjFilter + key); renderMyJobs(); }
+    function mjShowMore(key) { mjShowAll.add(key); renderMyJobs(); }
+    function mjToggleDone() { mjDoneOpen = !mjDoneOpen; renderMyJobs(); }
     function mjToggleMonth(key) {
-      // ครั้งแรกที่กด เริ่มจากสถานะที่เห็นอยู่ (เดือนแรกเปิด) แล้วสลับเดือนที่กด
-      if (!mjOpen) mjOpen = new Set(mjFirstKey ? [mjFilter + mjFirstKey] : []);
-      const id = mjFilter + key;
-      if (mjOpen.has(id)) mjOpen.delete(id); else mjOpen.add(id);
+      // ครั้งแรกที่กด เริ่มจากสถานะที่เห็นอยู่ แล้วสลับเดือนที่กด
+      if (!mjOpen) mjOpen = new Set(mjDefaultOpen);
+      if (mjOpen.has(key)) mjOpen.delete(key); else mjOpen.add(key);
       renderMyJobs();
     }
-    function mjSetView(v) {
-      mjView = v;
-      const cal = document.getElementById('myWorkCalendar');
-      const list = document.getElementById('mjList');
-      if (!cal || !list) return;
-      cal.classList.toggle('hidden', v !== 'calendar');
-      list.classList.toggle('hidden', v === 'calendar');
-      const on = 'bg-[#1153a1] text-white', off = 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50';
-      document.getElementById('mjViewList').className = 'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ' + (v === 'list' ? on : off);
-      document.getElementById('mjViewCal').className = 'px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ' + (v === 'calendar' ? on : off);
-      if (v === 'calendar') {
-        if (calTarget === 'myWorkCalendar') renderPlanCalendar();
-        else openPlanCalendar(null, null, 'myWorkCalendar');
-      }
-    }
-    Object.assign(window, { openMyJobForm, mjSetFilter, mjSetQuery, mjSetYear, mjShowMore, mjToggleMonth, mjSetView });
+    Object.assign(window, { openMyJobForm, mjSetQuery, mjShowMore, mjToggleDone, mjToggleMonth });
 
     let calTarget = null;
 
