@@ -5463,13 +5463,19 @@
       const label = { done: 'ล้างเสร็จแล้ว', cancelled: 'ยกเลิก', pending: 'ยังไม่ได้ล้าง' };
       const chip = { done: 'bg-emerald-100 text-emerald-800', cancelled: 'bg-gray-100 text-gray-500', pending: 'bg-blue-100 text-blue-800' };
 
-      const done = items.filter(i => i.state === 'done').length;
-      const pending = items.filter(i => i.state === 'pending').length;
-      const cancelled = items.filter(i => i.state === 'cancelled').length;
+      // นับเฉพาะงานล้าง — งานซ่อม/ติดตั้งในปฏิทินผู้รับเหมา (kind) นับแยก ไม่ให้ขึ้นว่า "ยังไม่ได้ล้าง"
+      const clean = items.filter(i => !i.kind);
+      const done = clean.filter(i => i.state === 'done').length;
+      const pending = clean.filter(i => i.state === 'pending').length;
+      const cancelled = clean.filter(i => i.state === 'cancelled').length;
+      const repairs = items.filter(i => i.kind === 'repair').length;
+      const installs = items.filter(i => i.kind === 'install').length;
       const summary = [
         done ? done + ' ล้างแล้ว' : '',
         pending ? pending + ' ยังไม่ได้ล้าง' : '',
-        cancelled ? cancelled + ' ยกเลิก' : ''
+        cancelled ? cancelled + ' ยกเลิก' : '',
+        repairs ? repairs + ' งานซ่อม' : '',
+        installs ? installs + ' งานติดตั้ง' : ''
       ].filter(Boolean).join(' · ');
 
       return `
@@ -11100,7 +11106,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <h3 class="text-sm font-bold text-gray-800 mb-1">ส่วนที่ 2 · ข้อมูลเครื่องที่ติดตั้ง</h3>
               <p class="text-xs text-gray-600 bg-slate-50 border border-gray-200 rounded px-2 py-1.5 mb-2">
                 ข้อมูลนี้ดึงมาจากทะเบียนเครื่อง — ถ้าเป็นเครื่องตัวใหม่
-                ${isContractor()
+                ${isContractor() || ifLink
                   ? 'ให้ส่ง Serial ของเครื่องใหม่ให้เจ้าหน้าที่ <b>เปลี่ยนเครื่องในระบบ</b> ก่อน แล้วค่อยกลับมาออกเอกสาร'
                   : 'ให้ไปกด <b>"เปลี่ยนเครื่อง"</b> ที่หน้ารายการเครื่องก่อน แล้วค่อยกลับมาออกเอกสาร'}
                 เอกสารจะได้ Serial ของเครื่องใหม่มาให้เอง
