@@ -112,7 +112,9 @@ export const REPAIRLINK_HEADERS = [
   'ID', 'TokenHash', 'AirCode', 'CreatedAt', 'CreatedBy', 'ExpiresAt',
   'UsedAt', 'DocNo', 'RevokedAt', 'RevokedBy',
   // ลิงก์ของงานอะไร: ว่าง/'repair' = ใบซ่อม (ลิงก์ก่อนมีช่องนี้) · 'install' = ใบติดตั้ง
-  'Kind'
+  'Kind',
+  // วันนัดให้ช่างเข้าทำงาน (เจ้าหน้าที่ใส่ตอนสร้างลิงก์ · เลื่อนนัด = สร้างลิงก์ใหม่)
+  'ApptDate'
 ];
 
 /**

@@ -165,6 +165,27 @@ test('ลิงก์ใบติดตั้ง — กรอกได้โด
   assert.equal(links[0].Kind, 'install');
 });
 
+test('วันนัดของลิงก์ — เจ้าหน้าที่ใส่ตอนสร้าง ช่างที่เปิดลิงก์เห็น · สร้างลิงก์ใหม่ = วันนัดใหม่', async () => {
+  const db = freshDb();
+  const first = await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'repair', '2026-10-05');
+  assert.equal(first.apptDate, '2026-10-05');
+  assert.equal((await getRepairLink(anon(db), first.token)).apptDate, '2026-10-05');
+  assert.equal((await getRepairLinks(as(db, 'boss')))[0].ApptDate, '2026-10-05');
+
+  // เลื่อนนัด = สร้างลิงก์ใหม่ (ลิงก์เดิมถูกยกเลิก)
+  const second = await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'repair', '2099-10-12');
+  assert.equal((await getRepairLink(anon(db), second.token)).apptDate, '2099-10-12');
+  // วันนัดไกลกว่าอายุลิงก์ → นับอายุจากวันนัด ลิงก์ต้องไม่หมดก่อนช่างเข้างาน
+  assert.equal(second.expiresAt.slice(0, 10), '2099-10-19');
+  assert.equal((await getRepairLink(anon(db), first.token)).state, 'revoked');
+
+  // ไม่ใส่วันนัดก็ได้ · รูปแบบผิดต้องฟ้อง
+  assert.equal((await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-2', 7, 'install')).apptDate, '');
+  await assert.rejects(() => createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-2', 7, 'install', '5/10/2026'), /วันนัด/);
+  // ช่าง (บัญชีผู้รับเหมา) สร้างลิงก์ / ใส่วันนัดเองไม่ได้
+  await assert.rejects(() => createRepairLink(as(db, 'ctA'), 'ATG-PMK-AIR-2', 7, 'install', '2026-10-05'), /Subcontract/);
+});
+
 test('ลิงก์ใบติดตั้งสร้างได้เฉพาะเครื่องที่มีงานติดตั้งรอเอกสาร · ลิงก์ซ่อมกับลิงก์ติดตั้งไม่ยกเลิกกันเอง', async () => {
   const db = freshDb();
   await assert.rejects(() => createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'install'), /ไม่มีงานติดตั้ง/);

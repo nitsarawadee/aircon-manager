@@ -9996,6 +9996,8 @@ const CLEANING_CHECKLIST_ITEMS = [
                 SN ${esc(found.IndoorSN || '-')} / ${esc(found.OutdoorSN || '-')}
               </div>`)}
 
+            ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
+
             ${card(`
               <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label>
               ${dateField('rf_date', new Date().toISOString().slice(0,10), field)}`)}
@@ -10424,6 +10426,17 @@ const CLEANING_CHECKLIST_ITEMS = [
     return m ? m[1] : '';
   }
 
+  /** แถบวันนัดบนฟอร์มของคนถือลิงก์ — เจ้าหน้าที่ใส่ไว้ตอนสร้างลิงก์ */
+  function linkApptBanner(apptDate) {
+    const d = String(apptDate).slice(0, 10);
+    const [y, m, day] = d.split('-').map(Number);
+    return `<div class="bg-blue-50 border border-blue-200 text-[#0e4485] rounded-xl px-4 py-3 flex items-center gap-3">
+      <i class="ph-fill ph-calendar-check text-2xl flex-shrink-0"></i>
+      <div><div class="text-xs text-blue-700">วันนัดเข้าทำงาน</div>
+        <div class="font-bold">${esc(day + ' ' + TH_MONTHS[m - 1] + ' ' + y)}</div></div>
+    </div>`;
+  }
+
   /** หน้าเต็มจอสำหรับคนถือลิงก์ — ใช้กับทุกสถานะที่ไม่ใช่ฟอร์ม */
   function repairLinkShell(inner, kind = 'repair') {
     const docTitle = kind === 'install' ? 'เอกสารบันทึกผลการติดตั้ง<br>ITEL-FM-NE-006' : 'เอกสารบันทึกผลการซ่อม<br>ITEL-FM-NE-005';
@@ -10467,11 +10480,11 @@ const CLEANING_CHECKLIST_ITEMS = [
         AirCode: u.AirCode, Brand: u.Brand, BTU: u.BTU,
         IndoorSerial: u.IndoorSN, IndoorAsset: u.IndoorAsset, OutdoorSerial: u.OutdoorSN, OutdoorAsset: u.OutdoorAsset
       };
-      openInstallForm(node, [{ slot: Number(info.slot) || 1, unit: shown }], Number(info.base) || 0, null, { token });
+      openInstallForm(node, [{ slot: Number(info.slot) || 1, unit: shown }], Number(info.base) || 0, null, { token, apptDate: info.apptDate });
       return;
     }
     if (info.state === 'open') {
-      openRepairForm(info.unit.AirCode, info.unit.Note, { token, unit: info.unit });
+      openRepairForm(info.unit.AirCode, info.unit.Note, { token, unit: info.unit, apptDate: info.apptDate });
       return;
     }
     if (info.state === 'done') { renderRepairLinkDone(token, info); return; }
@@ -10658,7 +10671,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     const l = repairLinksByCode[linkKey(kind, airCode)];
     if (!l || l.state === 'revoked') return '';
     const text = {
-      open: 'ส่งลิงก์แล้ว · รอกรอก ถึง ' + fmtDate(l.ExpiresAt.slice(0, 10)),
+      open: 'ส่งลิงก์แล้ว' + (l.ApptDate ? ' · นัด ' + fmtDate(l.ApptDate) : '') + ' · รอกรอก ถึง ' + fmtDate(l.ExpiresAt.slice(0, 10)),
       expired: 'ลิงก์หมดอายุแล้ว',
       done: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo,
       closed: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo
@@ -10711,19 +10724,23 @@ const CLEANING_CHECKLIST_ITEMS = [
       <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
         <i class="ph ph-warning"></i> ลิงก์นี้แสดงได้ครั้งเดียว — ปิดหน้าต่างแล้วดูซ้ำไม่ได้ ต้องสร้างใหม่ (ลิงก์นี้จะถูกยกเลิกให้)
       </p>
+      ${created.apptDate ? `<p class="text-sm text-gray-700 mt-3"><i class="ph ph-calendar-check text-[#1153a1]"></i> นัดช่างเข้าทำงาน <b>${esc(fmtDate(created.apptDate))}</b> — ช่างเห็นวันนัดนี้บนหน้าฟอร์ม</p>` : ''}
       <p class="text-xs text-gray-500 mt-2">ใช้ได้ถึง ${esc(fmtDate(created.expiresAt.slice(0, 10)))} · ส่งได้ครั้งเดียว · ส่งแล้วงานนี้ปิดทันที</p>
       ${created.publicUrl ? '' : `<p class="text-xs text-gray-500 mt-1"><i class="ph ph-wifi-high"></i>
         ลิงก์นี้เปิดได้เฉพาะเครื่องที่ต่อเน็ตวงเดียวกับออฟฟิศ — ช่างที่อยู่หน้างานจะเปิดได้เมื่อระบบขึ้นคลาวด์แล้ว</p>`}`
     : `
       ${open ? `<div class="text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
-          มีลิงก์ที่ยังไม่มีคนกรอก (สร้างโดย ${esc(l.CreatedBy)} · ใช้ได้ถึง ${esc(fmtDate(l.ExpiresAt.slice(0, 10)))})
+          มีลิงก์ที่ยังไม่มีคนกรอก (สร้างโดย ${esc(l.CreatedBy)}${l.ApptDate ? ' · นัด ' + esc(fmtDate(l.ApptDate)) : ''} · ใช้ได้ถึง ${esc(fmtDate(l.ExpiresAt.slice(0, 10)))})
           <button onclick="revokeRepairLinkRow('${jsStr(l.ID)}', '${jsStr(airCode)}', '${jsStr(kind)}')" class="block mt-1 text-xs text-red-600 hover:underline">ยกเลิกลิงก์นี้</button>
         </div>` : ''}
-      <label class="block text-sm font-medium text-gray-700 mb-1">ลิงก์ใช้ได้กี่วัน</label>
+      <!-- วันนัดให้ช่างเข้าทำงาน (เจ้าของงานขอ) — เลื่อนนัด = สร้างลิงก์ใหม่ -->
+      <label class="block text-sm font-medium text-gray-700 mb-1">วันนัดช่างเข้าทำงาน</label>
+      ${dateField('rl_appt', open && l.ApptDate ? l.ApptDate : '', 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none')}
+      <label class="block text-sm font-medium text-gray-700 mb-1 mt-3">ลิงก์ใช้ได้กี่วัน</label>
       <select id="rl_days" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none">
         <option value="3">3 วัน</option><option value="7" selected>7 วัน</option><option value="14">14 วัน</option>
       </select>
-      <p class="text-xs text-gray-500 mt-2">คนที่ได้ลิงก์กรอก${docName}ของเครื่องนี้ได้โดยไม่ต้องล็อกอิน ส่งได้ครั้งเดียว ส่งแล้วงานนี้ปิดทันที${open ? ' — สร้างใหม่แล้วลิงก์เดิมจะใช้ไม่ได้' : ''}</p>`;
+      <p class="text-xs text-gray-500 mt-2">คนที่ได้ลิงก์กรอก${docName}ของเครื่องนี้ได้โดยไม่ต้องล็อกอิน ส่งได้ครั้งเดียว ส่งแล้วงานนี้ปิดทันที${open ? ' — สร้างใหม่แล้วลิงก์เดิมจะใช้ไม่ได้ (เลื่อนนัดให้สร้างลิงก์ใหม่แล้วส่งให้ช่างอีกครั้ง)' : ''}</p>`;
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -10748,8 +10765,9 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   async function createRepairLinkFor(airCode, kind = 'repair') {
     const days = Number(document.getElementById('rl_days').value) || 7;
+    const appt = (document.getElementById('rl_appt') || {}).value || '';
     try {
-      const created = await call('createRepairLink', airCode, days, kind);
+      const created = await call('createRepairLink', airCode, days, kind, appt);
       await loadRepairLinks();
       openRepairLinkModal(airCode, created, kind);
       renderRepairView((document.getElementById('repairSearch') || {}).value || '');
@@ -11114,6 +11132,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
         <main class="flex-1 overflow-y-auto">
           <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
+
+            ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
 
             ${newUnit ? `<div class="bg-teal-50 border border-teal-200 text-teal-800 text-sm rounded-xl px-4 py-3 flex gap-2">
               <i class="ph ph-info text-lg shrink-0"></i>

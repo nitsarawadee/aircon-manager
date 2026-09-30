@@ -211,7 +211,9 @@ export const TABLES = {
       ID: S, TokenHash: S, AirCode: S, CreatedAt: DT, CreatedBy: S, ExpiresAt: DT,
       UsedAt: DT, DocNo: S, RevokedAt: DT, RevokedBy: S,
       // ว่าง/'repair' = ลิงก์ใบซ่อม · 'install' = ลิงก์ใบติดตั้ง
-      Kind: S
+      Kind: S,
+      // วันนัดให้ช่างเข้าทำงาน — ใส่ตอนสร้างลิงก์ (เลื่อนนัด = สร้างลิงก์ใหม่ ตามที่เจ้าของงานเลือก)
+      ApptDate: D
     },
     indexes: [['TokenHash'], ['AirCode']],
     unique: ['ID']

@@ -182,6 +182,8 @@ export async function getRepairLink(ctx, token) {
     state,
     kind,
     expiresAt: plainText(link.ExpiresAt),
+    // วันนัดที่เจ้าหน้าที่ใส่ไว้ตอนสร้างลิงก์ — โชว์ให้ช่างเห็นบนหน้าฟอร์ม
+    apptDate: plainText(link.ApptDate).slice(0, 10),
     unit: {
       AirCode: plainText(unit.AirCode), NodeName: plainText(unit.NodeName),
       SiteCode: plainText(unit.SiteCode), Province: plainText(unit.Province),
@@ -346,9 +348,11 @@ async function assertCanManage(ctx, airCode, kind = 'repair') {
  * ลิงก์เก่าของเครื่องเดียวกันที่ยังไม่ได้ใช้ ถูกยกเลิกให้อัตโนมัติ
  * งานหนึ่งจึงมีลิงก์ที่ใช้ได้แค่อันเดียวเสมอ ไม่มีลิงก์เก่าลอยอยู่ในไลน์กลุ่มไหน
  */
-export async function createRepairLink(ctx, airCode, days, kind = 'repair') {
+export async function createRepairLink(ctx, airCode, days, kind = 'repair', apptDate = '') {
   return ctx.withLock(async () => {
     if (!ASSIGN_KINDS[kind]) throw new Error('ไม่รู้จักประเภทงาน ' + plainText(kind));
+    const appt = plainText(apptDate).trim();
+    if (appt && !/^\d{4}-\d{2}-\d{2}$/.test(appt)) throw new Error('วันนัดไม่ถูกต้อง');
     await ctx.ensureBase();
     const unit = await assertCanManage(ctx, airCode, kind);
     if (!jobStillOpen(ctx, kind, unit)) {
@@ -369,6 +373,9 @@ export async function createRepairLink(ctx, airCode, days, kind = 'repair') {
     }
 
     const d = LINK_DAYS.includes(Number(days)) ? Number(days) : DEFAULT_DAYS;
+    // มีวันนัด → นับอายุลิงก์จากวันนัด (เวลาไทย) ไม่ให้ลิงก์หมดอายุก่อนช่างเข้าหน้างาน
+    const start = appt ? Math.max(now.getTime(), new Date(appt + 'T00:00:00+07:00').getTime()) : now.getTime();
+    if (Number.isNaN(start)) throw new Error('วันนัดไม่ถูกต้อง');
     const token = newToken();
     const link = {
       ID: 'RL' + Date.now(),
@@ -376,15 +383,16 @@ export async function createRepairLink(ctx, airCode, days, kind = 'repair') {
       AirCode: plainText(unit.AirCode),
       CreatedAt: ymdhms(now),
       CreatedBy: by,
-      ExpiresAt: ymdhms(new Date(now.getTime() + d * DAY)),
-      Kind: kind
+      ExpiresAt: ymdhms(new Date(start + d * DAY)),
+      Kind: kind,
+      ApptDate: appt
     };
     const headers = ctx.ss.headers(SHEETS.REPAIRLINK);
     ctx.ss.appendRow(SHEETS.REPAIRLINK, headers.map(h => (link[h] !== undefined ? link[h] : '')));
     await ctx.ss.flush();
 
     return {
-      id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt, kind,
+      id: link.ID, token, airCode: link.AirCode, expiresAt: link.ExpiresAt, kind, apptDate: appt,
       // ที่อยู่ที่คนอื่นเปิดได้ — หน้าเว็บใช้แทนที่อยู่ของตัวเองเมื่อเปิดระบบด้วย localhost
       // (ดู lanUrl ใน platform/node.js) PUBLIC_URL คือที่อยู่จริงตอนขึ้นคลาวด์ ชนะเสมอ
       publicUrl: String((ctx.env && ctx.env.PUBLIC_URL) || '').replace(/\/+$/, ''),
@@ -408,6 +416,7 @@ export async function getRepairLinks(ctx) {
     .filter(l => scope.has(normalizeCode(l.AirCode)) && kinds.has(kindOf(l)))
     .map(l => ({
       ID: plainText(l.ID), AirCode: plainText(l.AirCode), Kind: kindOf(l),
+      ApptDate: plainText(l.ApptDate).slice(0, 10),
       CreatedAt: plainText(l.CreatedAt), CreatedBy: plainText(l.CreatedBy),
       ExpiresAt: plainText(l.ExpiresAt), UsedAt: plainText(l.UsedAt), DocNo: plainText(l.DocNo),
       RevokedAt: plainText(l.RevokedAt), RevokedBy: plainText(l.RevokedBy),
