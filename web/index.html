@@ -311,6 +311,9 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="airlist">
         <i class="ph ph-list-dashes text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>รายการเครื่อง</span>
       </button>
+      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="warehouse">
+        <i class="ph ph-warehouse text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>คลังแอร์</span>
+      </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="plan">
         <i class="ph ph-calendar-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แผนล้างแอร์</span>
       </button>
@@ -520,6 +523,52 @@
                     <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ VIEW: คลังแอร์ ============================
+           เครื่องเก่าที่ถอดออกจากตำแหน่ง (เปลี่ยน/ย้ายเครื่อง) + ตำแหน่งที่เลิกใช้แต่ยังไม่เปลี่ยน (ดู src/modules/warehouse.js) -->
+      <section id="view-warehouse" class="view">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">คลังแอร์</h2>
+            <p class="text-sm text-gray-500">เครื่องที่ถอดออกจากหน้างาน (รื้อถอน/ปลดระวาง) รอขายหรือทิ้ง (Write off)</p>
+          </div>
+          <div class="relative w-full sm:w-64">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="whSearch" oninput="renderWarehouse()" placeholder="ค้นหารหัส, Node, Serial, Asset..."
+              class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
+          </div>
+        </div>
+
+        <div class="mb-8">
+          <h3 class="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph-fill ph-warehouse text-slate-600"></i> เครื่องในคลัง</h3>
+          <p class="text-xs text-gray-500 mb-3">เข้าคลังเองเมื่อกด "เปลี่ยนเครื่อง" หรือ "ย้ายเครื่อง" มาแทน — เครื่องเก่าพร้อม Serial / Asset</p>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="whStockTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead><tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ถอดจากตำแหน่ง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เข้าคลัง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
+                </tr></thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2"><i class="ph-fill ph-prohibit text-slate-500"></i> ตำแหน่งที่เลิกใช้ (ยังไม่เปลี่ยนเครื่อง)</h3>
+          <p class="text-xs text-gray-500 mb-3">เช่น ซ่อมไม่ได้แล้ว รอเครื่องใหม่มาแทน — พอเปลี่ยนเครื่อง เครื่องตัวเก่าจะย้ายขึ้นไปอยู่ในคลังด้านบน</p>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="whRetiredTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead><tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node/Site</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">หมายเหตุ</th>
+                </tr></thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
               </table>
             </div>
@@ -1983,6 +2032,7 @@
         else if (btn.dataset.tab === 'cleaningform') loadCleaningForm();
         else if (btn.dataset.tab === 'repair') loadRepair();
         else if (btn.dataset.tab === 'approvals') loadApprovals();
+        else if (btn.dataset.tab === 'warehouse') loadWarehouse();
       });
     });
 
@@ -2254,6 +2304,12 @@
         }
       });
 
+      // คลังแอร์เป็นส่วนหนึ่งของทะเบียนเครื่อง — ไม่เห็นรายการเครื่องก็ไม่เห็นคลัง
+      if (moduleLevel('airlist') === 'none') {
+        document.querySelector('[data-tab="warehouse"]')?.remove();
+        document.getElementById('view-warehouse')?.remove();
+      }
+
       // เอกสารรออนุมัติเป็นเรื่องของงานซ่อม — ไม่เห็นงานซ่อมก็ไม่เห็นหน้านี้
       if (moduleLevel('repair') === 'none') {
         document.querySelector('[data-tab="approvals"]')?.remove();
@@ -2360,7 +2416,7 @@
       // รายการเครื่อง
       openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
-      fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist',
+      fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist', writeOffStockRow: 'airlist',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
       openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'admin',
       openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
@@ -6250,6 +6306,78 @@
       document.querySelector('[data-tab="history"]').click();
     }
     window.clearHistoryUnitFilter = clearHistoryUnitFilter;
+
+    /* ============== คลังแอร์ (ดู src/modules/warehouse.js) ============== */
+    let warehouseData = { stock: [], retired: [] };
+
+    async function loadWarehouse() {
+      try {
+        const res = await call('getWarehouse');
+        if (res) warehouseData = res;
+      } catch (e) { /* call() แจ้ง error ให้ผู้ใช้แล้ว */ }
+      renderWarehouse();
+    }
+
+    function renderWarehouse() {
+      const stockTb = document.querySelector('#whStockTable tbody');
+      const retTb = document.querySelector('#whRetiredTable tbody');
+      if (!stockTb || !retTb) return;
+      const q = ((document.getElementById('whSearch') || {}).value || '').trim().toLowerCase();
+      const hit = o => !q || searchText(o).includes(q);
+      const spec = o => `<div>${esc(o.Brand) || '-'}</div><div class="text-[11px] text-gray-400">${o.BTU ? esc(Number(o.BTU).toLocaleString()) + ' BTU' : ''}</div>`;
+      const ids = o => `<div class="text-[12px]">${esc([o.IndoorSN, o.OutdoorSN].filter(Boolean).join(' / ')) || '-'}</div>
+        <div class="text-[11px] text-gray-400">${esc([o.IndoorAsset, o.OutdoorAsset].filter(Boolean).join(' / '))}</div>`;
+      const badge = st => st === 'Write off'
+        ? '<span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-medium">Write off</span>'
+        : '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">อยู่ในคลัง</span>';
+
+      const stock = (warehouseData.stock || []).filter(hit);
+      stockTb.innerHTML = stock.length ? stock.map(o => {
+        const out = String(o.Status || '').trim() === 'Write off';
+        return `
+        <tr class="hover:bg-slate-50 align-top">
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(o.ID)}</td>
+          <td class="px-4 py-3"><div class="font-medium">${esc(o.AirCode)}</div>
+            <div class="text-[11px] text-gray-400">${esc(o.NodeName)} · ภาค ${esc(o.Region)}</div></td>
+          <td class="px-4 py-3">${spec(o)}</td>
+          <td class="px-4 py-3">${ids(o)}</td>
+          <td class="px-4 py-3"><div>${esc(fmtDate(o.InDate))}</div>
+            <div class="text-[11px] text-gray-400 whitespace-normal max-w-[14rem]">${esc(o.InReason)}${o.Note ? ' · ' + esc(o.Note) : ''}</div></td>
+          <td class="px-4 py-3">${badge(o.Status)}${out && o.WriteOffDate ? `<div class="text-[11px] text-gray-400 mt-1">${esc(fmtDate(o.WriteOffDate))}</div>` : ''}</td>
+          <td class="px-4 py-3 text-right">${out ? '' : `<button onclick="writeOffStockRow('${jsStr(o.ID)}')"
+              class="text-slate-600 hover:text-white hover:bg-slate-600 px-3 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-trash-simple"></i> Write off</button>`}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">${q ? 'ไม่พบเครื่องในคลังที่ตรงกับคำค้นหา' : 'ยังไม่มีเครื่องในคลัง'}</td></tr>`;
+
+      const retired = (warehouseData.retired || []).filter(hit);
+      retTb.innerHTML = retired.length ? retired.map(o => `
+        <tr class="hover:bg-slate-50 align-top">
+          <td class="px-4 py-3">${airCodeBtn(o.AirCode)}</td>
+          <td class="px-4 py-3"><div class="text-[13px] font-medium text-gray-800">${esc(o.NodeName)}</div>
+            <div class="text-[11px] text-gray-400">${esc(o.SiteCode)}</div></td>
+          <td class="px-4 py-3">${spec(o)}</td>
+          <td class="px-4 py-3">${ids(o)}</td>
+          <td class="px-4 py-3">${esc(o.Status)}</td>
+          <td class="px-4 py-3 whitespace-normal max-w-xs text-gray-600">${esc(o.Note) || '-'}</td>
+        </tr>`).join('') : `<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">${q ? 'ไม่พบตำแหน่งที่ตรงกับคำค้นหา' : 'ไม่มีตำแหน่งที่เลิกใช้'}</td></tr>`;
+    }
+    window.renderWarehouse = renderWarehouse;
+
+    async function writeOffStockRow(id) {
+      const o = (warehouseData.stock || []).find(x => x.ID === id);
+      if (!o) return;
+      const ok = await showConfirm('Write off เครื่อง ' + id + ' (ถอดจาก ' + o.AirCode + ') ใช่มั้ย?\n' +
+        'หมายถึงขายหรือทิ้งออกไปแล้ว — ย้อนกลับไม่ได้');
+      if (!ok) return;
+      try {
+        const res = await call('writeOffStock', id);
+        if (res) warehouseData = res;
+        renderWarehouse();
+        showToast('Write off ' + id + ' แล้ว');
+      } catch (e) {}
+    }
+    window.writeOffStockRow = writeOffStockRow;
 
     /* ============== เอกสารรออนุมัติ (งานซ่อมที่ Infrastructure ต้องอนุมัติ) ============== */
 

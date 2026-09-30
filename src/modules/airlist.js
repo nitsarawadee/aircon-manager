@@ -4,6 +4,7 @@ import { HEADERS as IMPORT_HEADERS, COLUMNS as IMPORT_COLUMNS, ALLOWED as IMPORT
 import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
+import { stockOldMachine } from './warehouse.js';
 
 /**
  * รายการเครื่องปรับอากาศ (Master Data)
@@ -332,6 +333,9 @@ export async function moveAirUnit(ctx, row, destCode, note, expectCode) {
 
     // ---------- ปลายทาง: ตำแหน่งเดิม + ตัวเครื่องที่ย้ายมา ----------
     const destPrevNote = String(dest.Note || '').trim();
+    // เครื่องเดิมของปลายทางถูกยกออก → เข้าคลัง (ตำแหน่งว่างไม่มีอะไรเข้า ดู stockOldMachine)
+    await stockOldMachine(ctx, dest, 'ย้ายเครื่อง ' + src.AirCode + ' มาแทน',
+                          (openCaseOf(ctx.ss.objects(SHEETS.HISTORY), dest.AirCode) || {}).caseId || '');
     const toDest = { Status: srcStatus || 'ใช้งานปกติ', Note: src.Note || '', UpdatedAt: now, UpdatedBy: me };
     for (const f of MACHINE_FIELDS) toDest[f] = src[f] === undefined ? '' : src[f];
     ctx.ss.writeByHeaders(SHEETS.AIRLIST, dest._row, toDest);
@@ -478,6 +482,9 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
     // ของเครื่องที่ถูกยกออกไปแล้ว (อาการเดียวกับที่เคยแก้ตอนปิดงานซ่อม)
     // ข้อความเดิมไม่หายไปเฉยๆ แต่ถูกเก็บลงประวัติในบรรทัดถัดไป
     const prevNote = String(oldUnit.Note || '').trim();
+    // เครื่องเก่าถูกยกออก → เข้าคลัง พร้อม Serial / Asset / อาการเสีย (ดู warehouse.js)
+    await stockOldMachine(ctx, oldUnit, 'เปลี่ยนเครื่อง',
+                          (openCaseOf(ctx.ss.objects(SHEETS.HISTORY), oldUnit.AirCode) || {}).caseId || '');
     const payload = {
       Status: 'ใช้งานปกติ',
       Note: '',

@@ -237,6 +237,24 @@ export const TABLES = {
     unique: ['ID']
   },
 
+  /**
+   * คลังแอร์ — เครื่องเก่าที่ถูกถอดออกจากตำแหน่งตอนเปลี่ยน/ย้ายเครื่อง (ดู modules/warehouse.js)
+   * AirCode/Node/Region คือตำแหน่งเดิมที่ถอดออกมา ใช้กรองตามภูมิภาคของผู้ใช้
+   * ⚠️ ลำดับคอลัมน์ต้องตรงกับ WAREHOUSE_HEADERS เป๊ะ มีเทสต์เฝ้าไว้
+   */
+  warehouse_units: {
+    sheet: 'Warehouse',
+    columns: {
+      ID: S, AirCode: S, NodeName: S, SiteCode: S, Region: S, Province: S,
+      Brand: S, BTU: N, ModelIndoor: S, ModelOutdoor: S,
+      IndoorAsset: S, IndoorSN: S, OutdoorAsset: S, OutdoorSN: S, InstallDate: D, WarrantyExpire: D,
+      Status: S, InDate: D, InReason: S, CaseID: S, Note: S,
+      WriteOffDate: D, WriteOffBy: S, CreatedAt: DT, CreatedBy: S
+    },
+    indexes: [['Region'], ['AirCode']],
+    unique: ['ID']
+  },
+
   contractors: {
     sheet: 'Contractor',
     columns: {

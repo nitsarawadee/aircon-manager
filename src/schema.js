@@ -12,6 +12,18 @@ export const APPROVAL_HEADERS = [
 ];
 
 /**
+ * คลังแอร์ — เครื่องเก่าที่ถูกถอดออกจากตำแหน่ง (ดู modules/warehouse.js)
+ * ⚠️ เพิ่มคอลัมน์ใหม่ต้องต่อท้ายสุดเท่านั้น
+ */
+export const WAREHOUSE_HEADERS = [
+  'ID', 'AirCode', 'NodeName', 'SiteCode', 'Region', 'Province',
+  'Brand', 'BTU', 'ModelIndoor', 'ModelOutdoor',
+  'IndoorAsset', 'IndoorSN', 'OutdoorAsset', 'OutdoorSN', 'InstallDate', 'WarrantyExpire',
+  'Status', 'InDate', 'InReason', 'CaseID', 'Note',
+  'WriteOffDate', 'WriteOffBy', 'CreatedAt', 'CreatedBy'
+];
+
+/**
  * นิยามโครงสร้างชีตทั้งหมดของระบบ
  *
  * ⚠️ กติกาสำคัญที่ห้ามลืม (ยกมาจากโค้ด Apps Script เดิม):
@@ -41,7 +53,8 @@ export const SHEETS = {
   INSTALLFORM: 'InstallForm',
   CONTRACTOR: 'Contractor',
   REPAIRLINK: 'RepairLink',
-  APPROVAL: 'DocApproval'
+  APPROVAL: 'DocApproval',
+  WAREHOUSE: 'Warehouse'
 };
 
 export const AIRLIST_HEADERS = [

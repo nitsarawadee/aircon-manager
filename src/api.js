@@ -37,6 +37,7 @@ import {
   createRepairLink, getRepairLinks, revokeRepairLink
 } from './modules/repairlink.js';
 import { approveDoc, getApprovalCount } from './modules/approval.js';
+import { getWarehouse, writeOffStock } from './modules/warehouse.js';
 
 /**
  * ============================================================================
@@ -162,7 +163,11 @@ const API_FUNCTIONS = {
   // ขั้นอนุมัติเอกสาร (ใบล้าง / ซ่อม / ติดตั้ง) — ตรวจบทบาทกับภูมิภาคที่ approval.js
   approveDoc,
   // ตัวเลขบนเมนูเอกสารรออนุมัติ
-  getApprovalCount
+  getApprovalCount,
+
+  // คลังแอร์ — เครื่องเก่าที่ถอดออกจากตำแหน่ง
+  getWarehouse,
+  writeOffStock
 };
 
 /** คำสั่งที่เรียกได้ก่อนล็อกอิน */

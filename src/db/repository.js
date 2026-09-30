@@ -39,6 +39,7 @@ const SHEET_TO_TABLE = {
   Contractor: 'contractors',
   RepairLink: 'repair_links',
   DocApproval: 'doc_approvals',
+  Warehouse: 'warehouse_units',
   Config: 'config_values'
 };
 
