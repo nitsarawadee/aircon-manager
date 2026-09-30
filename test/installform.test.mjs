@@ -18,7 +18,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
-import { getHistory } from '../src/modules/history.js';
+import { getHistory, addHistoryRecord } from '../src/modules/history.js';
 import { getAirList, replaceAirUnit } from '../src/modules/airlist.js';
 import {
   getInstallForms, saveInstallForm, deleteInstallForm,
@@ -120,6 +120,27 @@ test('ติดตั้งสองเครื่องในใบเดี�
   assert.ok(res.docNo, 'เครื่องที่ 1 ต้องมีเลข');
   assert.ok(res.docNo2, 'เครื่องที่ 2 ต้องมีเลข');
   assert.notEqual(res.docNo, res.docNo2, 'เลขสองเครื่องห้ามซ้ำกัน');
+});
+
+test('ใบประวัติที่ออกเลขทีหลัง ต้องไม่ได้เลขเดียวกับใบติดตั้ง · ประวัติติดตั้งใช้เลขของใบนั้น', async () => {
+  // เคยเกิดจริง: เปลี่ยนเครื่อง → ใบติดตั้งไปแปะเลขที่แถวประวัติเดิม เลขใบจึงไม่อยู่ในประวัติ
+  // ตัวออกเลขไม่นับเลขใบติดตั้ง แจ้งซ่อมเครื่องอื่นเลยได้ CM2609-87 ซ้ำกับใบติดตั้ง
+  const db = freshDb();
+  const [unit] = (await getAirList(ctxOf(db))).filter(a => a.AirCode === 'KKN-CPE-AIR-1');
+  await replaceAirUnit(ctxOf(db), unit._row, { Brand: 'Daikin', IndoorSN: 'ใหม่-IN-1' }, unit.AirCode);
+  const res = await saveInstallForm(ctxOf(db), payload());
+  await addHistoryRecord(ctxOf(db), {
+    AirCode: 'KKN-CPE-AIR-2', Date: '2026-09-25', EventType: 'แจ้งซ่อม', Detail: 'ไม่เย็น'
+  });
+
+  const hist = await getHistory(ctxOf(db));
+  const report = hist.find(h => h.EventType === 'แจ้งซ่อม');
+  assert.notEqual(report.ID, res.docNo, 'แจ้งซ่อมได้เลขซ้ำใบติดตั้ง ' + res.docNo);
+
+  // ใบติดตั้งของเครื่องที่ไม่ได้มาจากการเปลี่ยน — ประวัติ "ติดตั้ง" ใช้เลขเดียวกับใบ
+  const res2 = await saveInstallForm(ctxOf(db), payload({ AirCode1: 'KKN-CPE-AIR-2', Date: '2026-09-26' }));
+  const installed = (await getHistory(ctxOf(db))).find(h => h.EventType === 'ติดตั้ง' && h.AirCode === 'KKN-CPE-AIR-2');
+  assert.equal(installed.ID, res2.docNo, 'ประวัติติดตั้งต้องถือเลขของใบ');
 });
 
 test('ไม่เลือกเครื่องเลย ต้องฟ้อง', async () => {

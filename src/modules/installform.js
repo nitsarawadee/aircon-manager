@@ -274,7 +274,7 @@ async function writeInstallForm(ctx, record, { units, first, slotBase, companyNa
       Cost: '',
       Technician: row.TechnicianName,
       Note: 'เอกสาร ' + docNo
-    });
+    }, { docNo });   // ประวัติใช้เลขเดียวกับเอกสารของเครื่องนั้น (แบบเดียวกับใบล้าง)
   }
 
   return row;

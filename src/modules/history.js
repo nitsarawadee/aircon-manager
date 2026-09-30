@@ -178,7 +178,14 @@ export function usedDocNumbers(ctx) {
     repairNos = ctx.ss.objects(SHEETS.REPAIRFORM).map(f => f.DocNo);
   } catch { /* ยังไม่ได้โหลดตารางเอกสารซ่อม */ }
 
-  return [...ids, ...docNos, ...repairNos].filter(Boolean);
+  // เอกสารติดตั้งก็ใช้เลข CM ชุดเดียวกัน (มีสองช่องเหมือนใบล้าง) — เดิมลืมนับ
+  // ใบประวัติแจ้งซ่อมเลยเคยได้เลขเดียวกับใบติดตั้งที่ออกไปแล้ว (CM2609-87 ในข้อมูลจริง)
+  let installNos = [];
+  try {
+    installNos = ctx.ss.objects(SHEETS.INSTALLFORM).flatMap(f => [f.DocNo, f.DocNo2]);
+  } catch { /* ยังไม่ได้โหลดตารางเอกสารติดตั้ง */ }
+
+  return [...ids, ...docNos, ...repairNos, ...installNos].filter(Boolean);
 }
 
 /**
