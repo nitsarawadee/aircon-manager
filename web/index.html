@@ -885,9 +885,9 @@
             <button onclick="openReportRepairModal()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
               <i class="ph ph-wrench"></i> แจ้งซ่อมแอร์ใหม่
             </button>
-            <!-- ติดตั้งเครื่องใหม่ = ฟอร์มเพิ่มเครื่องใหม่ (ลงทะเบียน) แล้วเปิดฟอร์มเอกสารติดตั้งต่อทันที -->
+            <!-- ติดตั้งเครื่องใหม่ = ฟอร์มเพิ่มเครื่องใหม่ (ลงทะเบียน) แล้วงานขึ้นในตาราง "งานติดตั้งที่รอเอกสาร" -->
             <button onclick="openAirModal()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
-              title="กรอกฟอร์มเพิ่มเครื่องใหม่ บันทึกแล้วเปิดฟอร์มเอกสารติดตั้งต่อทันที">
+              title="กรอกฟอร์มเพิ่มเครื่องใหม่ บันทึกแล้วงานติดตั้งขึ้นในตารางด้านล่าง ให้กรอกเอกสาร ส่งลิงก์ หรือมอบหมายผู้รับเหมา">
               <i class="ph ph-plus-circle"></i> ติดตั้งเครื่องใหม่
             </button>
           </div>
@@ -4652,16 +4652,8 @@
       if (row) unit._row = row;
       if (!unit.AirCode) { showToast('กรุณาระบุรหัสเครื่อง', 'error'); return; }
 
-      // เพิ่มเครื่องใหม่ = ติดตั้งใหม่ ทำทีเดียวกับเอกสารติดตั้ง (เจ้าของงานสั่ง)
-      // ยังไม่บันทึกเครื่องตอนนี้ — ตรวจก่อนว่าบันทึกได้ แล้วเปิดฟอร์มติดตั้งต่อ
-      // เครื่องเข้าทะเบียนพร้อมเอกสารตอนกดบันทึกฟอร์มติดตั้ง (installNewAirUnit)
-      // คนที่กรอกเอกสารติดตั้งไม่ได้ ยังเพิ่มเครื่องอย่างเดียวได้เหมือนเดิม
-      if (!row && docLevel('install') === 'edit') {
-        try { await call('checkNewAirUnit', unit); } catch (e) { return; }
-        await openInstallFormForNewUnit(unit);
-        return;
-      }
-
+      // เพิ่มเครื่องใหม่ไม่เปิดฟอร์มติดตั้งต่อแล้ว (เจ้าของงานสั่ง) — เซิร์ฟเวอร์ลงประวัติ "รอเอกสารติดตั้ง" ให้
+      // งานไปขึ้นที่หน้างานซ่อมและติดตั้ง ให้กรอกเอง ส่งลิงก์ หรือมอบหมายผู้รับเหมา เหมือนเครื่องที่เปลี่ยนมา
       try {
         const result = await call('saveAirUnit', unit);
         currentAirList = result.air;
@@ -4670,7 +4662,9 @@
         if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
         if (airDetailCode) renderAirDetail();
         closeModal();
-        showToast('บันทึกข้อมูลสำเร็จ', 'success');
+        showToast(row ? 'บันทึกข้อมูลสำเร็จ'
+          : 'เพิ่มเครื่องแล้ว — เอกสารติดตั้งรออยู่ที่หน้างานซ่อมและติดตั้ง', 'success');
+        if (!row) refreshRepairBadge();
         loadDashboard();
       } catch (e) {}
     }
@@ -7474,7 +7468,7 @@
         tb.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ตอนนี้ไม่มีงานติดตั้งที่รอเอกสาร</td></tr>';
         return;
       }
-      const JOB = { 'ติดตั้ง': 'ติดตั้งเครื่องใหม่', 'เปลี่ยนเครื่อง': 'เปลี่ยนเครื่อง / ย้ายเครื่องมาแทน' };
+      const JOB = { 'ติดตั้ง': 'ติดตั้งแอร์ใหม่','เปลี่ยนเครื่อง': 'เปลี่ยนเครื่อง / ย้ายเครื่องมาแทน' };
       // มอบหมาย/ส่งลิงก์ให้ผู้รับเหมา — เจ้าหน้าที่ที่แก้เอกสารติดตั้งได้ (เซิร์ฟเวอร์ตรวจซ้ำ)
       const canHandOut = isStaff() && docLevel('install') === 'edit';
       tb.innerHTML = list.map(h => {
