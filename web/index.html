@@ -6574,6 +6574,20 @@
         ? docs.find(f => f.kind === 'cleaning' && same(fmtDate(date), fmtDate(f.Date)) &&
                          [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)))
         : null;
+      // เปลี่ยนเครื่อง → ใบติดตั้งของเครื่องใหม่ (เจ้าของงานสั่ง) ไม่ใช่ใบซ่อมของเคส
+      // หมายเหตุของแถวนี้กลายเป็น "เอกสาร CM…" ตอนบันทึกใบติดตั้ง · ใบเก่ากว่านั้นหาจากเครื่องเดียวกันวันเดียวกัน
+      if (String(eventType || '').includes('เปลี่ยนเครื่อง')) {
+        const inst = docs.find(f => f.kind === 'install' && (same(inNote, f.DocNo) || same(inNote, f.DocNo2)))
+          || docs.find(f => f.kind === 'install' && same(fmtDate(date), fmtDate(f.Date)) &&
+                            [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)));
+        if (!inst) {
+          showToast('ยังไม่ได้กรอกเอกสารติดตั้งของเครื่องใหม่ (' + (caseId || id) + ')', 'error');
+          return;
+        }
+        pendingDocOpen = { kind: 'install', term: displayDocNo(inst) };
+        document.querySelector('[data-tab="cleaningform"]').click();
+        return;
+      }
       const match = (caseId && docs.find(f => same(caseId, f.CaseID)))
         || docs.find(f => [id, inNote].some(t => same(t, f.DocNo) || same(t, f.DocNo2)))
         || cleanOf();
