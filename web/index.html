@@ -495,7 +495,7 @@
       <section id="view-approvals" class="view">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
-          <p class="text-sm text-gray-500">ใบซ่อมและใบล้างแอร์ที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
+          <p class="text-sm text-gray-500">ใบซ่อม ใบล้างแอร์ และใบติดตั้งที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
         <!-- เคสรออนุมัติซ่อม — เฉพาะ Infrastructure เห็น (ซ่อนที่ renderApprovalsView) -->
@@ -531,7 +531,7 @@
           </div>
         </div>
         <!-- ใบล้างแอร์ที่ถึงขั้นของบัญชีนี้ — แยกตารางจากใบซ่อม ทุกคนที่มีหน้านี้เห็น (เจ้าของงานสั่ง) -->
-        <div>
+        <div class="mb-8">
           <h3 class="text-lg font-bold text-[#1153a1] mb-3 flex items-center gap-2"><i class="ph-fill ph-drop"></i> ใบล้างแอร์ที่รอคุณอนุมัติ</h3>
           <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -539,6 +539,22 @@
                 <thead>
                   <tr class="bg-blue-50 border-b border-blue-200 text-[#0e4485] font-semibold">
                     <th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">ช่าง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- ใบติดตั้งที่ถึงขั้นของบัญชีนี้ — แยกตารางแบบเดียวกับใบล้าง (เจ้าของงานขอ) -->
+        <div>
+          <h3 class="text-lg font-bold text-teal-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-plus-circle"></i> ใบติดตั้งที่รอคุณอนุมัติ</h3>
+          <div class="bg-white rounded-xl shadow-sm border border-teal-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+              <table id="apvInstallTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                  <tr class="bg-teal-50 border-b border-teal-200 text-teal-900 font-semibold">
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">ผู้ติดตั้ง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
@@ -6995,13 +7011,14 @@
 
     async function loadApprovals() {
       try {
-        const [air, hist, repairs, cleans] = await Promise.all([
-          call('getAirList'), call('getHistory', null), call('getRepairForms'), call('getCleaningForms')
+        const [air, hist, repairs, cleans, installs] = await Promise.all([
+          call('getAirList'), call('getHistory', null), call('getRepairForms'), call('getCleaningForms'), call('getInstallForms')
         ]);
         if (Array.isArray(air)) currentAirList = air;
         if (Array.isArray(hist)) currentHistory = hist;
         if (Array.isArray(repairs)) currentRepairForms = repairs;
         if (Array.isArray(cleans)) currentCleaningForms = cleans;
+        if (Array.isArray(installs)) currentInstallForms = installs;
       } catch (e) { /* call() แจ้ง error ให้ผู้ใช้แล้ว */ }
       renderApprovalsView();
     }
@@ -7084,6 +7101,33 @@
         </tr>`;
       }).join('')
         : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบล้างแอร์ที่รอคุณอนุมัติ</td></tr>';
+
+      // 4) ใบติดตั้งที่ถึงขั้นของบัญชีนี้ — กติกาเดียวกับใบซ่อม/ใบล้าง แยกตาราง
+      const installTb = document.querySelector('#apvInstallTable tbody');
+      if (!installTb) return;
+      const installs = (currentInstallForms || []).filter(f => f.Approval && f.Approval.canApprove);
+      installTb.innerHTML = installs.length ? installs.map(f => {
+        const codes = [f.AirCode1, f.AirCode2].filter(c => String(c || '').trim());
+        const docNo = f.DocNo || f.DocNo2 || f.ID;   // ติดตั้งเฉพาะเครื่องที่ 2 เลขอยู่ DocNo2
+        return `
+        <tr class="hover:bg-teal-50/40 align-top">
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(docNo)}</td>
+          <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
+          <td class="px-4 py-3">${codes.map(apvCodeBtn).join('<br>') || '-'}</td>
+          <td class="px-4 py-3">${esc(f.NodeName)}</td>
+          <td class="px-4 py-3">${esc(f.CompanyName || f.TechnicianName) || '-'}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดูก่อนอนุมัติ"
+              class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+            <button onclick="approveDocRow('install', '${jsStr(f.ID)}', '${jsStr(docNo)}')"
+              title="อนุมัติขั้น ${f.Approval.next}/4"
+              class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
+              <i class="ph ph-check"></i> อนุมัติขั้น ${f.Approval.next}</button>
+          </td>
+        </tr>`;
+      }).join('')
+        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบติดตั้งที่รอคุณอนุมัติ</td></tr>';
     }
 
     /**
