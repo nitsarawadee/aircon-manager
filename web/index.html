@@ -2367,6 +2367,7 @@
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
               <!-- มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
+              <div class="space-y-4">
               <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                 <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
                   <i class="ph ph-calendar-check text-[#1153a1]"></i> งานล้างของฉัน
@@ -2377,6 +2378,14 @@
                     class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
                 </div>
                 <div id="mjList" class="space-y-2"></div>
+              </div>
+              <!-- งานซ่อม/ติดตั้งที่มอบหมาย — กล่องแยกใต้งานล้าง แบ่งเดือนแบบเดียวกัน (เจ้าของงานเลือก) -->
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
+                  <i class="ph ph-wrench text-[#f47920]"></i> งานซ่อมและติดตั้ง
+                </h3>
+                <div id="mjWorkList" class="space-y-2"></div>
+              </div>
               </div>
               <div id="myWorkCalendar" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>
             </div>`;
@@ -5012,31 +5021,37 @@
      *   5. ค้นหาชื่อ Node หรือรหัสเครื่อง
      * รวมทุกแผน เหมือนปฏิทิน (แผนปีหน้ามักลงนัดตั้งแต่ปลายปีนี้)
      */
-    let mjJobs = [];
+    let mjJobs = [];      // งานล้าง (จากแผน)
+    let mjWork = [];      // งานซ่อม/ติดตั้งที่มอบหมายให้ (getMyJobs · src/modules/assign.js)
     let mjQuery = '';
-    let mjOpen = null;              // เดือนที่เปิดอยู่ (null = ค่าเริ่มต้น)
-    let mjDefaultOpen = new Set();  // เดือนที่เปิดไว้ตั้งต้น — คำนวณตอนวาด
-    let mjDoneOpen = false;         // กลุ่ม "ล้างครบแล้ว" ท้ายรายการ
-    const mjShowAll = new Set();    // กลุ่มที่กดแสดงครบแล้ว
+    // สถานะพับ/เปิดแยกของแต่ละกล่อง — clean = งานล้าง · work = งานซ่อมและติดตั้ง
+    const mjView = {
+      clean: { open: null, defaultOpen: new Set(), doneOpen: false, showAll: new Set() },
+      work: { open: null, defaultOpen: new Set(), doneOpen: false, showAll: new Set() }
+    };
     const MJ_PER_MONTH = 10;
     // ชื่อเดือนเต็มใช้ TH_MONTHS ของปฏิทิน (ประกาศไว้ด้านบน)
     const TH_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
     async function loadMyJobs() {
       if (!document.getElementById('mjList')) return;
-      // ปฏิทิน: เปิดครั้งแรกที่เดือนปัจจุบัน ครั้งต่อไปคงเดือนที่เลื่อนดูอยู่
-      if (calTarget === 'myWorkCalendar') renderPlanCalendar();
-      else openPlanCalendar(null, null, 'myWorkCalendar');
+      let ok = true;
       try {
         const years = ((await call('getPlanYears')) || []).map(n => String(n).replace('Plan_', ''));
-        const [plans, forms] = await Promise.all([
+        const [plans, forms, work] = await Promise.all([
           Promise.all(years.map(y => call('getCleaningPlan', y))),
-          call('getCleaningForms')
+          call('getCleaningForms'),
+          call('getMyJobs')
         ]);
         if (Array.isArray(forms)) currentCleaningForms = forms;
         mjJobs = years.flatMap((y, i) => buildMyJobs(y, Array.isArray(plans[i]) ? plans[i] : []));
-      } catch (e) { return; }
-      renderMyJobs();
+        mjWork = Array.isArray(work) ? work : [];
+      } catch (e) { ok = false; }
+      if (ok) renderMyJobs();
+      // ปฏิทินวาดหลังได้งานซ่อม/ติดตั้งแล้ว เพราะปฏิทินของผู้รับเหมาใส่นัดพวกนี้ด้วย (ดู renderPlanCalendar)
+      // เปิดครั้งแรกที่เดือนปัจจุบัน ครั้งต่อไปคงเดือนที่เลื่อนดูอยู่
+      if (calTarget === 'myWorkCalendar') renderPlanCalendar();
+      else openPlanCalendar(null, null, 'myWorkCalendar');
     }
 
     /** งานของผู้รับเหมาในแผนปีหนึ่ง รวมเป็นรายนัด (Node + รอบ) */
@@ -5073,45 +5088,65 @@
     }
 
     function renderMyJobs() {
-      const box = document.getElementById('mjList');
-      if (!box) return;
       const q = mjQuery.trim().toLowerCase();
-      const hit = j => !q || [j.node, j.site, ...j.units.map(u => u.code)].some(t => String(t || '').toLowerCase().includes(q));
+      const has = list => !q || list.some(t => String(t || '').toLowerCase().includes(q));
       const byNode = (a, b) => String(a.node).localeCompare(String(b.node), 'th') || a.round - b.round;
+      // เรียงวันจากน้อยไปมาก วันว่างไว้ท้าย
+      const byDateAsc = (da, db) => (!da) - (!db) || String(da).localeCompare(String(db));
 
-      // ต้องทำ: นัดใกล้สุดก่อน ยังไม่ลงวันไว้ท้าย
-      const todo = mjJobs.filter(j => j.pending && hit(j)).sort((a, b) =>
-        (!a.planDate) - (!b.planDate) || String(a.planDate).localeCompare(String(b.planDate)) || byNode(a, b));
-      // ล้างครบแล้ว: ล่าสุดก่อน
-      const done = mjJobs.filter(j => !j.pending && hit(j)).sort((a, b) =>
+      // ---- งานล้าง ----
+      const cleanHit = j => has([j.node, j.site, ...j.units.map(u => u.code)]);
+      const todo = mjJobs.filter(j => j.pending && cleanHit(j)).sort((a, b) => byDateAsc(a.planDate, b.planDate) || byNode(a, b));
+      const done = mjJobs.filter(j => !j.pending && cleanHit(j)).sort((a, b) =>
         String(b.doneDate).localeCompare(String(a.doneDate)) || byNode(a, b));
+      renderJobBox('clean', 'mjList', todo, done, j => j.planDate, myJobRow, 'ล้างครบแล้ว', 'ไม่มีงานล้างที่ต้องทำ');
+
+      // ---- งานซ่อม/ติดตั้ง ----
+      const workHit = w => has([w.unit.NodeName, w.unit.SiteCode, w.unit.AirCode]);
+      const byWorkNode = (a, b) => String(a.unit.NodeName).localeCompare(String(b.unit.NodeName), 'th');
+      const wTodo = mjWork.filter(w => w.state === 'open' && workHit(w)).sort((a, b) => byDateAsc(a.apptDate, b.apptDate) || byWorkNode(a, b));
+      const wDone = mjWork.filter(w => w.state === 'done' && workHit(w)).sort((a, b) =>
+        String((b.doc && b.doc.date) || '').localeCompare(String((a.doc && a.doc.date) || '')) || byWorkNode(a, b));
+      renderJobBox('work', 'mjWorkList', wTodo, wDone, w => w.apptDate, myWorkRow, 'เสร็จแล้ว', 'ไม่มีงานซ่อมหรือติดตั้งที่ต้องทำ');
+    }
+
+    /**
+     * วาดกล่องรายการหนึ่งกล่อง: แบ่งเดือนตามวันนัด (เดือนนี้และเดือนที่เลยกำหนดเปิดไว้ เดือนถัดไปพับ)
+     * เดือนละ 10 งาน ที่เหลือกดแสดงเพิ่ม · งานที่เสร็จแล้วพับไว้ท้ายกล่อง
+     * @param {'clean'|'work'} which กล่องไหน — เก็บสถานะพับ/เปิดแยกกัน
+     */
+    function renderJobBox(which, boxId, todo, done, todoDate, rowFn, doneLabel, emptyText) {
+      const box = document.getElementById(boxId);
+      if (!box) return;
+      const st = mjView[which];
+      const q = mjQuery.trim();
 
       const groups = [];
       for (const j of todo) {
-        const key = j.planDate ? j.planDate.slice(0, 7) : 'none';
+        const d = todoDate(j);
+        const key = d ? String(d).slice(0, 7) : 'none';
         let g = groups[groups.length - 1];
         if (!g || g.key !== key) groups.push(g = { key, jobs: [] });
         g.jobs.push(j);
       }
-      // เดือนนี้เปิดไว้ รวมถึงเดือนที่เลยมาแล้วแต่ยังค้าง (งานเลยกำหนด ต้องเห็น) · ไม่มีเลยก็เปิดเดือนแรก
       const t = new Date();
       const thisMonth = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
-      mjDefaultOpen = new Set(groups.filter(g => g.key !== 'none' && g.key <= thisMonth).map(g => g.key));
-      if (!mjDefaultOpen.size && groups.length) mjDefaultOpen.add(groups[0].key);
-      const isOpen = key => !!q || (mjOpen || mjDefaultOpen).has(key);
+      st.defaultOpen = new Set(groups.filter(g => g.key !== 'none' && g.key <= thisMonth).map(g => g.key));
+      if (!st.defaultOpen.size && groups.length) st.defaultOpen.add(groups[0].key);
+      const isOpen = key => !!q || (st.open || st.defaultOpen).has(key);
 
       const monthLabel = key => key === 'none' ? 'ยังไม่ลงวันนัด'
         : TH_MONTHS[Number(key.slice(5, 7)) - 1] + ' ' + key.slice(0, 4) + (key < thisMonth ? ' · เลยกำหนด' : '');
       const listOf = (key, jobs) => {
-        const limit = mjShowAll.has(key) ? jobs.length : MJ_PER_MONTH;
+        const limit = st.showAll.has(key) ? jobs.length : MJ_PER_MONTH;
         const more = jobs.length - limit;
         return `
           <div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
-            ${jobs.slice(0, limit).map(myJobRow).join('')}
-            ${more > 0 ? `<button onclick="mjShowMore('${jsStr(key)}')" class="w-full py-2 text-xs text-[#1153a1] hover:bg-blue-50/50 font-medium">แสดงอีก ${more} งาน</button>` : ''}
+            ${jobs.slice(0, limit).map(rowFn).join('')}
+            ${more > 0 ? `<button onclick="mjShowMore('${jsStr(which)}', '${jsStr(key)}')" class="w-full py-2 text-xs text-[#1153a1] hover:bg-blue-50/50 font-medium">แสดงอีก ${more} งาน</button>` : ''}
           </div>`;
       };
-      const header = (key, label, count, open, onclick, tone = 'text-gray-600') => `
+      const header = (label, count, open, onclick, tone) => `
         <button onclick="${onclick}" class="w-full flex items-center gap-1.5 text-xs font-semibold ${tone} px-1 py-1 hover:text-gray-900">
           <i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'}"></i>${esc(label)}
           <span class="font-normal text-gray-400">· ${count} งาน</span>
@@ -5120,28 +5155,32 @@
       let html = groups.map(g => {
         const open = isOpen(g.key);
         const late = g.key !== 'none' && g.key < thisMonth;
-        return `<div>${header(g.key, monthLabel(g.key), g.jobs.length, open, `mjToggleMonth('${jsStr(g.key)}')`, late ? 'text-rose-600' : 'text-gray-600')}
+        return `<div>${header(monthLabel(g.key), g.jobs.length, open, `mjToggleMonth('${jsStr(which)}', '${jsStr(g.key)}')`, late ? 'text-rose-600' : 'text-gray-600')}
           ${open ? listOf(g.key, g.jobs) : ''}</div>`;
       }).join('');
       if (!todo.length) {
         html = `<div class="px-3 py-6 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
-          ${q ? 'ไม่พบงานที่ค้นหา' : 'ไม่มีงานที่ต้องทำ'}</div>`;
+          ${q ? 'ไม่พบงานที่ค้นหา' : esc(emptyText)}</div>`;
       }
       if (done.length) {
-        const open = mjDoneOpen || !!q;
-        html += `<div class="pt-1 border-t border-gray-100">${header('done', 'ล้างครบแล้ว', done.length, open, 'mjToggleDone()', 'text-emerald-700')}
+        const open = st.doneOpen || !!q;
+        html += `<div class="pt-1 border-t border-gray-100">${header(doneLabel, done.length, open, `mjToggleDone('${jsStr(which)}')`, 'text-emerald-700')}
           ${open ? listOf('done', done) : ''}</div>`;
       }
       box.innerHTML = html;
     }
 
-    /** แถวของนัดหนึ่ง (กล่องข้างปฏิทินแคบ — วางเรียงลงล่าง) */
+    /** ช่องวันที่ด้านซ้ายของแถว */
+    function jobDateBox(d) {
+      return d
+        ? `<div class="text-lg font-bold text-gray-800 leading-none">${Number(String(d).slice(8, 10))}</div>
+           <div class="text-[10px] text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(String(d).slice(5, 7)) - 1]}</div>`
+        : `<div class="text-base font-bold text-gray-300 leading-none">—</div><div class="text-[10px] text-gray-400 mt-1">ยังไม่นัด</div>`;
+    }
+
+    /** แถวของนัดล้างหนึ่งนัด (กล่องข้างปฏิทินแคบ — วางเรียงลงล่าง) */
     function myJobRow(j) {
       const d = j.pending ? j.planDate : (j.doneDate || j.planDate);
-      const dateBox = d
-        ? `<div class="text-lg font-bold text-gray-800 leading-none">${Number(d.slice(8, 10))}</div>
-           <div class="text-[10px] text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(d.slice(5, 7)) - 1]}</div>`
-        : `<div class="text-base font-bold text-gray-300 leading-none">—</div><div class="text-[10px] text-gray-400 mt-1">ยังไม่นัด</div>`;
       // รหัสเต็มยาว (ATG-PMK-AIR-1) ในแถวที่บอก Node อยู่แล้ว เหลือแค่ AIR-1 พอ
       const short = code => String(code).startsWith(j.site + '-') ? String(code).slice(j.site.length + 1) : String(code);
       const chips = j.units.map(u => {
@@ -5158,11 +5197,46 @@
       }).join('');
       return `
         <div class="flex gap-3 px-3 py-2.5">
-          <div class="w-9 text-center flex-shrink-0 pt-0.5">${dateBox}</div>
+          <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-gray-800 truncate">${esc(j.node)}</div>
             <div class="text-[11px] text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}</div>
             <div class="flex flex-wrap gap-1 mt-1.5">${chips}</div>
+          </div>
+        </div>`;
+    }
+
+    /** แถวของงานซ่อม/ติดตั้งหนึ่งงาน */
+    function myWorkRow(w) {
+      const u = w.unit;
+      const d = w.state === 'open' ? w.apptDate : ((w.doc && w.doc.date) || w.apptDate);
+      const install = w.kind === 'install';
+      const tag = install
+        ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-50 text-teal-700 border border-teal-200">ติดตั้ง</span>'
+        : '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">ซ่อม</span>';
+      const short = String(u.AirCode).startsWith(u.SiteCode + '-') ? String(u.AirCode).slice(String(u.SiteCode).length + 1) : String(u.AirCode);
+      let chip = '';
+      if (w.state === 'open') {
+        chip = `<button onclick="openMyWorkForm('${jsStr(w.kind)}', '${jsStr(u.AirCode)}')" title="${install ? 'กรอกใบติดตั้ง' : 'กรอกใบซ่อม'}ของ ${esc(u.AirCode)}"
+          class="px-2 py-0.5 rounded-md text-[11px] font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
+          <i class="ph ph-pencil-simple"></i>${esc(short)} · ${install ? 'กรอกใบติดตั้ง' : 'กรอกใบซ่อม'}</button>`;
+      } else if (w.doc) {
+        const cls = w.doc.waiting ? 'bg-blue-50 text-[#1153a1] border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        const label = esc(w.doc.docNo) + (w.doc.waiting ? ' รออนุมัติ' : ' เสร็จ');
+        chip = install
+          ? `<button onclick="openInstallDoc(${Number(w.doc.row)}, '${jsStr(w.doc.id)}')" title="เปิดใบติดตั้ง"
+               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
+          : `<button onclick="openRepairDoc(${Number(w.doc.row)}, '${jsStr(w.doc.id)}')" title="เปิดใบซ่อม"
+               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`;
+      }
+      return `
+        <div class="flex gap-3 px-3 py-2.5">
+          <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-gray-800 truncate flex items-center gap-1.5">${tag}<span class="truncate">${esc(u.NodeName)}</span></div>
+            <div class="text-[11px] text-gray-500">${esc(u.SiteCode)} · ${esc(short)}</div>
+            ${w.state === 'open' && w.note ? `<div class="text-[11px] text-amber-700 mt-0.5">หมายเหตุ: ${esc(w.note)}</div>` : ''}
+            <div class="flex flex-wrap gap-1 mt-1.5">${chip}</div>
           </div>
         </div>`;
     }
@@ -5184,16 +5258,25 @@
       openCleaningFormModal({ airCode: code, year: String(year), round: Number(round), price: (u && u.price) || '', technician: '' });
     }
 
+    /** กรอกใบซ่อม/ใบติดตั้งของงานที่มอบหมาย — ฟอร์มตัวเดียวกับที่เจ้าหน้าที่ใช้ (เซิร์ฟเวอร์ตรวจว่างานเป็นของเราจริง) */
+    function openMyWorkForm(kind, code) {
+      const w = mjWork.find(x => x.kind === kind && x.state === 'open' && sameCode(x.unit.AirCode, code));
+      if (!w) { showToast('งานนี้ปิดไปแล้ว หรือไม่ได้มอบหมายให้คุณแล้ว', 'error'); loadMyJobs(); return; }
+      if (kind === 'install') openInstallFormFor(code);
+      else openRepairForm(code, w.unit.Note || '', null, w.unit);
+    }
+
     function mjSetQuery(v) { mjQuery = v || ''; renderMyJobs(); }
-    function mjShowMore(key) { mjShowAll.add(key); renderMyJobs(); }
-    function mjToggleDone() { mjDoneOpen = !mjDoneOpen; renderMyJobs(); }
-    function mjToggleMonth(key) {
+    function mjShowMore(which, key) { mjView[which].showAll.add(key); renderMyJobs(); }
+    function mjToggleDone(which) { mjView[which].doneOpen = !mjView[which].doneOpen; renderMyJobs(); }
+    function mjToggleMonth(which, key) {
       // ครั้งแรกที่กด เริ่มจากสถานะที่เห็นอยู่ แล้วสลับเดือนที่กด
-      if (!mjOpen) mjOpen = new Set(mjDefaultOpen);
-      if (mjOpen.has(key)) mjOpen.delete(key); else mjOpen.add(key);
+      const st = mjView[which];
+      if (!st.open) st.open = new Set(st.defaultOpen);
+      if (st.open.has(key)) st.open.delete(key); else st.open.add(key);
       renderMyJobs();
     }
-    Object.assign(window, { openMyJobForm, mjSetQuery, mjShowMore, mjToggleDone, mjToggleMonth });
+    Object.assign(window, { openMyJobForm, openMyWorkForm, mjSetQuery, mjShowMore, mjToggleDone, mjToggleMonth });
 
     let calTarget = null;
 
@@ -5249,6 +5332,27 @@
       }
       if (!cal) { root.innerHTML = shell('<div class="py-16 text-center text-gray-400">ไม่มีสิทธิ์ดูแผนล้างแอร์</div>'); return; }
 
+      // ปฏิทินในหน้าตารางงานของผู้รับเหมา: ใส่นัดงานซ่อม/ติดตั้งที่มอบหมายไว้ด้วย (เจ้าของงานขอ)
+      // ข้อมูลมาจาก getMyJobs ที่ loadMyJobs โหลดไว้แล้ว · งานพวกนี้ไม่มีแผนปี/รอบ ใช้ kind บอกชนิดแทน
+      const withWork = calTarget === 'myWorkCalendar' && isContractor();
+      if (withWork) {
+        cal.days = cal.days || {};
+        const prefix = calYear + '-' + String(calMonth).padStart(2, '0') + '-';
+        for (const w of mjWork) {
+          if (!w.apptDate || !String(w.apptDate).startsWith(prefix)) continue;
+          const day = Number(String(w.apptDate).slice(8, 10));
+          (cal.days[day] = cal.days[day] || []).push({
+            AirCode: w.unit.AirCode, NodeName: w.unit.NodeName, kind: w.kind,
+            state: w.state === 'open' ? 'pending' : 'done',
+            actualDate: w.doc ? w.doc.date : ''
+          });
+          cal.total = (cal.total || 0) + 1;
+        }
+      }
+      const KIND_DOT = { repair: 'bg-rose-500', install: 'bg-teal-600' };
+      const KIND_LABEL = { repair: 'งานซ่อม', install: 'งานติดตั้ง' };
+      const dotOf = it => (it.kind ? KIND_DOT[it.kind] : null) || { done: 'bg-emerald-500', pending: 'bg-[#1153a1]', cancelled: 'bg-gray-300' }[it.state] || 'bg-gray-300';
+
       const first = new Date(calYear, calMonth - 1, 1);
       const daysInMonth = new Date(calYear, calMonth, 0).getDate();
       const lead = first.getDay();   // ช่องว่างก่อนวันที่ 1 เพื่อให้ตรงคอลัมน์วัน
@@ -5296,11 +5400,11 @@
             ${/* มือถือช่องแคบเกินกว่าจะอ่านรหัสเครื่องได้ (เหลือแค่ "A..") จึงแสดงจุดสีตามสถานะแทน
                  กดที่วันแล้วได้รายการเต็มเหมือนเดิม */ ''}
             <div class="flex flex-wrap gap-0.5 sm:hidden">${items.map(it =>
-              `<span class="w-1.5 h-1.5 rounded-full ${dot[it.state] || 'bg-gray-300'}"></span>`).join('')}</div>
+              `<span class="w-1.5 h-1.5 rounded-full ${dotOf(it)}"></span>`).join('')}</div>
             ${shown.map(it => `
               <div class="hidden sm:flex items-center gap-1.5 text-[11px] leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
-                   title="${esc(it.AirCode)} · แผนปี ${esc(it.planYear || '-')} รอบที่ ${it.round}">
-                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[it.state] || 'bg-gray-300'}"></span>
+                   title="${esc(it.AirCode)} · ${it.kind ? esc(KIND_LABEL[it.kind]) : 'แผนปี ' + esc(it.planYear || '-') + ' รอบที่ ' + it.round}">
+                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotOf(it)}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
                 ${mixedYears && it.planYear ? `<span class="ml-auto text-[9px] text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
               </div>`).join('')}
@@ -5311,7 +5415,8 @@
       const legend = [
         ['bg-[#1153a1]', 'ยังไม่ได้ล้าง'],
         ['bg-emerald-500', 'ล้างเสร็จแล้ว'],
-        ['bg-gray-300', 'ยกเลิก']
+        ['bg-gray-300', 'ยกเลิก'],
+        ...(withWork ? [[KIND_DOT.repair, KIND_LABEL.repair], [KIND_DOT.install, KIND_LABEL.install]] : [])
       ].map(([c, t]) => `<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${t}</span>`).join('');
 
       root.innerHTML = shell(`
@@ -5402,11 +5507,16 @@
                     <tr class="hover:bg-blue-50/50">
                       <td class="px-5 py-2.5 font-medium whitespace-nowrap">${isContractor() ? esc(it.AirCode) : airCodeBtn(it.AirCode, it.state === 'cancelled' ? 'text-gray-400 line-through hover:text-gray-600 underline decoration-dotted underline-offset-2' : 'text-gray-800 hover:text-[#1153a1] underline decoration-dotted underline-offset-2 font-medium')}</td>
                       <td class="px-4 py-2.5 text-gray-600 truncate max-w-[200px]" title="${esc(it.NodeName)}">${esc(it.NodeName) || '-'}</td>
-                      <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${esc(it.planYear || '-')}</td>
-                      <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
-                      <td class="px-4 py-2.5 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
-                      </td>
+                      ${it.kind
+                        // งานซ่อม/ติดตั้งที่มอบหมาย (ปฏิทินของผู้รับเหมา) — ไม่มีแผนปี/รอบ
+                        ? `<td colspan="2" class="px-4 py-2.5 whitespace-nowrap"><span class="text-xs font-semibold ${it.kind === 'install' ? 'text-teal-700' : 'text-rose-700'}">${it.kind === 'install' ? 'งานติดตั้ง' : 'งานซ่อม'}</span></td>
+                           <td class="px-4 py-2.5 whitespace-nowrap">
+                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${it.state === 'done' ? chip.done : chip.pending}">${it.state === 'done' ? 'กรอกเอกสารแล้ว' : 'ยังไม่ได้ทำ'}</span></td>`
+                        : `<td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${esc(it.planYear || '-')}</td>
+                           <td class="px-4 py-2.5 text-gray-500 whitespace-nowrap">${it.round}</td>
+                           <td class="px-4 py-2.5 whitespace-nowrap">
+                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${chip[it.state] || chip.pending}">${label[it.state] || '-'}</span>
+                           </td>`}
                       <td class="px-5 py-2.5 text-gray-500 whitespace-nowrap">${it.actualDate ? esc(fmtDate(it.actualDate)) : '-'}</td>
                     </tr>`).join('')}
                 </tbody>
@@ -7075,7 +7185,7 @@
      */
     async function loadRepair() {
       try {
-        const [air, hist] = await Promise.all([call('getAirList'), call('getHistory', null), loadRepairLinks()]);
+        const [air, hist] = await Promise.all([call('getAirList'), call('getHistory', null), loadRepairLinks(), loadJobAssignments()]);
         if (Array.isArray(air)) currentAirList = air;
         if (Array.isArray(hist)) currentHistory = hist;
       } catch (e) { /* call() แจ้ง error ให้ผู้ใช้แล้ว */ }
@@ -7194,6 +7304,8 @@
         return;
       }
       const JOB = { 'ติดตั้ง': 'ติดตั้งเครื่องใหม่', 'เปลี่ยนเครื่อง': 'เปลี่ยนเครื่อง / ย้ายเครื่องมาแทน' };
+      // มอบหมาย/ส่งลิงก์ให้ผู้รับเหมา — เจ้าหน้าที่ที่แก้เอกสารติดตั้งได้ (เซิร์ฟเวอร์ตรวจซ้ำ)
+      const canHandOut = isStaff() && docLevel('install') === 'edit';
       tb.innerHTML = list.map(h => {
         const u = unitOf(h);
         const ev = String(h.EventType || '').trim();
@@ -7209,10 +7321,20 @@
           <td class="px-4 py-3">
             <span class="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">${esc(JOB[ev] || ev)}</span>
           </td>
-          <td class="px-4 py-3 text-right">
-            <button onclick="openInstallFormFor('${jsStr(h.AirCode)}')"
-              class="text-white bg-teal-700 hover:bg-teal-800 px-3 py-1.5 rounded-lg transition shadow-sm text-xs font-medium inline-flex items-center gap-1">
-              <i class="ph ph-file-text"></i> กรอกเอกสารติดตั้ง</button>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <div class="inline-flex flex-wrap gap-1.5 justify-end">
+              <button onclick="openInstallFormFor('${jsStr(h.AirCode)}')"
+                class="text-white bg-teal-700 hover:bg-teal-800 px-3 py-1.5 rounded-lg transition shadow-sm text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-file-text"></i> กรอกเอกสารติดตั้ง</button>
+              ${canHandOut ? `
+              <button onclick="openRepairLinkModal('${jsStr(h.AirCode)}', null, 'install')"
+                class="text-[#f47920] hover:text-white hover:bg-[#f47920] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] bg-white text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-link"></i> ส่งลิงก์</button>
+              <button onclick="openAssignModal('install', '${jsStr(h.AirCode)}')"
+                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                <i class="ph ph-user-check"></i> มอบหมาย</button>` : ''}
+            </div>
+            ${assignBadge('install', h.AirCode)}${repairLinkBadge(h.AirCode, 'install')}
           </td>
         </tr>`;
       }).join('');
@@ -7331,6 +7453,10 @@
                 actions.push(`<button onclick="openRepairLinkModal('${jsStr(a.AirCode)}')"
                   class="text-[#f47920] hover:text-white hover:bg-[#f47920] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#f47920] bg-white text-xs font-medium inline-flex items-center gap-1">
                   <i class="ph ph-link"></i> ส่งลิงก์</button>`);
+                // ผู้รับเหมาประจำ (มีบัญชี) — กรอกในบัญชีตัวเอง ไม่ต้องใช้ลิงก์
+                actions.push(`<button onclick="openAssignModal('repair', '${jsStr(a.AirCode)}')"
+                  class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                  <i class="ph ph-user-check"></i> มอบหมาย</button>`);
               }
             }
             if (status === 'ชำรุด' || status === 'รอซ่อม') {
@@ -7362,7 +7488,7 @@
                   <button onclick="viewAirHistory('${jsStr(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
                   ${actions.join('')}
                 </div>
-                ${String(a.Status || '').trim() === 'รอซ่อม' ? repairLinkBadge(a.AirCode) : ''}
+                ${String(a.Status || '').trim() === 'รอซ่อม' ? assignBadge('repair', a.AirCode) + repairLinkBadge(a.AirCode) : ''}
               </td>
             </tr>`;
           }).join('');
@@ -9771,9 +9897,11 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เปิดจากหน้างานซ่อม (ปุ่ม "ปิดงาน + ออกเอกสาร") จึงรู้เครื่องมาแล้วเสมอ
    * ข้อมูลเครื่องที่เหลือฝั่งเซิร์ฟเวอร์ดึงจากทะเบียนเอง จะได้ไม่มีสองความจริง
    */
-  async function openRepairForm(airCode, symptom, link) {
+  async function openRepairForm(airCode, symptom, link, unitOverride) {
     // โหมดลิงก์: ข้อมูลเครื่องมาจากลิงก์ เพราะคนถือลิงก์ไม่ได้ล็อกอิน ไม่มีรายการเครื่องในมือ
-    const found = link ? link.unit : (currentAirList || []).find(a => String(a.AirCode) === String(airCode));
+    // ผู้รับเหมาประจำ: ข้อมูลเครื่องมาจากงานที่มอบหมาย (unitOverride — ผู้รับเหมาไม่มีสิทธิ์เมนูรายการเครื่อง)
+    const found = link ? link.unit
+      : (unitOverride || (currentAirList || []).find(a => String(a.AirCode) === String(airCode)));
     if (!found) { showToast('ไม่พบข้อมูลเครื่อง ' + airCode, 'error'); return; }
 
     rfUnit = found;
@@ -9863,10 +9991,11 @@ const CLEANING_CHECKLIST_ITEMS = [
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label>
                   <input type="number" id="rf_cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="${field}"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
-                  <input id="rf_company" class="${field}"></div>
+                  ${companyInput('rf_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="rf_tech" class="${field}"></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                <!-- Subcontract ไม่ต้องกรอก — ชื่อผู้ควบคุมงานมาจาก Staff ที่กดอนุมัติ (เหมือนใบล้าง/ใบติดตั้ง) -->
+                <div class="${isContractor() ? 'hidden' : ''}"><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
                   <input id="rf_supervisor" class="${field}"></div>
               </div>`)}
 
@@ -10246,13 +10375,14 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
 
   /** หน้าเต็มจอสำหรับคนถือลิงก์ — ใช้กับทุกสถานะที่ไม่ใช่ฟอร์ม */
-  function repairLinkShell(inner) {
+  function repairLinkShell(inner, kind = 'repair') {
+    const docTitle = kind === 'install' ? 'เอกสารบันทึกผลการติดตั้ง<br>ITEL-FM-NE-006' : 'เอกสารบันทึกผลการซ่อม<br>ITEL-FM-NE-005';
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 bg-slate-50 overflow-y-auto">
         <div class="max-w-lg mx-auto px-4 py-8">
           <div class="flex items-center gap-3 mb-6">
             <img src="/assets/form-logo.png" alt="" class="h-10 w-auto">
-            <div class="text-sm text-gray-500 leading-tight">เอกสารบันทึกผลการซ่อม<br>ITEL-FM-NE-005</div>
+            <div class="text-sm text-gray-500 leading-tight">${docTitle}</div>
           </div>
           ${inner}
         </div>
@@ -10279,6 +10409,17 @@ const CLEANING_CHECKLIST_ITEMS = [
       return;
     } finally { showLoading(false); }
 
+    if (info.state === 'open' && info.kind === 'install') {
+      // ลิงก์ใบติดตั้ง — ฟอร์มติดตั้งตัวเดียวกับที่เจ้าหน้าที่ใช้ ช่องของเครื่องมาจากเซิร์ฟเวอร์ (info.slot/base)
+      const u = info.unit;
+      const node = { NodeName: u.NodeName, SiteCode: u.SiteCode, Province: u.Province, LocationType: u.LocationType };
+      const shown = {
+        AirCode: u.AirCode, Brand: u.Brand, BTU: u.BTU,
+        IndoorSerial: u.IndoorSN, IndoorAsset: u.IndoorAsset, OutdoorSerial: u.OutdoorSN, OutdoorAsset: u.OutdoorAsset
+      };
+      openInstallForm(node, [{ slot: Number(info.slot) || 1, unit: shown }], Number(info.base) || 0, null, { token });
+      return;
+    }
     if (info.state === 'open') {
       openRepairForm(info.unit.AirCode, info.unit.Note, { token, unit: info.unit });
       return;
@@ -10288,7 +10429,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     repairLinkShell(`<div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
       <i class="ph ph-link-break text-4xl text-gray-400"></i>
       <p class="mt-2 font-medium text-gray-700">ลิงก์นี้ใช้ไม่ได้แล้ว</p>
-      <p class="text-sm text-gray-500 mt-1">${esc(info.message || '')}</p></div>`);
+      <p class="text-sm text-gray-500 mt-1">${esc(info.message || '')}</p></div>`, info.kind);
   }
 
   /**
@@ -10297,9 +10438,12 @@ const CLEANING_CHECKLIST_ITEMS = [
    */
   function renderRepairLinkDone(token, info) {
     const have = new Set(info.photos || []);
-    const cells = REPAIR_PHOTO_CAPTIONS.map((cap, i) => {
+    const install = info.kind === 'install';
+    // ใบซ่อมมีเครื่องเดียว (ช่อง 1) · ใบติดตั้งรูปอยู่ช่องของเครื่องในลิงก์
+    const slot = install ? (Number(info.slot) || 1) : 1;
+    const cells = (install ? INSTALL_PHOTO_CAPTIONS : REPAIR_PHOTO_CAPTIONS).map((cap, i) => {
       const index = i + 1;
-      const ok = have.has('1-' + index);
+      const ok = have.has(slot + '-' + index);
       return `
         <button type="button" onclick="repairLinkAddPhoto('${jsStr(token)}', ${index})"
           class="text-left border rounded-lg p-2 ${ok ? 'border-emerald-300 bg-emerald-50' : 'border-dashed border-red-300 bg-red-50/40'}">
@@ -10312,7 +10456,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       <div class="bg-white rounded-xl border border-emerald-200 p-5 mb-4">
         <div class="flex items-center gap-2 text-emerald-700 font-bold"><i class="ph-fill ph-check-circle text-2xl"></i> ส่งเอกสารเรียบร้อยแล้ว</div>
         <p class="text-sm text-gray-600 mt-1">เลขที่เอกสาร <b>${esc(info.docNo)}</b> · ${esc(info.unit.AirCode)} ${esc(info.unit.NodeName)}</p>
-        <p class="text-sm text-gray-600">งานซ่อมนี้ปิดในระบบเรียบร้อยแล้ว</p>
+        <p class="text-sm text-gray-600">${install ? 'งานติดตั้งนี้' : 'งานซ่อมนี้'}ปิดในระบบเรียบร้อยแล้ว</p>
         <button onclick="repairLinkDownloadPdf('${jsStr(token)}')"
           class="mt-4 w-full px-4 py-3 text-base font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] flex items-center justify-center gap-2">
           <i class="ph ph-file-pdf text-lg"></i> ดาวน์โหลดไฟล์ PDF</button>
@@ -10326,7 +10470,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="grid grid-cols-3 gap-2">${cells}</div>
         <input type="file" id="rl_photoFile" accept="image/*" class="hidden">
       </div>
-      <p class="text-[11px] text-gray-400 text-center mt-4">ลิงก์นี้ใช้เพิ่มรูปและดาวน์โหลด PDF ได้ถึง ${esc(fmtDate(String(info.readableUntil || '').slice(0, 10)))}</p>`);
+      <p class="text-[11px] text-gray-400 text-center mt-4">ลิงก์นี้ใช้เพิ่มรูปและดาวน์โหลด PDF ได้ถึง ${esc(fmtDate(String(info.readableUntil || '').slice(0, 10)))}</p>`, info.kind);
   }
 
   function repairLinkAddPhoto(token, index) {
@@ -10362,22 +10506,106 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   /* ============== ลิงก์กรอกเอกสารซ่อม (ฝั่งเจ้าหน้าที่) ============== */
 
-  /** ลิงก์ล่าสุดของแต่ละเครื่อง (ไม่มีรหัส — รหัสเห็นได้ครั้งเดียวตอนสร้าง) */
+  /**
+   * ลิงก์ล่าสุดของแต่ละงาน (ไม่มีรหัส — รหัสเห็นได้ครั้งเดียวตอนสร้าง)
+   * คีย์ = "ชนิด|รหัสเครื่อง" — เครื่องเดียวกันมีทั้งลิงก์ใบซ่อมและลิงก์ใบติดตั้งได้ (ลิงก์เก่า Kind ว่าง = ซ่อม)
+   */
   let repairLinksByCode = {};
+  const linkKey = (kind, airCode) => (kind || 'repair') + '|' + airCode;
 
   async function loadRepairLinks() {
-    if (!isStaff() || docLevel('repair') !== 'edit') { repairLinksByCode = {}; return; }
+    if (!isStaff() || (docLevel('repair') !== 'edit' && docLevel('install') !== 'edit')) { repairLinksByCode = {}; return; }
     try {
       const list = (await callQuiet('getRepairLinks')) || [];
       repairLinksByCode = {};
-      // ใหม่ก่อนมาจากเซิร์ฟเวอร์ ตัวแรกที่เจอของแต่ละเครื่องจึงเป็นตัวล่าสุด
-      for (const l of list) if (!repairLinksByCode[l.AirCode]) repairLinksByCode[l.AirCode] = l;
+      // ใหม่ก่อนมาจากเซิร์ฟเวอร์ ตัวแรกที่เจอของแต่ละงานจึงเป็นตัวล่าสุด
+      for (const l of list) {
+        const k = linkKey(l.Kind, l.AirCode);
+        if (!repairLinksByCode[k]) repairLinksByCode[k] = l;
+      }
     } catch (e) { repairLinksByCode = {}; }
   }
 
+  /* ---------- มอบหมายงานซ่อม/ติดตั้งให้ผู้รับเหมาประจำ (ดู src/modules/assign.js) ---------- */
+
+  /** การมอบหมายที่ยังมีผล คีย์ = "ชนิด|รหัสเครื่อง" */
+  let jobAssignments = {};
+
+  async function loadJobAssignments() {
+    if (!isStaff()) { jobAssignments = {}; return; }
+    try {
+      const list = (await callQuiet('getJobAssignments')) || [];
+      jobAssignments = {};
+      for (const a of list) jobAssignments[linkKey(a.kind, a.airCode)] = a;
+    } catch (e) { jobAssignments = {}; }
+  }
+
+  /** ป้ายใต้ปุ่ม: มอบหมายให้ใคร นัดวันไหน */
+  function assignBadge(kind, airCode) {
+    const a = jobAssignments[linkKey(kind, airCode)];
+    if (!a) return '';
+    return `<div class="text-[11px] text-gray-500 mt-1 text-right"><i class="ph ph-user-check"></i> มอบหมาย: ${esc(a.contractorName)}${a.apptDate ? ' · นัด ' + esc(fmtDate(a.apptDate)) : ' · ยังไม่นัดวัน'}</div>`;
+  }
+
+  /** หน้าต่างมอบหมายงาน — เลือกผู้รับเหมา (ที่มีบัญชี) + วันนัด + หมายเหตุ */
+  async function openAssignModal(kind, airCode) {
+    if (!contractorList.length) await loadContractorList();
+    const a = jobAssignments[linkKey(kind, airCode)];
+    const unit = (currentAirList || []).find(u => String(u.AirCode) === String(airCode)) || { AirCode: airCode };
+    const title = kind === 'install' ? 'มอบหมายงานติดตั้ง' : 'มอบหมายงานซ่อม';
+    const field = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
+    document.getElementById('modalRoot').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-user-check text-[#1153a1]"></i> ${title}</h3>
+              <p class="text-xs text-gray-500">${esc(unit.AirCode)} · ${esc(unit.NodeName || '')}</p>
+            </div>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้รับเหมา <span class="text-red-500">*</span></label>
+              ${contractorSelect('as_ct', a ? a.contractorId : '', field)}</div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">วันนัด</label>
+              ${dateField('as_date', a ? a.apptDate : '', field)}</div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุถึงผู้รับเหมา</label>
+              <input id="as_note" value="${esc(a ? a.note : '')}" placeholder="เช่น เข้าหน้างานหลังบ่ายสอง" class="${field}"></div>
+            <p class="text-xs text-gray-500">ผู้รับเหมาเห็นงานนี้ในหน้าตารางงานของตัวเอง และกรอกเอกสารในบัญชีตัวเองได้ · ผู้รับเหมาที่ไม่มีบัญชี ใช้ปุ่ม "ส่งลิงก์" แทน</p>
+          </div>
+          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between gap-3 rounded-b-2xl">
+            <div>${a ? `<button onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', true)" class="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">ยกเลิกการมอบหมาย</button>` : ''}</div>
+            <div class="flex gap-3">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ปิด</button>
+              <button onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', false)" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm">บันทึก</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+  window.openAssignModal = openAssignModal;
+
+  async function saveAssign(kind, airCode, cancel) {
+    const ct = cancel ? '' : (document.getElementById('as_ct') || {}).value || '';
+    if (!cancel && !ct) { showToast('กรุณาเลือกผู้รับเหมา', 'error'); return; }
+    if (cancel && !(await showConfirm('ยกเลิกการมอบหมายงานนี้? ผู้รับเหมาจะกรอกเอกสารงานนี้ในบัญชีตัวเองไม่ได้อีก'))) return;
+    try {
+      const list = await call('assignJob', kind, airCode, ct,
+        cancel ? '' : ((document.getElementById('as_date') || {}).value || ''),
+        cancel ? '' : ((document.getElementById('as_note') || {}).value || ''));
+      jobAssignments = {};
+      for (const a of (list || [])) jobAssignments[linkKey(a.kind, a.airCode)] = a;
+      closeModal();
+      renderRepairView((document.getElementById('repairSearch') || {}).value || '');
+      showToast(cancel ? 'ยกเลิกการมอบหมายแล้ว' : 'มอบหมายงานแล้ว');
+    } catch (e) {}
+  }
+  window.saveAssign = saveAssign;
+
   /** ป้ายสถานะลิงก์ใต้ปุ่มในหน้างานซ่อม */
-  function repairLinkBadge(airCode) {
-    const l = repairLinksByCode[airCode];
+  function repairLinkBadge(airCode, kind = 'repair') {
+    const l = repairLinksByCode[linkKey(kind, airCode)];
     if (!l || l.state === 'revoked') return '';
     const text = {
       open: 'ส่งลิงก์แล้ว · รอกรอก ถึง ' + fmtDate(l.ExpiresAt.slice(0, 10)),
@@ -10417,10 +10645,11 @@ const CLEANING_CHECKLIST_ITEMS = [
    * รหัสลิงก์เห็นได้ครั้งเดียวตอนสร้าง เพราะระบบเก็บแค่แฮช
    * ปิดหน้าต่างไปแล้วอยากได้ลิงก์อีก ต้องสร้างใหม่ (ลิงก์เก่าจะถูกยกเลิกให้)
    */
-  function openRepairLinkModal(airCode, created) {
+  function openRepairLinkModal(airCode, created, kind = 'repair') {
     const unit = (currentAirList || []).find(a => String(a.AirCode) === String(airCode)) || { AirCode: airCode };
-    const l = repairLinksByCode[airCode];
+    const l = repairLinksByCode[linkKey(kind, airCode)];
     const open = l && l.state === 'open';
+    const docName = kind === 'install' ? 'เอกสารติดตั้ง' : 'เอกสารซ่อม';
 
     const body = created ? `
       <p class="text-sm text-gray-600 mb-2">ส่งลิงก์นี้ให้ช่างทางไลน์ได้เลย — คนที่ได้ลิงก์กรอกได้โดยไม่ต้องล็อกอิน</p>
@@ -10438,13 +10667,13 @@ const CLEANING_CHECKLIST_ITEMS = [
     : `
       ${open ? `<div class="text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
           มีลิงก์ที่ยังไม่มีคนกรอก (สร้างโดย ${esc(l.CreatedBy)} · ใช้ได้ถึง ${esc(fmtDate(l.ExpiresAt.slice(0, 10)))})
-          <button onclick="revokeRepairLinkRow('${jsStr(l.ID)}', '${jsStr(airCode)}')" class="block mt-1 text-xs text-red-600 hover:underline">ยกเลิกลิงก์นี้</button>
+          <button onclick="revokeRepairLinkRow('${jsStr(l.ID)}', '${jsStr(airCode)}', '${jsStr(kind)}')" class="block mt-1 text-xs text-red-600 hover:underline">ยกเลิกลิงก์นี้</button>
         </div>` : ''}
       <label class="block text-sm font-medium text-gray-700 mb-1">ลิงก์ใช้ได้กี่วัน</label>
       <select id="rl_days" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none">
         <option value="3">3 วัน</option><option value="7" selected>7 วัน</option><option value="14">14 วัน</option>
       </select>
-      <p class="text-xs text-gray-500 mt-2">คนที่ได้ลิงก์กรอกเอกสารซ่อมของเครื่องนี้ได้โดยไม่ต้องล็อกอิน ส่งได้ครั้งเดียว ส่งแล้วงานนี้ปิดทันที${open ? ' — สร้างใหม่แล้วลิงก์เดิมจะใช้ไม่ได้' : ''}</p>`;
+      <p class="text-xs text-gray-500 mt-2">คนที่ได้ลิงก์กรอก${docName}ของเครื่องนี้ได้โดยไม่ต้องล็อกอิน ส่งได้ครั้งเดียว ส่งแล้วงานนี้ปิดทันที${open ? ' — สร้างใหม่แล้วลิงก์เดิมจะใช้ไม่ได้' : ''}</p>`;
 
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -10452,7 +10681,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 animate-[fadeIn_0.2s_ease]">
           <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
             <div>
-              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-link text-[#f47920]"></i> ลิงก์กรอกเอกสารซ่อม</h3>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-link text-[#f47920]"></i> ลิงก์กรอก${docName}</h3>
               <p class="text-xs text-gray-500">${esc(unit.AirCode)} · ${esc(unit.NodeName || '')}</p>
             </div>
             <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
@@ -10460,19 +10689,19 @@ const CLEANING_CHECKLIST_ITEMS = [
           <div class="p-6">${body}</div>
           <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
             <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">${created ? 'เสร็จแล้ว' : 'ยกเลิก'}</button>
-            ${created ? '' : `<button onclick="createRepairLinkFor('${jsStr(airCode)}')" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-link"></i> ${open ? 'สร้างลิงก์ใหม่' : 'สร้างลิงก์'}</button>`}
+            ${created ? '' : `<button onclick="createRepairLinkFor('${jsStr(airCode)}', '${jsStr(kind)}')" class="px-4 py-2 text-sm font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm"><i class="ph ph-link"></i> ${open ? 'สร้างลิงก์ใหม่' : 'สร้างลิงก์'}</button>`}
           </div>
         </div>
       </div>`;
   }
   window.openRepairLinkModal = openRepairLinkModal;
 
-  async function createRepairLinkFor(airCode) {
+  async function createRepairLinkFor(airCode, kind = 'repair') {
     const days = Number(document.getElementById('rl_days').value) || 7;
     try {
-      const created = await call('createRepairLink', airCode, days);
+      const created = await call('createRepairLink', airCode, days, kind);
       await loadRepairLinks();
-      openRepairLinkModal(airCode, created);
+      openRepairLinkModal(airCode, created, kind);
       renderRepairView((document.getElementById('repairSearch') || {}).value || '');
     } catch (e) {}
   }
@@ -10491,12 +10720,12 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.copyRepairLink = copyRepairLink;
 
-  async function revokeRepairLinkRow(id, airCode) {
+  async function revokeRepairLinkRow(id, airCode, kind = 'repair') {
     if (!(await showConfirm('ยกเลิกลิงก์นี้? คนที่ได้ลิงก์ไปแล้วจะกรอกไม่ได้ทันที'))) return;
     try {
       await call('revokeRepairLink', id);
       await loadRepairLinks();
-      openRepairLinkModal(airCode);
+      openRepairLinkModal(airCode, null, kind);
       renderRepairView((document.getElementById('repairSearch') || {}).value || '');
       showToast('ยกเลิกลิงก์แล้ว');
     } catch (e) {}
@@ -10769,13 +10998,17 @@ const CLEANING_CHECKLIST_ITEMS = [
   /** เครื่องใหม่ที่จะเข้าทะเบียนพร้อมเอกสารใบนี้ (null = เครื่องที่อยู่ในทะเบียนแล้ว) */
   let ifNewUnit = null;
 
-  function openInstallForm(node, picked, base = 0, newUnit = null) {
+  /** โหมดลิงก์ (คนถือลิงก์ใบติดตั้ง ไม่ได้ล็อกอิน) — { token } · null = กรอกในระบบ */
+  let ifLink = null;
+
+  function openInstallForm(node, picked, base = 0, newUnit = null, link = null) {
     ifSavedRow = null;   // ใบใหม่ — ไม่ใช่การส่งรูปค้างของใบก่อน
     ifNode = node;
     ifUnits = picked || [];
     ifBase = base;
     ifNewUnit = newUnit;
     ifPhotos = {};
+    ifLink = link ? { token: link.token } : null;
 
     const card = inner => `<section class="bg-white rounded-xl border border-gray-200 p-4">${inner}</section>`;
     const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600';
@@ -10817,10 +11050,11 @@ const CLEANING_CHECKLIST_ITEMS = [
 
         <header class="bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
           <div class="max-w-3xl mx-auto px-3 py-2.5 flex items-center gap-2">
+            ${ifLink ? '<img src="/assets/form-logo.png" alt="" class="h-9 w-auto flex-shrink-0">' : `
             <button onclick="closeInstallForm()" title="ย้อนกลับ"
               class="w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0">
               <i class="ph ph-arrow-left text-xl"></i>
-            </button>
+            </button>`}
             <div class="min-w-0 flex-1">
               <h2 class="font-bold text-gray-800 leading-tight truncate">บันทึกผลการติดตั้ง</h2>
               <p class="text-xs text-gray-500 leading-tight truncate">${esc(node.NodeName)} · ${esc(node.SiteCode || '-')}</p>
@@ -10895,8 +11129,8 @@ const CLEANING_CHECKLIST_ITEMS = [
                   ${companyInput('if_company', field)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
                   <input id="if_tech" class="${field}"></div>
-                <!-- Subcontract ไม่ต้องกรอก — ชื่อผู้ควบคุมงานมาจาก Staff ที่กดอนุมัติ (เหมือนใบล้าง) -->
-                <div class="${isContractor() ? 'hidden' : ''}"><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
+                <!-- Subcontract / คนถือลิงก์ไม่ต้องกรอก — ชื่อผู้ควบคุมงานมาจาก Staff ที่กดอนุมัติ (เหมือนใบล้าง) -->
+                <div class="${isContractor() || ifLink ? 'hidden' : ''}"><label class="block text-sm font-medium text-gray-700 mb-1">ผู้ควบคุมงาน Interlink</label>
                   <input id="if_supervisor" class="${field}"></div>
               </div>`)}
 
@@ -11120,7 +11354,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     for (const key of Object.keys(ifPhotos)) {
       const [slot, index] = key.split('-').map(Number);
       try {
-        await call('saveInstallPhoto', { row, unitSlot: slot, index, dataUrl: ifPhotos[key] });
+        // โหมดลิงก์: ส่งด้วยรหัสลิงก์ (ไม่มีเลขแถว) เซิร์ฟเวอร์ลงช่องของเครื่องในลิงก์เอง
+        if (ifLink) await request('/api/public', { fn: 'saveRepairLinkPhoto', args: [ifLink.token, index, ifPhotos[key]] });
+        else await call('saveInstallPhoto', { row, unitSlot: slot, index, dataUrl: ifPhotos[key] });
         done.push(key);
       } catch (e) { failed.push(key); }
     }
@@ -11141,6 +11377,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!up.failed.length) {
       ifSavedRow = null;
       ifPhotos = {};
+      if (ifLink) { openRepairLinkPage(ifLink.token); return; }
       closeModal();
       renderCleaningFormTable();
       showToast('ส่งรูปครบแล้ว');
@@ -11211,6 +11448,36 @@ const CLEANING_CHECKLIST_ITEMS = [
     const btn = document.getElementById('if_submitBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังบันทึก...';
+
+    // โหมดลิงก์: ส่งผ่านคำสั่งของลิงก์ (เครื่องมาจากลิงก์ ฝั่งเซิร์ฟเวอร์) แล้วส่งรูปตามด้วยรหัสลิงก์
+    if (ifLink) {
+      const slot = ifUnits[0] ? ifUnits[0].slot : 1;
+      const linkRecord = { ...record, AcceptResult: record['AcceptResult' + slot] || '' };
+      let res;
+      try {
+        showLoading(true);
+        res = await request('/api/public', { fn: 'submitInstallLink', args: [ifLink.token, linkRecord] });
+      } catch (e) {
+        showToast(e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร';
+        return;
+      } finally { showLoading(false); }
+
+      const up = await uploadIfPhotos(null);
+      up.done.forEach(k => delete ifPhotos[k]);
+      if (up.failed.length) {
+        ifSavedRow = res.docNo;   // มีค่า = ส่งเอกสารแล้ว ปุ่มกลายเป็นปุ่มส่งรูปซ้ำ
+        renderIfPhotos();
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-arrow-clockwise text-lg"></i> ส่งรูปที่เหลืออีกครั้ง (' + up.failed.length + ' ใบ)';
+        showToast('ส่งเอกสาร ' + res.docNo + ' แล้ว แต่รูปยังส่งไม่ขึ้น ' + up.failed.length +
+                  ' ใบ — กดปุ่มด้านล่างเพื่อส่งซ้ำเมื่อสัญญาณดีขึ้น', 'error');
+        return;
+      }
+      openRepairLinkPage(ifLink.token);
+      return;
+    }
 
     try {
       // เครื่องใหม่: เข้าทะเบียนพร้อมเอกสารในคำสั่งเดียว (พลาด = ไม่มีอะไรถูกบันทึก)
