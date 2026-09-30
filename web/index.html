@@ -3924,7 +3924,18 @@
     function exportAirListCSV() {
       const rows = airLastList || [];
       const filtered = rows.length !== (currentAirList || []).length;
-      exportCSV(rows, 'AirList');
+      // เพิ่มอายุ (ปีเต็ม) ต่อท้ายวันที่ติดตั้ง — คิดจากวันที่ติดตั้ง ณ วันที่โหลด
+      // ใส่แค่ไฟล์รายงานนี้ ไม่ใส่ไฟล์นำเข้า กันคนแก้ตัวเลขอายุแล้วคิดว่าระบบจะเปลี่ยนตาม
+      const withAge = rows.map(r => {
+        const age = unitAge(r.InstallDate);
+        const out = {};
+        for (const k of Object.keys(r)) {
+          out[k] = r[k];
+          if (k === 'InstallDate') out.AgeYears = age && !age.future ? age.years : '';
+        }
+        return out;
+      });
+      exportCSV(withAge, 'AirList');
       if (rows.length && filtered) {
         showToast('ดาวน์โหลด ' + rows.length.toLocaleString() + ' เครื่องตามที่กรองอยู่');
       }
