@@ -36,7 +36,7 @@ import {
   getRepairLink, submitRepairLink, saveRepairLinkPhoto, getRepairLinkPdf,
   createRepairLink, getRepairLinks, revokeRepairLink
 } from './modules/repairlink.js';
-import { approveDoc } from './modules/approval.js';
+import { approveDoc, getApprovalCount } from './modules/approval.js';
 
 /**
  * ============================================================================
@@ -159,7 +159,9 @@ const API_FUNCTIONS = {
   getInstallPhotos,
 
   // ขั้นอนุมัติเอกสาร (ใบล้าง / ซ่อม / ติดตั้ง) — ตรวจบทบาทกับภูมิภาคที่ approval.js
-  approveDoc
+  approveDoc,
+  // ตัวเลขบนเมนูเอกสารรออนุมัติ
+  getApprovalCount
 };
 
 /** คำสั่งที่เรียกได้ก่อนล็อกอิน */

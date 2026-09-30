@@ -322,6 +322,8 @@
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="approvals">
         <i class="ph ph-seal-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>เอกสารรออนุมัติ</span>
+        <!-- จำนวนที่รอให้บัญชีนี้กดอนุมัติ (แบบตัวเลขข้อความใหม่ในไลน์) ดู refreshApprovalBadge -->
+        <span id="apvBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-5 text-center shadow-sm"></span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="cleaningform">
         <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แบบฟอร์มเอกสาร</span>
@@ -1958,6 +1960,7 @@
       btn.addEventListener('click', () => {
         // สิทธิ์อาจถูก Admin เปลี่ยนระหว่างที่เปิดหน้าค้างไว้ (ดู checkPermissionChange)
         checkPermissionChange();
+        refreshApprovalBadge();
         document.querySelectorAll('.tab-btn').forEach(b => {
           b.classList.remove('active', 'bg-gradient-to-r', 'from-blue-50', 'to-orange-50', 'text-[#1153a1]', 'border', 'border-[#f47920]/30', 'shadow-sm');
           b.classList.add('text-slate-500', 'hover:bg-slate-50');
@@ -2145,6 +2148,7 @@
       // ล็อกปุ่มแก้ข้อมูลที่ไม่มีสิทธิ์ ทุกหน้า ทุกครั้งที่ถูกวาด (ดู EDIT_ACTIONS)
       startEditGuard();
       renderUserBadge();
+      startApprovalBadge();
 
       try {
         // ไม่ต้องตั้งค่าปีล่วงหน้าแล้ว ปล่อยให้ loadBudget() ขอปีปัจจุบันจากเซิร์ฟเวอร์
@@ -4308,6 +4312,7 @@
         if (airDetailCode) renderAirDetail();
         showToast('เปลี่ยนสถานะเป็น "' + newStatus + '" แล้ว', 'success');
         loadDashboard();
+        refreshApprovalBadge();   // อนุมัติซ่อม / แจ้งชำรุด เปลี่ยนตัวเลขบนเมนูเอกสารรออนุมัติ
       } catch (e) {}
     }
     window.changeAirStatus = changeAirStatus;
@@ -6203,6 +6208,25 @@
     window.clearHistoryUnitFilter = clearHistoryUnitFilter;
 
     /* ============== เอกสารรออนุมัติ (งานซ่อมที่ Infrastructure ต้องอนุมัติ) ============== */
+
+    /**
+     * ตัวเลขแดงบนเมนูเอกสารรออนุมัติ — จำนวนที่รอให้บัญชีนี้กดอนุมัติ (นับที่เซิร์ฟเวอร์ getApprovalCount)
+     * นับใหม่ตอนเข้าระบบ ตอนเปลี่ยนเมนู หลังกดอนุมัติ และทุก 1 นาที (คนอื่นอนุมัติขั้นก่อนหน้ามาให้เรา)
+     */
+    async function refreshApprovalBadge() {
+      const badge = document.getElementById('apvBadge');
+      if (!badge || !currentUserInfo) return;   // ไม่เห็นงานซ่อม = ไม่มีเมนูนี้
+      let n = 0;
+      try { n = ((await callQuiet('getApprovalCount')) || {}).total || 0; } catch (e) { return; }
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.classList.toggle('hidden', !n);
+    }
+
+    let approvalBadgeTimer = null;
+    function startApprovalBadge() {
+      refreshApprovalBadge();
+      if (!approvalBadgeTimer) approvalBadgeTimer = setInterval(refreshApprovalBadge, 60 * 1000);
+    }
 
     async function loadApprovals() {
       try {
@@ -8466,6 +8490,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     // โหลดใหม่ทั้งแท็บ ทั้งตอนสำเร็จและไม่สำเร็จ — อาจมีคนอื่นกดขั้นนี้ไปก่อนแล้ว
     await loadCleaningForm();
     renderApprovalsView();   // กดจากหน้าเอกสารรออนุมัติ ใบที่อนุมัติแล้วต้องหายไปจากตารางนั้นด้วย
+    refreshApprovalBadge();  // ตัวเลขบนเมนูลดทันที
   }
   window.approveDocRow = approveDocRow;
 

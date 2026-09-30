@@ -187,3 +187,19 @@ test('ใบล้าง: เพิ่มเครื่องเข้าใบ
   assert.equal(after.Approval.next, 2);
   assert.equal(after.Approval.s2.name, '');
 });
+
+test('ตัวเลขบนเมนูเอกสารรออนุมัติ — นับเฉพาะที่ถึงขั้นของบัญชีนั้น · เคสชำรุดนับให้ Infrastructure เท่านั้น', async () => {
+  const { getApprovalCount } = await import('../src/modules/approval.js');
+  const db = freshDb();
+  const form = await newRepair(db);
+  const count = async u => (await getApprovalCount(as(db, u))).total;
+
+  assert.deepEqual([await count('staff'), await count('sup'), await count('reg'), await count('infra')], [1, 0, 0, 0]);
+  await approveDoc(as(db, 'staff'), 'repair', form.ID);
+  assert.deepEqual([await count('staff'), await count('sup'), await count('reg'), await count('infra')], [0, 1, 1, 0]);
+  assert.equal(await count('staff2'), 0, 'นอกภูมิภาคไม่นับ');
+
+  db.exec("UPDATE air_units SET Status = 'ชำรุด' WHERE AirCode = 'AYA-WNI-AIR-1'");
+  assert.deepEqual(await getApprovalCount(as(db, 'infra')), { docs: 0, cases: 1, total: 1 });
+  assert.equal(await count('sup'), 1, 'เคสชำรุดไม่นับให้บทบาทอื่น');
+});

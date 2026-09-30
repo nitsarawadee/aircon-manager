@@ -255,3 +255,38 @@ async function storeFinalPdf(ctx, kind, form) {
   if (kind === 'repair') return (await import('./repairform.js')).storeRepairPdf(ctx, key);
   return (await import('./installform.js')).storeInstallPdf(ctx, key);
 }
+
+/**
+ * จำนวนงานที่รอให้บัญชีนี้กดอนุมัติ — ตัวเลขบนเมนู "เอกสารรออนุมัติ" (แบบตัวเลขข้อความใหม่ในไลน์)
+ *
+ * นับให้ตรงกับที่หน้านั้นแสดงจริง:
+ *   docs  = ใบซ่อมที่ถึงขั้นของบัญชีนี้ (Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4)
+ *   cases = เคสชำรุดรออนุมัติซ่อม — นับเฉพาะ Infrastructure (คนเดียวที่เห็นและกดได้)
+ * นับที่เซิร์ฟเวอร์ ไม่ต้องโหลดรายการทั้งหมดมาหน้าเว็บทุกครั้งที่อยากรู้แค่ตัวเลข
+ */
+export async function getApprovalCount(ctx) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('repair'))) return { docs: 0, cases: 0, total: 0 };
+  await ctx.ensureBase();
+
+  const info = await ctx.userInfo();
+  const inScope = await ctx.scopeFilter();
+
+  let docs = 0;
+  if (await ctx.canView('repairform')) {
+    const rows = new Map();
+    for (const a of ctx.ss.objects(SHEETS.APPROVAL)) {
+      if (plainText(a.DocKind) === 'repair') rows.set(plainText(a.FormID), a);
+    }
+    for (const f of ctx.ss.objects(SHEETS.REPAIRFORM).filter(inScope)) {
+      const next = nextStage(rows.get(plainText(f.ID)) || null);
+      if (next && canApproveStage(info, next)) docs++;
+    }
+  }
+
+  const cases = info.role === 'Admin'
+    ? ctx.ss.objects(SHEETS.AIRLIST).filter(a => plainText(a.Status).trim() === 'ชำรุด').length
+    : 0;
+
+  return { docs, cases, total: docs + cases };
+}
