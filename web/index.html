@@ -3997,9 +3997,12 @@
 
         // ไฟล์ .xlsx เป็นรูปแบบไบนารี ไม่มีปัญหาเรื่องรหัสภาษา
         // ส่วน .csv ต้องเดารหัสเอง ไม่งั้นภาษาไทยกลายเป็นตัวขยะแล้วนำเข้าไปเงียบๆ
+        // dateNF: ช่องที่เป็นวันที่จริง (Excel เก็บเป็นวันที่ / CSV ที่ตัวอ่านแปลงให้) ออกมาเป็น 4/26/2018
+        // เดือน/วัน/ปี 4 หลัก ตาม Template — ถ้าไม่ระบุ ได้ 4/26/18 แล้วถูกปฏิเสธเพราะปีไม่ครบ 4 หลัก
+        // ต้องใส่ตอนอ่านไฟล์ ใส่ตอนแปลงเป็นแถวไม่มีผล (ข้อความของช่องถูกสร้างไว้ตั้งแต่ตอนอ่าน)
         const book = isCsv
-          ? XLSX.read(decodeCsvText(bytes), { type: 'string' })
-          : XLSX.read(bytes, { type: 'array' });
+          ? XLSX.read(decodeCsvText(bytes), { type: 'string', dateNF: 'm/d/yyyy' })
+          : XLSX.read(bytes, { type: 'array', dateNF: 'm/d/yyyy' });
         const sheet = book.Sheets[book.SheetNames[0]];
 
         // raw:false = ให้ทุกช่องออกมาเป็นข้อความ ไม่ให้ตัวเลขกับวันที่ถูกแปลงร่าง
