@@ -722,6 +722,10 @@
               <button onclick="exportPlanTemplate()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดฟอร์มไปกรอกข้อมูลนำเข้า">
                 <i class="ph ph-download-simple"></i> Template
               </button>
+              <!-- แผนเก็บข้อมูลเครื่องไว้ตั้งแต่ตอนสร้าง ปุ่มนี้ดึงของใหม่จากรายการเครื่อง (ดู syncCleaningPlan) -->
+              <button data-admin-only onclick="syncPlanFromAirList()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="เพิ่มเครื่องใหม่เข้าแผน และอัปเดตชื่อ Node / BTU / ราคาของรอบที่ยังไม่ล้าง ตามรายการเครื่องตอนนี้">
+                <i class="ph ph-arrows-clockwise"></i> อัปเดตจากรายการเครื่อง
+              </button>
               <button id="deletePlanBtn" onclick="deletePlan()" style="display:none" class="bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="ลบแผนของปีที่เลือกอยู่ (เฉพาะแผนที่ยังไม่มีงานล้างจริง)">
                 <i class="ph ph-trash"></i> ลบแผน
               </button>
@@ -5933,6 +5937,82 @@
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
     }
+
+    /**
+     * อัปเดตแผนปีที่เปิดอยู่ตามรายการเครื่อง — ดูผลก่อนเสมอ (ราคาที่ตั้งเองรายรอบจะถูกทับ)
+     * กติกาอยู่ที่ syncCleaningPlan ฝั่งเซิร์ฟเวอร์
+     */
+    async function syncPlanFromAirList() {
+      if (!currentYear) { showToast('กรุณาเลือกปีของแผนก่อน', 'error'); return; }
+      let res;
+      try { res = await call('syncCleaningPlan', currentYear, false); } catch (e) { return; }
+      if (!res) return;
+      const c = res.counts;
+      if (!c.adds && !c.updates) { showToast('แผนปี ' + currentYear + ' ตรงกับรายการเครื่องอยู่แล้ว'); return; }
+
+      const addRows = res.adds.map(a => `
+        <div class="text-xs py-1 border-t border-gray-100 flex gap-2">
+          <span class="font-mono text-emerald-700">${esc(a.airCode)}</span><span class="text-gray-500">${esc(a.nodeName)}</span></div>`).join('');
+      const updRows = res.updates.map(u => `
+        <div class="text-xs py-1 border-t border-gray-100">
+          <span class="font-mono text-slate-700">${esc(u.airCode)}</span>
+          ${u.changes.map(ch => `<span class="ml-2 text-gray-500">${esc(ch.column)}:</span>
+            <span class="line-through text-gray-400">${esc(ch.from) || '(ว่าง)'}</span>
+            <i class="ph ph-arrow-right text-[10px] text-gray-400"></i>
+            <span class="text-gray-800 font-medium">${esc(ch.to)}</span>`).join('')}</div>`).join('');
+      const block = (title, count, body) => !count ? '' : `
+        <details class="border border-gray-200 rounded-lg" ${count <= 20 ? 'open' : ''}>
+          <summary class="px-3 py-2 text-sm font-medium text-gray-700 cursor-pointer">${esc(title)} (${count.toLocaleString()})</summary>
+          <div class="px-3 pb-3 max-h-64 overflow-y-auto">${body}</div>
+        </details>`;
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl relative z-10 animate-[fadeIn_0.2s_ease] max-h-[90vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-arrows-clockwise text-[#1153a1]"></i> อัปเดตแผนปี ${esc(currentYear)} จากรายการเครื่อง</h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+              <div class="grid grid-cols-2 gap-2">
+                ${airImportTile('เครื่องที่จะเพิ่มเข้าแผน', c.adds, 'border-emerald-200 bg-emerald-50 text-emerald-700')}
+                ${airImportTile('เครื่องที่ข้อมูลจะถูกแก้', c.updates, 'border-blue-200 bg-blue-50 text-blue-700')}
+              </div>
+              ${block('เพิ่มเข้าแผน (' + res.rounds + ' รอบ ราคาตามรายการเครื่อง)', c.adds, addRows)}
+              ${block('แก้ข้อมูลในแผน', c.updates, updRows)}
+              <div class="bg-blue-50 text-[#1153a1] text-xs p-3 rounded-lg space-y-1">
+                <p><i class="ph ph-info"></i> รอบที่ล้างไปแล้วไม่ถูกแตะ — ราคาของรอบนั้นคือเงินที่จ่ายไปจริง</p>
+                <p><i class="ph ph-info"></i> ราคาที่ตั้งเองรายรอบ (ของรอบที่ยังไม่ล้าง) จะถูกแทนด้วยราคาในรายการเครื่อง</p>
+                <p><i class="ph ph-info"></i> เครื่องที่ไม่มีในรายการแล้วไม่ถูกลบออกจากแผน · ระบบสำรองฐานข้อมูลให้ก่อนเขียน</p>
+              </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
+              <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ยกเลิก</button>
+              <button onclick="confirmSyncPlan(${c.adds}, ${c.updates}, this)"
+                class="px-4 py-2 rounded-lg bg-[#1153a1] hover:bg-[#0e4485] text-white text-sm font-medium">ยืนยันอัปเดต</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    window.syncPlanFromAirList = syncPlanFromAirList;
+
+    async function confirmSyncPlan(adds, updates, btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังอัปเดต...';
+      try {
+        const res = await call('syncCleaningPlan', currentYear, true, { adds, updates });
+        if (Array.isArray(res.plan)) currentPlan = res.plan;
+        closeModal();
+        renderPlanTable();
+        renderPlanSummary(currentYear);
+        showToast('อัปเดตแผนปี ' + currentYear + ' แล้ว — เพิ่ม ' + res.added + ' แก้ ' + res.updated + ' เครื่อง');
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = 'ยืนยันอัปเดต';
+      }
+    }
+    window.confirmSyncPlan = confirmSyncPlan;
 
     async function createPlan() {
       const year = document.getElementById('cp_year').value;

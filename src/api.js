@@ -4,7 +4,7 @@ import {
   getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
   getAirUnitImportFile, getAirUnitImportTemplate, planAirUnitImport, applyAirUnitImport, checkNewAirUnit
 } from './modules/airlist.js';
-import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
+import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, syncCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
   getHistory, addHistoryRecord, deleteHistoryRecord,
   reportRepair, markCannotRepair, getRepairWorkCount
@@ -97,6 +97,8 @@ const API_FUNCTIONS = {
   getUpcomingCleanings,
   createCleaningPlan,
   deleteCleaningPlan,
+  // อัปเดตแผนที่สร้างแล้วตามรายการเครื่อง (ดูผลก่อน แล้วค่อยยืนยัน)
+  syncCleaningPlan,
   updateCleaningRound,
   updatePlanBulk,
   updatePlanDatesByNode,

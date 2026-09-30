@@ -535,6 +535,108 @@ export async function createCleaningPlan(ctx, year, rounds = 3) {
 }
 
 /**
+ * อัปเดตแผนที่สร้างไปแล้วตามรายการเครื่องตอนนี้ (ปุ่ม "อัปเดตจากรายการเครื่อง" — เจ้าของงานขอ)
+ *
+ * แผนเก็บชื่อ Node / SiteCode / BTU / ราคารายรอบไว้ตั้งแต่ตอนสร้าง (createCleaningPlan)
+ * นำเข้าหรือแก้รายการเครื่องทีหลังแผนจึงไม่เปลี่ยนตาม และเครื่องที่เพิ่มทีหลังไม่มีในแผน
+ *
+ *   เพิ่ม  เครื่องที่ใช้งานอยู่แต่ยังไม่มีในแผน — จำนวนรอบเท่าแผนปีนั้น ราคาตามรายการเครื่อง
+ *   แก้    ชื่อ Node / SiteCode / BTU ที่ไม่ตรง และราคาของ "รอบที่ยังไม่ล้าง"
+ *          รอบที่ล้างแล้วไม่แตะ — เป็นเงินที่จ่ายไปจริง (เหตุผลเดียวกับที่ลบแผนที่มีรอบล้างแล้วไม่ได้)
+ *   ไม่ลบ  เครื่องที่ไม่มีในรายการแล้ว — ตารางแผนขึ้นป้าย "ถูกลบแล้ว / รื้อถอนแล้ว" ให้อยู่แล้ว
+ *
+ * ดูผลก่อน (apply = false ไม่เขียนอะไร) แล้วค่อยยืนยัน ราคาที่ตั้งเองรายรอบในแผนจะถูกทับด้วย
+ * คนกดจึงต้องเห็นก่อนว่าอะไรจะเปลี่ยนจากอะไรเป็นอะไร
+ *
+ * @param {boolean} [apply]  true = เขียนจริง
+ * @param {Object}  [expect] { adds, updates } ที่เห็นตอนดูผล — ไม่ตรง = มีคนแก้คั่น ต้องดูใหม่
+ */
+export async function syncCleaningPlan(ctx, year, apply = false, expect = null) {
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    // แตะแผนทั้งปีทุกภูมิภาค — สิทธิ์เดียวกับสร้าง/ลบแผน
+    await ctx.assertAdmin();
+
+    const name = planSheet(year);
+    if (!(await ctx.ss.hasSheet(name))) throw new Error('ไม่พบแผนล้างแอร์ปี ' + year);
+    await ctx.ss.load(name);
+    await ctx.ss.ensureColumns(name, PLAN_HEADERS);
+
+    const rows = ctx.ss.objects(name);
+    const n = planYearRounds(rows);
+    const text = v => (v === null || v === undefined ? '' : String(v).trim());
+    const priceOf = u => (text(u.CleaningPricePerRound) !== '' && !isNaN(Number(u.CleaningPricePerRound)))
+      ? Number(u.CleaningPricePerRound) : null;
+
+    const inPlan = new Map(rows.map(p => [normalizeCode(p.AirCode), p]));
+    const units = ctx.ss.objects(SHEETS.AIRLIST).filter(a => a.AirCode && !isRetiredStatus(a.Status));
+
+    const adds = [];
+    const updates = [];
+    for (const u of units) {
+      const p = inPlan.get(normalizeCode(u.AirCode));
+      if (!p) { adds.push(u); continue; }
+
+      const patch = {};
+      const changes = [];
+      for (const f of ['NodeName', 'SiteCode', 'BTU']) {
+        // รายการเครื่องว่าง (เช่นตำแหน่งที่ย้ายเครื่องออกไปแล้ว ล้าง BTU ทิ้ง) ไม่ล้างค่าในแผนตาม
+        if (text(u[f]) !== '' && text(u[f]) !== text(p[f])) {
+          patch[f] = u[f];
+          changes.push({ column: f, from: text(p[f]), to: text(u[f]) });
+        }
+      }
+      const price = priceOf(u);
+      if (price !== null) {
+        for (const r of roundsOf(p)) {
+          if (roundState(p, r, false) === 'done') continue;
+          if (text(p['R' + r + '_Price']) === '' || Number(p['R' + r + '_Price']) !== price) {
+            patch['R' + r + '_Price'] = price;
+            changes.push({ column: 'ราคารอบ ' + r, from: text(p['R' + r + '_Price']), to: String(price) });
+          }
+        }
+      }
+      if (changes.length) updates.push({ row: p._row, airCode: p.AirCode, patch, changes });
+    }
+
+    const summary = {
+      rounds: n,
+      counts: { adds: adds.length, updates: updates.length },
+      adds: adds.slice(0, 200).map(u => ({ airCode: u.AirCode, nodeName: u.NodeName || '' })),
+      updates: updates.slice(0, 200).map(x => ({ airCode: x.airCode, changes: x.changes }))
+    };
+    if (!apply) return summary;
+
+    if (!adds.length && !updates.length) throw new Error('แผนปี ' + year + ' ตรงกับรายการเครื่องอยู่แล้ว ไม่มีอะไรต้องอัปเดต');
+    if (expect && (Number(expect.adds) !== adds.length || Number(expect.updates) !== updates.length)) {
+      throw new Error('ข้อมูลเปลี่ยนไประหว่างที่ดูผลอยู่ (ตอนนี้จะเพิ่ม ' + adds.length +
+                      ' แก้ ' + updates.length + ' เครื่อง) กรุณากดดูผลใหม่อีกครั้ง');
+    }
+
+    // สำรองก่อนเขียน เหมือนนำเข้ารายการเครื่อง — แตะแผนทีเดียวได้หลายร้อยแถว
+    let backupName = '';
+    if (ctx.backup) backupName = ctx.backup('ก่อนอัปเดตแผนปี-' + year + '-จากรายการเครื่อง');
+
+    const me = await ctx.currentUser();
+    for (const x of updates) ctx.ss.writeByHeaders(name, x.row, { ...x.patch, UpdatedBy: me });
+
+    const headers = ctx.ss.headers(name);
+    for (const u of adds) {
+      // แถวใหม่หน้าตาเดียวกับที่ createCleaningPlan สร้าง
+      const rec = { AirCode: u.AirCode, NodeName: u.NodeName, SiteCode: u.SiteCode, BTU: u.BTU, UpdatedBy: me, Rounds: n };
+      for (const r of [1, 2, 3].slice(0, n)) {
+        rec['R' + r + '_Price'] = u.CleaningPricePerRound || '';
+        rec['R' + r + '_Status'] = 'รอดำเนินการ';
+      }
+      ctx.ss.appendRow(name, headers.map(h => (rec[h] !== undefined ? rec[h] : '')));
+    }
+
+    await ctx.ss.flush();
+    return { added: adds.length, updated: updates.length, backupName, plan: await getCleaningPlan(ctx, year) };
+  });
+}
+
+/**
  * ลบแผนล้างทั้งปี — มีไว้แก้กรณีกดสร้างแผนผิดปี
  *
  * ลบได้เฉพาะแผนที่ยังไม่มีงานจริงเกิดขึ้นเลย รอบไหนล้างไปแล้ว (มีวันที่ล้างจริง
