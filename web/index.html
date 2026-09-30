@@ -1202,6 +1202,41 @@
           </div>
         </div>
 
+        <!-- ค้นหา + ตัวกรอง — ดู userMatchesFilters -->
+        <div class="flex flex-col md:flex-row gap-2 mb-4">
+          <div class="relative flex-1 min-w-0">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="userSearch" oninput="renderUsersTable()" placeholder="ค้นหาชื่อ หรือ Username..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm shadow-sm">
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:flex">
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-map-pin text-gray-500"></i>
+              <select id="userRegionFilter" onchange="renderUsersTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="">ทุกภูมิภาค</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-identification-badge text-gray-500"></i>
+              <select id="userRoleFilter" onchange="renderUsersTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="">ทุกบทบาท</option>
+                <option value="Admin">Infrastructure</option>
+                <option value="RegionAdmin">Regional</option>
+                <option value="Staff">Staff</option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Contractor">Subcontract</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <i class="ph ph-user-circle text-gray-500"></i>
+              <select id="userStatusFilter" onchange="renderUsersTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="">ทุกสถานะบัญชี</option>
+                <option value="active">ใช้งานอยู่</option>
+                <option value="inactive">ปิดใช้งาน</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table class="w-full text-sm" id="usersTable">
@@ -2747,6 +2782,45 @@
       } catch (e) {}
     }
 
+    const isUserInactive = u => u.Active === false || String(u.Active).toUpperCase() === 'FALSE';
+
+    /**
+     * ตัวกรองหน้าจัดการผู้ใช้
+     * ภูมิภาค: เทียบเฉพาะบัญชีที่ตั้งภูมิภาคไว้ (Regional/Staff/Supervisor) — Infrastructure ดูแลทุกภูมิภาค
+     * และผู้รับเหมาไม่มีภูมิภาค จึงไม่ขึ้นเมื่อเลือกภูมิภาคใดภูมิภาคหนึ่ง (เลือกดูได้จากตัวกรองบทบาท)
+     */
+    function userMatchesFilters(u) {
+      const val = id => (document.getElementById(id) || {}).value || '';
+      const q = val('userSearch').trim().toLowerCase();
+      if (q && !(String(u.Name || '') + ' ' + String(u.Username || '')).toLowerCase().includes(q)) return false;
+      const role = val('userRoleFilter');
+      if (role && roleOfUser(u) !== role) return false;
+      const status = val('userStatusFilter');
+      if (status && (status === 'inactive') !== isUserInactive(u)) return false;
+      const region = val('userRegionFilter');
+      if (region) {
+        if (u.ContractorID || u.Role === 'Admin') return false;
+        // แปลงเป็นข้อความก่อน — ภูมิภาคที่เป็นตัวเลขล้วนอาจถูกเก็บเป็น Number (ดู openUserModal)
+        const mine = String(u.Regions == null ? '' : u.Regions).split(',').map(s => s.trim());
+        if (!mine.includes(region)) return false;
+      }
+      return true;
+    }
+
+    /** เติมตัวเลือกภูมิภาคจาก Config — เรียกตอนวาดตารางเพราะ Config อาจโหลดเสร็จทีหลัง */
+    function fillUserRegionFilter() {
+      const sel = document.getElementById('userRegionFilter');
+      if (!sel) return;
+      const regions = (currentConfig.Region || []).map(r => String(r).trim());
+      const key = regions.join('|');
+      if (sel.dataset.filled === key) return;
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">ทุกภูมิภาค</option>' +
+        regions.map(r => `<option value="${esc(r)}">${esc(regionLabel(r))}</option>`).join('');
+      sel.value = regions.includes(cur) ? cur : '';
+      sel.dataset.filled = key;
+    }
+
     function renderUsersTable() {
       const tb = document.querySelector('#usersTable tbody');
       if (!tb) return;
@@ -2754,7 +2828,13 @@
         tb.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400"><i class="ph ph-users-three text-4xl mb-2 block"></i>ยังไม่มีผู้ใช้งานในระบบ กดปุ่ม "เพิ่มผู้ใช้งาน" เพื่อสร้างบัญชีแรก</td></tr>`;
         return;
       }
-      tb.innerHTML = currentUsersList.map(u => `
+      fillUserRegionFilter();
+      const rows = currentUsersList.filter(userMatchesFilters);
+      if (rows.length === 0) {
+        tb.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400"><i class="ph ph-magnifying-glass text-4xl mb-2 block"></i>ไม่พบผู้ใช้ที่ตรงกับตัวกรอง</td></tr>`;
+        return;
+      }
+      tb.innerHTML = rows.map(u => `
         <tr class="hover:bg-blue-50/50 transition-colors">
           <td class="px-4 py-3 font-medium text-gray-900">${esc(u.Username)}</td>
           <td class="px-4 py-3 text-gray-600">${esc(u.Name) || '-'}</td>
