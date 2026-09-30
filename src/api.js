@@ -2,7 +2,7 @@ import { Ctx } from './context.js';
 
 import {
   getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
-  getAirUnitImportFile, planAirUnitImport, applyAirUnitImport, checkNewAirUnit
+  getAirUnitImportFile, getAirUnitImportTemplate, planAirUnitImport, applyAirUnitImport, checkNewAirUnit
 } from './modules/airlist.js';
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
 import {
@@ -74,6 +74,7 @@ const API_FUNCTIONS = {
   saveAirUnit,
   deleteAirUnit,
   getAirUnitImportFile,
+  getAirUnitImportTemplate,
   planAirUnitImport,
   applyAirUnitImport,
   moveAirUnit,

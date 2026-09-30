@@ -325,3 +325,18 @@ test('ผลลัพธ์ต้องส่งรายการเครื�
   assert.equal(res.air.length, (await getAirList(ctxOf(db))).length);
   assert.ok(res.air.some(a => a.AirCode === 'ATG-ATG-AIR-2'));
 });
+
+/* ==================== Template ==================== */
+
+test('Template — คอลัมน์ตรงกับที่ตัวนำเข้ารับเป๊ะ พร้อมคำอธิบาย/ตัวอย่าง/ค่าที่ใช้ได้ · คนที่ดูได้อย่างเดียวโหลดไม่ได้', async () => {
+  const { getAirUnitImportTemplate } = await import('../src/modules/airlist.js');
+  const { HEADERS } = await import('../src/import-spec.js');
+  const db = freshDb();
+  const t = await getAirUnitImportTemplate(ctxOf(db));
+  assert.deepEqual(t.columns.map(c => c.name), HEADERS);
+  const region = t.columns.find(c => c.name === 'Region');
+  assert.equal(region.required, true);
+  assert.ok(region.allowed.includes('1'));
+  assert.ok(t.columns.find(c => c.name === 'AirNo').desc.includes('รหัสเครื่อง'));
+  await assert.rejects(() => getAirUnitImportTemplate(ctxOf(db, { user: 'viewer' })), /ไม่มีสิทธิ์แก้ไข/);
+});

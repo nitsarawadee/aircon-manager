@@ -561,6 +561,9 @@
             <button onclick="downloadAirImportFile(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดไฟล์ในรูปแบบที่นำเข้ากลับได้ทันที สำหรับแก้ข้อมูลเป็นชุด">
               <i class="ph ph-file-arrow-down"></i> ไฟล์สำหรับแก้
             </button>
+            <button onclick="downloadAirTemplate(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="ไฟล์เปล่าสำหรับกรอกเครื่องใหม่ แล้วนำเข้า — มีชีตคำอธิบายแต่ละคอลัมน์">
+              <i class="ph ph-file-xls"></i> Template
+            </button>
 
             <input type="file" id="fileImportAir" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
             <button onclick="document.getElementById('fileImportAir').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="นำเข้าไฟล์ที่แก้จาก Excel — ดูผลก่อนยืนยันเสมอ">
@@ -2357,7 +2360,7 @@
       // รายการเครื่อง
       openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
-      fileImportAir: 'airlist', confirmAirImport: 'airlist',
+      fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
       openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'admin',
       openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
@@ -3835,6 +3838,47 @@
       }
     }
     window.downloadAirImportFile = downloadAirImportFile;
+
+    /**
+     * Template นำเข้าเครื่องใหม่ (Excel) — ชีตแรกกรอกข้อมูล ชีตที่สองคำอธิบายรายคอลัมน์
+     *
+     * หัวตารางชีตแรกต้องเป็นชื่อคอลัมน์ภาษาอังกฤษตามที่ตัวนำเข้าอ่าน และต้องเป็นชีตแรก
+     * (ตัวนำเข้าอ่านชีตแรกเท่านั้น) ไม่ใส่แถวตัวอย่างในชีตกรอก เพราะถ้าลืมลบ
+     * ตัวอย่างจะถูกนำเข้าไปแก้เครื่องจริงที่รหัสตรงกัน — ตัวอย่างอยู่ในชีตคำอธิบายแทน
+     */
+    async function downloadAirTemplate(btn) {
+      const old = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
+      try {
+        const res = await call('getAirUnitImportTemplate');
+        const cols = (res && res.columns) || [];
+        if (!cols.length) throw new Error('ไม่ได้รับรูปแบบคอลัมน์จากเซิร์ฟเวอร์');
+
+        const fill = XLSX.utils.aoa_to_sheet([cols.map(c => c.name)]);
+        fill['!cols'] = cols.map(c => ({ wch: Math.max(12, c.name.length + 2) }));
+
+        const help = XLSX.utils.aoa_to_sheet([
+          ['คอลัมน์', 'ความหมาย', 'ต้องกรอก', 'คำอธิบาย', 'ตัวอย่าง', 'ค่าที่ใช้ได้'],
+          ...cols.map(c => [c.name, c.label, c.required ? 'ต้องกรอก' : '', c.desc, c.example,
+                            c.allowed ? c.allowed.join(' / ') : '']),
+          [],
+          ['วิธีใช้: กรอกในชีต "กรอกข้อมูล" แถวละ 1 เครื่อง (ห้ามแก้ชื่อหัวคอลัมน์) แล้วกดปุ่ม "นำเข้า (Excel/CSV)" ในหน้ารายการเครื่อง'],
+          ['ระบบสร้างรหัสเครื่องให้เองจาก SiteCode + AirNo เช่น ATG-ATG + 1 = ATG-ATG-AIR-1 · รหัสที่มีอยู่แล้ว = แก้ข้อมูลเครื่องนั้น · ดูผลก่อนยืนยันทุกครั้ง']
+        ]);
+        help['!cols'] = [{ wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 60 }, { wch: 16 }, { wch: 50 }];
+
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, fill, 'กรอกข้อมูล');
+        XLSX.utils.book_append_sheet(book, help, 'คำอธิบาย');
+        XLSX.writeFile(book, 'AirList_Template.xlsx');
+        showToast('โหลด Template แล้ว — กรอกในชีตแรก แล้วกด "นำเข้า (Excel/CSV)"');
+      } catch (err) {
+        showToast('โหลด Template ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      }
+    }
+    window.downloadAirTemplate = downloadAirTemplate;
 
     /**
      * แถวที่อ่านจากไฟล์ เก็บไว้ระหว่างที่หน้าต่างยืนยันเปิดค้างอยู่

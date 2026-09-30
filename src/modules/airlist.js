@@ -1,6 +1,6 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
-import { HEADERS as IMPORT_HEADERS } from '../import-spec.js';
+import { HEADERS as IMPORT_HEADERS, COLUMNS as IMPORT_COLUMNS, ALLOWED as IMPORT_ALLOWED } from '../import-spec.js';
 import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, ymd, ymdhms } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
@@ -651,6 +651,23 @@ async function buildImportPlan(ctx, rows) {
  *
  * ได้เฉพาะเครื่องในภูมิภาคที่ตัวเองดูแล ซึ่งตรงกับที่ตัวเองแก้ได้พอดี
  */
+/**
+ * Template เปล่าสำหรับนำเข้าเครื่องใหม่ — หัวตารางกับคำอธิบายรายคอลัมน์
+ *
+ * มาจาก import-spec.js ที่เดียวกับตัวตรวจไฟล์นำเข้า (และสคริปต์ make-template.mjs)
+ * Template ที่โหลดจากหน้าเว็บจึงตรงกับที่ระบบรับเสมอ หน้าเว็บเป็นคนประกอบไฟล์ Excel เอง
+ */
+export async function getAirUnitImportTemplate(ctx) {
+  await ctx.assertModuleEdit('airlist');
+  return {
+    columns: IMPORT_COLUMNS.map(c => ({
+      name: c.name, label: c.label || '', required: !!c.required,
+      desc: c.desc || '', example: c.example || '',
+      allowed: IMPORT_ALLOWED[c.name] || null
+    }))
+  };
+}
+
 export async function getAirUnitImportFile(ctx) {
   await ctx.assertModuleEdit('airlist');
   return { headers: IMPORT_HEADERS, rows: toExportRows(await getAirList(ctx)) };
