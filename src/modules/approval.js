@@ -1,5 +1,5 @@
 import { SHEETS, ROLE_TITLES } from '../schema.js';
-import { plainText, ymdhms } from '../values.js';
+import { isAwaitingInstall, normalizeCode, plainText, ymdhms } from '../values.js';
 
 /**
  * ขั้นอนุมัติเอกสาร (ใบล้าง PM / ใบซ่อม / ใบติดตั้ง)
@@ -202,6 +202,21 @@ export async function attachApprovals(ctx, kind, list) {
  * @param {string} kind   'cleaning' | 'repair' | 'install'
  * @param {string} formId ID ของแถวเอกสาร (ไม่ใช้เลขแถว เพราะเลื่อนได้เมื่อมีคนลบใบอื่น)
  */
+/**
+ * เครื่องในใบติดตั้งที่ยัง "รอติดตั้ง" → "ใช้งานปกติ" (ยังไม่ flush — เรียกในล็อกของ approveDoc)
+ * เครื่องที่เปลี่ยน/ย้ายมาแทนไม่เคยรอ จึงไม่ถูกแตะ · ไม่ลงประวัติเพิ่ม แถว "ติดตั้ง" ของใบนี้มีอยู่แล้ว
+ */
+function activateInstalledUnits(ctx, form, info) {
+  const codes = new Set([form.AirCode1, form.AirCode2].map(c => normalizeCode(c)).filter(Boolean));
+  for (const u of ctx.ss.objects(SHEETS.AIRLIST)) {
+    if (!codes.has(normalizeCode(u.AirCode)) || !isAwaitingInstall(u.Status)) continue;
+    ctx.ss.writeByHeaders(SHEETS.AIRLIST, u._row, {
+      Status: 'ใช้งานปกติ', UpdatedAt: ymdhms(new Date()),
+      UpdatedBy: plainText(info.username) + ' (อนุมัติใบติดตั้ง)'
+    });
+  }
+}
+
 export async function approveDoc(ctx, kind, formId) {
   const spec = APPROVAL_KINDS[kind];
   if (!spec) throw new Error('ไม่รู้จักประเภทเอกสาร "' + plainText(kind) + '"');
@@ -233,6 +248,8 @@ export async function approveDoc(ctx, kind, formId) {
     };
     if (next === 3) patch.S3Role = info.roleKey;
     ctx.ss.writeByHeaders(SHEETS.APPROVAL, row._row, patch);
+    // ใบติดตั้งอนุมัติขั้นสุดท้าย = เครื่องใหม่ในใบเริ่มใช้งานจริง ขึ้นทุกรายการ (ดู isAwaitingInstall)
+    if (kind === 'install' && next === FINAL_STAGE) activateInstalledUnits(ctx, form, info);
     await ctx.ss.flush();
 
     const fresh = approvalRowOf(ctx, kind, id);

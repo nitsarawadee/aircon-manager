@@ -1,5 +1,7 @@
 import { SHEETS, PLAN_HEADERS } from '../schema.js';
-import { formatDate, isRetiredStatus, normalizeCode, orderByNode, safeParseDate, todayStart } from '../values.js';
+import {
+  formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, orderByNode, safeParseDate, todayStart
+} from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { jobKey } from '../context.js';
 
@@ -507,7 +509,8 @@ export async function createCleaningPlan(ctx, year, rounds = 3) {
     //
     // เครื่องที่รื้อถอนหรือขายออกไปแล้วต้องไม่ถูกดึงเข้าแผน ไม่งั้นช่างจะได้ใบสั่ง
     // ไปล้างแอร์ที่ไม่มีอยู่ที่หน้างานแล้ว และตัวเลขคืบหน้าจะไม่มีวันเต็ม 100%
-    const airList = ctx.ss.objects(SHEETS.AIRLIST).filter(a => !isRetiredStatus(a.Status));
+    // เครื่องที่รอใบติดตั้งอนุมัติยังไม่เข้าแผน — อนุมัติครบแล้วกด "อัปเดตจากรายการเครื่อง"
+    const airList = ctx.ss.objects(SHEETS.AIRLIST).filter(a => !isRetiredStatus(a.Status) && !isAwaitingInstall(a.Status));
     if (airList.length === 0) {
       throw new Error('ยังไม่มีข้อมูลเครื่องปรับอากาศที่ใช้งานอยู่ในระบบ กรุณาเพิ่มแอร์ก่อนสร้างแผนครับ');
     }
@@ -573,7 +576,8 @@ export async function syncCleaningPlan(ctx, year, apply = false, expect = null) 
       ? Number(u.CleaningPricePerRound) : null;
 
     const inPlan = new Map(rows.map(p => [normalizeCode(p.AirCode), p]));
-    const units = ctx.ss.objects(SHEETS.AIRLIST).filter(a => a.AirCode && !isRetiredStatus(a.Status));
+    const units = ctx.ss.objects(SHEETS.AIRLIST)
+      .filter(a => a.AirCode && !isRetiredStatus(a.Status) && !isAwaitingInstall(a.Status));
 
     const adds = [];
     const updates = [];

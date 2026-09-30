@@ -1,5 +1,7 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
-import { formatDate, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms } from '../values.js';
+import {
+  formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms
+} from '../values.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
 /**
@@ -286,6 +288,10 @@ export async function reportRepair(ctx, record) {
     if (isRetiredStatus(found.Status)) {
       throw new Error('เครื่อง ' + found.AirCode + ' อยู่ในสถานะ "' + found.Status +
                       '" ไม่ได้ใช้งานแล้ว จึงแจ้งซ่อมไม่ได้');
+    }
+    // เครื่องใหม่ที่ใบติดตั้งยังอนุมัติไม่ครบ ยังไม่นับว่าใช้งานอยู่ (ดู isAwaitingInstall)
+    if (isAwaitingInstall(found.Status)) {
+      throw new Error('เครื่อง ' + found.AirCode + ' รอใบติดตั้งอนุมัติครบ จึงแจ้งซ่อมไม่ได้');
     }
 
     // เปิดเคสใหม่ เว้นแต่เครื่องนี้มีเคสค้างอยู่แล้ว — แจ้งซ้ำต้องไปต่อในเคสเดิม

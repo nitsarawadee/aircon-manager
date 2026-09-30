@@ -1,7 +1,9 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
 import { HEADERS as IMPORT_HEADERS, COLUMNS as IMPORT_COLUMNS, ALLOWED as IMPORT_ALLOWED } from '../import-spec.js';
-import { formatDate, isRetiredStatus, normalizeCode, normalizeRegion, orderByNode, ymd, ymdhms } from '../values.js';
+import {
+  AWAITING_INSTALL_STATUS, formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeRegion, orderByNode, ymd, ymdhms
+} from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 import { stockOldMachine } from './warehouse.js';
@@ -143,6 +145,8 @@ async function insertAirUnitRaw(ctx, unit) {
  */
 export async function addNewAirUnitRaw(ctx, unit) {
   await ctx.assertRegionAccess(unit.Region);
+  // เครื่องใหม่ยังไม่นับว่ามีอยู่จริงจนกว่าใบติดตั้งจะอนุมัติครบ — ไม่สนสถานะที่ส่งมา (ดู AWAITING_INSTALL_STATUS)
+  unit = { ...unit, Status: AWAITING_INSTALL_STATUS };
   await insertAirUnitRaw(ctx, unit);
   await addHistoryRaw(ctx, {
     AirCode: unit.AirCode,
@@ -207,6 +211,13 @@ export async function saveAirUnit(ctx, unit) {
       // ตรวจสิทธิ์ก่อนเขียนอะไรทั้งสิ้น จะได้ไม่มีอะไรค้างอยู่ครึ่งทางตอนถูกปฏิเสธ
       const statusChanged = !!unit.Status && String(unit.Status) !== String(oldStatus || '');
       if (statusChanged) await assertCanSetStatus(ctx, unit.Status);
+      // "รอติดตั้ง" ระบบตั้งและปลดเองเท่านั้น — ปลดเองได้ = เครื่องขึ้นทุกรายการโดยใบติดตั้งยังไม่อนุมัติ
+      if (statusChanged && isAwaitingInstall(oldStatus)) {
+        throw new Error('เครื่อง ' + unit.AirCode + ' รอใบติดตั้งอนุมัติครบ สถานะจะเปลี่ยนเป็น "ใช้งานปกติ" เองเมื่ออนุมัติขั้นสุดท้าย');
+      }
+      if (statusChanged && isAwaitingInstall(unit.Status)) {
+        throw new Error('สถานะ "' + AWAITING_INSTALL_STATUS + '" ระบบตั้งให้เครื่องที่เพิ่มใหม่เท่านั้น ตั้งเองไม่ได้');
+      }
 
       const payload = { ...unit, UpdatedAt: ymdhms(new Date()), UpdatedBy: await ctx.currentUser() };
       delete payload._row;
@@ -302,6 +313,11 @@ export async function moveAirUnit(ctx, row, destCode, note, expectCode) {
     await ctx.assertRegionAccess(dest.Region);
 
     const srcStatus = String(src.Status || '').trim();
+    // เครื่องที่รอใบติดตั้งอนุมัติยังไม่นับว่ามีอยู่จริง ย้ายเข้า/ออกไม่ได้
+    if (isAwaitingInstall(srcStatus) || isAwaitingInstall(dest.Status)) {
+      throw new Error('เครื่องที่รอใบติดตั้งอนุมัติ (' + (isAwaitingInstall(srcStatus) ? src.AirCode : dest.AirCode) +
+                      ') ย้ายไม่ได้ — รอใบติดตั้งอนุมัติครบก่อน');
+    }
     if (isRepairStatus(srcStatus) || isRetiredStatus(srcStatus)) {
       throw new Error('เครื่อง ' + src.AirCode + ' สถานะ "' + srcStatus + '" ย้ายไม่ได้ — ' +
                       'ต้องเป็นเครื่องที่ใช้งานได้และไม่มีงานซ่อมค้าง');
@@ -711,7 +727,9 @@ export async function getAirUnitImportTemplate(ctx) {
 export async function getAirUnitImportFile(ctx) {
   await ctx.assertModuleEdit('airlist');
   // Node เดียวกันเรียงติดกันตามเลขเครื่อง — เครื่องที่เพิ่มทีหลังไม่ไปโผล่ท้ายไฟล์ (ดู orderByNode)
-  return { headers: IMPORT_HEADERS, rows: toExportRows(orderByNode(await getAirList(ctx))) };
+  // เครื่องที่รอใบติดตั้งอนุมัติไม่อยู่ในไฟล์ (ยังไม่ขึ้นรายการ)
+  const list = (await getAirList(ctx)).filter(u => !isAwaitingInstall(u.Status));
+  return { headers: IMPORT_HEADERS, rows: toExportRows(orderByNode(list)) };
 }
 
 /**

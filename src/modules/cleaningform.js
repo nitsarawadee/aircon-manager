@@ -8,7 +8,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
  */
 const KIND = 'cleaning';
-import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
+import { cleanFormValue, isAwaitingInstall, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
@@ -130,7 +130,10 @@ export async function getCleaningFormNodes(ctx) {
       IndoorSerial: plainText(a.IndoorSN), IndoorAsset: plainText(a.IndoorAsset),
       OutdoorSerial: plainText(a.OutdoorSN), OutdoorAsset: plainText(a.OutdoorAsset),
       // ราคาต่อรอบที่ตั้งไว้ในรายการเครื่อง ใช้เติมช่องราคาให้อัตโนมัติ
-      CleaningPrice: plainText(a.CleaningPricePerRound)
+      CleaningPrice: plainText(a.CleaningPricePerRound),
+      // รอใบติดตั้งอนุมัติ — ยังอยู่ในรายการนี้เพราะฟอร์มติดตั้งต้องใช้ (ลำดับเครื่องใน Node)
+      // แต่ฝั่งใบล้างซ่อนไว้ (หน้าเว็บ cleanUnitsOf) และบันทึกใบล้างไม่ได้ (bindToRegistry)
+      Awaiting: isAwaitingInstall(a.Status)
     });
   });
 
@@ -414,6 +417,9 @@ async function bindToRegistry(ctx, record, bySlot) {
     if (!unit) {
       if (info.role === 'Admin') continue;
       throw new Error('ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง หรือไม่มีสิทธิ์เข้าถึง');
+    }
+    if (isAwaitingInstall(unit.Status)) {
+      throw new Error('เครื่อง ' + unit.AirCode + ' รอใบติดตั้งอนุมัติครบ ยังออกใบล้างไม่ได้');
     }
     found.push({ slot, unit });
   }

@@ -219,6 +219,19 @@ export function isRetiredStatus(status) {
   return s.includes('ปลดระวาง') || s.includes('รื้อถอน') || /write\s*[-_]?\s*off/i.test(s);
 }
 
+/**
+ * เครื่องติดตั้งใหม่ที่ยังรอใบติดตั้งอนุมัติครบ (เจ้าของงานขอ)
+ *
+ * เพิ่มเครื่องใหม่ = ตั้งสถานะนี้ให้เอง เครื่องยังไม่นับว่ามีอยู่จริง — ไม่ขึ้นแดชบอร์ด แผนล้าง
+ * ใบล้าง แจ้งซ่อม และรายการเครื่อง (ยกเว้นตัวกรอง "รอติดตั้ง") ขึ้นแค่หน้างานซ่อมและติดตั้ง
+ * ให้กรอกเอกสาร ส่งลิงก์ หรือมอบหมาย · ใบติดตั้งอนุมัติถึงขั้นสุดท้าย → "ใช้งานปกติ" (ดู approveDoc)
+ * ตั้ง/เปลี่ยนสถานะนี้เองไม่ได้ ระบบเป็นคนตั้งและปลดเท่านั้น (ดู saveAirUnit)
+ */
+export const AWAITING_INSTALL_STATUS = 'รอติดตั้ง';
+export function isAwaitingInstall(status) {
+  return String(status == null ? '' : status).trim() === AWAITING_INSTALL_STATUS;
+}
+
 export function normalizeRegion(v) {
   return String(v == null ? '' : v).trim();
 }

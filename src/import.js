@@ -39,6 +39,7 @@
  */
 
 import { COLUMNS, HEADERS, makeAirCode, validateRow, canonicalize } from './import-spec.js';
+import { isAwaitingInstall } from './values.js';
 
 /** ชื่อชีต/ตารางของข้อมูลเครื่อง */
 const AIRLIST = 'AirList';
@@ -148,6 +149,8 @@ export function planImport(existing, rows) {
     }
 
     // มีอยู่แล้ว — ดูว่าเปลี่ยนอะไรบ้าง
+    // เครื่องที่รอใบติดตั้งอนุมัติ: สถานะระบบปลดเองตอนอนุมัติครบ ไฟล์นำเข้าเปลี่ยนไม่ได้ (ดู isAwaitingInstall)
+    if (isAwaitingInstall(current.Status)) delete values.Status;
     const changes = [];
     for (const [col, next] of Object.entries(values)) {
       if (col === 'AirCode') continue;
@@ -182,7 +185,9 @@ export function planImport(existing, rows) {
 
   // ---------- เครื่องในระบบที่ไม่มีในไฟล์ ----------
   // นับรหัสที่ไฟล์พูดถึงทั้งหมด รวมแถวที่มีข้อผิดพลาดด้วย — แถวผิดยังตั้งใจหมายถึงเครื่องนั้นอยู่
-  const missing = existing.filter(u => u.AirCode && !seenInFile.has(String(u.AirCode).trim()));
+  // เครื่องที่รอใบติดตั้งอนุมัติไม่อยู่ในไฟล์สำหรับแก้อยู่แล้ว (ยังไม่ขึ้นรายการ) — ไม่นับว่าหายจากไฟล์
+  const missing = existing.filter(u => u.AirCode && !isAwaitingInstall(u.Status) &&
+                                       !seenInFile.has(String(u.AirCode).trim()));
 
   return { adds, updates, unchanged, errors, warnings, suspects, missing };
 }

@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { isRetiredStatus, partsOf, safeParseDate, todayStart } from '../values.js';
+import { isAwaitingInstall, isRetiredStatus, partsOf, safeParseDate, todayStart } from '../values.js';
 import { getPlanYears, getCleaningPlan, summarizeCleaning, upcomingFromPlan, UPCOMING_LIMIT } from './plan.js';
 import { getHistory } from './history.js';
 
@@ -37,6 +37,8 @@ export async function getDashboardSummary(ctx, year) {
   // ข้อมูลยังอยู่ในระบบเพราะต้องเก็บประวัติ แต่ถ้านับรวมด้วย ยอดจะบวมขึ้นทุกปี
   // จนไม่ตรงกับจำนวนเครื่องที่ต้องดูแลจริง ซึ่งเป็นตัวเลขที่คนเอาไปใช้วางแผน
   airList = airList.filter(a => !isRetiredStatus(a.Status));
+  // เครื่องใหม่ที่ใบติดตั้งยังอนุมัติไม่ครบ ยังไม่นับว่ามีอยู่จริง (ดู isAwaitingInstall)
+  airList = airList.filter(a => !isAwaitingInstall(a.Status));
 
   const totalUnits = airList.length;
   const byRegion = {};
