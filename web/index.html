@@ -424,7 +424,7 @@
           <div class="relative z-10 flex items-center gap-2 bg-white/70 border rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0"
                style="border-color:var(--p-card-border)">
             <i class="ph ph-calendar-blank" style="color:var(--p-brand-fg)"></i>
-            <select id="dashYearSelect" onchange="loadDashboard()"
+            <select id="dashYearSelect" onchange="onDashYearChange()"
                     class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-semibold"
                     style="color:var(--p-brand-fg)"></select>
           </div>
@@ -1386,6 +1386,12 @@
     let pendingBudgetYear = null;
     let currentConfig = {};
     let currentYear = null;
+    /**
+     * ปีที่หน้า Dashboard เลือกอยู่ = ปีตั้งต้นของทุกหน้า (เจ้าของงานขอ)
+     * เปิดเว็บมา = ปีตามปฏิทิน · เปลี่ยนปีที่ Dashboard → ทุกหน้าเปลี่ยนตาม (followDashYear)
+     * แต่ละหน้าเลือกปีอื่นเองได้ จนกว่า Dashboard จะเปลี่ยนปีอีกครั้ง
+     */
+    let dashYear = String(new Date().getFullYear());
     let currentBudget = null;
     let currentUserInfo = null;
     let currentUsers = [];
@@ -1530,28 +1536,31 @@
      * ตัวเลือกปี (หน้าประวัติ · แบบฟอร์มเอกสาร · ประวัติงานซ่อม) — เจ้าของงานขอ
      *
      * ข้อมูลไม่ได้แยกเก็บรายปี แค่หน้าจอแสดงทีละปี: ปีที่มีข้อมูลจริง + ปีนี้ ใหม่ก่อนเก่า + "ทุกปี"
-     * เปิดครั้งแรกเป็นปีนี้ รายการจะได้ไม่ยาวขึ้นทุกปี · หลังจากนั้นคงปีที่เลือกไว้
+     * เปิดครั้งแรกเป็นปีของ Dashboard (ดู dashYear) รายการจะได้ไม่ยาวขึ้นทุกปี · หลังจากนั้นคงปีที่เลือกไว้
      */
     const thisYear = () => String(new Date().getFullYear());
     function syncYearFilter(selectId, dates) {
       const sel = document.getElementById(selectId);
       if (!sel) return '';
-      const years = [...new Set([thisYear(), ...(dates || []).map(d => String(d == null ? '' : d).slice(0, 4))])]
+      // เปิดครั้งแรก = ปีของ Dashboard · หลังจากนั้นคงปีที่เลือกไว้ (ปีที่เลือกไว้ต้องอยู่ในรายการเสมอ แม้ไม่มีข้อมูล)
+      const cur = sel.dataset.ready ? sel.value : dashYear;
+      const years = [...new Set([thisYear(), dashYear, cur, ...(dates || []).map(d => String(d == null ? '' : d).slice(0, 4))])]
         .filter(y => /^\d{4}$/.test(y)).sort().reverse();
-      const cur = sel.dataset.ready ? sel.value : thisYear();
       sel.innerHTML = years.map(y => `<option value="${y}">ปี ${y}</option>`).join('') + '<option value="">ทุกปี</option>';
-      sel.value = cur === '' || years.includes(cur) ? cur : thisYear();
+      sel.value = cur;
       sel.dataset.ready = '1';
       return sel.value;
     }
-    /** ลิงก์จากหน้าอื่น (ดูประวัติเครื่องนี้ · เลขที่ในหน้าประวัติ) — "ทุกปี" ไม่งั้นของปีก่อนจะถูกซ่อน */
-    function showAllYears(selectId) {
+    /** ตั้งปีของตัวเลือกจากที่อื่น ('' = ทุกปี) — ตัวเลือกยังไม่มีปีนั้นก็เพิ่มให้ */
+    function showYear(selectId, year) {
       const sel = document.getElementById(selectId);
       if (!sel) return;
-      if (![...sel.options].some(o => o.value === '')) sel.add(new Option('ทุกปี', ''));
-      sel.value = '';
+      if (![...sel.options].some(o => o.value === year)) sel.add(new Option(year ? 'ปี ' + year : 'ทุกปี', year));
+      sel.value = year;
       sel.dataset.ready = '1';
     }
+    /** ลิงก์จากหน้าอื่น (ดูประวัติเครื่องนี้ · เลขที่ในหน้าประวัติ) — "ทุกปี" ไม่งั้นของปีก่อนจะถูกซ่อน */
+    const showAllYears = selectId => showYear(selectId, '');
     const yearOf = d => String(d == null ? '' : d).slice(0, 4);
 
     function syncRegionFilter(selectId, values) {
@@ -3162,6 +3171,25 @@
     }
 
     /* ============== DASHBOARD ============== */
+    /** เปลี่ยนปีที่ Dashboard = เปลี่ยนปีของทุกหน้าตาม แล้วค่อยโหลด Dashboard ใหม่ */
+    function onDashYearChange() {
+      const y = (document.getElementById('dashYearSelect') || {}).value;
+      if (y) followDashYear(y);
+      loadDashboard();
+    }
+    window.onDashYearChange = onDashYearChange;
+
+    /**
+     * ตั้งปีของทุกหน้าให้เป็นปีของ Dashboard — ทับปีที่แต่ละหน้าเลือกไว้เอง
+     * หน้าที่ยังไม่เคยเปิดใช้ปีนี้ตอนเปิดครั้งแรก (syncYearFilter / loadPlanYears / loadBudget)
+     */
+    function followDashYear(y) {
+      dashYear = String(y);
+      for (const id of ['historyYearFilter', 'docYearFilter', 'repairHistYear']) showYear(id, dashYear);
+      currentYear = dashYear;          // แผนล้างแอร์ — ปีนั้นยังไม่มีแผน = หน้าแผนบอกว่ายังไม่มี
+      pendingBudgetYear = dashYear;    // งบประมาณ — ใช้ตอนเปิดหน้างบครั้งถัดไป
+    }
+
     async function loadDashboard() {
       // ทุกจุดที่บันทึกงาน (แจ้งซ่อม ปิดเคส เปลี่ยน/ย้าย/เพิ่มเครื่อง กรอกใบติดตั้ง) เรียกตัวนี้ต่อท้าย
       // ตัวเลขบนเมนูงานซ่อมและติดตั้งจึงนับใหม่ตรงนี้ทีเดียว ไม่ต้องไล่ใส่ทุกจุด
@@ -5118,52 +5146,48 @@
 
     /* ============== 2. CLEANING PLAN ============== */
     async function loadPlanYears() {
-      const years = await call('getPlanYears');
+      const years = (await call('getPlanYears')).map(y => String(y).replace('Plan_', ''));
       const sel = document.getElementById('planYearSelect');
-      if (years.length === 0) {
-        sel.innerHTML = '<option value="">-- ยังไม่มีแผน --</option>';
-        document.querySelector('#planTable tbody').innerHTML = `<tr><td colspan="16" class="px-4 py-8 text-center text-gray-400">กรุณาสร้างแผนล้างแอร์</td></tr>`;
-        return;
-      }
-      sel.innerHTML = years.map(y => `<option value="${y.replace('Plan_','')}">ปี ${y.replace('Plan_','')}</option>`).join('');
 
       // ตั้งปีที่ถูกขอมาก่อนโหลด ไม่ใช่โหลดปีล่าสุดแล้วค่อยเปลี่ยนทีหลัง
       // ไม่งั้นจะยิงเซิร์ฟเวอร์สองรอบ และจอจะกระพริบเป็นปีที่ไม่ได้ขอแวบหนึ่ง
       const wantYear = pendingPlanYear;
       pendingPlanYear = null;
-      if (wantYear && [...sel.options].some(o => o.value === String(wantYear))) {
-        sel.value = String(wantYear);
+      let y;
+      if (wantYear && years.includes(String(wantYear))) {
+        y = String(wantYear);
       } else {
         // เข้าหน้าแผนเองตามปกติ ให้กล่องสรุปกลับไปใช้ความชอบที่จำไว้
         planSummaryForceOpen = false;
-        sel.value = pickPlanYear([...sel.options].map(o => o.value), currentYear, new Date().getFullYear());
+        y = pickPlanYear(years, currentYear, dashYear);
       }
+      // ปีที่ยังไม่มีแผนก็อยู่ในรายการ (ปีของ Dashboard) — ตารางบอกว่ายังไม่มีแผนปีนั้น
+      const all = [...new Set([...years, y])].filter(Boolean).sort().reverse();
+      sel.innerHTML = all.map(v => `<option value="${esc(v)}">ปี ${esc(v)}${years.includes(v) ? '' : ' (ยังไม่มีแผน)'}</option>`).join('');
+      sel.value = y;
+      planYearsWithPlan = years;
 
       currentYear = sel.value;
       await loadPlan();
     }
+    /** ปีที่มีแผนจริง (ปีในตัวเลือกที่ไม่อยู่ในนี้ = ปีของ Dashboard ที่ยังไม่ได้สร้างแผน) */
+    let planYearsWithPlan = [];
 
     /**
      * ปีของแผนที่จะเปิดให้ดู เมื่อไม่มีใครขอปีไหนมาเป็นพิเศษ
      *
-     * เดิมเปิดปีแรกในรายการเสมอ ซึ่งเรียงใหม่ไปเก่า พอสร้างแผนปีหน้าไว้ล่วงหน้า
-     * (ทำกันทุกปลายปี) หน้าแผนก็เปิดมาที่ปีหน้าแทนปีที่กำลังล้างอยู่ และกลับไปปีหน้า
-     * ทุกครั้งที่ออกจากหน้าแล้วเข้ามาใหม่ แม้เพิ่งเลือกปีนี้ไว้
-     *
-     * ลำดับ: ปีที่เลือกดูอยู่ก่อนออกจากหน้า → ปีปัจจุบัน → ปีล่าสุดที่ยังไม่เกินปีปัจจุบัน → ปีข้างหน้าที่ใกล้ที่สุด
+     * ลำดับ: ปีที่เลือกดูอยู่ก่อนออกจากหน้า (ถ้ายังมีแผน) → ปีของ Dashboard (เจ้าของงานขอ)
+     * ปีของ Dashboard ยังไม่มีแผนก็เปิดปีนั้น ตารางบอกว่ายังไม่มีแผน — ไม่กระโดดไปปีอื่นเอง
+     * (เดิมกระโดดไปปีล่าสุดที่มีแผน ทำให้ปีบนหน้าแผนไม่ตรงกับปีที่ Dashboard เลือก)
+     * Dashboard เปลี่ยนปี = current ถูกตั้งเป็นปีนั้น (ดู followDashYear)
      *
      * @param {string[]} years   ปีที่มีแผน (ข้อความ เช่น "2026")
      * @param {*}        current ปีที่เปิดดูอยู่ก่อนหน้า (null = เพิ่งเปิดแอป)
-     * @param {number}   nowYear ปีปัจจุบัน
+     * @param {string}   dash    ปีของ Dashboard
      */
-    function pickPlanYear(years, current, nowYear) {
-      const has = y => y != null && years.includes(String(y));
-      if (has(current)) return String(current);
-      if (has(nowYear)) return String(nowYear);
-      const past = years.filter(y => Number(y) <= nowYear).sort((a, b) => b - a);
-      if (past.length) return past[0];
-      // มีแต่แผนของปีข้างหน้า — เอาปีที่ใกล้ที่สุด (ปีหน้า ไม่ใช่อีกสามปี)
-      return [...years].sort((a, b) => a - b)[0] || '';
+    function pickPlanYear(years, current, dash) {
+      if (current != null && (years.includes(String(current)) || String(current) === String(dash))) return String(current);
+      return String(dash);
     }
 
     /* ============== โหมดกลางวัน / กลางคืน ============== */
@@ -6096,7 +6120,14 @@
       if (planPage < 1) planPage = 1;
 
       if (totalRows === 0) {
-        tb.innerHTML = `<tr><td colspan="16" class="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td></tr>`;
+        const noPlan = currentYear && !planYearsWithPlan.includes(String(currentYear));
+        const canCreate = isAdmin();   // สร้างแผนได้เฉพาะ Infrastructure (ดู EDIT_ACTIONS)
+        tb.innerHTML = noPlan
+          ? `<tr><td colspan="16" class="px-4 py-10 text-center text-gray-400">
+              <i class="ph ph-calendar-x text-4xl mb-2 block"></i>ยังไม่มีแผนล้างแอร์ปี ${esc(currentYear)}
+              ${canCreate ? `<div class="mt-3"><button onclick="openCreatePlanModal('${jsStr(currentYear)}')" class="bg-[#f47920] hover:bg-[#d96615] text-white px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1"><i class="ph ph-plus"></i> สร้างแผนปี ${esc(currentYear)}</button></div>` : ''}
+            </td></tr>`
+          : `<tr><td colspan="16" class="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td></tr>`;
         renderPlanPagination(0, 0);
         lockViewOnlySection('plan');
         return;
@@ -6447,8 +6478,9 @@
       } catch (e) {}
     }
 
-    function openCreatePlanModal() {
-      const nextYear = new Date().getFullYear() + 1;
+    function openCreatePlanModal(year) {
+      // กดจากตาราง "ยังไม่มีแผนปี …" ส่งปีนั้นมา · กดปุ่มปกติ = ปีหน้า (สร้างล่วงหน้าตอนปลายปี)
+      const nextYear = /^\d{4}$/.test(String(year || '')) ? Number(year) : new Date().getFullYear() + 1;
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
