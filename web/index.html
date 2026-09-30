@@ -4189,8 +4189,9 @@
      * ถ้าสลับลำดับฝั่งนั้น คำสั่งแก้/ลบจะไปโดนเครื่องผิดตัวโดยไม่มีอะไรฟ้องเลย
      * เรียงตรงนี้ปลอดภัยเพราะ _row ติดไปกับข้อมูลแต่ละตัว สลับที่ยังไงก็ชี้ถูกตัวเดิม
      */
-    function sortAirRows(list) {
-      const mode = (document.getElementById('airSort') || {}).value || 'code-asc';
+    /** @param {string} [mode] ค่าจากช่องเรียงลำดับ (airSort) — ไม่ส่ง = รหัสเครื่อง A → Z */
+    function sortAirRows(list, mode) {
+      mode = mode || 'code-asc';
       const byCode = (a, b) =>
         String(a.AirCode || '').localeCompare(String(b.AirCode || ''), 'th', { numeric: true, sensitivity: 'base' });
       const dir = mode.endsWith('-desc') ? -1 : 1;
@@ -4234,7 +4235,7 @@
 
       if (airAgeFilter) rows = rows.filter(isOldUnit);
       renderAirAgeFilterBar();
-      airLastList = sortAirRows(rows);
+      airLastList = sortAirRows(rows, document.getElementById('airSort')?.value);
       // เปลี่ยนคำค้นหาหรือโหลดข้อมูลใหม่ ให้กลับไปหน้าแรกเสมอ
       // ยกเว้นตอนกดปุ่มเปลี่ยนหน้า ซึ่งต้องคงหน้าที่กดไว้
       if (!keepPage) airPage = 1;
