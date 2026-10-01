@@ -1,6 +1,7 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { normalizeCode, plainText, ymdhms } from '../values.js';
-import { unitsInScope } from './airlist.js';
+import { unitsInScope, getAirList } from './airlist.js';
+import { closeRepairCaseRaw, getHistory } from './history.js';
 import { openCaseOf } from './repair-case.js';
 import { checkContractorId } from './plan.js';
 import { approvalRowOf, isPending } from './approval.js';
@@ -234,3 +235,44 @@ export async function getMyJobs(ctx) {
   }
   return out;
 }
+
+/**
+ * ซ่อมเอง — Infrastructure ซ่อมเอง หรือใช้ช่างพื้นที่ ไม่ได้ให้ผู้รับเหมา และไม่ต้องออกใบซ่อม (เจ้าของงานขอ)
+ *
+ * เลือกจากหน้าต่างมอบหมาย → กรอกที่หน้าต่างบันทึกประวัติ → ปิดเคสเหมือนออกใบซ่อมทุกอย่าง
+ * (ประวัติ "ซ่อมแล้ว" ผูกเลขเคส · เครื่องกลับเป็นใช้งานปกติ) แต่ไม่มีเอกสาร จึงติดป้ายไว้ในรายละเอียด
+ * ให้คนอ่านประวัติรู้ว่างานนี้ไม่มีใบซ่อม · เฉพาะ Infrastructure — เป็นการปิดงานโดยไม่มีหลักฐาน
+ * การมอบหมายผู้รับเหมาของเคสนี้ (ถ้ามี) ถูกยกเลิก ผู้รับเหมาจะได้ไม่เห็นเป็นงานที่ตัวเองทำเสร็จ
+ */
+export async function closeRepairSelf(ctx, record) {
+  return ctx.withLock(async () => {
+    await ctx.assertAdmin();
+    await ctx.ensureBase();
+    record = record || {};
+    const detail = plainText(record.Detail).trim();
+    if (!detail) throw new Error('กรุณากรอกว่าซ่อมอะไรไป');
+    if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่');
+
+    const code = plainText(record.AirCode);
+    const ref = openRef(ctx, 'repair', code);   // อ่านก่อนปิดเคส (ปิดแล้วเคสไม่เปิดอยู่)
+    // ตรวจสถานะและลงประวัติ — ไม่ผ่านจะ throw ก่อนแตะการมอบหมาย
+    await closeRepairCaseRaw(ctx, { ...record, AirCode: code, Detail: SELF_REPAIR_TAG + ' — ' + detail });
+
+    if (ref) {
+      const nc = normalizeCode(code);
+      const me = await ctx.currentUser();
+      for (const a of ctx.ss.objects(SHEETS.ASSIGN)) {
+        if (plainText(a.Kind) !== 'repair' || normalizeCode(a.AirCode) !== nc || plainText(a.RefID) !== ref) continue;
+        if (!plainText(a.ContractorID)) continue;
+        ctx.ss.writeByHeaders(SHEETS.ASSIGN, a._row, {
+          ContractorID: '', ApptDate: '', Note: '', AssignedBy: me + ' (ซ่อมเอง)', AssignedAt: ymdhms(new Date())
+        });
+      }
+    }
+    await ctx.ss.flush();
+    return { air: await getAirList(ctx), history: await getHistory(ctx) };
+  });
+}
+
+/** ป้ายในรายละเอียดประวัติของงานที่ปิดแบบซ่อมเอง (ไม่มีใบซ่อม) */
+export const SELF_REPAIR_TAG = 'ซ่อมเอง (ไม่มีเอกสาร)';

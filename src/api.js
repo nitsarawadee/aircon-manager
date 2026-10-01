@@ -36,7 +36,7 @@ import {
   getRepairLink, submitRepairLink, submitInstallLink, saveRepairLinkPhoto, getRepairLinkPdf,
   createRepairLink, getRepairLinks, revokeRepairLink
 } from './modules/repairlink.js';
-import { assignJob, getJobAssignments, getMyJobs } from './modules/assign.js';
+import { assignJob, getJobAssignments, getMyJobs, closeRepairSelf } from './modules/assign.js';
 import { approveDoc, getApprovalCount } from './modules/approval.js';
 import { getWarehouse, writeOffStock } from './modules/warehouse.js';
 
@@ -153,6 +153,8 @@ const API_FUNCTIONS = {
   assignJob,
   getJobAssignments,
   getMyJobs,
+  // ซ่อมเอง (Infrastructure) — ปิดเคสโดยไม่ออกใบซ่อม
+  closeRepairSelf,
 
   // เอกสารติดตั้ง ITEL-FM-NE-006
   getInstallForms,

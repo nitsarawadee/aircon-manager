@@ -19,7 +19,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
 import { INSTALL_PENDING_NOTE } from '../src/schema.js';
-import { assignJob, getJobAssignments, getMyJobs } from '../src/modules/assign.js';
+import { assignJob, getJobAssignments, getMyJobs, closeRepairSelf } from '../src/modules/assign.js';
 import { saveRepairForm, getRepairForms } from '../src/modules/repairform.js';
 import { saveInstallForm, getInstallForms } from '../src/modules/installform.js';
 import {
@@ -214,4 +214,27 @@ test('ลิงก์ใบติดตั้งสร้างได้เฉ�
   const rep = await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'repair');
   await createRepairLink(as(db, 'boss'), 'ATG-PMK-AIR-1', 7, 'install');
   assert.equal((await getRepairLink(anon(db), rep.token)).state, 'open', 'ลิงก์ซ่อมต้องไม่ถูกยกเลิกเพราะสร้างลิงก์ติดตั้ง');
+});
+
+/* ==================== ซ่อมเอง (Infrastructure — ไม่ออกใบซ่อม) ==================== */
+
+test('ซ่อมเอง — เฉพาะ Infrastructure ต้องบอกว่าซ่อมอะไร · ปิดเคส ประวัติติดป้ายไม่มีเอกสาร · ยกเลิกการมอบหมายผู้รับเหมา', async () => {
+  const db = freshDb();
+  await assignJob(as(db, 'boss'), 'repair', 'ATG-PMK-AIR-1', 'CT001', '2026-09-05', '');
+  const rec = { AirCode: 'ATG-PMK-AIR-1', Date: '2026-09-06', Detail: 'เปลี่ยนคาปาซิเตอร์', Technician: 'ช่างพื้นที่' };
+
+  await assert.rejects(() => closeRepairSelf(as(db, 'r2'), rec), /Infrastructure|ผู้ดูแลระบบ|สิทธิ์/);
+  await assert.rejects(() => closeRepairSelf(as(db, 'boss'), { ...rec, Detail: ' ' }), /ซ่อมอะไร/);
+
+  await closeRepairSelf(as(db, 'boss'), rec);
+  assert.equal(db.prepare("SELECT Status FROM air_units WHERE AirCode = 'ATG-PMK-AIR-1'").get().Status, 'ใช้งานปกติ');
+  const h = db.prepare("SELECT * FROM history WHERE AirCode = 'ATG-PMK-AIR-1' AND EventType = 'ซ่อมแล้ว'").get();
+  assert.equal(h.CaseID, 'IC2609-01', 'ผูกเลขเคสเดิม');
+  assert.ok(h.Detail.includes('ซ่อมเอง (ไม่มีเอกสาร) — เปลี่ยนคาปาซิเตอร์'), h.Detail);
+  assert.ok(h.Detail.startsWith('อาการที่แจ้งไว้: ไม่เย็น'), 'อาการที่แจ้งไว้ยังอยู่ในประวัติ');
+  assert.equal(h.Technician, 'ช่างพื้นที่');
+  assert.equal((await getMyJobs(as(db, 'ctA'))).length, 0, 'ผู้รับเหมาต้องไม่เห็นเป็นงานที่ตัวเองทำเสร็จ');
+
+  // ปิดไปแล้ว ปิดซ้ำไม่ได้
+  await assert.rejects(() => closeRepairSelf(as(db, 'boss'), rec), /ยังปิดงานซ่อมไม่ได้/);
 });

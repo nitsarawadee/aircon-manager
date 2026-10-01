@@ -436,65 +436,72 @@ export async function completeRepairRecord(ctx, record) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('repair');
     await ctx.ensureBase();
-
-    const airHeaders = ctx.ss.headers(SHEETS.AIRLIST);
-    const list = ctx.ss.objects(SHEETS.AIRLIST);
-    const target = normalizeCode(record.AirCode);
-    const found = list.find(a => normalizeCode(a.AirCode) === target);
-
-    if (!found) {
-      throw new Error('ไม่พบรหัสเครื่อง ' + record.AirCode + ' ในระบบ ไม่สามารถปิดงานซ่อมได้');
-    }
-    await ctx.assertRegionAccess(found.Region);
-
-    // ปิดงานได้เฉพาะตอนที่เคสเดินมาถึงขั้น "รอซ่อม" แล้วเท่านั้น
-    //
-    // ขั้น "ชำรุด" คือเพิ่งเปิดเคส ยังอยู่ระหว่างขออนุมัติค่าใช้จ่าย ยังไม่มีใครลงมือซ่อม
-    // ปิดงานตอนนั้นจะได้ประวัติที่บอกว่าซ่อมเสร็จทั้งที่ยังไม่ได้เริ่ม
-    //
-    // ตรวจที่ฝั่งเซิร์ฟเวอร์ด้วย ไม่ใช่แค่ซ่อนปุ่มในหน้าเว็บ เพราะการซ่อนปุ่มกันได้แค่
-    // การกดพลาด กันไม่ได้ถ้าหน้าเว็บค้างอยู่ในสถานะเก่าแล้วกดตามที่เห็น
-    const status = String(found.Status || '').trim();
-    if (status !== 'รอซ่อม') {
-      throw new Error(
-        'เครื่อง ' + found.AirCode + ' อยู่ในสถานะ "' + (status || '-') + '" ยังปิดงานซ่อมไม่ได้ — ' +
-        'ต้องอนุมัติซ่อมแล้วเปลี่ยนสถานะเป็น "รอซ่อม" ก่อน (กดปุ่มในหน้างานซ่อม หรือแก้ที่หน้ารายการเครื่องก็ได้)'
-      );
-    }
-
-    // เก็บอาการเสียที่แจ้งไว้ลงประวัติก่อน แล้วค่อยล้างออกจากข้อมูลเครื่อง
-    // ไม่พึ่งข้อความที่หน้าเว็บเติมมาให้ เพราะคนกรอกลบทิ้งได้
-    // ถ้าไม่ดักตรงนี้ อาการเสียจะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
-    const reported = String(found.Note || '').trim();
-    let detail = String(record.Detail || '').trim();
-    if (reported && !detail.includes(reported)) {
-      detail = 'อาการที่แจ้งไว้: ' + reported + (detail ? ' — ' + detail : '');
-    }
-
-    const caseId = ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), record.AirCode);
-
-    await addHistoryRaw(ctx, {
-      CaseID: caseId,
-      AirCode: record.AirCode,
-      Date: record.Date,
-      EventType: 'ซ่อมแล้ว',
-      Detail: detail,
-      Cost: record.Cost,
-      Technician: record.Technician
-    });
-
-    // ล้างอาการเสียทิ้งพร้อมกับปิดงาน ไม่งั้นเครื่องที่ซ่อมเสร็จแล้วจะยังขึ้นอาการเดิมค้างอยู่
-    // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
-    ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
-      Status: 'ใช้งานปกติ',
-      Note: '',
-      UpdatedAt: ymdhms(new Date()),
-      UpdatedBy: await ctx.currentUser()
-    });
-
+    await closeRepairCaseRaw(ctx, record);
     await ctx.ss.flush();
 
     const { getAirList } = await import('./airlist.js');
     return { air: await getAirList(ctx), history: await getHistory(ctx) };
   });
+}
+
+/**
+ * แกนของการปิดเคสซ่อม — ตรวจว่า "รอซ่อม" ลงประวัติ "ซ่อมแล้ว" ผูกเลขเคส แล้วเครื่องกลับเป็นใช้งานปกติ
+ * ไม่ล็อก ไม่ flush — ผู้เรียกถือล็อกและ ensureBase แล้ว (completeRepairRecord · closeRepairSelf ใน assign.js)
+ */
+export async function closeRepairCaseRaw(ctx, record) {
+  const airHeaders = ctx.ss.headers(SHEETS.AIRLIST);
+  const list = ctx.ss.objects(SHEETS.AIRLIST);
+  const target = normalizeCode(record.AirCode);
+  const found = list.find(a => normalizeCode(a.AirCode) === target);
+
+  if (!found) {
+    throw new Error('ไม่พบรหัสเครื่อง ' + record.AirCode + ' ในระบบ ไม่สามารถปิดงานซ่อมได้');
+  }
+  await ctx.assertRegionAccess(found.Region);
+
+  // ปิดงานได้เฉพาะตอนที่เคสเดินมาถึงขั้น "รอซ่อม" แล้วเท่านั้น
+  //
+  // ขั้น "ชำรุด" คือเพิ่งเปิดเคส ยังอยู่ระหว่างขออนุมัติค่าใช้จ่าย ยังไม่มีใครลงมือซ่อม
+  // ปิดงานตอนนั้นจะได้ประวัติที่บอกว่าซ่อมเสร็จทั้งที่ยังไม่ได้เริ่ม
+  //
+  // ตรวจที่ฝั่งเซิร์ฟเวอร์ด้วย ไม่ใช่แค่ซ่อนปุ่มในหน้าเว็บ เพราะการซ่อนปุ่มกันได้แค่
+  // การกดพลาด กันไม่ได้ถ้าหน้าเว็บค้างอยู่ในสถานะเก่าแล้วกดตามที่เห็น
+  const status = String(found.Status || '').trim();
+  if (status !== 'รอซ่อม') {
+    throw new Error(
+      'เครื่อง ' + found.AirCode + ' อยู่ในสถานะ "' + (status || '-') + '" ยังปิดงานซ่อมไม่ได้ — ' +
+      'ต้องอนุมัติซ่อมแล้วเปลี่ยนสถานะเป็น "รอซ่อม" ก่อน (กดปุ่มในหน้างานซ่อม หรือแก้ที่หน้ารายการเครื่องก็ได้)'
+    );
+  }
+
+  // เก็บอาการเสียที่แจ้งไว้ลงประวัติก่อน แล้วค่อยล้างออกจากข้อมูลเครื่อง
+  // ไม่พึ่งข้อความที่หน้าเว็บเติมมาให้ เพราะคนกรอกลบทิ้งได้
+  // ถ้าไม่ดักตรงนี้ อาการเสียจะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
+  const reported = String(found.Note || '').trim();
+  let detail = String(record.Detail || '').trim();
+  if (reported && !detail.includes(reported)) {
+    detail = 'อาการที่แจ้งไว้: ' + reported + (detail ? ' — ' + detail : '');
+  }
+
+  const caseId = ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), record.AirCode);
+
+  await addHistoryRaw(ctx, {
+    CaseID: caseId,
+    AirCode: record.AirCode,
+    Date: record.Date,
+    EventType: 'ซ่อมแล้ว',
+    Detail: detail,
+    Cost: record.Cost,
+    Technician: record.Technician
+  });
+
+  // ล้างอาการเสียทิ้งพร้อมกับปิดงาน ไม่งั้นเครื่องที่ซ่อมเสร็จแล้วจะยังขึ้นอาการเดิมค้างอยู่
+  // ตัวอาการไม่หายไปไหน ย้ายไปอยู่ในประวัติของงานซ่อมใบนี้แทน
+  ctx.ss.writeByHeaders(SHEETS.AIRLIST, found._row, {
+    Status: 'ใช้งานปกติ',
+    Note: '',
+    UpdatedAt: ymdhms(new Date()),
+    UpdatedBy: await ctx.currentUser()
+  });
+
 }

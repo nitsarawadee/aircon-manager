@@ -2640,7 +2640,7 @@
       // ประวัติ
       openHistoryModal: 'history', saveHistory: 'history', deleteHistory: 'history', addHistoryForUnit: 'history',
       // งานซ่อม
-      openReportRepairModal: 'repair', submitReportRepair: 'repair', approveRepair: 'repair',
+      openReportRepairModal: 'repair', submitReportRepair: 'repair', approveRepair: 'repair', goSelfRepair: 'admin',
       openCannotRepairModal: 'repair', submitCannotRepair: 'repair',
       // เอกสารล้าง
       openCleaningFormModal: 'cleaningform', submitCleaningForm: 'cleaningform', openFormForPlanUnit: 'cleaningform',
@@ -7061,28 +7061,46 @@
 
     document.getElementById('historySearch').addEventListener('input', () => refreshHistoryTable());
 
-    function openHistoryModal() {
+    /**
+     * โหมดซ่อมเอง (มาจากหน้าต่างมอบหมายงานซ่อม — Infrastructure) — เครื่องกับเหตุการณ์ "ซ่อมแล้ว" ล็อกไว้
+     * บันทึกแล้วปิดเคสด้วย closeRepairSelf แทน addHistoryRecord · null = บันทึกประวัติทั่วไปแบบเดิม
+     */
+    let historySelfRepair = null;
+
+    function openHistoryModal(opts) {
       const opt = (arr) => (arr || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+      historySelfRepair = (opts && opts.selfRepair) || null;
+      const selfUnit = historySelfRepair
+        ? ((currentAirList || []).find(a => sameCode(a.AirCode, historySelfRepair)) || { AirCode: historySelfRepair })
+        : null;
+      const fieldCls = 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg relative z-10 animate-[fadeIn_0.2s_ease]">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-wrench text-[#1153a1]"></i> บันทึกประวัติซ่อมบำรุง</h3>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-wrench text-[#1153a1]"></i> ${selfUnit ? 'ซ่อมเอง — บันทึกและปิดงานซ่อม' : 'บันทึกประวัติซ่อมบำรุง'}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="p-6 space-y-4">
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องปรับอากาศ <span class="text-red-500">*</span></label>
+              ${selfUnit ? `<div class="bg-blue-50 border border-blue-100 text-[#1153a1] text-xs rounded-lg p-3 flex gap-2">
+                <i class="ph ph-info text-lg shrink-0"></i>
+                <p>บันทึกแล้วเคสซ่อมของเครื่องนี้จะปิด เครื่องกลับเป็น "ใช้งานปกติ" — ไม่ต้องออกใบซ่อม
+                   ประวัติจะขึ้นว่า "ซ่อมเอง (ไม่มีเอกสาร)"${selfUnit.Note ? '<br>อาการที่แจ้งไว้: ' + esc(selfUnit.Note) : ''}</p>
+              </div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องปรับอากาศ</label>
+                <input id="h_air" value="${esc(airPickerLabel(selfUnit))}" readonly class="${fieldCls} bg-slate-50 text-gray-600 text-sm"></div>`
+              : `<div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่องปรับอากาศ <span class="text-red-500">*</span></label>
                 ${airPickerInput({
                   id: 'h_air', units: (currentAirList || []).filter(a => !isAwaitingInstall(a.Status)),
                   focusCls: 'focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]'
                 })}
-              </div>
+              </div>`}
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ดำเนินการ <span class="text-red-500">*</span></label>${dateField('h_date', new Date().toISOString().slice(0,10), 'w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]')}</div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเหตุการณ์</label><select id="h_type" class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]">${opt(currentConfig.EventType)}</select></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเหตุการณ์</label><select id="h_type" ${selfUnit ? 'disabled' : ''} class="w-full rounded-lg border-gray-300 border px-3 py-2 bg-white outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1] disabled:bg-slate-50 disabled:text-gray-600">${selfUnit ? '<option value="ซ่อมแล้ว">ซ่อมแล้ว</option>' : opt(currentConfig.EventType)}</select></div>
               </div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียด / อาการเสีย</label><textarea id="h_detail" rows="3" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></textarea></div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">${selfUnit ? 'ซ่อมอะไรไป <span class="text-red-500">*</span>' : 'รายละเอียด / อาการเสีย'}</label><textarea id="h_detail" rows="3" class="w-full rounded-lg border-gray-300 border px-3 py-2 resize-none outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></textarea></div>
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label><input type="number" id="h_cost" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่าง / ผู้รับเหมา</label><input id="h_tech" class="w-full rounded-lg border-gray-300 border px-3 py-2 outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]"></div>
@@ -7090,7 +7108,7 @@
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-              <button onclick="saveHistory()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-floppy-disk"></i> บันทึกประวัติ</button>
+              <button onclick="saveHistory()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-floppy-disk"></i> ${selfUnit ? 'บันทึกและปิดงาน' : 'บันทึกประวัติ'}</button>
             </div>
           </div>
         </div>`;
@@ -7116,6 +7134,25 @@
         return;
       }
       if (!record.Date) { showToast('กรุณาระบุวันที่', 'error'); return; }
+      // ซ่อมเอง: ปิดเคสซ่อมด้วย (เฉพาะ Infrastructure — ดู closeRepairSelf)
+      if (historySelfRepair) {
+        if (!String(record.Detail || '').trim()) { showToast('กรุณากรอกว่าซ่อมอะไรไป', 'error'); return; }
+        try {
+          const res = await call('closeRepairSelf', record);
+          historySelfRepair = null;
+          currentHistory = res.history;
+          currentAirList = res.air;
+          renderAirTable(currentAirList);   // วาดหน้างานซ่อมตามด้วย (เคสหายจากตารางเคสที่ยังไม่ปิด)
+          renderHistoryTable();
+          if (airDetailCode) renderAirDetail();
+          closeModal();
+          showToast('ปิดงานซ่อมแล้ว — ซ่อมเอง (ไม่มีเอกสาร)');
+          loadJobAssignments();
+          loadDashboard();
+          loadBudget();
+        } catch (e) {}
+        return;
+      }
       try {
         currentHistory = await call('addHistoryRecord', record);
         renderHistoryTable();
@@ -10938,6 +10975,14 @@ const CLEANING_CHECKLIST_ITEMS = [
     const unit = (currentAirList || []).find(u => String(u.AirCode) === String(airCode)) || { AirCode: airCode };
     const title = kind === 'install' ? 'มอบหมายงานติดตั้ง' : 'มอบหมายงานซ่อม';
     const field = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
+    // ซ่อมเอง (ไม่ออกใบซ่อม) เฉพาะงานซ่อม และเฉพาะ Infrastructure — เซิร์ฟเวอร์ตรวจซ้ำ (closeRepairSelf)
+    const canSelf = kind === 'repair' && isAdmin();
+    const modeBtn = (mode, icon, label, on) => `
+      <label class="cursor-pointer">
+        <input type="radio" name="as_mode" value="${mode}" ${on ? 'checked' : ''} onchange="setAssignMode(this.value)" class="peer sr-only">
+        <span class="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-600 peer-checked:border-[#1153a1] peer-checked:bg-blue-50 peer-checked:text-[#1153a1] hover:bg-gray-50">
+          <i class="ph ${icon}"></i> ${label}</span>
+      </label>`;
     document.getElementById('modalRoot').innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -10950,25 +10995,64 @@ const CLEANING_CHECKLIST_ITEMS = [
             <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
           </div>
           <div class="p-6 space-y-4">
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้รับเหมา <span class="text-red-500">*</span></label>
-              ${contractorSelect('as_ct', a ? a.contractorId : '', field)}</div>
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">วันนัด</label>
-              ${dateField('as_date', a ? a.apptDate : '', field)}</div>
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุถึงผู้รับเหมา</label>
-              <input id="as_note" value="${esc(a ? a.note : '')}" placeholder="เช่น เข้าหน้างานหลังบ่ายสอง" class="${field}"></div>
-            <p class="text-xs text-gray-500">ผู้รับเหมาเห็นงานนี้ในหน้าตารางงานของตัวเอง และกรอกเอกสารในบัญชีตัวเองได้ · ผู้รับเหมาที่ไม่มีบัญชี ใช้ปุ่ม "ส่งลิงก์" แทน</p>
+            ${canSelf ? `<div class="grid grid-cols-2 gap-2">
+              ${modeBtn('contractor', 'ph-hard-hat', 'ผู้รับเหมาซ่อม', true)}
+              ${modeBtn('self', 'ph-wrench', 'ซ่อมเอง', false)}
+            </div>` : ''}
+            <div id="as_contractorBox" class="space-y-4">
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">ผู้รับเหมา <span class="text-red-500">*</span></label>
+                ${contractorSelect('as_ct', a ? a.contractorId : '', field)}</div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">วันนัด</label>
+                ${dateField('as_date', a ? a.apptDate : '', field)}</div>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุถึงผู้รับเหมา</label>
+                <input id="as_note" value="${esc(a ? a.note : '')}" placeholder="เช่น เข้าหน้างานหลังบ่ายสอง" class="${field}"></div>
+              <p class="text-xs text-gray-500">ผู้รับเหมาเห็นงานนี้ในหน้าตารางงานของตัวเอง และกรอกเอกสารในบัญชีตัวเองได้ · ผู้รับเหมาที่ไม่มีบัญชี ใช้ปุ่ม "ส่งลิงก์" แทน</p>
+            </div>
+            ${canSelf ? `<div id="as_selfBox" class="hidden bg-blue-50 border border-blue-100 text-[#1153a1] text-sm rounded-lg p-3 flex gap-2">
+              <i class="ph ph-info text-lg shrink-0"></i>
+              <p>Infrastructure ซ่อมเอง หรือใช้ช่างพื้นที่ — ไม่ต้องออกใบซ่อม กด "ไปบันทึกประวัติ" แล้วกรอกว่าซ่อมอะไรไป
+                 บันทึกแล้วเคสจะปิด เครื่องกลับเป็น "ใช้งานปกติ" และประวัติขึ้นว่า "ซ่อมเอง (ไม่มีเอกสาร)"${a ? ' · การมอบหมายผู้รับเหมาของงานนี้จะถูกยกเลิก' : ''}</p>
+            </div>` : ''}
           </div>
           <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between gap-3 rounded-b-2xl">
-            <div>${a ? `<button onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', true)" class="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">ยกเลิกการมอบหมาย</button>` : ''}</div>
+            <div id="as_cancelBox">${a ? `<button onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', true)" class="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">ยกเลิกการมอบหมาย</button>` : ''}</div>
             <div class="flex gap-3">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ปิด</button>
-              <button onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', false)" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm">บันทึก</button>
+              <button id="as_saveBtn" onclick="saveAssign('${jsStr(kind)}', '${jsStr(airCode)}', false)" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm">บันทึก</button>
+              ${canSelf ? `<button id="as_selfBtn" onclick="goSelfRepair('${jsStr(airCode)}')" class="hidden px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm items-center gap-1"><i class="ph ph-clock-counter-clockwise"></i> ไปบันทึกประวัติ</button>` : ''}
             </div>
           </div>
         </div>
       </div>`;
   }
   window.openAssignModal = openAssignModal;
+
+  /** สลับหน้าต่างมอบหมาย: ผู้รับเหมาซ่อม (แบบเดิม) / ซ่อมเอง (ไปบันทึกประวัติ) */
+  function setAssignMode(mode) {
+    const self = mode === 'self';
+    const show = (id, on, cls = 'block') => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('hidden', !on);
+      if (cls !== 'block') el.classList.toggle(cls, on);
+    };
+    show('as_contractorBox', !self);
+    // ซ่อนแบบยังกินที่ ปุ่มด้านขวาจะได้ไม่เลื่อนไปชิดซ้าย
+    const cancelBox = document.getElementById('as_cancelBox');
+    if (cancelBox) cancelBox.classList.toggle('invisible', self);
+    show('as_saveBtn', !self);
+    show('as_selfBox', self, 'flex');
+    show('as_selfBtn', self, 'inline-flex');
+  }
+  window.setAssignMode = setAssignMode;
+
+  /** ซ่อมเอง → หน้าประวัติ เปิดหน้าต่างบันทึกประวัติของเครื่องนี้ (บันทึกแล้วปิดเคส — ดู saveHistory) */
+  function goSelfRepair(airCode) {
+    closeModal();
+    document.querySelector('[data-tab="history"]').click();
+    openHistoryModal({ selfRepair: airCode });
+  }
+  window.goSelfRepair = goSelfRepair;
 
   async function saveAssign(kind, airCode, cancel) {
     const ct = cancel ? '' : (document.getElementById('as_ct') || {}).value || '';
