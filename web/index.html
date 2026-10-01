@@ -2025,8 +2025,12 @@
      *
      * 1.2 วินาทีแรกคือเวลาที่สายตากว่าจะเหลือบไปเห็นว่ามีอะไรเด้งขึ้นมาตรงมุมจอ
      * ที่เหลือคิดตามจำนวนตัวอักษรที่ต้องอ่าน ราว 11 ตัวต่อวินาที
+     *
+     * ข้อความสีแดง (error) ค้าง 7 วินาทีเท่ากันทุกอัน (เจ้าของงานขอ — เดิมค้างจนกว่าจะกดปิด)
+     * เอาเมาส์วางหรือแตะค้าง = หยุดนับ อ่านให้จบก่อนได้ เหมือนข้อความอื่น
      */
-    function toastMs(message) {
+    function toastMs(message, type) {
+      if (type === 'error') return 7000;
       const chars = String(message == null ? '' : message).length;
       return Math.min(14000, Math.max(4000, 1200 + chars * 90));
     }
@@ -2113,10 +2117,7 @@
         toast.classList.add('toast-enter-active');
       });
 
-      // error ค้างไว้จนกว่าจะกดปิด — ไม่ตั้งเวลา ไม่มีแถบนับถอยหลัง
-      if (type === 'error') return;
-
-      const ms = toastMs(message);
+      const ms = toastMs(message, type);
 
       const bar = document.createElement('div');
       bar.className = 'toast-bar mx-4 mb-3 ' + skin[3] + ' opacity-60';
