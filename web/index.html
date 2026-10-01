@@ -7588,7 +7588,9 @@
       }
       // ยังรอเอกสารติดตั้ง (เพิ่มเครื่องใหม่ / เปลี่ยน / ย้ายเครื่องมาแทน) → หน้างานซ่อมและติดตั้งของเครื่องนั้น
       // ตารางงานติดตั้งที่รอเอกสารมีปุ่มกรอก ส่งลิงก์ มอบหมาย (เดิมเฉพาะเปลี่ยนเครื่อง เพิ่มเครื่องใหม่ขึ้น "ยังไม่มีเอกสาร")
-      if (String(note || '').trim() === INSTALL_PENDING_NOTE && document.querySelector('[data-tab="repair"]')) {
+      // (เครื่องที่ลบไปแล้วไม่มีงานให้ทำที่หน้านั้น — ปล่อยให้ไปสรุปเคส / บอกว่าไม่มีเอกสารแทน)
+      const unitGone = (currentAirList || []).length && !(currentAirList || []).some(a => sameCode(a.AirCode, airCode));
+      if (String(note || '').trim() === INSTALL_PENDING_NOTE && !unitGone && document.querySelector('[data-tab="repair"]')) {
         viewAirRepair(airCode);
         return;
       }
@@ -7912,6 +7914,10 @@
         return true;
       });
       const unitOf = h => (currentAirList || []).find(a => sameCode(a.AirCode, h.AirCode)) || {};
+      // เครื่องที่ถูกลบไปแล้ว ประวัติยังอยู่ (ตั้งใจเก็บไว้) แต่ไม่มีอะไรให้ติดตั้ง — ไม่โชว์
+      // กติกาเดียวกับตัวเลขบนเมนู (getRepairWorkCount นับเฉพาะเครื่องที่ยังอยู่) ตารางกับตัวเลขจะได้ตรงกัน
+      // รายการเครื่องว่าง (ไม่มีสิทธิ์ดูเมนูรายการเครื่อง) = เช็คไม่ได้ ปล่อยไว้ตามเดิม
+      if ((currentAirList || []).length) list = list.filter(h => unitOf(h).AirCode);
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         list = list.filter(h => searchText({ ...unitOf(h), ...h }).includes(q));
