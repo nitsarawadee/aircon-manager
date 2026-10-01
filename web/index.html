@@ -7025,14 +7025,19 @@
 
       historyPage = clampPage(historyPage, displayHistory.length);
       // กดเลขที่แล้วไปหน้าแบบฟอร์มเอกสารของเคส/ใบนั้น — เฉพาะคนที่มีเมนูแบบฟอร์มเอกสาร
-      const canOpenDocs = !!document.querySelector('[data-tab="cleaningform"]');
+      // เคสที่ปิดแบบซ่อมเองไม่มีเอกสาร กดแล้วเปิดสรุปเคสแทน ทุกคนที่เห็นหน้าประวัติกดได้
+      const hasDocsMenu = !!document.querySelector('[data-tab="cleaningform"]');
+      const selfCases = selfRepairCaseIds();
+      const canOpenDocs = h => hasDocsMenu || selfCases.has(String(h.CaseID || '').trim());
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
           <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${
             !displayDocId(h) ? '-'
-            : canOpenDocs
+            : canOpenDocs(h)
               ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
-                  title="${isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์' : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
+                  title="${selfCases.has(String(h.CaseID || '').trim()) ? 'ดูสรุปเคสนี้ (ซ่อมเอง — ไม่มีใบซ่อม)'
+                    : isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์'
+                    : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
                   class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
               : esc(displayDocId(h))
           }</td>
@@ -7424,6 +7429,11 @@
      */
     let pendingDocOpen = null;
     async function openDocOfHistory(caseId, id, note, airCode, date, eventType) {
+      // เคสที่ปิดแบบซ่อมเอง (ไม่มีใบซ่อม) → หน้าต่างสรุปเคส ใช้เป็นหลักฐานแทนเอกสาร (เจ้าของงานขอ)
+      if (caseId && selfRepairCaseIds().has(String(caseId).trim())) {
+        openCaseSummary(caseId);
+        return;
+      }
       // รื้อถอน/ปลดระวาง · Write off → เครื่องนั้นในคลังแอร์ (เจ้าของงานสั่ง) — เฉพาะคนที่เห็นเมนูคลัง
       if (isRetiredStatus(eventType) && document.querySelector('[data-tab="warehouse"]')) {
         await openWarehouseOfHistory(caseId, airCode, date);
@@ -7493,6 +7503,77 @@
       document.querySelector('[data-tab="cleaningform"]').click();
     }
     window.openDocOfHistory = openDocOfHistory;
+
+    /** ป้ายที่เซิร์ฟเวอร์ใส่ในรายละเอียดประวัติของงานที่ปิดแบบซ่อมเอง (SELF_REPAIR_TAG ใน src/modules/assign.js) */
+    const SELF_REPAIR_TAG = 'ซ่อมเอง (ไม่มีเอกสาร)';
+
+    /** เลขเคสที่ปิดแบบซ่อมเอง — มีแถว "ซ่อมแล้ว" ที่ติดป้าย SELF_REPAIR_TAG */
+    function selfRepairCaseIds() {
+      const out = new Set();
+      for (const h of (currentHistory || [])) {
+        const c = String(h.CaseID || '').trim();
+        if (c && String(h.EventType || '').trim() === 'ซ่อมแล้ว' && String(h.Detail || '').includes(SELF_REPAIR_TAG)) out.add(c);
+      }
+      return out;
+    }
+
+    /**
+     * สรุปเคส (ซ่อมเอง) — ทุกขั้นของเคสเรียงตามเวลา: วันที่ เหตุการณ์ รายละเอียด ช่าง ค่าใช้จ่าย และใครบันทึก
+     * ใช้เป็นหลักฐานของงานที่ปิดโดยไม่มีใบซ่อม · ข้อมูลมาจากประวัติล้วนๆ ไม่ได้เก็บอะไรเพิ่ม
+     */
+    function openCaseSummary(caseId) {
+      const id = String(caseId || '').trim();
+      const rows = (currentHistory || []).filter(h => String(h.CaseID || '').trim() === id)
+        .slice().sort((a, b) => String(a.Date || '').localeCompare(String(b.Date || '')) ||
+                                String(a.CreatedAt || '').localeCompare(String(b.CreatedAt || '')));
+      if (!rows.length) { showToast('ไม่พบประวัติของเคส ' + id, 'error'); return; }
+      const code = rows[0].AirCode;
+      const unit = (currentAirList || []).find(a => sameCode(a.AirCode, code)) || {};
+      const self = rows.some(h => String(h.EventType || '').trim() === 'ซ่อมแล้ว' && String(h.Detail || '').includes(SELF_REPAIR_TAG));
+      const timeOf = v => { const m = /\d{2}:\d{2}/.exec(String(v || '')); return m ? ' ' + m[0] : ''; };
+
+      const items = rows.map((h, i) => `
+        <li class="relative pl-6 pb-4 ${i === rows.length - 1 ? '' : 'border-l border-gray-200'} ml-2">
+          <span class="absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white ${i === rows.length - 1 ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-medium text-gray-800">${esc(fmtDate(h.Date))}</span>
+            ${eventTypeBadge(h.EventType)}
+            <span class="text-[11px] text-gray-400 font-mono">${esc(h.ID)}</span>
+          </div>
+          <p class="text-sm text-gray-700 mt-1 whitespace-pre-line">${esc(h.Detail) || '-'}</p>
+          <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            ${h.Technician ? `<span><i class="ph ph-user"></i> ช่าง: ${esc(h.Technician)}</span>` : ''}
+            ${h.Cost ? `<span><i class="ph ph-coins"></i> ${Number(h.Cost).toLocaleString()} บาท</span>` : ''}
+            <span><i class="ph ph-pencil-simple-line"></i> บันทึกโดย ${esc(h.RecordedBy) || '-'}${esc(timeOf(h.CreatedAt))}</span>
+          </div>
+        </li>`).join('');
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative z-10 animate-[fadeIn_0.2s_ease]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-start gap-3">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-clipboard-text text-[#1153a1]"></i> สรุปเคส ${esc(id)}</h3>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  <button type="button" onclick="closeModal(); openAirDetail('${jsStr(code)}')" title="เปิดหน้าของเครื่อง ${esc(code)}"
+                    class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2 font-medium">${esc(code)}</button>
+                  ${unit.NodeName ? ' · ' + esc(unit.NodeName) : ''}${unit.SiteCode ? ' (' + esc(unit.SiteCode) + ')' : ''}</p>
+              </div>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6">
+              ${self ? `<div class="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 flex items-center gap-2">
+                <i class="ph-fill ph-wrench"></i> ปิดงานแบบซ่อมเอง — ไม่มีใบซ่อม</div>` : ''}
+              <ol class="list-none">${items}</ol>
+            </div>
+            <div class="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-end rounded-b-2xl">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ปิด</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    window.openCaseSummary = openCaseSummary;
 
     /**
      * เคสรื้อถอน/Write off ในหน้าประวัติ → หน้าคลังแอร์ ค้นหาเครื่องของเคสนั้นไว้ให้
