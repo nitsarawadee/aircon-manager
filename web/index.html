@@ -7028,7 +7028,7 @@
       // เคสที่ปิดแบบซ่อมเองไม่มีเอกสาร กดแล้วเปิดสรุปเคสแทน ทุกคนที่เห็นหน้าประวัติกดได้
       const hasDocsMenu = !!document.querySelector('[data-tab="cleaningform"]');
       const selfCases = selfRepairCaseIds();
-      const canOpenDocs = h => hasDocsMenu || selfCases.has(String(h.CaseID || '').trim());
+      const canOpenDocs = h => hasDocsMenu || !!String(h.CaseID || '').trim();
       tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
         <tr class="hover:bg-blue-50/50 transition-colors">
           <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขเคสงานซ่อม (ใบนี้เลขที่ ' + esc(h.ID) + ')' : 'เลขที่เอกสาร'}">${
@@ -7036,6 +7036,7 @@
             : canOpenDocs(h)
               ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
                   title="${selfCases.has(String(h.CaseID || '').trim()) ? 'ดูสรุปเคสนี้ (ซ่อมเอง — ไม่มีใบซ่อม)'
+                    : !hasDocsMenu ? 'ดูสรุปเคสนี้'
                     : isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์'
                     : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
                   class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
@@ -7430,7 +7431,7 @@
     let pendingDocOpen = null;
     async function openDocOfHistory(caseId, id, note, airCode, date, eventType) {
       // เคสที่ปิดแบบซ่อมเอง (ไม่มีใบซ่อม) → หน้าต่างสรุปเคส ใช้เป็นหลักฐานแทนเอกสาร (เจ้าของงานขอ)
-      if (caseId && selfRepairCaseIds().has(String(caseId).trim())) {
+      if (caseId && (selfRepairCaseIds().has(String(caseId).trim()) || !document.querySelector('[data-tab="cleaningform"]'))) {
         openCaseSummary(caseId);
         return;
       }
@@ -7492,6 +7493,8 @@
         || docs.find(f => [id, inNote].some(t => same(t, f.DocNo) || same(t, f.DocNo2)))
         || cleanOf();
       if (!match) {
+        // เคสที่ไม่มีเอกสาร (ยังไม่ปิด · เคสเก่า · ปิดทางอื่น) → สรุปเคสจากประวัติ (เจ้าของงานขอ)
+        if (caseId) { openCaseSummary(caseId); return; }
         showToast('ยังไม่มีเอกสารของ ' + (caseId || id) + ' ในแบบฟอร์มเอกสาร', 'error');
         return;
       }
@@ -7518,8 +7521,9 @@
     }
 
     /**
-     * สรุปเคส (ซ่อมเอง) — ทุกขั้นของเคสเรียงตามเวลา: วันที่ เหตุการณ์ รายละเอียด ช่าง ค่าใช้จ่าย และใครบันทึก
-     * ใช้เป็นหลักฐานของงานที่ปิดโดยไม่มีใบซ่อม · ข้อมูลมาจากประวัติล้วนๆ ไม่ได้เก็บอะไรเพิ่ม
+     * สรุปเคส — ทุกขั้นของเคสเรียงตามเวลา: วันที่ เหตุการณ์ รายละเอียด ช่าง ค่าใช้จ่าย และใครบันทึก
+     * เปิดแทนเอกสารเมื่อเคสไม่มีเอกสาร: ซ่อมเอง · เคสที่ยังไม่ปิด · ปิดแล้วแต่ไม่มีใบในระบบ (ป้ายบนสุดบอกว่าแบบไหน)
+     * ข้อมูลมาจากประวัติล้วนๆ ไม่ได้เก็บอะไรเพิ่ม
      */
     function openCaseSummary(caseId) {
       const id = String(caseId || '').trim();
@@ -7530,6 +7534,16 @@
       const code = rows[0].AirCode;
       const unit = (currentAirList || []).find(a => sameCode(a.AirCode, code)) || {};
       const self = rows.some(h => String(h.EventType || '').trim() === 'ซ่อมแล้ว' && String(h.Detail || '').includes(SELF_REPAIR_TAG));
+      // เคสยังไม่ปิด = เครื่องอยู่ในขั้นของงานซ่อม และเคสนี้คือเคสล่าสุดของเครื่อง (สถานะกับขั้นของเคสเดินคู่กันเสมอ)
+      const latestCase = (currentHistory || []).filter(h => sameCode(h.AirCode, code) && String(h.CaseID || '').trim())
+        .reduce((best, h) => (!best || String(h.CreatedAt || h.Date || '') > String(best.CreatedAt || best.Date || '') ? h : best), null);
+      const step = { 'ชำรุด': 'ชำรุด — รออนุมัติซ่อม', 'รอซ่อม': 'รอซ่อม — กำลังดำเนินการ' }[String(unit.Status || '').trim()];
+      const open = !self && step && latestCase && String(latestCase.CaseID).trim() === id;
+      const banner = self
+        ? ['bg-amber-50 border-amber-200 text-amber-800', 'ph-fill ph-wrench', 'ปิดงานแบบซ่อมเอง — ไม่มีใบซ่อม']
+        : open
+          ? ['bg-blue-50 border-blue-200 text-[#1153a1]', 'ph-fill ph-hourglass', 'เคสยังไม่ปิด — ขั้นตอนตอนนี้: ' + step]
+          : ['bg-slate-50 border-slate-200 text-slate-600', 'ph-fill ph-file-dashed', 'ปิดแล้ว — ไม่มีเอกสารในระบบ'];
       const timeOf = v => { const m = /\d{2}:\d{2}/.exec(String(v || '')); return m ? ' ' + m[0] : ''; };
 
       const items = rows.map((h, i) => `
@@ -7563,8 +7577,8 @@
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="p-6">
-              ${self ? `<div class="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 flex items-center gap-2">
-                <i class="ph-fill ph-wrench"></i> ปิดงานแบบซ่อมเอง — ไม่มีใบซ่อม</div>` : ''}
+              <div class="mb-4 border ${banner[0]} text-sm rounded-lg px-3 py-2 flex items-center gap-2">
+                <i class="${banner[1]}"></i> ${esc(banner[2])}</div>
               <ol class="list-none">${items}</ol>
             </div>
             <div class="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-end rounded-b-2xl">
