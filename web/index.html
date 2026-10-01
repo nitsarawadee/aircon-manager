@@ -498,8 +498,39 @@
           <p class="text-sm text-gray-500">ใบซ่อม ใบล้างแอร์ และใบติดตั้งที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
+        <!-- แท็บตามประเภท (ตัวเลข = ที่รออยู่ ตามคำค้น/ภูมิภาคที่เลือก) + ค้นหา + Region — ดู renderApprovalsView
+             เดิมเป็น 4 ตารางเรียงลงมา ช่วงรอบล้างใบล้างเป็นร้อยแถวดันใบติดตั้งลงไปล่างสุดจนมองไม่เห็น (เจ้าของงานขอ) -->
+        <div class="flex flex-col lg:flex-row lg:items-end gap-2 mb-4 border-b border-gray-200">
+          <div class="flex items-center gap-1 overflow-x-auto">
+          <button id="apvTab_case" onclick="setApvKind('case')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
+            <i class="ph ph-warning-circle"></i> เคสซ่อม <span id="apvCount_case" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+          </button>
+          <button id="apvTab_repair" onclick="setApvKind('repair')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
+            <i class="ph ph-wrench"></i> ใบซ่อม <span id="apvCount_repair" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+          </button>
+          <button id="apvTab_cleaning" onclick="setApvKind('cleaning')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
+            <i class="ph ph-drop"></i> ใบล้าง <span id="apvCount_cleaning" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+          </button>
+          <button id="apvTab_install" onclick="setApvKind('install')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
+            <i class="ph ph-plus-circle"></i> ใบติดตั้ง <span id="apvCount_install" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+          </button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 lg:ml-auto pb-2">
+            <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+              <i class="ph ph-map-pin text-gray-500"></i>
+              <select id="apvRegion" onchange="setApvFilter()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                <option value="">ทุก Region</option>
+              </select>
+            </div>
+            <div class="relative sm:w-72">
+              <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input type="text" id="apvSearch" oninput="setApvFilter()" placeholder="ค้นหารหัสเครื่อง, Node, เลขที่..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm shadow-sm">
+            </div>
+          </div>
+        </div>
+
         <!-- เคสรออนุมัติซ่อม — เฉพาะ Infrastructure เห็น (ซ่อนที่ renderApprovalsView) -->
-        <div id="apvCaseBox" class="mb-8">
+        <div id="apvCaseBox" data-apv-kind="case">
           <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-warning-circle"></i> เคสรออนุมัติซ่อม</h3>
           <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -515,7 +546,7 @@
           </div>
         </div>
 
-        <div class="mb-8">
+        <div data-apv-kind="repair">
           <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-file-text"></i> ใบซ่อมที่รอคุณอนุมัติ</h3>
           <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -531,7 +562,7 @@
           </div>
         </div>
         <!-- ใบล้างแอร์ที่ถึงขั้นของบัญชีนี้ — แยกตารางจากใบซ่อม ทุกคนที่มีหน้านี้เห็น (เจ้าของงานสั่ง) -->
-        <div class="mb-8">
+        <div data-apv-kind="cleaning">
           <h3 class="text-lg font-bold text-[#1153a1] mb-3 flex items-center gap-2"><i class="ph-fill ph-drop"></i> ใบล้างแอร์ที่รอคุณอนุมัติ</h3>
           <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -547,7 +578,7 @@
           </div>
         </div>
         <!-- ใบติดตั้งที่ถึงขั้นของบัญชีนี้ — แยกตารางแบบเดียวกับใบล้าง (เจ้าของงานขอ) -->
-        <div>
+        <div data-apv-kind="install">
           <h3 class="text-lg font-bold text-teal-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-plus-circle"></i> ใบติดตั้งที่รอคุณอนุมัติ</h3>
           <div class="bg-white rounded-xl shadow-sm border border-teal-200 overflow-hidden">
             <div class="table-container overflow-x-auto">
@@ -562,6 +593,7 @@
             </div>
           </div>
         </div>
+        <div id="apvPager" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 mt-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-600"></div>
       </section>
 
       <!-- ============================ VIEW: คลังแอร์ ============================
@@ -7404,9 +7436,9 @@
       document.getElementById('apvCaseBox').classList.toggle('hidden', !isAdmin());
 
       // 1) เคสที่แจ้งชำรุดแล้ว รอ Infrastructure อนุมัติซ่อม (ปุ่มเดียวกับหน้างานซ่อม)
-      const cases = (currentAirList || []).filter(a => String(a.Status || '').trim() === 'ชำรุด')
-        .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode), 'th'));
-      caseTb.innerHTML = cases.length ? cases.map(a => `
+      const cases = (currentAirList || []).filter(a => String(a.Status || '').trim() === 'ชำรุด');
+      const caseRows = cases.map(a => apvItem(caseOpenedAt(a.AirCode), a.Region,
+        [openCaseIdOf(a.AirCode), a.AirCode, a.NodeName, a.SiteCode, a.Note], `
         <tr class="hover:bg-rose-50/40 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(openCaseIdOf(a.AirCode)) || '-'}</td>
           <td class="px-4 py-3">${apvCodeBtn(a.AirCode)}</td>
@@ -7418,13 +7450,13 @@
                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
                 <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
             : apvWaiting}</td>
-        </tr>`).join('')
-        : '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">ไม่มีเคสที่รออนุมัติซ่อม</td></tr>';
+        </tr>`));
 
       // 2) ใบซ่อมที่ถึงขั้นของบัญชีนี้ — Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4
       //    (canApprove มาจากเซิร์ฟเวอร์ ตามบทบาทและภูมิภาค ดู approval.js)
       const docs = (currentRepairForms || []).filter(f => f.Approval && f.Approval.canApprove);
-      docTb.innerHTML = docs.length ? docs.map(f => `
+      const repairRows = docs.map(f => apvItem(f.CreatedAt || f.Date, f.Region,
+        [f.DocNo, f.ID, f.CaseID, f.AirCode, f.NodeName, f.Symptom, fmtDate(f.Date)], `
         <tr class="hover:bg-rose-50/40 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(f.DocNo || f.ID)}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
@@ -7440,16 +7472,16 @@
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-check"></i> อนุมัติขั้น ${f.Approval.next}</button>
           </td>
-        </tr>`).join('')
-        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบซ่อมที่รอคุณอนุมัติ</td></tr>';
+        </tr>`));
 
       // 3) ใบล้างแอร์ที่ถึงขั้นของบัญชีนี้ — กติกาเดียวกับใบซ่อม แยกตาราง
       const cleanTb = document.querySelector('#apvCleanTable tbody');
       if (!cleanTb) return;
       const cleans = (currentCleaningForms || []).filter(f => f.Approval && f.Approval.canApprove);
-      cleanTb.innerHTML = cleans.length ? cleans.map(f => {
+      const cleaningRows = cleans.map(f => {
         const codes = [f.AirCode1, f.AirCode2].filter(c => String(c || '').trim());
-        return `
+        return apvItem(f.CreatedAt || f.Date, f.Region,
+          [displayDocNo(f), f.DocNo2, ...codes, f.NodeName, f.SiteCode, f.TechnicianName, fmtDate(f.Date)], `
         <tr class="hover:bg-blue-50/40 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(displayDocNo(f))}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
@@ -7465,18 +7497,18 @@
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-check"></i> อนุมัติขั้น ${f.Approval.next}</button>
           </td>
-        </tr>`;
-      }).join('')
-        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบล้างแอร์ที่รอคุณอนุมัติ</td></tr>';
+        </tr>`);
+      });
 
       // 4) ใบติดตั้งที่ถึงขั้นของบัญชีนี้ — กติกาเดียวกับใบซ่อม/ใบล้าง แยกตาราง
       const installTb = document.querySelector('#apvInstallTable tbody');
       if (!installTb) return;
       const installs = (currentInstallForms || []).filter(f => f.Approval && f.Approval.canApprove);
-      installTb.innerHTML = installs.length ? installs.map(f => {
+      const installRows = installs.map(f => {
         const codes = [f.AirCode1, f.AirCode2].filter(c => String(c || '').trim());
         const docNo = f.DocNo || f.DocNo2 || f.ID;   // ติดตั้งเฉพาะเครื่องที่ 2 เลขอยู่ DocNo2
-        return `
+        return apvItem(f.CreatedAt || f.Date, f.Region,
+          [docNo, f.DocNo2, ...codes, f.NodeName, f.SiteCode, f.CompanyName, f.TechnicianName, fmtDate(f.Date)], `
         <tr class="hover:bg-teal-50/40 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(docNo)}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
@@ -7492,10 +7524,97 @@
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-check"></i> อนุมัติขั้น ${f.Approval.next}</button>
           </td>
-        </tr>`;
-      }).join('')
-        : '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">ไม่มีใบติดตั้งที่รอคุณอนุมัติ</td></tr>';
+        </tr>`);
+      });
+
+      // ---- กรอง (คำค้น + ภูมิภาค) · เรียงรอนานสุดก่อน · ตัวเลขบนแท็บ · แบ่งหน้าเฉพาะแท็บที่เปิด ----
+      const groups = {
+        case: { rows: caseRows, tb: caseTb, cols: 5, empty: 'ไม่มีเคสที่รออนุมัติซ่อม', show: isAdmin() },
+        repair: { rows: repairRows, tb: docTb, cols: 6, empty: 'ไม่มีใบซ่อมที่รอคุณอนุมัติ', show: true },
+        cleaning: { rows: cleaningRows, tb: cleanTb, cols: 6, empty: 'ไม่มีใบล้างแอร์ที่รอคุณอนุมัติ', show: true },
+        install: { rows: installRows, tb: installTb, cols: 6, empty: 'ไม่มีใบติดตั้งที่รอคุณอนุมัติ', show: true }
+      };
+      const region = syncRegionFilter('apvRegion', Object.values(groups).filter(g => g.show).flatMap(g => g.rows.map(r => r.region)));
+      const q = ((document.getElementById('apvSearch') || {}).value || '').trim().toLowerCase();
+      const hasFilter = !!(q || region);
+      for (const g of Object.values(groups)) {
+        g.hits = g.rows.filter(r => (!region || sameRegion(r.region, region)) && (!q || r.text.includes(q)))
+          .sort((a, b) => a.since.localeCompare(b.since));   // รอนานสุด (เก่าสุด) ขึ้นก่อน
+      }
+      // เปิดหน้ามาครั้งแรก = แท็บแรกที่มีของรอ (ไม่งั้นแท็บที่ว่างจะบังแท็บที่มีงาน)
+      const kinds = Object.keys(groups).filter(k => groups[k].show);
+      if (!apvKind || !kinds.includes(apvKind)) apvKind = kinds.find(k => groups[k].rows.length) || kinds[0];
+
+      for (const k of Object.keys(groups)) {
+        const g = groups[k], on = k === apvKind;
+        const tab = document.getElementById('apvTab_' + k);
+        const count = document.getElementById('apvCount_' + k);
+        if (tab) {
+          tab.classList.toggle('hidden', !g.show);
+          tab.classList.toggle('border-[#1153a1]', on);
+          tab.classList.toggle('text-[#1153a1]', on);
+          tab.classList.toggle('border-transparent', !on);
+          tab.classList.toggle('text-gray-500', !on);
+        }
+        if (count) {
+          count.textContent = g.hits.length;
+          count.className = 'min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center ' +
+            (g.hits.length ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-400');
+        }
+        const box = document.querySelector('#view-approvals [data-apv-kind="' + k + '"]');
+        if (box) box.classList.toggle('hidden', !on || !g.show);
+      }
+
+      const g = groups[apvKind];
+      apvPage = clampPage(apvPage, g.hits.length, APV_PAGE_SIZE);
+      const startIdx = (apvPage - 1) * APV_PAGE_SIZE;
+      g.tb.innerHTML = g.hits.length
+        ? g.hits.slice(startIdx, startIdx + APV_PAGE_SIZE).map(r => r.html).join('')
+        : `<tr><td colspan="${g.cols}" class="px-4 py-6 text-center text-gray-400">${hasFilter && g.rows.length ? 'ไม่พบรายการที่ตรงกับคำค้น / Region ที่เลือก' : g.empty}</td></tr>`;
+      renderTablePager('apvPager', g.hits.length, apvPage, 'goToApvPage', APV_PAGE_SIZE);
     }
+
+    /* ---------- เอกสารรออนุมัติ: แท็บ / ค้นหา / แบ่งหน้า ---------- */
+    const APV_PAGE_SIZE = 10;
+    let apvKind = '';   // ว่าง = ยังไม่เคยเลือก (เปิดแท็บแรกที่มีของรอ)
+    let apvPage = 1;
+
+    /** แถวหนึ่งของตาราง + ข้อมูลไว้กรอง/เรียง — since = เวลาที่เริ่มรอ (yyyy-mm-dd…) เรียงแบบข้อความได้ */
+    function apvItem(since, region, words, html) {
+      return {
+        since: String(since || ''), region,
+        text: words.map(w => String(w == null ? '' : w)).join(' ').toLowerCase(),
+        html
+      };
+    }
+
+    /** วันที่เปิดเคสซ่อมของเครื่อง (แถวแรกของเลขเคสที่ยังเปิด) — ใช้เรียงเคสที่รอนานสุดก่อน */
+    function caseOpenedAt(code) {
+      const id = openCaseIdOf(code);
+      const rows = (currentHistory || []).filter(h => id && String(h.CaseID || '').trim() === id);
+      return rows.map(h => String(h.CreatedAt || h.Date || '')).sort()[0] || '';
+    }
+
+    function setApvKind(kind) {
+      apvKind = kind;
+      apvPage = 1;
+      renderApprovalsView();
+    }
+    window.setApvKind = setApvKind;
+
+    /** เปลี่ยนคำค้นหรือ Region = กลับหน้า 1 */
+    function setApvFilter() {
+      apvPage = 1;
+      renderApprovalsView();
+    }
+    window.setApvFilter = setApvFilter;
+
+    function goToApvPage(p) {
+      apvPage = p;
+      renderApprovalsView();
+    }
+    window.goToApvPage = goToApvPage;
+
 
     /**
      * เลขที่ในหน้าประวัติ → หน้าแบบฟอร์มเอกสารของเคส/ใบนั้น (เลือกแท็บชนิดเอกสาร + ค้นหาไว้ให้)
