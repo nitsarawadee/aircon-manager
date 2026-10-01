@@ -1,6 +1,6 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
 import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
-import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { addHistoryRaw, historyPrefix, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
@@ -249,7 +249,27 @@ export async function writeInstallForm(ctx, record, { units, first, slotBase, co
     row[p + 'OutdoorAsset'] = unit ? plainText(unit.OutdoorAsset) : '';
   }
 
-  // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+  // งานที่รอเอกสาร (เพิ่ม / เปลี่ยน / ย้ายเครื่อง) มีเลขในประวัติอยู่แล้ว — ใบติดตั้งของเครื่องนั้นใช้เลขเดียวกัน
+  // กดเลขในหน้าประวัติแล้วได้ใบเลขเดียวกัน (เดิมใบออกเลขใหม่ กด CM2609-21 ได้ใบ CM2609-22 — เจ้าของงานขอให้ตรง)
+  // ใช้ได้เมื่อเป็นเลข CM และยังไม่มีเอกสารใบไหนใช้เลขนั้น ไม่งั้นออกเลขใหม่ตามเดิม
+  const formNos = new Set([SHEETS.CLEANFORM, SHEETS.REPAIRFORM, SHEETS.INSTALLFORM].flatMap(sheet => {
+    try { return ctx.ss.objects(sheet).flatMap(f => [plainText(f.DocNo).trim(), plainText(f.DocNo2).trim()]); }
+    catch { return []; }   // ตารางยังไม่ถูกโหลด = ไม่มีเลขให้หลบ
+  }).filter(Boolean));
+  const prefix = historyPrefix(EVENT);
+  const isOwnNo = id => id.startsWith(prefix) && /^\d{4}-\d+$/.test(id.slice(prefix.length));
+  for (const slot of [1, 2]) {
+    const unit = units[slot];
+    if (!unit) continue;
+    const pending = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
+      normalizeCode(h.AirCode) === normalizeCode(unit.AirCode) && plainText(h.Note).trim() === INSTALL_PENDING_NOTE);
+    const id = pending.length ? plainText(pending[pending.length - 1].ID).trim() : '';
+    if (!id || !isOwnNo(id) || formNos.has(id)) continue;
+    row[slot === 2 ? 'DocNo2' : 'DocNo'] = id;
+    formNos.add(id);
+  }
+
+  // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน (ช่องที่ได้เลขจากงานที่รอเอกสารแล้ว ข้ามไป)
   assignDocNumbers(ctx, row, row.Date);
 
   const headers = ctx.ss.headers(SHEETS.INSTALLFORM);

@@ -7435,6 +7435,12 @@
         openCaseSummary(caseId);
         return;
       }
+      // ยังรอเอกสารติดตั้ง (เพิ่มเครื่องใหม่ / เปลี่ยน / ย้ายเครื่องมาแทน) → หน้างานซ่อมและติดตั้งของเครื่องนั้น
+      // ตารางงานติดตั้งที่รอเอกสารมีปุ่มกรอก ส่งลิงก์ มอบหมาย (เดิมเฉพาะเปลี่ยนเครื่อง เพิ่มเครื่องใหม่ขึ้น "ยังไม่มีเอกสาร")
+      if (String(note || '').trim() === INSTALL_PENDING_NOTE && document.querySelector('[data-tab="repair"]')) {
+        viewAirRepair(airCode);
+        return;
+      }
       // รื้อถอน/ปลดระวาง · Write off → เครื่องนั้นในคลังแอร์ (เจ้าของงานสั่ง) — เฉพาะคนที่เห็นเมนูคลัง
       if (isRetiredStatus(eventType) && document.querySelector('[data-tab="warehouse"]')) {
         await openWarehouseOfHistory(caseId, airCode, date);
@@ -7494,7 +7500,7 @@
         || cleanOf();
       if (!match) {
         // เคสที่ไม่มีเอกสาร (ยังไม่ปิด · เคสเก่า · ปิดทางอื่น) → สรุปเคสจากประวัติ (เจ้าของงานขอ)
-        if (caseId) { openCaseSummary(caseId); return; }
+        if (caseId) { openCaseSummary(caseId, { noDoc: true }); return; }
         showToast('ยังไม่มีเอกสารของ ' + (caseId || id) + ' ในแบบฟอร์มเอกสาร', 'error');
         return;
       }
@@ -7525,7 +7531,9 @@
      * เปิดแทนเอกสารเมื่อเคสไม่มีเอกสาร: ซ่อมเอง · เคสที่ยังไม่ปิด · ปิดแล้วแต่ไม่มีใบในระบบ (ป้ายบนสุดบอกว่าแบบไหน)
      * ข้อมูลมาจากประวัติล้วนๆ ไม่ได้เก็บอะไรเพิ่ม
      */
-    function openCaseSummary(caseId) {
+    function openCaseSummary(caseId, opts) {
+      // noDoc = หาเอกสารแล้วไม่เจอจริง · ไม่ส่งมา = ไม่ได้หา (เช่นบัญชีที่ไม่มีสิทธิ์ดูเอกสาร) อย่าบอกว่าไม่มีเอกสาร
+      const noDoc = !!(opts && opts.noDoc);
       const id = String(caseId || '').trim();
       const rows = (currentHistory || []).filter(h => String(h.CaseID || '').trim() === id)
         .slice().sort((a, b) => String(a.Date || '').localeCompare(String(b.Date || '')) ||
@@ -7543,7 +7551,7 @@
         ? ['bg-amber-50 border-amber-200 text-amber-800', 'ph-fill ph-wrench', 'ปิดงานแบบซ่อมเอง — ไม่มีใบซ่อม']
         : open
           ? ['bg-blue-50 border-blue-200 text-[#1153a1]', 'ph-fill ph-hourglass', 'เคสยังไม่ปิด — ขั้นตอนตอนนี้: ' + step]
-          : ['bg-slate-50 border-slate-200 text-slate-600', 'ph-fill ph-file-dashed', 'ปิดแล้ว — ไม่มีเอกสารในระบบ'];
+          : ['bg-slate-50 border-slate-200 text-slate-600', 'ph-fill ph-check-circle', noDoc ? 'ปิดแล้ว — ไม่มีเอกสารในระบบ' : 'ปิดแล้ว'];
       const timeOf = v => { const m = /\d{2}:\d{2}/.exec(String(v || '')); return m ? ' ' + m[0] : ''; };
 
       const items = rows.map((h, i) => `

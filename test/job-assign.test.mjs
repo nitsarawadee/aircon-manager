@@ -133,6 +133,22 @@ test('มอบหมายงานติดตั้ง → ผู้รับ
   assert.equal((await getInstallForms(as(db, 'ctA'))).length, 1);
 });
 
+test('ใบติดตั้งของงานที่รอเอกสาร ใช้เลขเดียวกับแถวประวัตินั้น — กดเลขในหน้าประวัติได้ใบเลขเดียวกัน', async () => {
+  const db = freshDb();
+  // แถวรอเอกสารของเครื่อง 2 คือ CM2609-03 (ดู freshDb)
+  const r = await saveInstallForm(as(db, 'boss'), { AirCode2: 'ATG-PMK-AIR-2', Date: '2026-09-06' });
+  assert.equal(r.docNo2, 'CM2609-03');
+  assert.equal(db.prepare("SELECT Note FROM history WHERE ID = 'CM2609-03'").get().Note, 'เอกสาร CM2609-03');
+});
+
+test('ใบติดตั้ง — เลขของแถวรอเอกสารมีเอกสารใบอื่นใช้อยู่แล้ว ออกเลขใหม่ ไม่ให้เลขซ้ำ', async () => {
+  const db = freshDb();
+  db.prepare("INSERT INTO repair_forms (ID, DocNo, AirCode, Date) VALUES ('RF1', 'CM2609-03', 'ATG-PMK-AIR-1', '2026-09-03')").run();
+  const r = await saveInstallForm(as(db, 'boss'), { AirCode2: 'ATG-PMK-AIR-2', Date: '2026-09-06' });
+  assert.notEqual(r.docNo2, 'CM2609-03');
+  assert.equal(db.prepare("SELECT Note FROM history WHERE ID = 'CM2609-03'").get().Note, 'เอกสาร ' + r.docNo2);
+});
+
 /* ==================== ลิงก์ใบติดตั้ง ==================== */
 
 test('ลิงก์ใบติดตั้ง — กรอกได้โดยไม่ล็อกอิน ปิดงานที่รอเอกสาร และส่งได้ครั้งเดียว', async () => {
