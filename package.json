@@ -2,7 +2,7 @@
   "name": "aircon-manager",
   "version": "1.0.0",
   "private": true,
-  "description": "ระบบบริหารจัดการเครื่องปรับอากาศ ITEL - Google Sheets เป็นฐานข้อมูล",
+  "description": "ระบบบริหารจัดการเครื่องปรับอากาศ ITEL - Node + SQLite ไม่พึ่ง npm",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
@@ -10,11 +10,6 @@
   "scripts": {
     "start": "node platform/node.js",
     "dev": "node --watch platform/node.js",
-    "test": "node --test \"test/**/*.test.mjs\"",
-    "deploy": "wrangler deploy",
-    "deploy:tail": "wrangler tail"
-  },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
+    "test": "node --test \"test/**/*.test.mjs\""
   }
 }

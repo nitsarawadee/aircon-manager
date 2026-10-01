@@ -24,8 +24,8 @@ export class Ctx {
   /**
    * @param {Object} env   ค่าตั้งค่าและค่าลับ
    * @param {Object} state  ตัวเก็บ session และคิวกันเขียนชนกัน
-   *   ฝั่ง Node เป็น LocalState / ฝั่ง Cloudflare เป็น Durable Object
-   *   ทั้งสองตัวมีเมธอดชื่อเดียวกัน โค้ดตรงนี้จึงไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
+   *   ตอนนี้คือ LocalState (src/local-state.js) — โค้ดตรงนี้เรียกแค่เมธอดของมัน
+   *   ไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
    * @param {Object} [db]  ฐานข้อมูล SQLite ที่เปิดไว้แล้ว ส่งเข้ามาจาก platform/
    *   src/ ห้ามเปิดไฟล์เอง จึงต้องรับเข้ามาแบบนี้
    * @param {Object} [services]  เครื่องมือที่ชั้น platform ส่งเข้ามาให้ใช้
