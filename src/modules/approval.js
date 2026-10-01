@@ -280,12 +280,12 @@ async function storeFinalPdf(ctx, kind, form) {
  *   docs     = ใบซ่อมที่ถึงขั้นของบัญชีนี้ (Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4)
  *   cleaning = ใบล้างแอร์ที่ถึงขั้นของบัญชีนี้ (กติกาเดียวกัน)
  *   install  = ใบติดตั้งที่ถึงขั้นของบัญชีนี้ (กติกาเดียวกัน)
- *   cases = เคสชำรุดรออนุมัติซ่อม — นับเฉพาะ Infrastructure (คนเดียวที่เห็นและกดได้)
+ * เคสชำรุดที่รออนุมัติซ่อมไม่นับที่นี่แล้ว — อยู่และนับที่เมนูงานซ่อมและติดตั้งที่เดียว (เจ้าของงานขอ)
  * นับที่เซิร์ฟเวอร์ ไม่ต้องโหลดรายการทั้งหมดมาหน้าเว็บทุกครั้งที่อยากรู้แค่ตัวเลข
  */
 export async function getApprovalCount(ctx) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('repair'))) return { docs: 0, cleaning: 0, install: 0, cases: 0, total: 0 };
+  if (!(await ctx.canView('repair'))) return { docs: 0, cleaning: 0, install: 0, total: 0 };
   await ctx.ensureBase();
 
   const info = await ctx.userInfo();
@@ -311,9 +311,7 @@ export async function getApprovalCount(ctx) {
   const cleaning = await waiting('cleaning');
   const install = await waiting('install');
 
-  const cases = info.role === 'Admin'
-    ? ctx.ss.objects(SHEETS.AIRLIST).filter(a => plainText(a.Status).trim() === 'ชำรุด').length
-    : 0;
-
-  return { docs, cleaning, install, cases, total: docs + cleaning + install + cases };
+  // เคสที่แจ้งชำรุด (รออนุมัติซ่อม) ไม่นับที่นี่แล้ว — อยู่ที่หน้างานซ่อมและติดตั้งที่เดียว
+  // นับอยู่ในตัวเลขของเมนูนั้นแล้ว (getRepairWorkCount) ถ้านับสองที่ Infrastructure จะเห็นงานเดียวกันสองครั้ง
+  return { docs, cleaning, install, total: docs + cleaning + install };
 }

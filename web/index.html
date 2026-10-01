@@ -495,16 +495,13 @@
       <section id="view-approvals" class="view">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
-          <p class="text-sm text-gray-500">ใบซ่อม ใบล้างแอร์ และใบติดตั้งที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง</p>
+          <p class="text-sm text-gray-500">ใบซ่อม ใบล้างแอร์ และใบติดตั้งที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง · อนุมัติซ่อม (เคสที่แจ้งชำรุด) อยู่ที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
         <!-- แท็บตามประเภท (ตัวเลข = ที่รออยู่ ตามคำค้น/ภูมิภาคที่เลือก) + ค้นหา + Region — ดู renderApprovalsView
              เดิมเป็น 4 ตารางเรียงลงมา ช่วงรอบล้างใบล้างเป็นร้อยแถวดันใบติดตั้งลงไปล่างสุดจนมองไม่เห็น (เจ้าของงานขอ) -->
         <div class="flex flex-col lg:flex-row lg:items-end gap-2 mb-4 border-b border-gray-200">
           <div class="flex items-center gap-1 overflow-x-auto">
-          <button id="apvTab_case" onclick="setApvKind('case')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
-            <i class="ph ph-warning-circle"></i> เคสซ่อม <span id="apvCount_case" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
-          </button>
           <button id="apvTab_repair" onclick="setApvKind('repair')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
             <i class="ph ph-wrench"></i> ใบซ่อม <span id="apvCount_repair" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
           </button>
@@ -525,23 +522,6 @@
             <div class="relative sm:w-72">
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="apvSearch" oninput="setApvFilter()" placeholder="ค้นหารหัสเครื่อง, Node, เลขที่..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm shadow-sm">
-            </div>
-          </div>
-        </div>
-
-        <!-- เคสรออนุมัติซ่อม — เฉพาะ Infrastructure เห็น (ซ่อนที่ renderApprovalsView) -->
-        <div id="apvCaseBox" data-apv-kind="case">
-          <h3 class="text-lg font-bold text-rose-700 mb-3 flex items-center gap-2"><i class="ph-fill ph-warning-circle"></i> เคสรออนุมัติซ่อม</h3>
-          <div class="bg-white rounded-xl shadow-sm border border-rose-200 overflow-hidden">
-            <div class="table-container overflow-x-auto">
-              <table id="apvCaseTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
-                <thead>
-                  <tr class="bg-rose-50 border-b border-rose-200 text-rose-900 font-semibold">
-                    <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขเคส</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node/Site</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
-              </table>
             </div>
           </div>
         </div>
@@ -7429,30 +7409,11 @@
     const apvWaiting = '<span class="text-slate-400 px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-dashed border-slate-300 rounded-lg"><i class="ph ph-hourglass"></i> รอ Infrastructure อนุมัติ</span>';
 
     function renderApprovalsView() {
-      const caseTb = document.querySelector('#apvCaseTable tbody');
       const docTb = document.querySelector('#apvDocTable tbody');
-      if (!caseTb || !docTb) return;   // ไม่มีสิทธิ์เห็นหน้านี้
-      // เคสรออนุมัติซ่อม เจ้าของงานให้เห็นเฉพาะ Infrastructure (คนเดียวที่กดอนุมัติซ่อมได้)
-      document.getElementById('apvCaseBox').classList.toggle('hidden', !isAdmin());
+      if (!docTb) return;   // ไม่มีสิทธิ์เห็นหน้านี้
+      // อนุมัติซ่อม (เคสที่แจ้งชำรุด) ไม่อยู่หน้านี้แล้ว — อยู่ที่หน้างานซ่อมและติดตั้งที่เดียว (เจ้าของงานขอ ไม่ให้ทำซ้ำสองที่)
 
-      // 1) เคสที่แจ้งชำรุดแล้ว รอ Infrastructure อนุมัติซ่อม (ปุ่มเดียวกับหน้างานซ่อม)
-      const cases = (currentAirList || []).filter(a => String(a.Status || '').trim() === 'ชำรุด');
-      const caseRows = cases.map(a => apvItem(caseOpenedAt(a.AirCode), a.Region,
-        [openCaseIdOf(a.AirCode), a.AirCode, a.NodeName, a.SiteCode, a.Note], `
-        <tr class="hover:bg-rose-50/40 align-top">
-          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(openCaseIdOf(a.AirCode)) || '-'}</td>
-          <td class="px-4 py-3">${apvCodeBtn(a.AirCode)}</td>
-          <td class="px-4 py-3"><div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
-            <div class="text-[11px] text-gray-400">${esc(a.SiteCode)}</div></td>
-          <td class="px-4 py-3 text-red-600 whitespace-normal max-w-xs">${esc(a.Note) || '-'}</td>
-          <td class="px-4 py-3 text-right">${isAdmin()
-            ? `<button onclick="approveRepair('${jsStr(a.AirCode)}')"
-                class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-3 py-1.5 rounded-lg transition shadow-sm border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                <i class="ph ph-check"></i> อนุมัติซ่อมแล้ว</button>`
-            : apvWaiting}</td>
-        </tr>`));
-
-      // 2) ใบซ่อมที่ถึงขั้นของบัญชีนี้ — Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4
+      // 1) ใบซ่อมที่ถึงขั้นของบัญชีนี้ — Staff ขั้น 2 · Supervisor/Regional ขั้น 3 · Infrastructure ขั้น 4
       //    (canApprove มาจากเซิร์ฟเวอร์ ตามบทบาทและภูมิภาค ดู approval.js)
       const docs = (currentRepairForms || []).filter(f => f.Approval && f.Approval.canApprove);
       const repairRows = docs.map(f => apvItem(f.CreatedAt || f.Date, f.Region,
@@ -7529,7 +7490,6 @@
 
       // ---- กรอง (คำค้น + ภูมิภาค) · เรียงรอนานสุดก่อน · ตัวเลขบนแท็บ · แบ่งหน้าเฉพาะแท็บที่เปิด ----
       const groups = {
-        case: { rows: caseRows, tb: caseTb, cols: 5, empty: 'ไม่มีเคสที่รออนุมัติซ่อม', show: isAdmin() },
         repair: { rows: repairRows, tb: docTb, cols: 6, empty: 'ไม่มีใบซ่อมที่รอคุณอนุมัติ', show: true },
         cleaning: { rows: cleaningRows, tb: cleanTb, cols: 6, empty: 'ไม่มีใบล้างแอร์ที่รอคุณอนุมัติ', show: true },
         install: { rows: installRows, tb: installTb, cols: 6, empty: 'ไม่มีใบติดตั้งที่รอคุณอนุมัติ', show: true }
@@ -7586,13 +7546,6 @@
         text: words.map(w => String(w == null ? '' : w)).join(' ').toLowerCase(),
         html
       };
-    }
-
-    /** วันที่เปิดเคสซ่อมของเครื่อง (แถวแรกของเลขเคสที่ยังเปิด) — ใช้เรียงเคสที่รอนานสุดก่อน */
-    function caseOpenedAt(code) {
-      const id = openCaseIdOf(code);
-      const rows = (currentHistory || []).filter(h => id && String(h.CaseID || '').trim() === id);
-      return rows.map(h => String(h.CreatedAt || h.Date || '')).sort()[0] || '';
     }
 
     function setApvKind(kind) {
