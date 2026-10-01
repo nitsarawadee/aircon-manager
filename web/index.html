@@ -2229,7 +2229,82 @@
         else if (btn.dataset.tab === 'repair') loadRepair();
         else if (btn.dataset.tab === 'approvals') loadApprovals();
         else if (btn.dataset.tab === 'warehouse') loadWarehouse();
+        navRecord('#/' + btn.dataset.tab);
       });
+    });
+
+    /* --- ปุ่มย้อน / ไปข้างหน้าของเบราว์เซอร์ (เจ้าของงานขอ) ---
+     *
+     * เว็บนี้เป็นหน้าเดียว เปลี่ยนเมนูแค่สลับเนื้อหาข้างใน เบราว์เซอร์จึงไม่รู้ว่าเปลี่ยนหน้า
+     * กดย้อนของเบราว์เซอร์ (หรือปัดย้อนบนมือถือ) แล้วหลุดออกจากเว็บไปเลย
+     * จึงบันทึกหน้าลงประวัติของเบราว์เซอร์เอง: #/<เมนู> · #/air/<รหัสเครื่อง>
+     * ผลพลอยได้: กด F5 แล้วอยู่หน้าเดิม (navInit)
+     *
+     * ไม่แตะลิงก์ให้ช่าง (#rl=…) — ที่อยู่ที่ไม่ขึ้นต้นด้วย #/ ไม่ใช่ของตัวนี้
+     */
+    let navRestoring = false;   // กำลังย้อนตามปุ่มของเบราว์เซอร์ — ห้ามบันทึกซ้ำ
+    let navCurrent = '';        // หน้าที่อยู่ตอนนี้ (ใช้ดึงที่อยู่กลับตอนย้อนไม่ได้)
+
+    /** บันทึกหน้าที่เพิ่งเปิดลงประวัติของเบราว์เซอร์ (ไม่ใช่ตอนย้อนตามปุ่มของเบราว์เซอร์) */
+    function navRecord(hash) {
+      if (navRestoring || !navCurrent) return;   // ยังไม่ผ่าน navInit = ยังเริ่มแอปไม่เสร็จ
+      if (location.hash === hash) return;
+      history.pushState({ acmgr: 1 }, '', hash);
+      navCurrent = hash;
+    }
+
+    /** มีหน้าต่าง / ฟอร์มเต็มจอ / กล่องยืนยัน เปิดค้างอยู่ไหม */
+    function navOverlayOpen() {
+      const root = document.getElementById('modalRoot');
+      const el = root && root.children[0];
+      const confirmBox = document.getElementById('confirmDialog');
+      return !!(el && !el.classList.contains('opacity-0')) ||
+             !!(confirmBox && !confirmBox.classList.contains('hidden'));
+    }
+
+    /** เปิดหน้าตามที่อยู่ (#/เมนู หรือ #/air/รหัส) — เมนูที่บัญชีนี้ไม่มีสิทธิ์ = กลับหน้าแรก */
+    function applyRoute(hash) {
+      navRestoring = true;
+      try {
+        const air = /^#\/air\/(.+)$/.exec(hash);
+        if (air) {
+          openAirDetail(decodeURIComponent(air[1]));
+        } else {
+          const tab = (/^#\/([a-z]+)$/.exec(hash) || [])[1];
+          const ok = b => b && b.style.display !== 'none' && document.getElementById('view-' + b.dataset.tab);
+          let btn = tab && document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+          if (!ok(btn)) {
+            btn = [...document.querySelectorAll('.tab-btn')].find(ok);
+            if (btn) history.replaceState(history.state, '', '#/' + btn.dataset.tab);
+          }
+          if (btn) btn.click();
+        }
+      } finally {
+        navRestoring = false;
+      }
+      navCurrent = location.hash;
+    }
+
+    /** เริ่มแอปเสร็จ — เปิดหน้าตามที่อยู่ (F5 / เปิดที่อยู่ตรงๆ) แล้วตั้งเป็นจุดเริ่มของประวัติ */
+    function navInit() {
+      if (/^#\//.test(location.hash)) applyRoute(location.hash);
+      const active = document.querySelector('.tab-btn.active');
+      const hash = airDetailCode ? '#/air/' + encodeURIComponent(airDetailCode)
+        : '#/' + (active ? active.dataset.tab : 'dashboard');
+      // first = ไม่มีหน้าในเว็บอยู่ก่อนหน้านี้ (ปุ่ม "กลับ" ของหน้าเครื่องจะไม่สั่งย้อนออกนอกเว็บ)
+      history.replaceState({ acmgr: 1, first: 1 }, '', hash);
+      navCurrent = hash;
+    }
+
+    window.addEventListener('popstate', () => {
+      if (!/^#\//.test(location.hash) || !navCurrent) return;   // ลิงก์ช่าง / ยังไม่เข้าแอป
+      // มีหน้าต่างหรือฟอร์มเปิดค้าง — ไม่เปลี่ยนหน้า ข้อมูลที่กรอกไว้ (และรูป) จะได้ไม่หายเพราะกดย้อนพลาด
+      if (navOverlayOpen()) {
+        history.pushState({ acmgr: 1 }, '', navCurrent);
+        showToast('ปิดหน้าต่างที่เปิดอยู่ก่อน แล้วค่อยกดย้อนกลับ', 'info');
+        return;
+      }
+      applyRoute(location.hash);
     });
 
     /* --- AUTHENTICATION (Username / Password) --- */
@@ -2431,6 +2506,7 @@
       } catch (e) {
         showToast('เกิดข้อผิดพลาดขณะโหลดข้อมูลเริ่มต้น: ' + (e && e.message ? e.message : e), 'error');
       }
+      navInit();
     }
 
     /* ============== สิทธิ์รายเมนู/รายฟังก์ชัน (Permissions) ============== */
@@ -3599,6 +3675,7 @@
       if (fromBtn) airDetailFrom = fromBtn.dataset.tab;
 
       airDetailCode = code;
+      navRecord('#/air/' + encodeURIComponent(code));
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       const view = document.getElementById('view-airdetail');
       view.classList.add('active');
@@ -3621,8 +3698,9 @@
     }
     window.openAirDetail = openAirDetail;
 
-    /** กลับไปหน้าที่จากมา */
+    /** กลับไปหน้าที่จากมา — มีหน้าในเว็บอยู่ก่อนหน้า = ย้อนแบบเดียวกับปุ่มของเบราว์เซอร์ (ประวัติไม่ซ้อน) */
     function backFromAirDetail() {
+      if (history.state && history.state.acmgr && !history.state.first) { history.back(); return; }
       const btn = document.querySelector('[data-tab="' + airDetailFrom + '"]') ||
                   document.querySelector('[data-tab="airlist"]');
       if (btn) btn.click();
