@@ -3019,13 +3019,13 @@
       tb.innerHTML = rows.map(u => `
         <tr class="hover:bg-blue-50/50 transition-colors">
           <td class="px-4 py-3 font-medium text-gray-900">${esc(u.Username)}</td>
-          <td class="px-4 py-3 text-gray-600">${esc(u.Name) || '-'}</td>
+          <td class="px-4 py-3 text-gray-600">${esc(u.Name) || '-'}${u.ContractorID ? ` <span class="text-gray-400">(${esc(contractorNameOf(u.ContractorID))})</span>` : ''}</td>
           <td class="px-4 py-3 text-gray-500 text-xs">${esc(u.Email) || '-'}</td>
           <td class="px-4 py-3">
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${u.ContractorID ? 'bg-amber-100 text-amber-800' : u.Role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'}">${esc(ROLE_TITLES[roleOfUser(u)])}</span>
           </td>
           <td class="px-4 py-3 text-gray-600 text-sm max-w-[220px]">${
-            u.ContractorID ? esc(contractorNameOf(u.ContractorID))
+            u.ContractorID ? '<span class="text-gray-400">ตามงานที่ได้รับมอบหมาย</span>'
             : u.Role === 'Admin' ? '<span class="text-gray-400">ทุกภูมิภาค</span>'
             : (esc(u.Regions) || '<span class="text-rose-500">ยังไม่กำหนด</span>')}</td>
           <td class="px-4 py-3">${(u.Active === false || String(u.Active).toUpperCase() === 'FALSE') ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">ปิดใช้งาน</span>' : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">ใช้งานอยู่</span>'}</td>
