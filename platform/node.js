@@ -468,7 +468,7 @@ const server = createServer(async (req, res) => {
 
 // ฟังทุกการ์ดเครือข่าย (ไม่ใช่แค่ localhost) เพื่อให้เครื่องอื่นในออฟฟิศเข้าถึงได้
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('\n✅ ระบบบริหารจัดการเครื่องปรับอากาศ ITEL พร้อมใช้งานแล้ว\n');
+  console.log('\n✅ Air Conditioning Management พร้อมใช้งานแล้ว\n');
   console.log('   เครื่องนี้        http://localhost:' + PORT);
 
   for (const list of Object.values(networkInterfaces())) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบบริหารจัดการเครื่องปรับอากาศ ITEL</title>
+  <title>Air Conditioning Management</title>
   <!-- ไอคอนบนแท็บเบราว์เซอร์ ใช้ไฟล์ในเครื่อง ไม่ดึงจากเน็ต
        ต่อท้ายด้วยเลขรุ่นเพื่อกันแคชค้างเวลาเปลี่ยนรูป เหมือนที่ทำกับโลโก้
        เบราว์เซอร์ย่อจาก 240px ลงเป็น 16/32 ให้เอง ไม่ต้องเตรียมหลายขนาด -->
@@ -232,7 +232,7 @@
              ใช้พื้นขาวของภาพเป็นตัวการ์ดเลย แค่มนมุมกับใส่เงาให้ -->
         <img src="assets/logo.png?v=2" alt="INTERLINK Telecom"
              class="max-w-[260px] max-h-[88px] w-auto h-auto object-contain mx-auto mb-3">
-        <div class="text-xs text-slate-400 font-medium tracking-wide">AIRCON MANAGER</div>
+        <div class="text-xs text-slate-400 font-medium tracking-wide">Air Conditioning Management</div>
       </div>
 
       <!-- LOGIN FORM -->
@@ -291,7 +291,7 @@
       <div class="flex flex-col gap-0.5 min-w-0">
         <img src="assets/logo.png?v=2" alt="INTERLINK Telecom"
              class="max-w-[150px] md:max-w-[172px] max-h-[40px] md:max-h-[52px] w-auto h-auto object-contain">
-        <div class="text-[10px] text-slate-400 font-medium tracking-wide pl-1">AIRCON MANAGER</div>
+        <div class="text-[10px] text-slate-400 font-medium tracking-wide pl-1">Air Conditioning Management</div>
       </div>
 
       <!-- ปุ่มสลับโหมดสีอยู่มุมขวาบนของแถบเมนู
@@ -413,7 +413,7 @@
              style="background:var(--p-brand-bg); border:1px solid var(--p-card-border); color:var(--p-brand-fg)">
           <div class="relative z-10">
             <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 leading-tight">
-              ระบบบริหารจัดการแอร์ ITEL <i class="ph-fill ph-sparkle" style="color:var(--p-peach)"></i>
+              Air Conditioning Management <i class="ph-fill ph-sparkle" style="color:var(--p-peach)"></i>
             </h2>
             <!-- เดิมใช้สีที่ทำไว้สำหรับพื้นน้ำเงินเข้ม ซึ่งจะจางหายไปบนพื้นพาสเทลอ่อน -->
             <p class="text-xs hidden sm:block" style="color:var(--p-brand-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
@@ -440,7 +440,7 @@
           <!-- แถวบนซ้าย: จำนวนเครื่องตามภูมิภาค -->
           <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
             <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
-              <i class="ph ph-map-pin text-[#f47920]"></i> จำนวนเครื่องตามภูมิภาค
+              <i class="ph ph-map-pin text-[#f47920]"></i> จำนวนเครื่องตาม Region
             </h3>
             <div id="regionChart" class="dash-scroll space-y-2 pr-1"></div>
           </div>
@@ -708,7 +708,7 @@
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
-                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ภูมิภาค/จังหวัด</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Region/จังหวัด</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node/Site</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">BTU / ยี่ห้อ</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันติดตั้ง</th>
@@ -753,26 +753,33 @@
               </div>
             </div>
 
-            <!-- แถวล่าง: ปุ่มทั้งหมด -->
+            <!-- แถวล่าง: ปุ่มที่ใช้บ่อยโชว์ไว้ 2 ปุ่ม ที่เหลือเก็บในเมนู "เพิ่มเติม"
+                 เดิมโชว์ครบ 6 ปุ่ม 5 สี ล้นเป็น 2 แถว และปุ่มลบแผนสีแดงเด่นเกินไปจนกดพลาดง่าย -->
             <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <input type="file" id="fileImportPlan" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+              <span class="row-menu-wrap inline-block">
+                <button onclick="toggleRowMenu(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+                  <i class="ph ph-dots-three-outline"></i> เพิ่มเติม <i class="ph ph-caret-down text-xs text-gray-400"></i>
+                </button>
+                <div class="row-menu hidden fixed w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5 text-sm text-left">
+                  <button data-admin-only onclick="closeRowMenus(); document.getElementById('fileImportPlan').click()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700">
+                    <i class="ph ph-upload-simple text-lg text-emerald-600"></i> นำเข้า (Excel/CSV)
+                  </button>
+                  <button onclick="closeRowMenus(); exportPlanTemplate()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700" title="โหลดฟอร์มไปกรอกข้อมูลนำเข้า">
+                    <i class="ph ph-download-simple text-lg text-gray-500"></i> Template
+                  </button>
+                  <!-- แผนเก็บข้อมูลเครื่องไว้ตั้งแต่ตอนสร้าง ปุ่มนี้ดึงของใหม่จากรายการเครื่อง (ดู syncCleaningPlan) -->
+                  <button data-admin-only onclick="closeRowMenus(); syncPlanFromAirList()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700" title="เพิ่มเครื่องใหม่เข้าแผน และอัปเดตชื่อ Node / BTU / ราคาของรอบที่ยังไม่ล้าง ตามรายการเครื่องตอนนี้">
+                    <i class="ph ph-arrows-clockwise text-lg text-gray-500"></i> อัปเดตจากรายการเครื่อง
+                  </button>
+                  <div data-admin-only class="my-1 border-t border-gray-100"></div>
+                  <button id="deletePlanBtn" onclick="closeRowMenus(); deletePlan()" style="display:none" class="w-full text-left px-3 py-2 hover:bg-red-50 flex items-center gap-2.5 text-red-600" title="ลบแผนของปีที่เลือกอยู่ (เฉพาะแผนที่ยังไม่มีงานล้างจริง)">
+                    <i class="ph ph-trash text-lg"></i> ลบแผนปีนี้
+                  </button>
+                </div>
+              </span>
               <button onclick="openNodeDateModal()" class="bg-[#1153a1] hover:bg-[#0e4485] text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                 <i class="ph ph-calendar-plus"></i> ตั้งวันราย Node
-              </button>
-
-              <input type="file" id="fileImportPlan" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
-              <button data-admin-only onclick="document.getElementById('fileImportPlan').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-                <i class="ph ph-upload-simple"></i> นำเข้า (Excel/CSV)
-              </button>
-
-              <button onclick="exportPlanTemplate()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="โหลดฟอร์มไปกรอกข้อมูลนำเข้า">
-                <i class="ph ph-download-simple"></i> Template
-              </button>
-              <!-- แผนเก็บข้อมูลเครื่องไว้ตั้งแต่ตอนสร้าง ปุ่มนี้ดึงของใหม่จากรายการเครื่อง (ดู syncCleaningPlan) -->
-              <button data-admin-only onclick="syncPlanFromAirList()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" title="เพิ่มเครื่องใหม่เข้าแผน และอัปเดตชื่อ Node / BTU / ราคาของรอบที่ยังไม่ล้าง ตามรายการเครื่องตอนนี้">
-                <i class="ph ph-arrows-clockwise"></i> อัปเดตจากรายการเครื่อง
-              </button>
-              <button id="deletePlanBtn" onclick="deletePlan()" style="display:none" class="bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="ลบแผนของปีที่เลือกอยู่ (เฉพาะแผนที่ยังไม่มีงานล้างจริง)">
-                <i class="ph ph-trash"></i> ลบแผน
               </button>
               <button onclick="openCreatePlanModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
                 <i class="ph ph-folder-plus"></i> สร้างแผน
@@ -1242,7 +1249,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">จัดการผู้ใช้งาน</h2>
-            <p class="text-sm text-gray-500">กำหนดสิทธิ์การเข้าใช้งานระบบ และภูมิภาคที่แต่ละ Admin ในพื้นที่รับผิดชอบ</p>
+            <p class="text-sm text-gray-500">กำหนดสิทธิ์การเข้าใช้งานระบบ และ Region ที่แต่ละ Admin ในพื้นที่รับผิดชอบ</p>
           </div>
           <button onclick="openUserModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
             <i class="ph ph-user-plus"></i> เพิ่มผู้ใช้งาน
@@ -1252,8 +1259,8 @@
         <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800 flex items-start gap-2">
           <i class="ph-fill ph-info text-lg flex-shrink-0 mt-0.5"></i>
           <div>
-            <strong>Infrastructure</strong> ทำได้ทุกอย่าง ทุกภูมิภาค รวมถึงจัดการผู้ใช้งานหน้านี้ &nbsp;|&nbsp;
-            <strong>Regional / Staff / Supervisor</strong> ดูแลเฉพาะภูมิภาคที่กำหนด ตามสิทธิ์รายเมนูที่ตั้งไว้ (ทั้งสามบทบาททำงานเหมือนกัน) &nbsp;|&nbsp;
+            <strong>Infrastructure</strong> ทำได้ทุกอย่าง ทุก Region รวมถึงจัดการผู้ใช้งานหน้านี้ &nbsp;|&nbsp;
+            <strong>Regional / Staff / Supervisor</strong> ดูแลเฉพาะ Region ที่กำหนด ตามสิทธิ์รายเมนูที่ตั้งไว้ (ทั้งสามบทบาททำงานเหมือนกัน) &nbsp;|&nbsp;
             <strong>Subcontract</strong> เห็นเฉพาะงานที่ได้รับมอบหมาย (รอบที่เลือกบริษัทของตัวเองไว้ในช่อง "ผู้รับเหมา" ของแผนล้าง)
           </div>
         </div>
@@ -1268,7 +1275,7 @@
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
               <i class="ph ph-map-pin text-gray-500"></i>
               <select id="userRegionFilter" onchange="renderUsersTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
-                <option value="">ทุกภูมิภาค</option>
+                <option value="">ทุก Region</option>
               </select>
             </div>
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
@@ -1302,7 +1309,7 @@
                   <th class="px-4 py-3 text-left">ชื่อ</th>
                   <th class="px-4 py-3 text-left">อีเมล</th>
                   <th class="px-4 py-3 text-left">บทบาท</th>
-                  <th class="px-4 py-3 text-left">ภูมิภาคที่ดูแล</th>
+                  <th class="px-4 py-3 text-left">Region ที่ดูแล</th>
                   <th class="px-4 py-3 text-left">สถานะ</th>
                   <th class="px-4 py-3 text-right">จัดการ</th>
                 </tr>
@@ -2687,6 +2694,8 @@
         // ปุ่มเปลี่ยนหน้าตาราง (goToAirPage / goToPlanPage / ...) แค่เลื่อนดู ไม่ได้แก้อะไร
         // ถ้าล็อกไว้ คนที่ดูได้อย่างเดียวจะเห็นแค่หน้าแรกของตาราง
         if (/^goTo\w*Page\(/.test(oc)) return;
+        // ปุ่ม ⋯ แค่เปิดเมนู — ในเมนูมีแจ้งซ่อมที่คนดูได้อย่างเดียวยังต้องกดได้ (ปุ่มในเมนูถูกล็อกแยกทีละปุ่มอยู่แล้ว)
+        if (oc.startsWith('toggleRowMenu(')) return;
         el.style.pointerEvents = 'none';
         el.style.opacity = '0.45';
         if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') el.disabled = true;
@@ -2852,9 +2861,9 @@
       if (!el || !currentUserInfo) return;
       const displayName = currentUserInfo.name || currentUserInfo.username || '';
       const title = currentUserInfo.title || ROLE_TITLES[currentUserInfo.role] || currentUserInfo.role;
-      const roleLabel = currentUserInfo.role === 'Admin' ? title + ' (ทุกภูมิภาค)'
+      const roleLabel = currentUserInfo.role === 'Admin' ? title + ' (ทุก Region)'
         : isContractor() ? `${title}: ${currentUserInfo.contractorName || '-'} · ${(currentUserInfo.jobs || []).length} งาน`
-        : `${title}: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนดภูมิภาค'}`;
+        : `${title}: ${(currentUserInfo.regions || []).join(', ') || 'ยังไม่กำหนด Region'}`;
       const roleColor = currentUserInfo.role === 'Admin' ? 'text-[#1153a1] bg-blue-50'
         : isContractor() ? 'text-amber-800 bg-amber-50' : 'text-teal-700 bg-teal-50';
       el.innerHTML = `
@@ -2997,7 +3006,7 @@
       const key = regions.join('|');
       if (sel.dataset.filled === key) return;
       const cur = sel.value;
-      sel.innerHTML = '<option value="">ทุกภูมิภาค</option>' +
+      sel.innerHTML = '<option value="">ทุก Region</option>' +
         regions.map(r => `<option value="${esc(r)}">${esc(regionLabel(r))}</option>`).join('');
       sel.value = regions.includes(cur) ? cur : '';
       sel.dataset.filled = key;
@@ -3026,7 +3035,7 @@
           </td>
           <td class="px-4 py-3 text-gray-600 text-sm max-w-[220px]">${
             u.ContractorID ? '<span class="text-gray-400">ตามงานที่ได้รับมอบหมาย</span>'
-            : u.Role === 'Admin' ? '<span class="text-gray-400">ทุกภูมิภาค</span>'
+            : u.Role === 'Admin' ? '<span class="text-gray-400">ทุก Region</span>'
             : (esc(u.Regions) || '<span class="text-rose-500">ยังไม่กำหนด</span>')}</td>
           <td class="px-4 py-3">${(u.Active === false || String(u.Active).toUpperCase() === 'FALSE') ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">ปิดใช้งาน</span>' : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">ใช้งานอยู่</span>'}</td>
           <td class="px-4 py-3 text-right space-x-1">
@@ -3181,13 +3190,13 @@
                 <p class="text-xs text-gray-400 mt-1">ชื่อบริษัทนี้จะขึ้นเป็นตัวเลือกในช่อง "ผู้รับเหมา" ของแผนล้าง — เลือกให้รอบไหน บัญชีนี้จะเห็นเฉพาะรอบนั้น · ช่างหลายคนของบริษัทเดียวกันเลือกบริษัทเดิม จะเห็นงานชุดเดียวกัน</p>
               </div>
               <div id="u_regionBox" class="${isRegionalRole(role) ? '' : 'hidden'}">
-                <label class="block text-sm font-medium text-gray-700 mb-1">ภูมิภาคที่รับผิดชอบ</label>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">${regionOpts || '<p class="text-xs text-gray-400 col-span-2 px-2">ยังไม่มีรายชื่อภูมิภาคใน Config</p>'}</div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Region ที่รับผิดชอบ</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">${regionOpts || '<p class="text-xs text-gray-400 col-span-2 px-2">ยังไม่มีรายชื่อ Region ใน Config</p>'}</div>
               </div>
               <div id="u_permBox" class="${isRegionalRole(role) ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งานรายเมนู</label>
                 <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">${permRows}</div>
-                <p class="text-xs text-gray-400 mt-1">สิทธิ์นี้จะถูกจำกัดร่วมกับภูมิภาคด้านบนด้วย (เช่น เลือก "แก้ไขได้" แต่จะแก้ไขได้เฉพาะภูมิภาคของตัวเองเท่านั้น)</p>
+                <p class="text-xs text-gray-400 mt-1">สิทธิ์นี้จะถูกจำกัดร่วมกับ Region ด้านบนด้วย (เช่น เลือก "แก้ไขได้" แต่จะแก้ไขได้เฉพาะ Region ของตัวเองเท่านั้น)</p>
               </div>
               <div class="flex items-center gap-2 pt-1">
                 <input type="checkbox" id="u_Active" ${(data.Active === false || String(data.Active).toUpperCase() === 'FALSE') ? '' : 'checked'} class="rounded border-gray-300 text-[#1153a1] focus:ring-[#1153a1]">
@@ -3219,7 +3228,7 @@
         showToast('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมา', 'error'); return;
       }
       const regions = isRegionalRole(role) ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
-      if (isRegionalRole(role) && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 ภูมิภาคสำหรับบทบาท ' + ROLE_TITLES[role], 'error'); return; }
+      if (isRegionalRole(role) && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 Region สำหรับบทบาท ' + ROLE_TITLES[role], 'error'); return; }
       const permissions = {};
       // ช่องเดียวอาจคุมหลายสิทธิ์ (แบบฟอร์มเอกสาร = ใบล้าง ใบซ่อม ใบติดตั้ง) ตั้งทุกตัวเป็นค่าเดียวกัน
       document.querySelectorAll('.u_perm_select').forEach(sel => {
@@ -3325,7 +3334,7 @@
           label: `คืบหน้าล้างแอร์ปี ${s.latestPlanSummary.year}`,
           icon: 'ph-check-circle', tone: 'mint',
           ...go('plan', `goToPlanProgress('${s.latestPlanSummary.year}')`,
-                `ดูแผนล้างแอร์ปี ${s.latestPlanSummary.year} แยกตามภูมิภาค`)
+                `ดูแผนล้างแอร์ปี ${s.latestPlanSummary.year} แยกตาม Region`)
         });
       }
 
@@ -3582,13 +3591,14 @@
 
       if (trendChartObj) trendChartObj.destroy();
       trendChartObj = new Chart(canvas, {
-        type: 'line',
+        // กราฟแท่ง ไม่ใช้เส้นโค้ง — เส้นโค้งลากผ่านเดือนข้างเคียงจนดูเหมือนมีค่าใช้จ่ายในเดือนที่ไม่มีจริง
+        type: 'bar',
         data: {
           labels,
           datasets: [
             // ใช้สีพาสเทลชุดเดียวกับการ์ดค่าใช้จ่ายด้านบน จะได้โยงกันได้ด้วยสายตา
-            { label: 'ค่าล้างแอร์', data: cleanData, borderColor: pastel('aqua'), backgroundColor: pastel('aqua') + '33', fill: true, tension: 0.35, pointRadius: 2 },
-            { label: 'ค่าซ่อมบำรุง', data: repairData, borderColor: pastel('lilac'), backgroundColor: pastel('lilac') + '33', fill: true, tension: 0.35, pointRadius: 2 }
+            { label: 'ค่าล้างแอร์', data: cleanData, backgroundColor: pastel('aqua'), borderRadius: 4 },
+            { label: 'ค่าซ่อมบำรุง', data: repairData, backgroundColor: pastel('lilac'), borderRadius: 4 }
           ]
         },
         options: {
@@ -3599,8 +3609,8 @@
             tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ฿${ctx.parsed.y.toLocaleString()}` } }
           },
           scales: {
-            y: { ticks: { callback: (v) => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } },
-            x: { grid: { display: false } }
+            y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } },
+            x: { stacked: true, grid: { display: false } }
           }
         }
       });
@@ -4024,7 +4034,7 @@
         ]),
 
         airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
-          airInfoField('ภูมิภาค', regionLabel(u.Region)),
+          airInfoField('Region', regionLabel(u.Region)),
           airInfoField('จังหวัด', u.Province),
           airInfoField('Node', u.NodeName),
           airInfoField('Site Code', u.SiteCode),
@@ -4227,6 +4237,32 @@
       const wrap = document.getElementById('airDownloadWrap');
       if (wrap && !wrap.contains(e.target)) closeAirDownloadMenu();
     });
+
+    /**
+     * เมนู ⋯ ท้ายแถวตาราง — วางแบบ fixed ตามตำแหน่งปุ่ม
+     * ไม่ใช้ absolute เพราะกรอบตารางเลื่อนแนวนอนได้ (overflow) เมนูของแถวล่างๆ จะโดนตัดหาย
+     */
+    function toggleRowMenu(btn) {
+      const menu = btn.parentElement.querySelector('.row-menu');
+      const wasOpen = !menu.classList.contains('hidden');
+      closeRowMenus();
+      if (wasOpen) return;
+      menu.classList.remove('hidden');
+      const r = btn.getBoundingClientRect();
+      const h = menu.offsetHeight, w = menu.offsetWidth;
+      // ชิดขวาของปุ่ม · ถ้าข้างล่างไม่พอให้เปิดขึ้นข้างบนแทน
+      menu.style.left = Math.max(8, r.right - w) + 'px';
+      menu.style.top = (r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - 4 - h) : r.bottom + 4) + 'px';
+    }
+    function closeRowMenus() {
+      document.querySelectorAll('.row-menu').forEach(m => m.classList.add('hidden'));
+    }
+    window.toggleRowMenu = toggleRowMenu;
+    window.closeRowMenus = closeRowMenus;
+    document.addEventListener('click', e => { if (!e.target.closest('.row-menu-wrap')) closeRowMenus(); });
+    // เมนูเป็น fixed — เลื่อนจอแล้วเมนูจะลอยค้างไม่ตามแถว จึงปิดทิ้ง
+    window.addEventListener('scroll', closeRowMenus, true);
+    window.addEventListener('resize', closeRowMenus);
 
     /**
      * ดาวน์โหลดรายการเครื่องตามที่กรองอยู่ ด้วยเหตุผลเดียวกับหน้าประวัติ
@@ -4696,13 +4732,21 @@
             <td class="px-4 py-3 text-gray-500">${esc(fmtDate(a.InstallDate))}</td>
             <td class="px-4 py-3 whitespace-nowrap">${ageCell(a.InstallDate)}</td>
             <td class="px-4 py-3">${statusBadge(a.Status)}</td>
-            <td class="px-4 py-3 text-right space-x-1">
-              <button onclick="openReportRepairModal('${jsStr(a.AirCode)}')" title="แจ้งซ่อมเครื่องนี้" class="text-rose-500 hover:text-white hover:bg-rose-500 p-1.5 rounded transition"><i class="ph ph-wrench text-lg"></i></button>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              <!-- โชว์แค่ปุ่มที่ใช้บ่อย (ประวัติ · แก้ไข) ที่เหลือเก็บในเมนู ⋯ — เดิมมี 6 ไอคอนสีต่างกันเรียงกัน
+                   ดูรก และปุ่มลบอยู่ติดปุ่มแก้ไขจนกดพลาดง่าย -->
               <button onclick="viewAirHistory('${jsStr(a.AirCode)}')" title="ดูประวัติเครื่องนี้" class="text-slate-500 hover:text-white hover:bg-slate-500 p-1.5 rounded transition"><i class="ph ph-clock-counter-clockwise text-lg"></i></button>
-              <button onclick='openMoveModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="ย้ายเครื่อง" class="text-teal-600 hover:text-white hover:bg-teal-500 p-1.5 rounded transition"><i class="ph ph-arrows-left-right text-lg"></i></button>
-              <button onclick='openReplaceModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="เปลี่ยนเครื่อง (ชำรุดซ่อมไม่ได้)" class="text-[#f47920] hover:text-white hover:bg-[#f47920] p-1.5 rounded transition"><i class="ph ph-arrows-clockwise text-lg"></i></button>
               <button onclick='openAirModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' title="แก้ไข" class="text-[#1153a1] hover:text-[#0e4485] hover:bg-blue-50 p-1.5 rounded transition"><i class="ph ph-pencil-simple text-lg"></i></button>
-              <button onclick="deleteAir(${a._row}, '${jsStr(a.AirCode)}')" title="ลบ" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+              <span class="row-menu-wrap inline-block">
+                <button onclick="toggleRowMenu(this)" title="เพิ่มเติม" class="text-gray-500 hover:text-gray-800 hover:bg-gray-100 p-1.5 rounded transition"><i class="ph ph-dots-three-outline-vertical text-lg"></i></button>
+                <div class="row-menu hidden fixed w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5 text-sm text-left">
+                  <button onclick="closeRowMenus(); openReportRepairModal('${jsStr(a.AirCode)}')" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700"><i class="ph ph-wrench text-lg text-rose-500"></i> แจ้งซ่อมเครื่องนี้</button>
+                  <button onclick='closeRowMenus(); openMoveModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700"><i class="ph ph-arrows-left-right text-lg text-teal-600"></i> ย้ายเครื่อง</button>
+                  <button onclick='closeRowMenus(); openReplaceModal(${JSON.stringify(a).replace(/'/g,"&apos;")})' class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700"><i class="ph ph-arrows-clockwise text-lg text-[#f47920]"></i> เปลี่ยนเครื่อง (ซ่อมไม่ได้)</button>
+                  <div class="my-1 border-t border-gray-100"></div>
+                  <button onclick="closeRowMenus(); deleteAir(${a._row}, '${jsStr(a.AirCode)}')" class="w-full text-left px-3 py-2 hover:bg-red-50 flex items-center gap-2.5 text-red-600"><i class="ph ph-trash text-lg"></i> ลบเครื่องนี้</button>
+                </div>
+              </span>
             </td>
           </tr>`;
         }).join('');
@@ -6068,14 +6112,14 @@
 
             <div>
               <div class="flex items-baseline gap-2 mb-2 flex-wrap">
-                <span class="text-xs font-semibold text-gray-700">แยกตามภูมิภาค</span>
-                <span class="text-[11px] text-gray-400">กดภูมิภาคเพื่อดูราย Node · กดชื่อ Node เพื่อกรองตารางข้างล่าง</span>
+                <span class="text-xs font-semibold text-gray-700">แยกตาม Region</span>
+                <span class="text-[11px] text-gray-400">กด Region เพื่อดูราย Node · กดชื่อ Node เพื่อกรองตารางข้างล่าง</span>
               </div>
               <div class="overflow-x-auto max-h-[22rem] overflow-y-auto border border-gray-100 rounded-lg">
                 <table class="w-full text-sm">
                   <thead>
                     <tr class="text-slate-600 border-b border-gray-200 text-[11px] bg-slate-50 sticky top-0 z-10">
-                      <th class="py-1 px-3 text-left font-semibold">ภูมิภาค / Node</th>
+                      <th class="py-1 px-3 text-left font-semibold">Region / Node</th>
                       <th class="py-1 px-3 text-right font-semibold">เครื่อง</th>
                       <th class="py-1 px-3 text-right font-semibold">ล้างแล้ว</th>
                       <th class="py-1 px-3 text-right font-semibold">ค่าใช้จ่าย</th>
@@ -6117,7 +6161,7 @@
                 ${esc(regionLabel(r.region))}
                 <span class="text-[11px] font-normal text-gray-400">${r.nodes.length} Node</span>
               </button>
-              <button type="button" onclick="filterPlanBy('${jsStr(r.region)}')" title="กรองตารางข้างล่างด้วยภูมิภาคนี้"
+              <button type="button" onclick="filterPlanBy('${jsStr(r.region)}')" title="กรองตารางข้างล่างด้วย Region นี้"
                       class="ml-1 text-gray-300 hover:text-[#1153a1] p-0.5"><i class="ph ph-funnel text-xs"></i></button>
             </div>
           </td>
@@ -6519,7 +6563,7 @@
         }
       }
       if (!findUnitByAirCode(p.AirCode)) {
-        showToast('ไม่พบเครื่อง ' + p.AirCode + ' ในรายการเครื่อง — อาจถูกลบไปแล้ว หรือไม่มีสิทธิ์เข้าถึงภูมิภาคนี้', 'error');
+        showToast('ไม่พบเครื่อง ' + p.AirCode + ' ในรายการเครื่อง — อาจถูกลบไปแล้ว หรือไม่มีสิทธิ์เข้าถึง Region นี้', 'error');
         return;
       }
 
@@ -7312,7 +7356,7 @@
         <tr class="hover:bg-slate-50 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(o.ID)}</td>
           <td class="px-4 py-3"><div class="font-medium">${esc(o.AirCode)}</div>
-            <div class="text-[11px] text-gray-400">${esc(o.NodeName)} · ภาค ${esc(o.Region)}</div></td>
+            <div class="text-[11px] text-gray-400">${esc(o.NodeName)} · ${esc(regionLabel(o.Region))}</div></td>
           <td class="px-4 py-3">${spec(o)}</td>
           <td class="px-4 py-3">${ids(o)}</td>
           <td class="px-4 py-3"><div>${esc(fmtDate(o.InDate))}</div>
@@ -13160,7 +13204,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               onchange="pfSetNode(this.value)" class="accent-[#1153a1] flex-shrink-0">
             <span class="min-w-0">
               <span class="block text-sm font-medium text-gray-800 truncate">${esc(n.NodeName)}</span>
-              <span class="block text-xs text-gray-500">${esc(n.SiteCode || '-')} · ภูมิภาค ${esc(n.Region || '-')} · ${pfUnitsOf(n).length} เครื่อง</span>
+              <span class="block text-xs text-gray-500">${esc(n.SiteCode || '-')} · ${esc(regionLabel(n.Region) || 'Region -')} · ${pfUnitsOf(n).length} เครื่อง</span>
             </span>
           </label>`;
         }).join('')
@@ -13438,7 +13482,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             onchange="adSetNode(this.value)" class="accent-[#1153a1] flex-shrink-0">
           <span class="min-w-0">
             <span class="block text-sm font-medium text-gray-800 truncate">${esc(n.NodeName)}</span>
-            <span class="block text-xs text-gray-500">${esc(n.SiteCode || '-')} · ภูมิภาค ${esc(n.Region || '-')} · ${cleanUnitsOf(n).length} เครื่อง</span>
+            <span class="block text-xs text-gray-500">${esc(n.SiteCode || '-')} · ${esc(regionLabel(n.Region) || 'Region -')} · ${cleanUnitsOf(n).length} เครื่อง</span>
           </span>
         </label>`;
       }).join('');
