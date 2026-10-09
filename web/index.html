@@ -1266,7 +1266,7 @@
           </div>
         </div>
 
-        <!-- เตือนผู้รับเหมาที่ยังไม่มีบัญชี (เช่น ได้งานจากการนำเข้าไฟล์แผน) — ดู renderContractorNoAccount -->
+        <!-- เตือนผู้รับเหมาที่ยังไม่มีบัญชีใช้งาน (เช่น ปิดบัญชีไปแล้ว) — ดู renderContractorNoAccount -->
         <div id="contractorNoAccountBanner" class="hidden mb-4"></div>
 
         <!-- ค้นหา + ตัวกรอง — ดู userMatchesFilters -->
@@ -2980,7 +2980,7 @@
 
     /**
      * ผู้รับเหมาที่ยังไม่มีบัญชีใช้งาน — ล็อกอินไม่ได้ จึงไม่เห็นงานที่ถูกมอบหมาย
-     * ส่วนใหญ่มาจากการนำเข้าไฟล์แผนที่ใส่ชื่อผู้รับเหมาใหม่ (ระบบเพิ่มชื่อให้ แต่สร้างบัญชีให้ไม่ได้)
+     * เช่น บัญชีของผู้รับเหมาเจ้านั้นถูกปิด/ลบไป — ระหว่างนี้นำเข้าแผนด้วยชื่อนี้ไม่ได้ (ดู updatePlanBulk)
      * เตือนค้างไว้จนกว่าจะสร้างบัญชี ไม่ใช่เตือนครั้งเดียวตอนนำเข้าแล้วลืม
      */
     function renderContractorNoAccount() {
@@ -3833,12 +3833,7 @@
             </div>
           </div>
 
-          <!-- สองคอลัมน์บนจอกว้าง ไม่งั้นข้อมูลสั้นๆ จะถูกยืดจนชื่อช่องกับค่าห่างกันคนละฝั่งจอ
-               การ์ดในแถวเดียวกันสูงเท่ากัน (items-stretch) เพื่อให้ขอบล่างตรงกันเป็นแนวเดียว
-               ส่วนที่ว่างที่เกิดขึ้นในการ์ดเตี้ย ถูกใช้ดันบรรทัด "ยังไม่ได้กรอก" ไปชิดก้นการ์ด -->
-          <div class="grid lg:grid-cols-2 gap-3 items-stretch">
-            ${airInfoBody(u)}
-          </div>
+          ${airInfoBody(u)}
 
           <p class="text-[11px] text-gray-400 text-right mt-2">
             แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
@@ -3996,52 +3991,49 @@
      * เพราะกล่องกลุ่มต้องรู้ก่อนว่าช่องไหนมีค่าช่องไหนว่าง จึงจะจัดวางได้
      *
      * html: ค่าที่เป็นมาร์กอัปอยู่แล้ว (เช่นป้ายอายุที่มีสี) ห้ามหนีอักขระซ้ำ
-     * wide: กินสองคอลัมน์ สำหรับค่าที่ยาว เช่นที่อยู่หรือหมายเหตุ
+     * derived: ระบบคำนวณให้เอง (ไม่เข้ารายการ "ยังไม่ได้กรอก")
      */
     function airInfoField(label, value, opts = {}) {
       return { label, value: String(value == null ? '' : value).trim(), ...opts };
     }
 
     /**
-     * กล่องข้อมูลหนึ่งกลุ่ม
+     * ข้อมูลหนึ่งกลุ่ม — เป็นคอลัมน์หนึ่งในการ์ดรวม (ดู airInfoBody)
      *
-     * ช่องที่ยังไม่ได้กรอกไม่แสดงเป็นช่องเปล่า แต่ยุบไปรวมเป็นบรรทัดเดียวท้ายกล่อง
+     * ชื่อช่องกับค่าอยู่บรรทัดเดียวกัน (ชื่อซ้าย ค่าขวา) แบบใบสเปก กินที่น้อยกว่าวางซ้อนบน-ล่าง
+     * ช่องที่ยังไม่ได้กรอกไม่แสดงเป็นช่องเปล่า — ส่งรายชื่อกลับไปรวมเป็นบรรทัดเดียวท้ายการ์ด
      * เพราะข้อมูลจริงส่วนใหญ่ยังกรอกไม่ครบ ถ้าแสดงทุกช่องจะเต็มไปด้วยขีดว่าง
      * จนหาค่าที่มีอยู่จริงไม่เจอ แต่จะตัดทิ้งเงียบๆ ก็ไม่ได้ เพราะคนต้องรู้ว่าต้องไปตามอะไร
      *
      * ไอคอนใช้สีจากชุดพาสเทลกลางชุดเดียวกับการ์ดบนแดชบอร์ด แต่ละกลุ่มได้สีของตัวเอง
      * เวลาเลื่อนดูจะจับกลุ่มได้ด้วยสีโดยไม่ต้องอ่านหัวข้อ และเปลี่ยนตามโหมดสว่าง/มืดเอง
+     *
+     * @returns {{html: string, missing: string[]}}
      */
-    function airInfoGroup(title, icon, tone, fields, opts = {}) {
+    function airInfoGroup(title, icon, tone, fields, cls = '') {
       const filled = fields.filter(f => f.value !== '');
       // ช่องที่ระบบคำนวณให้เอง (derived) ไม่เข้ารายการ "ยังไม่ได้กรอก"
       // เพราะกรอกเองไม่ได้ ต้องไปเติมช่องต้นทางแทน บอกไปก็ทำให้เข้าใจผิดว่าลืมกรอก
-      const missing = fields.filter(f => f.value === '' && f.label && !f.derived);
+      const missing = fields.filter(f => f.value === '' && f.label && !f.derived).map(f => f.label);
 
-      const cell = f => `
-        <div class="${f.wide ? 'col-span-2' : ''} min-w-0">
-          ${f.label ? `<div class="text-[11px] text-gray-400 mb-0.5">${esc(f.label)}</div>` : ''}
-          <div class="text-sm font-semibold text-gray-800 break-words leading-snug">${f.html ? f.value : esc(f.value)}</div>
+      const row = f => `
+        <div class="flex items-baseline justify-between gap-3 py-1 min-w-0">
+          <span class="text-[12px] text-gray-400 flex-shrink-0">${esc(f.label)}</span>
+          <span class="text-[13px] font-semibold text-gray-800 text-right break-words min-w-0">${f.html ? f.value : esc(f.value)}</span>
         </div>`;
 
-      return `
-        <div class="${opts.wide ? 'lg:col-span-2 ' : ''}bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+      const html = `
+        <section class="min-w-0 ${cls}">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
                   style="background:var(--p-${tone}-bg); color:var(--p-${tone}-fg)">
-              <i class="ph-fill ${icon} text-sm"></i>
+              <i class="ph-fill ${icon} text-xs"></i>
             </span>
             <span class="text-xs font-bold text-gray-600">${esc(title)}</span>
           </div>
-
-          ${filled.length ? `<div class="grid grid-cols-2 gap-x-5 gap-y-3">${filled.map(cell).join('')}</div>` : ''}
-
-          ${missing.length ? `
-            <div class="${filled.length ? 'mt-auto pt-4 border-t border-gray-100 ' : 'mt-auto '}flex items-start gap-1.5 text-[11px] text-gray-400">
-              <i class="ph ph-info text-sm leading-none mt-px flex-shrink-0"></i>
-              <span>ยังไม่ได้กรอก: ${missing.map(f => esc(f.label)).join(' · ')}</span>
-            </div>` : ''}
-        </div>`;
+          ${filled.length ? filled.map(row).join('') : '<p class="text-[12px] text-gray-300 py-1">ยังไม่มีข้อมูล</p>'}
+        </section>`;
+      return { html, missing };
     }
 
     function airInfoBody(u) {
@@ -4052,8 +4044,10 @@
       // ไม่งั้นกล่องจะนับว่าช่องนี้มีค่าแล้ว แล้วไม่ไปอยู่ในรายการที่ยังไม่ได้กรอก
       const age = String(u.InstallDate || '').trim() ? ageCell(u.InstallDate) : '';
 
+      // เส้นคั่นระหว่างคอลัมน์ — เฉพาะจอกว้างที่วาง 4 คอลัมน์เรียงกัน
+      const SEP = 'xl:border-l xl:border-gray-100 xl:pl-6';
       // เรียงจาก "ของที่ต้องดูบ่อยสุด" ลงไปหา "ของที่นานๆ ดูที"
-      return [
+      const groups = [
         airInfoGroup('ตัวเครื่อง', 'ph-snowflake', 'brand', [
           airInfoField('ยี่ห้อ', u.Brand),
           airInfoField('ขนาด (BTU)', u.BTU ? Number(u.BTU).toLocaleString() : ''),
@@ -4066,7 +4060,7 @@
           airInfoField('Indoor S/N', u.IndoorSN),
           airInfoField('Outdoor Asset (คอยล์ร้อน)', u.OutdoorAsset),
           airInfoField('Outdoor S/N', u.OutdoorSN)
-        ]),
+        ], SEP),
 
         airInfoGroup('ที่ตั้ง', 'ph-map-pin', 'mint', [
           airInfoField('Region', regionLabel(u.Region)),
@@ -4075,17 +4069,35 @@
           airInfoField('Site Code', u.SiteCode),
           airInfoField('ประเภทสถานที่', u.LocationType),
           airInfoField('พิกัด', coords),
-          airInfoField('ที่อยู่', u.Address, { wide: true })
-        ]),
+          airInfoField('ที่อยู่', u.Address)
+        ], SEP),
 
         airInfoGroup('อายุและการรับประกัน', 'ph-timer', 'peach', [
           airInfoField('วันติดตั้ง', u.InstallDate ? fmtDate(u.InstallDate) : ''),
           airInfoField('อายุการใช้งาน', age, { html: true, derived: true }),
           airInfoField('ประกันหมดอายุ', u.WarrantyExpire ? fmtDate(u.WarrantyExpire) : '')
-        ]),
+        ], SEP)
+      ];
+      const missing = groups.flatMap(g => g.missing);
 
-        u.Note ? airInfoGroup('หมายเหตุ', 'ph-note', 'aqua', [airInfoField('', u.Note, { wide: true })], { wide: true }) : ''
-      ].join('');
+      // การ์ดเดียว แบ่ง 4 คอลัมน์บนจอกว้าง (2 บนแท็บเล็ต 1 บนมือถือ) — เดิมเป็นการ์ดแยก 4 ใบ 2 แถว
+      // ซึ่งเปลืองที่แนวตั้งเกือบครึ่งจอ ทั้งที่แต่ละกลุ่มมีแค่ 3-7 บรรทัด
+      return `
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4">
+          <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4">
+            ${groups.map(g => g.html).join('')}
+          </div>
+          ${u.Note ? `
+            <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2 text-[13px]">
+              <span class="text-[12px] text-gray-400 flex-shrink-0 flex items-center gap-1"><i class="ph ph-note"></i> หมายเหตุ</span>
+              <span class="text-gray-700 break-words whitespace-pre-line min-w-0">${esc(u.Note)}</span>
+            </div>` : ''}
+          ${missing.length ? `
+            <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-1.5 text-[11px] text-gray-400">
+              <i class="ph ph-info text-sm leading-none mt-px flex-shrink-0"></i>
+              <span>ยังไม่ได้กรอก: ${missing.map(esc).join(' · ')}</span>
+            </div>` : ''}
+        </div>`;
     }
 
     /**
@@ -7042,7 +7054,7 @@
 
     function exportPlanTemplate() {
       if(!currentPlan || currentPlan.length === 0) { showToast('ไม่มีข้อมูลในแผนปีนี้', 'error'); return; }
-      // ผู้รับเหมาใส่เป็น "ชื่อ" — ชื่อใหม่ที่ยังไม่มีในระบบจะถูกเพิ่มให้ตอนนำเข้า (ดู updatePlanBulk)
+      // ผู้รับเหมาใส่เป็น "ชื่อ" — ต้องตรงกับผู้รับเหมาที่มี User ในระบบ ไม่งั้นไม่นำเข้าทั้งไฟล์ (ดู updatePlanBulk)
       const template = currentPlan.map(p => ({
         AirCode: p.AirCode,
         NodeName: p.NodeName,
@@ -7075,6 +7087,8 @@
           if(!bulkData[0].AirCode) throw new Error('ไฟล์ไม่ถูกต้อง (ต้องมีคอลัมน์ AirCode)');
 
           const result = await call('updatePlanBulk', currentYear, bulkData);
+          // ชื่อผู้รับเหมาไม่ตรงกับคนที่มี User — เซิร์ฟเวอร์ไม่ได้บันทึกอะไรเลย บอกรายชื่อแล้วจบ
+          if (result.rejected) { showPlanImportNotice(result); return; }
           currentPlan = result.plan;
           renderPlanTable();
           if (result.notFoundCodes && result.notFoundCodes.length > 0) {
@@ -7082,9 +7096,7 @@
           } else {
             showToast(`นำเข้าแผนล้างแอร์ปี ${currentYear} สำเร็จ (${result.matchedCount} รายการ)`);
           }
-          // ชื่อผู้รับเหมาใหม่ถูกเพิ่มเข้ารายชื่อ — โหลดใหม่ให้ตัวเลือกในหน้าต่างรอบเห็นด้วย
-          if (result.newContractors) await loadContractorList();
-          if ((result.noAccount || []).length || result.skippedDoneRounds) showPlanImportNotice(result);
+          if (result.skippedDoneRounds || (result.ignoredColumns || []).length) showPlanImportNotice(result);
         } catch(error) {
           showLoading(false);
           showToast('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + error.message, 'error');
@@ -7095,31 +7107,41 @@
     });
 
     /**
-     * แจ้งหลังนำเข้าแผน — ผู้รับเหมาที่ได้งานแต่ยังไม่มีบัญชี (ต้องให้ Infrastructure สร้าง)
-     * และรอบที่ล้างไปแล้วซึ่งไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์
+     * แจ้งผลนำเข้าแผน
+     *   rejected: ชื่อผู้รับเหมาในไฟล์ไม่ตรงกับคนที่มี User — ไม่ได้นำเข้าเลย บอกรายชื่อให้ไปสร้าง User หรือแก้ชื่อ
+     *   นำเข้าแล้ว: คอลัมน์ R4 ขึ้นไปที่ไม่ได้นำเข้า (แผนมีสูงสุด 3 รอบ)
+     *               และรอบที่ล้างไปแล้วซึ่งไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์
      */
     function showPlanImportNotice(result) {
-      const missing = result.noAccount || [];
+      const unknown = result.unknownContractors || [];
       document.getElementById('modalRoot').innerHTML = `
         <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph-fill ph-warning text-amber-500"></i> นำเข้าแล้ว — มีเรื่องต้องทำต่อ</h3>
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">${result.rejected
+                ? '<i class="ph-fill ph-x-circle text-rose-500"></i> ไม่ได้นำเข้า — ชื่อผู้รับเหมาไม่ตรงกับ User ในระบบ'
+                : '<i class="ph-fill ph-warning text-amber-500"></i> นำเข้าแล้ว — มีข้อควรรู้'}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="p-6 space-y-4 text-sm text-gray-700">
-              ${missing.length ? `
+              ${unknown.length ? `
               <div>
-                <p class="font-semibold text-gray-800">ผู้รับเหมา ${missing.length} รายยังไม่มีบัญชีเข้าระบบ</p>
-                <p class="text-gray-500 mt-0.5">ได้งานแล้วแต่ล็อกอินไม่ได้ จึงยังไม่เห็นงาน — ต้องสร้างบัญชีให้ที่หน้าจัดการผู้ใช้</p>
-                <ul class="mt-2 space-y-1">${missing.map(c => `<li class="flex items-center gap-2"><i class="ph ph-user text-amber-600"></i> ${esc(c.Name)}</li>`).join('')}</ul>
+                <p class="text-gray-600">ชื่อต่อไปนี้ยังไม่มี User ผู้รับเหมาที่เปิดใช้งาน หรือสะกดไม่ตรงกับในระบบ — ยังไม่ได้บันทึกอะไรจากไฟล์นี้</p>
+                <ul class="mt-2 space-y-1 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">${unknown.map(n => `<li class="flex items-center gap-2 text-rose-700"><i class="ph ph-user"></i> ${esc(n)}</li>`).join('')}</ul>
+                <p class="text-gray-500 text-xs mt-2">สร้าง User ผู้รับเหมาที่หน้าจัดการผู้ใช้ หรือแก้ชื่อในไฟล์ให้ตรง แล้วดรอปไฟล์ใหม่ (ตัวพิมพ์เล็ก/ใหญ่และช่องว่างไม่ต้องตรงเป๊ะ)</p>
+              </div>` : ''}
+              ${(result.ignoredColumns || []).length ? `
+              <div class="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">
+                <p class="font-semibold text-rose-700"><i class="ph-fill ph-x-circle"></i> ระบบรองรับสูงสุด 3 รอบต่อปี — คอลัมน์เหล่านี้ไม่ได้นำเข้า</p>
+                <p class="text-rose-700 mt-1 font-mono text-xs break-words">${result.ignoredColumns.map(esc).join(', ')}</p>
+                <p class="text-gray-500 text-xs mt-1">ส่วนอื่นของไฟล์ (R1–R3) นำเข้าตามปกติแล้ว</p>
               </div>` : ''}
               ${result.skippedDoneRounds ? `
               <p class="text-gray-500"><i class="ph ph-info"></i> ${result.skippedDoneRounds} รอบล้างเสร็จไปแล้ว จึงไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์</p>` : ''}
             </div>
             <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
-              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">ไว้ทีหลัง</button>
-              ${missing.length ? `<button onclick="closeModal(); document.querySelector('[data-tab=&quot;users&quot;]').click()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-user-plus"></i> ไปสร้างบัญชี</button>` : ''}
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">${unknown.length ? 'ปิด' : 'ตกลง'}</button>
+              ${unknown.length ? `<button onclick="closeModal(); document.querySelector('[data-tab=&quot;users&quot;]').click()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-user-plus"></i> ไปสร้าง User</button>` : ''}
             </div>
           </div>
         </div>`;

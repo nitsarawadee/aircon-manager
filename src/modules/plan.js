@@ -4,7 +4,6 @@ import {
 } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { jobKey } from '../context.js';
-import { findOrCreateContractor } from './contractors.js';
 
 /**
  * แผนล้างแอร์ประจำปี
@@ -900,14 +899,15 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
  * นำเข้าแผนแบบกลุ่มจากไฟล์ Excel/CSV — วันตามแผน และผู้รับเหมาของแต่ละรอบ
  *
  * คอลัมน์ผู้รับเหมา (R1_Contractor / R2_Contractor / R3_Contractor) ใส่ "ชื่อ" ไม่ใช่รหัส
- * เพราะคนกรอกไฟล์รู้จักแค่ชื่อ — ชื่อที่ยังไม่มีในรายชื่อจะถูกเพิ่มให้เอง (findOrCreateContractor
- * เทียบแบบไม่สนตัวพิมพ์/ช่องว่าง จึงไม่เกิดชื่อซ้ำ) จะเป็นชื่อบริษัทหรือชื่อคนก็ได้
+ * เพราะคนกรอกไฟล์รู้จักแค่ชื่อ — เทียบแบบไม่สนตัวพิมพ์/ช่องว่าง แต่ตัวสะกดต้องตรง
  * ช่องว่าง = ไม่แตะผู้รับเหมาเดิมของรอบนั้น
  *
- * รอบที่ล้างเสร็จแล้วไม่เปลี่ยนผู้รับเหมา — คนที่ล้างไปแล้วคือข้อเท็จจริง ไฟล์ทับไม่ได้
+ * ชื่อต้องเป็นผู้รับเหมาที่มีบัญชีผู้ใช้ (User) ที่เปิดใช้งานอยู่แล้วเท่านั้น (เจ้าของงานกำหนด)
+ * เพราะผู้รับเหมาเห็นงานผ่านบัญชีของตัวเอง — มอบงานให้ชื่อที่ไม่มีบัญชี = งานที่ไม่มีใครเห็น
+ * มีชื่อไหนไม่ตรงแม้แต่ชื่อเดียว ไม่นำเข้าทั้งไฟล์ แล้วบอกรายชื่อ ให้ไปสร้าง User หรือแก้ชื่อแล้วดรอปใหม่
+ * (ไม่นำเข้าครึ่งๆ กลางๆ — ไม่งั้นต้องมาไล่ว่าแถวไหนเข้าแถวไหนไม่เข้า)
  *
- * ผู้รับเหมาที่ได้งานจากไฟล์แต่ยังไม่มีบัญชีเข้าระบบ จะไม่เห็นงานของตัวเองเลย
- * จึงส่งรายชื่อกลับไป (noAccount) ให้หน้าเว็บเตือน Infrastructure ไปสร้างบัญชีให้
+ * รอบที่ล้างเสร็จแล้วไม่เปลี่ยนผู้รับเหมา — คนที่ล้างไปแล้วคือข้อเท็จจริง ไฟล์ทับไม่ได้
  */
 export async function updatePlanBulk(ctx, year, importedData) {
   return ctx.withLock(async () => {
@@ -930,6 +930,11 @@ export async function updatePlanBulk(ctx, year, importedData) {
     if (!hasAnyColumn) {
       throw new Error('ไฟล์นำเข้าไม่มีคอลัมน์ R1_PlanDate / R2_PlanDate / R3_PlanDate หรือ R1_Contractor / R2_Contractor / R3_Contractor กรุณาใช้ Template ที่ระบบสร้างให้');
     }
+    // แผนมีได้สูงสุด 3 รอบ — คอลัมน์ R4 ขึ้นไปที่เติมเองในไฟล์ไม่ถูกนำเข้า
+    // ส่งชื่อกลับไปให้หน้าเว็บเตือน ไม่งั้นคนกรอกจะเข้าใจว่าบันทึกแล้ว (ส่วนอื่นของไฟล์ยังนำเข้าตามปกติ)
+    const ignoredColumns = [...new Set((importedData || []).flatMap(item => Object.keys(item)))]
+      .filter(k => { const m = /^R(\d+)_/i.exec(k); return m && Number(m[1]) > 3; })
+      .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 
     const info = await ctx.userInfo();
     const allowed = info.role === 'Admin' ? null : await ctx.allowedAirCodes();
@@ -959,15 +964,23 @@ export async function updatePlanBulk(ctx, year, importedData) {
       if (item.AirCode) mapImport[normalizeCode(item.AirCode)] = item;
     });
 
-    // ชื่อผู้รับเหมา → รหัส (เรียกหา/สร้างครั้งเดียวต่อชื่อ) · นับว่าสร้างใหม่กี่ราย
-    const contractorCount = ctx.ss.objects(SHEETS.CONTRACTOR).length;
+    // ชื่อผู้รับเหมาที่ใช้ได้ = เปิดใช้งาน และมีบัญชีผู้ใช้ที่เปิดใช้งานผูกอยู่อย่างน้อย 1 บัญชี
+    const nameKey = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '');
+    const isOn = v => v !== false && String(v).toUpperCase() !== 'FALSE';
+    const withUser = new Set(ctx.ss.objects(SHEETS.USERS).filter(u => isOn(u.Active))
+      .map(u => String(u.ContractorID || '').trim().toUpperCase()).filter(Boolean));
     const idByName = new Map();
-    const resolveContractor = async raw => {
-      const key = String(raw).toLowerCase().replace(/\s+/g, '');
-      if (!idByName.has(key)) idByName.set(key, await findOrCreateContractor(ctx, raw));
-      return idByName.get(key);
-    };
-    const assigned = new Set();   // รหัสผู้รับเหมาที่ได้งานจากไฟล์นี้
+    for (const c of ctx.ss.objects(SHEETS.CONTRACTOR)) {
+      const id = String(c.ID || '').trim();
+      if (id && isOn(c.Active) && withUser.has(id.toUpperCase())) idByName.set(nameKey(c.Name), id);
+    }
+    // ตรวจทุกชื่อในไฟล์ก่อนแตะแถวไหน — ไม่ตรงชื่อเดียวก็ไม่นำเข้าทั้งไฟล์
+    const unknown = [...new Set((importedData || []).flatMap(item => [1, 2, 3]
+      .map(r => String(item['R' + r + '_Contractor'] || '').trim().replace(/\s+/g, ' '))
+      .filter(v => v && !idByName.has(nameKey(v)))))];
+    // คืนรายชื่อแทนการโยน error — หน้าเว็บแสดงเป็นรายการให้อ่านง่าย (ข้อความ error ยาวๆ อ่านในป้ายแจ้งเตือนไม่ทัน)
+    // ยังไม่ได้เขียนอะไรลงแผนเลย ณ จุดนี้
+    if (unknown.length) return { rejected: true, unknownContractors: unknown, matchedCount: 0 };
     let skippedDone = 0;
 
     const matchedCodes = new Set();
@@ -988,9 +1001,7 @@ export async function updatePlanBulk(ctx, year, importedData) {
         if (!cname || r > n || idx['c' + r] < 0) continue;
         const done = String(row[idx['s' + r]] || '').trim() === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
         if (done) { skippedDone++; continue; }
-        const cid = await resolveContractor(cname);
-        row[idx['c' + r]] = cid;
-        assigned.add(cid.toUpperCase());
+        row[idx['c' + r]] = idByName.get(nameKey(cname));
       }
       if (idx.by > -1) row[idx.by] = me;
       values[i] = row;
@@ -1005,23 +1016,13 @@ export async function updatePlanBulk(ctx, year, importedData) {
       [idx.c1, String], [idx.c2, String], [idx.c3, String]
     ]);
 
-    // ผู้รับเหมาที่ได้งานแต่ยังไม่มีบัญชีที่ใช้งานอยู่ — ล็อกอินไม่ได้ จึงไม่เห็นงานของตัวเอง
-    const activeOwners = new Set(ctx.ss.objects(SHEETS.USERS)
-      .filter(u => u.Active !== false && String(u.Active).toUpperCase() !== 'FALSE')
-      .map(u => String(u.ContractorID || '').trim().toUpperCase())
-      .filter(Boolean));
-    const noAccount = ctx.ss.objects(SHEETS.CONTRACTOR)
-      .filter(c => assigned.has(String(c.ID).trim().toUpperCase()) && !activeOwners.has(String(c.ID).trim().toUpperCase()))
-      .map(c => ({ ID: String(c.ID).trim(), Name: String(c.Name || '').trim() }));
-
     await ctx.ss.flush();
     return {
       plan: await getCleaningPlan(ctx, year),
       matchedCount: matchedCodes.size,
       notFoundCodes: notFound,
-      newContractors: ctx.ss.objects(SHEETS.CONTRACTOR).length - contractorCount,
       skippedDoneRounds: skippedDone,
-      noAccount
+      ignoredColumns
     };
   });
 }
