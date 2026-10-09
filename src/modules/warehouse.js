@@ -129,3 +129,34 @@ export async function writeOffStock(ctx, id) {
     return getWarehouse(ctx);
   });
 }
+
+/** ความยาวสูงสุดของบันทึกเพิ่มเติม — พอสำหรับโน้ตสั้นๆ ไม่ให้กลายเป็นที่เก็บเอกสารยาว */
+const REMARK_MAX = 500;
+
+/**
+ * บันทึกเพิ่มเติมของรายการในคลัง เช่น ขายให้ใคร เก็บไว้ตรงไหน
+ *
+ * แยกจาก Note ซึ่งเป็นอาการเสียที่ติดมากับเครื่องตอนเข้าคลัง (ไม่ให้เขียนทับของเดิม)
+ * แก้ได้ทั้งตอนอยู่ในคลังและหลัง Write off — หลังขาย/ทิ้งแล้วมักต้องจดว่าไปที่ไหน
+ * ส่งข้อความว่าง = ลบบันทึก
+ */
+export async function setStockRemark(ctx, id, text) {
+  return ctx.withLock(async () => {
+    await ctx.assertAdmin();
+    await ctx.ensureBase();
+    const want = plainText(id).trim();
+    const row = ctx.ss.objects(SHEETS.WAREHOUSE).find(r => plainText(r.ID) === want);
+    if (!row) throw new Error('ไม่พบรายการ ' + want + ' ในคลัง (อาจถูกลบไปแล้ว)');
+    await ctx.assertRegionAccess(row.Region);
+    const remark = plainText(text).trim();
+    if (remark.length > REMARK_MAX) throw new Error('บันทึกยาวเกิน ' + REMARK_MAX + ' ตัวอักษร');
+
+    ctx.ss.writeByHeaders(SHEETS.WAREHOUSE, row._row, {
+      Remark: remark,
+      RemarkBy: remark ? await ctx.currentUser() : '',
+      RemarkAt: remark ? ymdhms(new Date()) : ''
+    });
+    await ctx.ss.flush();
+    return getWarehouse(ctx);
+  });
+}

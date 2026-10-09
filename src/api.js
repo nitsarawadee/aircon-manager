@@ -38,7 +38,7 @@ import {
 } from './modules/repairlink.js';
 import { assignJob, getJobAssignments, getMyJobs, closeRepairSelf } from './modules/assign.js';
 import { approveDoc, getApprovalCount } from './modules/approval.js';
-import { getWarehouse, writeOffStock } from './modules/warehouse.js';
+import { getWarehouse, writeOffStock, setStockRemark } from './modules/warehouse.js';
 
 /**
  * ============================================================================
@@ -173,7 +173,8 @@ const API_FUNCTIONS = {
 
   // คลังแอร์ — เครื่องเก่าที่ถอดออกจากตำแหน่ง
   getWarehouse,
-  writeOffStock
+  writeOffStock,
+  setStockRemark
 };
 
 /** คำสั่งที่เรียกได้ก่อนล็อกอิน */

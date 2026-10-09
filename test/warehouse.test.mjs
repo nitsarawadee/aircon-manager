@@ -15,7 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createTableStatements } from '../src/db/schema.js';
 import { Ctx } from '../src/context.js';
 import { replaceAirUnit, moveAirUnit } from '../src/modules/airlist.js';
-import { getWarehouse, writeOffStock } from '../src/modules/warehouse.js';
+import { getWarehouse, writeOffStock, setStockRemark } from '../src/modules/warehouse.js';
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -80,4 +80,28 @@ test('คลังแอร์เฉพาะ Infrastructure — บทบาท
   assert.equal(s.Status, 'Write off');
   assert.ok(s.WriteOffDate);
   await assert.rejects(() => writeOffStock(as(db, 'boss'), item.ID), /Write off ไปแล้ว/);
+});
+
+test('บันทึกเพิ่มเติม — แยกจาก Note เดิม · แก้ได้หลัง Write off · ว่าง = ลบ · เฉพาะ Infrastructure', async () => {
+  const db = freshDb();
+  await replaceAirUnit(as(db, 'boss'), rowOf(db, 'ATG-PMK-AIR-1'), { IndoorSN: 'NEW' }, 'ATG-PMK-AIR-1');
+  const [item] = (await getWarehouse(as(db, 'boss'))).stock;
+
+  await assert.rejects(() => setStockRemark(as(db, 'r1'), item.ID, 'x'), /Infrastructure/);
+
+  let s = (await setStockRemark(as(db, 'boss'), item.ID, '  เก็บไว้ห้องเก็บของชั้น 2  ')).stock[0];
+  assert.equal(s.Remark, 'เก็บไว้ห้องเก็บของชั้น 2');
+  assert.equal(s.RemarkBy, 'boss');
+  assert.ok(s.RemarkAt);
+  assert.equal(s.Note, 'คอมเพรสเซอร์เสีย', 'หมายเหตุเดิมที่ติดมากับเครื่องต้องไม่ถูกทับ');
+
+  await writeOffStock(as(db, 'boss'), item.ID);
+  s = (await setStockRemark(as(db, 'boss'), item.ID, 'ขายให้ร้านรับซื้อแล้ว')).stock[0];
+  assert.equal(s.Remark, 'ขายให้ร้านรับซื้อแล้ว');
+
+  s = (await setStockRemark(as(db, 'boss'), item.ID, '')).stock[0];
+  assert.deepEqual([s.Remark, s.RemarkBy, s.RemarkAt], ['', '', '']);
+
+  await assert.rejects(() => setStockRemark(as(db, 'boss'), item.ID, 'ก'.repeat(501)), /ยาวเกิน/);
+  await assert.rejects(() => setStockRemark(as(db, 'boss'), 'WH0000-99', 'x'), /ไม่พบรายการ/);
 });

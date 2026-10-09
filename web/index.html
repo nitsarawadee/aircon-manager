@@ -311,9 +311,6 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="airlist">
         <i class="ph ph-list-dashes text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>รายการเครื่อง</span>
       </button>
-      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="warehouse">
-        <i class="ph ph-warehouse text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>คลังแอร์</span>
-      </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="plan">
         <i class="ph ph-calendar-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แผนล้างแอร์</span>
       </button>
@@ -338,6 +335,10 @@
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="users">
         <i class="ph ph-users-three text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>จัดการผู้ใช้</span>
+      </button>
+      <!-- คลังแอร์อยู่ล่างสุด เพราะใช้ไม่บ่อย (เจ้าของงานขอ) -->
+      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="warehouse">
+        <i class="ph ph-warehouse text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>คลังแอร์</span>
       </button>
     </nav>
 
@@ -598,7 +599,7 @@
             <div class="table-container overflow-x-auto">
               <table id="whStockTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead><tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
-                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ถอดจากตำแหน่ง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เข้าคลัง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ถอดจากตำแหน่ง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เข้าคลัง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">บันทึกเพิ่มเติม</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
               </table>
@@ -2732,6 +2733,7 @@
       openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
       fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist', writeOffStockRow: 'admin',
+      openStockRemarkModal: 'admin', saveStockRemark: 'admin',
       // แผนล้าง (ช่องรอบในแผนไม่อยู่ในนี้ — คนที่ดูได้อย่างเดียวยังเปิดดู/ปิดงานได้ ดู openRoundModal)
       openNodeDateModal: 'plan', saveNodeDates: 'plan', saveRound: 'plan', fileImportPlan: 'admin',
       openCreatePlanModal: 'admin', createPlan: 'admin', deletePlan: 'admin',
@@ -7362,11 +7364,16 @@
           <td class="px-4 py-3"><div>${esc(fmtDate(o.InDate))}</div>
             <div class="text-[11px] text-gray-400 whitespace-normal max-w-[14rem]">${esc(o.InReason)}${o.Note ? ' · ' + esc(o.Note) : ''}</div></td>
           <td class="px-4 py-3">${badge(o.Status)}${out && o.WriteOffDate ? `<div class="text-[11px] text-gray-400 mt-1">${esc(fmtDate(o.WriteOffDate))}</div>` : ''}</td>
+          <td class="px-4 py-3 whitespace-normal min-w-[12rem] max-w-[18rem]">${o.Remark
+            ? `<button onclick="openStockRemarkModal('${jsStr(o.ID)}')" title="แก้บันทึก" class="group text-left w-full">
+                <span class="block text-[13px] text-gray-700 whitespace-pre-line break-words group-hover:text-[#1153a1]">${esc(o.Remark)}</span>
+                <span class="block text-[11px] text-gray-400 mt-0.5"><i class="ph ph-pencil-simple"></i> ${esc(o.RemarkBy)}${o.RemarkAt ? ' · ' + esc(fmtDate(o.RemarkAt)) : ''}</span></button>`
+            : `<button onclick="openStockRemarkModal('${jsStr(o.ID)}')" class="text-xs text-gray-400 hover:text-[#1153a1] inline-flex items-center gap-1"><i class="ph ph-plus"></i> เพิ่มโน้ต</button>`}</td>
           <td class="px-4 py-3 text-right">${out ? '' : `<button onclick="writeOffStockRow('${jsStr(o.ID)}')"
               class="text-slate-600 hover:text-white hover:bg-slate-600 px-3 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-trash-simple"></i> Write off</button>`}</td>
         </tr>`;
-      }).join('') : `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">${q ? 'ไม่พบเครื่องในคลังที่ตรงกับคำค้นหา' : 'ยังไม่มีเครื่องในคลัง'}</td></tr>`;
+      }).join('') : `<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">${q ? 'ไม่พบเครื่องในคลังที่ตรงกับคำค้นหา' : 'ยังไม่มีเครื่องในคลัง'}</td></tr>`;
 
       const retired = (warehouseData.retired || []).filter(hit);
       retTb.innerHTML = retired.length ? retired.map(o => `
@@ -7396,6 +7403,49 @@
       } catch (e) {}
     }
     window.writeOffStockRow = writeOffStockRow;
+
+    /** บันทึกเพิ่มเติมของรายการในคลัง — เด้งกล่องให้พิมพ์ แล้วกดบันทึก (กันพิมพ์พลาดแล้วบันทึกไปเอง) */
+    function openStockRemarkModal(id) {
+      const o = (warehouseData.stock || []).find(x => x.ID === id);
+      if (!o) return;
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-note-pencil text-[#1153a1]"></i> บันทึกเพิ่มเติม</h3>
+                <p class="text-xs text-gray-500">${esc(o.ID)} · ถอดจาก ${esc(o.AirCode)}</p>
+              </div>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6">
+              <textarea id="stockRemarkText" rows="4" maxlength="500" placeholder="เช่น เก็บไว้ห้องเก็บของชั้น 2 · ขายให้ร้านรับซื้อแล้ว"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1153a1] outline-none">${esc(o.Remark || '')}</textarea>
+              <p class="text-xs text-gray-400 mt-1">ลบข้อความทั้งหมดแล้วกดบันทึก = ลบโน้ตนี้</p>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">ยกเลิก</button>
+              <button onclick="saveStockRemark('${jsStr(o.ID)}')" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-floppy-disk"></i> บันทึก</button>
+            </div>
+          </div>
+        </div>`;
+      const ta = document.getElementById('stockRemarkText');
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+
+    async function saveStockRemark(id) {
+      const text = document.getElementById('stockRemarkText').value;
+      try {
+        const res = await call('setStockRemark', id, text);
+        if (res) warehouseData = res;
+        renderWarehouse();
+        closeModal();
+        showToast(text.trim() ? 'บันทึกโน้ตแล้ว' : 'ลบโน้ตแล้ว');
+      } catch (e) {}
+    }
+    window.openStockRemarkModal = openStockRemarkModal;
+    window.saveStockRemark = saveStockRemark;
 
     /* ============== เอกสารรออนุมัติ (งานซ่อมที่ Infrastructure ต้องอนุมัติ) ============== */
 

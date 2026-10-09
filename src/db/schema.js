@@ -274,7 +274,8 @@ export const TABLES = {
       Brand: S, BTU: N, ModelIndoor: S, ModelOutdoor: S,
       IndoorAsset: S, IndoorSN: S, OutdoorAsset: S, OutdoorSN: S, InstallDate: D, WarrantyExpire: D,
       Status: S, InDate: D, InReason: S, CaseID: S, Note: S,
-      WriteOffDate: D, WriteOffBy: S, CreatedAt: DT, CreatedBy: S
+      WriteOffDate: D, WriteOffBy: S, CreatedAt: DT, CreatedBy: S,
+      Remark: S, RemarkBy: S, RemarkAt: DT
     },
     indexes: [['Region'], ['AirCode']],
     unique: ['ID']

@@ -20,7 +20,9 @@ export const WAREHOUSE_HEADERS = [
   'Brand', 'BTU', 'ModelIndoor', 'ModelOutdoor',
   'IndoorAsset', 'IndoorSN', 'OutdoorAsset', 'OutdoorSN', 'InstallDate', 'WarrantyExpire',
   'Status', 'InDate', 'InReason', 'CaseID', 'Note',
-  'WriteOffDate', 'WriteOffBy', 'CreatedAt', 'CreatedBy'
+  'WriteOffDate', 'WriteOffBy', 'CreatedAt', 'CreatedBy',
+  // บันทึกเพิ่มเติมของคลัง (กรอกเองจากหน้าคลังแอร์) — แยกจาก Note ที่ติดมาจากตำแหน่งตอนเข้าคลัง
+  'Remark', 'RemarkBy', 'RemarkAt'
 ];
 
 /**
