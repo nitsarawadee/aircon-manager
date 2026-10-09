@@ -4,6 +4,7 @@ import {
 } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
 import { jobKey } from '../context.js';
+import { findOrCreateContractor } from './contractors.js';
 
 /**
  * แผนล้างแอร์ประจำปี
@@ -895,7 +896,19 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
   });
 }
 
-/** นำเข้าวันตามแผนแบบกลุ่มจากไฟล์ Excel/CSV */
+/**
+ * นำเข้าแผนแบบกลุ่มจากไฟล์ Excel/CSV — วันตามแผน และผู้รับเหมาของแต่ละรอบ
+ *
+ * คอลัมน์ผู้รับเหมา (R1_Contractor / R2_Contractor / R3_Contractor) ใส่ "ชื่อ" ไม่ใช่รหัส
+ * เพราะคนกรอกไฟล์รู้จักแค่ชื่อ — ชื่อที่ยังไม่มีในรายชื่อจะถูกเพิ่มให้เอง (findOrCreateContractor
+ * เทียบแบบไม่สนตัวพิมพ์/ช่องว่าง จึงไม่เกิดชื่อซ้ำ) จะเป็นชื่อบริษัทหรือชื่อคนก็ได้
+ * ช่องว่าง = ไม่แตะผู้รับเหมาเดิมของรอบนั้น
+ *
+ * รอบที่ล้างเสร็จแล้วไม่เปลี่ยนผู้รับเหมา — คนที่ล้างไปแล้วคือข้อเท็จจริง ไฟล์ทับไม่ได้
+ *
+ * ผู้รับเหมาที่ได้งานจากไฟล์แต่ยังไม่มีบัญชีเข้าระบบ จะไม่เห็นงานของตัวเองเลย
+ * จึงส่งรายชื่อกลับไป (noAccount) ให้หน้าเว็บเตือน Infrastructure ไปสร้างบัญชีให้
+ */
 export async function updatePlanBulk(ctx, year, importedData) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('plan');
@@ -904,17 +917,18 @@ export async function updatePlanBulk(ctx, year, importedData) {
 
     const name = planSheet(year);
     await ctx.connect();
+    await ctx.ensureBase();   // ต้องมีรายชื่อผู้รับเหมาและผู้ใช้ไว้จับคู่ชื่อ/ตรวจบัญชี
     if (!(await ctx.ss.hasSheet(name))) throw new Error('ไม่พบแผนปี ' + year);
     await ctx.ss.load(name);
     await ctx.ss.ensureColumns(name, PLAN_HEADERS);
 
-    // ตรวจว่าไฟล์นำเข้ามีคอลัมน์วันที่อย่างน้อย 1 คอลัมน์
+    // ตรวจว่าไฟล์นำเข้ามีคอลัมน์วันที่หรือผู้รับเหมาอย่างน้อย 1 คอลัมน์
     // ป้องกันการนำเข้าไฟล์ผิด template แบบเงียบๆ
-    const hasAnyDateColumn = (importedData || []).some(item =>
-      item.R1_PlanDate !== undefined || item.R2_PlanDate !== undefined || item.R3_PlanDate !== undefined
-    );
-    if (!hasAnyDateColumn) {
-      throw new Error('ไฟล์นำเข้าไม่มีคอลัมน์ R1_PlanDate / R2_PlanDate / R3_PlanDate กรุณาใช้ Template ที่ระบบสร้างให้');
+    const hasAnyColumn = (importedData || []).some(item => [1, 2, 3].some(r =>
+      item['R' + r + '_PlanDate'] !== undefined || item['R' + r + '_Contractor'] !== undefined
+    ));
+    if (!hasAnyColumn) {
+      throw new Error('ไฟล์นำเข้าไม่มีคอลัมน์ R1_PlanDate / R2_PlanDate / R3_PlanDate หรือ R1_Contractor / R2_Contractor / R3_Contractor กรุณาใช้ Template ที่ระบบสร้างให้');
     }
 
     const info = await ctx.userInfo();
@@ -927,6 +941,15 @@ export async function updatePlanBulk(ctx, year, importedData) {
       r1: headers.indexOf('R1_PlanDate'),
       r2: headers.indexOf('R2_PlanDate'),
       r3: headers.indexOf('R3_PlanDate'),
+      c1: headers.indexOf('R1_ContractorID'),
+      c2: headers.indexOf('R2_ContractorID'),
+      c3: headers.indexOf('R3_ContractorID'),
+      s1: headers.indexOf('R1_Status'),
+      s2: headers.indexOf('R2_Status'),
+      s3: headers.indexOf('R3_Status'),
+      a1: headers.indexOf('R1_ActualDate'),
+      a2: headers.indexOf('R2_ActualDate'),
+      a3: headers.indexOf('R3_ActualDate'),
       by: headers.indexOf('UpdatedBy')
     };
     const me = await ctx.currentUser();
@@ -936,6 +959,17 @@ export async function updatePlanBulk(ctx, year, importedData) {
       if (item.AirCode) mapImport[normalizeCode(item.AirCode)] = item;
     });
 
+    // ชื่อผู้รับเหมา → รหัส (เรียกหา/สร้างครั้งเดียวต่อชื่อ) · นับว่าสร้างใหม่กี่ราย
+    const contractorCount = ctx.ss.objects(SHEETS.CONTRACTOR).length;
+    const idByName = new Map();
+    const resolveContractor = async raw => {
+      const key = String(raw).toLowerCase().replace(/\s+/g, '');
+      if (!idByName.has(key)) idByName.set(key, await findOrCreateContractor(ctx, raw));
+      return idByName.get(key);
+    };
+    const assigned = new Set();   // รหัสผู้รับเหมาที่ได้งานจากไฟล์นี้
+    let skippedDone = 0;
+
     const matchedCodes = new Set();
     for (let i = 1; i < values.length; i++) {
       const row = values[i] || [];
@@ -944,11 +978,20 @@ export async function updatePlanBulk(ctx, year, importedData) {
       if (!imp) continue;
       if (allowed && !allowed.has(code)) continue; // ข้ามเครื่องนอกภูมิภาคที่ตนดูแล
 
-      // รอบที่ปีนี้ไม่มี ไม่รับวันจากไฟล์
+      // รอบที่ปีนี้ไม่มี ไม่รับวัน/ผู้รับเหมาจากไฟล์
       const n = roundsInRow(headers, c => row[c]);
       if (imp.R1_PlanDate) row[idx.r1] = imp.R1_PlanDate;
       if (imp.R2_PlanDate && n >= 2) row[idx.r2] = imp.R2_PlanDate;
       if (imp.R3_PlanDate && n >= 3) row[idx.r3] = imp.R3_PlanDate;
+      for (const r of [1, 2, 3]) {
+        const cname = String(imp['R' + r + '_Contractor'] || '').trim();
+        if (!cname || r > n || idx['c' + r] < 0) continue;
+        const done = String(row[idx['s' + r]] || '').trim() === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
+        if (done) { skippedDone++; continue; }
+        const cid = await resolveContractor(cname);
+        row[idx['c' + r]] = cid;
+        assigned.add(cid.toUpperCase());
+      }
       if (idx.by > -1) row[idx.by] = me;
       values[i] = row;
       matchedCodes.add(code);
@@ -958,14 +1001,27 @@ export async function updatePlanBulk(ctx, year, importedData) {
     const notFound = Object.keys(mapImport).filter(code => !matchedCodes.has(code));
 
     writeBackColumns(ctx, name, values, [
-      [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String]
+      [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String],
+      [idx.c1, String], [idx.c2, String], [idx.c3, String]
     ]);
+
+    // ผู้รับเหมาที่ได้งานแต่ยังไม่มีบัญชีที่ใช้งานอยู่ — ล็อกอินไม่ได้ จึงไม่เห็นงานของตัวเอง
+    const activeOwners = new Set(ctx.ss.objects(SHEETS.USERS)
+      .filter(u => u.Active !== false && String(u.Active).toUpperCase() !== 'FALSE')
+      .map(u => String(u.ContractorID || '').trim().toUpperCase())
+      .filter(Boolean));
+    const noAccount = ctx.ss.objects(SHEETS.CONTRACTOR)
+      .filter(c => assigned.has(String(c.ID).trim().toUpperCase()) && !activeOwners.has(String(c.ID).trim().toUpperCase()))
+      .map(c => ({ ID: String(c.ID).trim(), Name: String(c.Name || '').trim() }));
 
     await ctx.ss.flush();
     return {
       plan: await getCleaningPlan(ctx, year),
       matchedCount: matchedCodes.size,
-      notFoundCodes: notFound
+      notFoundCodes: notFound,
+      newContractors: ctx.ss.objects(SHEETS.CONTRACTOR).length - contractorCount,
+      skippedDoneRounds: skippedDone,
+      noAccount
     };
   });
 }

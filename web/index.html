@@ -1266,6 +1266,9 @@
           </div>
         </div>
 
+        <!-- เตือนผู้รับเหมาที่ยังไม่มีบัญชี (เช่น ได้งานจากการนำเข้าไฟล์แผน) — ดู renderContractorNoAccount -->
+        <div id="contractorNoAccountBanner" class="hidden mb-4"></div>
+
         <!-- ค้นหา + ตัวกรอง — ดู userMatchesFilters -->
         <div class="flex flex-col md:flex-row gap-2 mb-4">
           <div class="relative flex-1 min-w-0">
@@ -2975,6 +2978,35 @@
       } catch (e) {}
     }
 
+    /**
+     * ผู้รับเหมาที่ยังไม่มีบัญชีใช้งาน — ล็อกอินไม่ได้ จึงไม่เห็นงานที่ถูกมอบหมาย
+     * ส่วนใหญ่มาจากการนำเข้าไฟล์แผนที่ใส่ชื่อผู้รับเหมาใหม่ (ระบบเพิ่มชื่อให้ แต่สร้างบัญชีให้ไม่ได้)
+     * เตือนค้างไว้จนกว่าจะสร้างบัญชี ไม่ใช่เตือนครั้งเดียวตอนนำเข้าแล้วลืม
+     */
+    function renderContractorNoAccount() {
+      const box = document.getElementById('contractorNoAccountBanner');
+      if (!box) return;
+      // นับจากรายชื่อผู้ใช้บนหน้านี้ (ไม่ใช่ตัวเลขจากเซิร์ฟเวอร์) — สร้าง/ปิดบัญชีแล้วป้ายอัปเดตทันที
+      const owners = new Set((currentUsersList || []).filter(u => !isUserInactive(u))
+        .map(u => String(u.ContractorID || '').trim().toUpperCase()).filter(Boolean));
+      const missing = (contractorList || []).filter(c => c.Active && !owners.has(String(c.ID).trim().toUpperCase()));
+      box.classList.toggle('hidden', !missing.length);
+      if (!missing.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div class="flex items-start gap-2 text-sm text-amber-800">
+            <i class="ph-fill ph-warning text-lg mt-0.5"></i>
+            <div><span class="font-semibold">ผู้รับเหมา ${missing.length} รายยังไม่มีบัญชีเข้าระบบ</span>
+              — ล็อกอินไม่ได้ จึงไม่เห็นงานที่มอบหมาย กดสร้างบัญชีให้ได้เลย</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-2.5 ml-7">
+            ${missing.map(c => `<button onclick="openUserModal({ ContractorID: '${jsStr(c.ID)}' })"
+                class="bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-medium inline-flex items-center gap-1.5">
+                <i class="ph ph-user-plus"></i> ${esc(c.Name)}</button>`).join('')}
+          </div>
+        </div>`;
+    }
+
     const isUserInactive = u => u.Active === false || String(u.Active).toUpperCase() === 'FALSE';
 
     /**
@@ -3017,6 +3049,7 @@
     function renderUsersTable() {
       const tb = document.querySelector('#usersTable tbody');
       if (!tb) return;
+      renderContractorNoAccount();   // สร้าง/ลบ/ปิดบัญชีแล้วป้ายเตือนต้องอัปเดตตาม
       if (currentUsersList.length === 0) {
         tb.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400"><i class="ph ph-users-three text-4xl mb-2 block"></i>ยังไม่มีผู้ใช้งานในระบบ กดปุ่ม "เพิ่มผู้ใช้งาน" เพื่อสร้างบัญชีแรก</td></tr>`;
         return;
@@ -7009,12 +7042,16 @@
 
     function exportPlanTemplate() {
       if(!currentPlan || currentPlan.length === 0) { showToast('ไม่มีข้อมูลในแผนปีนี้', 'error'); return; }
+      // ผู้รับเหมาใส่เป็น "ชื่อ" — ชื่อใหม่ที่ยังไม่มีในระบบจะถูกเพิ่มให้ตอนนำเข้า (ดู updatePlanBulk)
       const template = currentPlan.map(p => ({
         AirCode: p.AirCode,
         NodeName: p.NodeName,
         R1_PlanDate: p.R1_PlanDate || '',
         R2_PlanDate: p.R2_PlanDate || '',
-        R3_PlanDate: p.R3_PlanDate || ''
+        R3_PlanDate: p.R3_PlanDate || '',
+        R1_Contractor: p.R1_ContractorName || '',
+        R2_Contractor: p.R2_ContractorName || '',
+        R3_Contractor: p.R3_ContractorName || ''
       }));
       exportCSV(template, `Plan_Template_${currentYear}`);
       showToast('ดาวน์โหลดฟอร์มสำเร็จ');
@@ -7045,6 +7082,9 @@
           } else {
             showToast(`นำเข้าแผนล้างแอร์ปี ${currentYear} สำเร็จ (${result.matchedCount} รายการ)`);
           }
+          // ชื่อผู้รับเหมาใหม่ถูกเพิ่มเข้ารายชื่อ — โหลดใหม่ให้ตัวเลือกในหน้าต่างรอบเห็นด้วย
+          if (result.newContractors) await loadContractorList();
+          if ((result.noAccount || []).length || result.skippedDoneRounds) showPlanImportNotice(result);
         } catch(error) {
           showLoading(false);
           showToast('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + error.message, 'error');
@@ -7053,6 +7093,37 @@
       reader.readAsArrayBuffer(file);
       e.target.value = '';
     });
+
+    /**
+     * แจ้งหลังนำเข้าแผน — ผู้รับเหมาที่ได้งานแต่ยังไม่มีบัญชี (ต้องให้ Infrastructure สร้าง)
+     * และรอบที่ล้างไปแล้วซึ่งไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์
+     */
+    function showPlanImportNotice(result) {
+      const missing = result.noAccount || [];
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph-fill ph-warning text-amber-500"></i> นำเข้าแล้ว — มีเรื่องต้องทำต่อ</h3>
+              <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 text-sm text-gray-700">
+              ${missing.length ? `
+              <div>
+                <p class="font-semibold text-gray-800">ผู้รับเหมา ${missing.length} รายยังไม่มีบัญชีเข้าระบบ</p>
+                <p class="text-gray-500 mt-0.5">ได้งานแล้วแต่ล็อกอินไม่ได้ จึงยังไม่เห็นงาน — ต้องสร้างบัญชีให้ที่หน้าจัดการผู้ใช้</p>
+                <ul class="mt-2 space-y-1">${missing.map(c => `<li class="flex items-center gap-2"><i class="ph ph-user text-amber-600"></i> ${esc(c.Name)}</li>`).join('')}</ul>
+              </div>` : ''}
+              ${result.skippedDoneRounds ? `
+              <p class="text-gray-500"><i class="ph ph-info"></i> ${result.skippedDoneRounds} รอบล้างเสร็จไปแล้ว จึงไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์</p>` : ''}
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+              <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">ไว้ทีหลัง</button>
+              ${missing.length ? `<button onclick="closeModal(); document.querySelector('[data-tab=&quot;users&quot;]').click()" class="px-4 py-2 text-sm font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] shadow-sm"><i class="ph ph-user-plus"></i> ไปสร้างบัญชี</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
 
     /* ============== 3. HISTORY ============== */
     async function loadHistory() {
