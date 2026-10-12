@@ -417,7 +417,7 @@
               Air Conditioning Management <i class="ph-fill ph-sparkle" style="color:var(--p-peach)"></i>
             </h2>
             <!-- เดิมใช้สีที่ทำไว้สำหรับพื้นน้ำเงินเข้ม ซึ่งจะจางหายไปบนพื้นพาสเทลอ่อน -->
-            <p class="text-xs hidden sm:block" style="color:var(--p-brand-fg); opacity:.8">ติดตามสถานะ แผนการล้าง และประวัติการซ่อมบำรุงเครื่องปรับอากาศทั้งหมด</p>
+            <p class="text-xs hidden sm:block" style="color:var(--p-brand-fg); opacity:.8">สรุปสถานะเครื่องปรับอากาศ ความคืบหน้าการล้าง และค่าใช้จ่ายประจำปี</p>
           </div>
 
           <!-- เลือกปี: คุมเฉพาะตัวเลขที่ขึ้นกับปี (คืบหน้าล้างแอร์ · ค่าใช้จ่าย · กราฟแนวโน้ม)
@@ -496,7 +496,7 @@
       <section id="view-approvals" class="view">
         <div class="mb-6">
           <h2 class="text-2xl font-bold text-gray-800">เอกสารรออนุมัติ</h2>
-          <p class="text-sm text-gray-500">ใบซ่อม ใบล้างแอร์ และใบติดตั้งที่รอคุณอนุมัติ · กดรหัสเครื่องเพื่อไปดูที่หน้างานซ่อมและติดตั้ง · อนุมัติซ่อม (เคสที่แจ้งชำรุด) อยู่ที่หน้างานซ่อมและติดตั้ง</p>
+          <p class="text-sm text-gray-500">ใบซ่อม ใบล้าง และใบติดตั้งที่รอการอนุมัติ สำหรับเคสแจ้งชำรุด ให้อนุมัติที่หน้างานซ่อมและติดตั้ง</p>
         </div>
 
         <!-- แท็บตามประเภท (ตัวเลข = ที่รออยู่ ตามคำค้น/ภูมิภาคที่เลือก) + ค้นหา + Region — ดู renderApprovalsView
@@ -583,7 +583,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">คลังแอร์</h2>
-            <p class="text-sm text-gray-500">เครื่องที่ถอดออกจากหน้างาน (รื้อถอน/ปลดระวาง) รอขายหรือทิ้ง (Write off)</p>
+            <p class="text-sm text-gray-500">เครื่องปรับอากาศที่ถอดออกจากตำแหน่งติดตั้ง ระหว่างรอจำหน่ายหรือตัดจำหน่าย (Write off)</p>
           </div>
           <div class="relative w-full sm:w-64">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -629,7 +629,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">รายการเครื่องปรับอากาศ</h2>
-            <p class="text-sm text-gray-500">จัดการข้อมูล Master Data ของเครื่องทั้งหมด</p>
+            <p class="text-sm text-gray-500">ข้อมูลหลักของเครื่องปรับอากาศทั้งหมดในความรับผิดชอบ</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <!-- ปุ่มโหลดไฟล์ 3 แบบรวมเป็นเมนูเดียว — ดู toggleAirDownloadMenu -->
@@ -730,7 +730,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">แผนล้างแอร์ประจำปี</h2>
-            <p class="text-sm text-gray-500">คลิกที่ช่องใดก็ได้ในตารางเพื่อบันทึกผลล้าง หรือนำเข้าไฟล์เพื่ออัปเดตแบบกลุ่ม</p>
+            <p class="text-sm text-gray-500">แผนและผลการล้างเครื่องปรับอากาศประจำปี จำแนกตามรอบ</p>
           </div>
           <div class="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
 
@@ -834,7 +834,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">ประวัติการทำงาน</h2>
-            <p class="text-sm text-gray-500">บันทึกการซ่อมบำรุงและเหตุการณ์ต่างๆ</p>
+            <p class="text-sm text-gray-500">บันทึกการซ่อมบำรุงและเหตุการณ์ที่เกี่ยวข้องกับเครื่องปรับอากาศ</p>
           </div>
           <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
               <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
@@ -902,7 +902,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">งานซ่อมและติดตั้ง</h2>
-            <p class="text-sm text-gray-500">ติดตามเครื่องปรับอากาศที่รอซ่อม งานติดตั้งที่รอเอกสาร และประวัติงานซ่อม</p>
+            <p class="text-sm text-gray-500">รายการแจ้งซ่อมที่อยู่ระหว่างดำเนินการ งานติดตั้งที่รอเอกสาร และประวัติการซ่อม</p>
           </div>
           
           <div class="flex flex-wrap items-center gap-3">
@@ -1021,7 +1021,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">แบบฟอร์มเอกสาร</h2>
-            <p class="text-sm text-gray-500">กรอกในระบบแล้วเปิดเอกสารปริ้นได้เลย หรือปริ้นฟอร์มเปล่าไปเขียนมือหน้างานแล้วถ่ายรูปแนบกลับก็ได้ — ทั้งสองทางปิดงานในแผนได้เหมือนกัน</p>
+            <p class="text-sm text-gray-500">เอกสารการล้าง การซ่อม และการติดตั้ง กรอกในระบบ หรือพิมพ์แบบฟอร์มเปล่าไปกรอกด้วยลายมือแล้วแนบกลับเข้าระบบ</p>
           </div>
           <!-- ปุ่มของแต่ละประเภทเอกสาร — ซ่อน/แสดงตามแท็บที่เลือก (ดู paintDocTabs)
                ไม่งั้นแท็บซ่อมจะมีปุ่มของงานล้างปนอยู่ ซึ่งกดไปก็ได้ฟอร์มผิดแบบ -->
@@ -1131,7 +1131,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">การจัดการงบประมาณ</h2>
-            <p class="text-sm text-gray-500">ควบคุมและติดตามค่าใช้จ่ายแยกระหว่างงานล้างและงานซ่อมบำรุงประจำปี</p>
+            <p class="text-sm text-gray-500">งบประมาณและค่าใช้จ่ายประจำปี แยกตามงานล้างและงานซ่อมบำรุง</p>
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
@@ -1250,7 +1250,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">จัดการผู้ใช้งาน</h2>
-            <p class="text-sm text-gray-500">กำหนดสิทธิ์การเข้าใช้งานระบบ และ Region ที่แต่ละ Admin ในพื้นที่รับผิดชอบ</p>
+            <p class="text-sm text-gray-500">บัญชีผู้ใช้งาน บทบาท และ Region ที่รับผิดชอบ</p>
           </div>
           <button onclick="openUserModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
             <i class="ph ph-user-plus"></i> เพิ่มผู้ใช้งาน
@@ -2623,7 +2623,7 @@
           dash.innerHTML = `
             <div class="mb-4">
               <h2 class="text-2xl font-bold text-gray-800">ตารางงาน</h2>
-              <p class="text-sm text-gray-500">นัดล้างแอร์ที่มอบหมายให้ ${esc(currentUserInfo.contractorName || '')} · กดกรอกใบล้างจากรายการได้เลย หรือปิดงานที่เมนูแผนล้างแอร์ (กดที่ช่องรอบ)</p>
+              <p class="text-sm text-gray-500">งานล้างเครื่องปรับอากาศที่ได้รับมอบหมายของ ${esc(currentUserInfo.contractorName || '')}</p>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
               <!-- มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
