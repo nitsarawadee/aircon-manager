@@ -22,7 +22,12 @@
   <script>
     // เปิดใช้โหมดมืดแบบสั่งเองด้วยคลาส ไม่ใช่ตามค่าของเครื่อง
     // เพราะผู้ใช้ต้องเลือกเองได้ ไม่ใช่เปลี่ยนตามเวลาหรือการตั้งค่าของ Windows
-    tailwind.config = { darkMode: 'class' };
+    tailwind.config = {
+      darkMode: 'class',
+      // ใช้ Sarabun ตัวเดียวทั้งไทยและอังกฤษ ให้เข้ากับเอกสาร PDF และรายงานที่ใช้ TH Sarabun New
+      // รวม font-mono ด้วย (เลขที่เอกสาร รหัส) เพื่อไม่ให้มีฟอนต์ที่สามโผล่ขึ้นมา
+      theme: { extend: { fontFamily: { sans: ['Sarabun', 'sans-serif'], mono: ['Sarabun', 'sans-serif'] } } }
+    };
   </script>
   <script>
     // ใส่คลาสก่อนที่หน้าจะวาด เพื่อไม่ให้เห็นหน้าขาวแวบหนึ่งก่อนเปลี่ยนเป็นมืด
@@ -33,7 +38,7 @@
   </script>
 
   <style>
-    body { font-family: 'Inter', 'Sarabun', sans-serif; background-color: #f8fafc; color: #334155; }
+    body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; color: #334155; }
 
     /* ============================================================
        ชุดสีพาสเทลของหน้าแดชบอร์ด
@@ -291,7 +296,7 @@
       <div class="flex flex-col gap-0.5 min-w-0">
         <img src="assets/logo.png?v=2" alt="INTERLINK Telecom"
              class="max-w-[150px] md:max-w-[172px] max-h-[40px] md:max-h-[52px] w-auto h-auto object-contain">
-        <div class="text-[10px] text-slate-400 font-medium tracking-wide pl-1">Air Conditioning Management</div>
+        <div class="text-xs text-slate-400 font-medium tracking-wide pl-1">Air Conditioning Management</div>
       </div>
 
       <!-- ปุ่มสลับโหมดสีอยู่มุมขวาบนของแถบเมนู
@@ -320,12 +325,12 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="repair">
         <i class="ph ph-wrench text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งานซ่อมและติดตั้ง</span>
         <!-- เคสซ่อมที่ยังไม่ปิด + งานติดตั้งที่รอเอกสาร กันลืมมากรอก ดู refreshRepairBadge -->
-        <span id="repairBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-5 text-center shadow-sm"></span>
+        <span id="repairBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-bold leading-5 text-center shadow-sm"></span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="approvals">
         <i class="ph ph-seal-check text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>เอกสารรออนุมัติ</span>
         <!-- จำนวนที่รอให้บัญชีนี้กดอนุมัติ (แบบตัวเลขข้อความใหม่ในไลน์) ดู refreshApprovalBadge -->
-        <span id="apvBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-5 text-center shadow-sm"></span>
+        <span id="apvBadge" class="hidden md:ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-bold leading-5 text-center shadow-sm"></span>
       </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="cleaningform">
         <i class="ph ph-clipboard-text text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แบบฟอร์มเอกสาร</span>
@@ -375,7 +380,7 @@
           #view-dashboard #dashCards .w-12 { width: 1.75rem; height: 1.75rem; border-radius: .5rem; }
           #view-dashboard #dashCards .text-2xl { font-size: .95rem; line-height: 1; }
           #view-dashboard #dashCards .text-3xl { font-size: 1.15rem; }
-          #view-dashboard #dashCards .text-sm { font-size: .68rem; line-height: 1.15; }
+          #view-dashboard #dashCards .text-sm { font-size: .75rem; line-height: 1.15; }
           #view-dashboard #dashCards > div > i { font-size: 48px; }
           /* กล่องรายการที่อาจยาว: ยืดเต็มพื้นที่ที่เหลือของกล่อง แล้วเลื่อนอ่านข้างใน
              ต้องมี flex:1 ด้วย ไม่งั้นกล่องจะสูงตามเนื้อหาและล้นออกนอกกรอบ */
@@ -471,11 +476,11 @@
 
           <!-- แถวล่างซ้าย: ค่าใช้จ่ายรายเดือน -->
           <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col min-h-0">
-            <h3 class="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2 flex-shrink-0">
-              <i class="ph ph-chart-bar text-[#1153a1]"></i> <span id="trendTitle">ค่าใช้จ่ายรายเดือน</span>
+            <h3 class="text-sm font-semibold text-gray-800 mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 flex-shrink-0">
+              <i class="ph ph-chart-bar text-[#1153a1]"></i> <span id="trendTitle" class="whitespace-nowrap">ค่าใช้จ่ายรายเดือน</span>
               <!-- ยอดรวมทั้งปีวางไว้บนหัวกราฟ เพราะกราฟตอบได้แค่ว่าเดือนไหนใช้เยอะ
                    แต่คำถามที่ถูกถามคู่กันเสมอคือ "ทั้งปีไปเท่าไหร่แล้ว" ซึ่งกราฟไม่ตอบ -->
-              <span id="trendTotals" class="ml-auto text-[11px] font-normal text-gray-500 whitespace-nowrap"></span>
+              <span id="trendTotals" class="ml-auto text-xs font-normal text-gray-500 whitespace-nowrap"></span>
             </h3>
             <div class="dash-canvas"><canvas id="trendChartCanvas"></canvas></div>
           </div>
@@ -504,13 +509,13 @@
         <div class="flex flex-col lg:flex-row lg:items-end gap-2 mb-4 border-b border-gray-200">
           <div class="flex items-center gap-1 overflow-x-auto">
           <button id="apvTab_repair" onclick="setApvKind('repair')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
-            <i class="ph ph-wrench"></i> ใบซ่อม <span id="apvCount_repair" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+            <i class="ph ph-wrench"></i> ใบซ่อม <span id="apvCount_repair" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-xs font-semibold text-center"></span>
           </button>
           <button id="apvTab_cleaning" onclick="setApvKind('cleaning')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
-            <i class="ph ph-drop"></i> ใบล้าง <span id="apvCount_cleaning" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+            <i class="ph ph-drop"></i> ใบล้าง <span id="apvCount_cleaning" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-xs font-semibold text-center"></span>
           </button>
           <button id="apvTab_install" onclick="setApvKind('install')" class="px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors inline-flex items-center gap-1.5">
-            <i class="ph ph-plus-circle"></i> ใบติดตั้ง <span id="apvCount_install" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center"></span>
+            <i class="ph ph-plus-circle"></i> ใบติดตั้ง <span id="apvCount_install" class="min-w-[22px] px-1.5 py-0.5 rounded-full text-xs font-semibold text-center"></span>
           </button>
           </div>
           <div class="flex flex-col sm:flex-row gap-2 lg:ml-auto pb-2">
@@ -807,7 +812,7 @@
                   <th data-round="2" colspan="4" class="px-3 py-1.5 sticky top-0 bg-indigo-50/90 z-20 border-r border-indigo-200 text-indigo-800">รอบที่ 2</th>
                   <th data-round="3" colspan="4" class="px-3 py-1.5 sticky top-0 bg-purple-50/90 z-20 text-purple-800">รอบที่ 3</th>
                 </tr>
-                <tr class="bg-white border-b border-gray-200 text-gray-600 text-[11px] text-center uppercase tracking-wider">
+                <tr class="bg-white border-b border-gray-200 text-gray-600 text-xs text-center uppercase tracking-wider">
                   <th class="px-1.5 py-1.5 sticky top-[41px] bg-blue-50/90 z-10 font-semibold">แผน/ดำเนินการ</th>
                   <th class="px-1.5 py-1.5 sticky top-[41px] bg-blue-50/90 z-10 font-semibold">ราคา</th>
                   <th class="px-1.5 py-1.5 sticky top-[41px] bg-blue-50/90 z-10 font-semibold">PR</th>
@@ -1217,9 +1222,9 @@
               </h3>
               <p class="text-xs text-gray-500 mt-0.5">ปี <span id="bdg_monthly_year">-</span> · รวมทั้งปี <span id="bdg_monthly_total" class="font-semibold text-gray-700">฿0</span></p>
             </div>
-            <div class="flex items-center gap-4 text-xs text-gray-600">
-              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#1153a1"></span> ล้างแอร์</span>
-              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#f47920"></span> ซ่อมบำรุง</span>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+              <span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-3 h-3 rounded-sm" style="background:#1153a1"></span> ล้างแอร์</span>
+              <span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-3 h-3 rounded-sm" style="background:#f47920"></span> ซ่อมบำรุง</span>
             </div>
           </div>
 
@@ -2005,7 +2010,7 @@
                   class="p-1 rounded hover:bg-gray-100 text-gray-600 flex-shrink-0"><i class="ph ph-caret-right"></i></button>
         </div>
         <div class="grid grid-cols-7 gap-0.5 mb-1">
-          ${TH_DOW.map(d => `<div class="text-center text-[10px] text-gray-400 font-medium">${d}</div>`).join('')}
+          ${TH_DOW.map(d => `<div class="text-center text-xs text-gray-400 font-medium">${d}</div>`).join('')}
         </div>
         <div class="grid grid-cols-7 gap-0.5">${cells.join('')}</div>
         <button type="button" class="df-today mt-2 w-full text-xs text-[#1153a1] hover:underline">วันนี้</button>`;
@@ -2931,7 +2936,7 @@
         .map(c => `<option value="${esc(c.ID)}" ${!keep && c.ID === cur ? 'selected' : ''}>${esc(c.Name)}${c.Active ? '' : ' (ปิดใช้งาน)'}</option>`)
         .join('');
       const hint = contractorList.length ? ''
-        : '<p class="text-[11px] text-gray-400 mt-1">ยังไม่มีรายชื่อ — สร้างบัญชีผู้รับเหมาที่เมนูจัดการผู้ใช้ก่อน</p>';
+        : '<p class="text-xs text-gray-400 mt-1">ยังไม่มีรายชื่อ — สร้างบัญชีผู้รับเหมาที่เมนูจัดการผู้ใช้ก่อน</p>';
       return `<select id="${id}" class="${cls}">
           ${keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>'
                  : `<option value="" ${!cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>`}${opts}
@@ -3180,7 +3185,7 @@
               <option value="none" ${level === 'none' ? 'selected' : ''}>ไม่ให้เข้าถึง</option>
             </select>
           </div>
-          ${mixed ? `<p class="text-[11px] text-amber-600 mt-1">เดิมตั้งแยกไว้ (${m.keys.map(k => esc((PERMISSION_MODULES.find(p => p.key === k) || {}).label) + ': ' + LEVEL_TH[currentPerms[k]]).join(' · ')}) — บันทึกแล้วจะใช้ค่านี้ทั้งหมด</p>` : ''}
+          ${mixed ? `<p class="text-xs text-amber-600 mt-1">เดิมตั้งแยกไว้ (${m.keys.map(k => esc((PERMISSION_MODULES.find(p => p.key === k) || {}).label) + ': ' + LEVEL_TH[currentPerms[k]]).join(' · ')}) — บันทึกแล้วจะใช้ค่านี้ทั้งหมด</p>` : ''}
         </div>`;
       }).join('');
       const content = `
@@ -3463,10 +3468,10 @@
                  ปลอดภัยกว่าการหนีอักขระ เพราะไม่ต้องหวังพึ่งว่าหนีครบทุกตัวหรือยัง -->
             <div data-node="${esc(up.NodeName)}" data-year="${esc(up.PlanYear || '')}"
                  onclick="goToPlan(this.dataset.node, this.dataset.year)" class="border border-gray-200 rounded-xl p-4 hover:border-[#1153a1] hover:shadow-md transition-all cursor-pointer bg-white relative overflow-hidden group">
-               ${isToday ? `<div class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg shadow-sm z-10">วันนี้</div>` : ''}
+               ${isToday ? `<div class="absolute top-0 right-0 bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-bl-lg shadow-sm z-10">วันนี้</div>` : ''}
                <div class="flex items-center gap-3 mb-3">
                   <div class="w-12 h-12 rounded-xl ${isToday ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-blue-50 text-[#1153a1] border border-blue-100'} flex flex-col items-center justify-center flex-shrink-0 shadow-inner">
-                     <span class="text-[10px] font-bold uppercase leading-none tracking-wider mb-0.5">${pDate.toLocaleDateString('th-TH', {month:'short'})}</span>
+                     <span class="text-xs font-bold uppercase leading-none tracking-wider mb-0.5">${pDate.toLocaleDateString('th-TH', {month:'short'})}</span>
                      <span class="text-lg font-black leading-none">${pDate.getDate()}</span>
                   </div>
                   <div class="flex-1 min-w-0">
@@ -3640,7 +3645,7 @@
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } },
+            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 12 } } },
             tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ฿${ctx.parsed.y.toLocaleString()}` } }
           },
           scales: {
@@ -3835,7 +3840,7 @@
 
           ${airInfoBody(u)}
 
-          <p class="text-[11px] text-gray-400 text-right mt-2">
+          <p class="text-xs text-gray-400 text-right mt-2">
             แก้ไขล่าสุด ${u.UpdatedAt ? esc(fmtDate(u.UpdatedAt)) : '-'}${u.UpdatedBy ? ' โดย ' + esc(u.UpdatedBy) : ''}
           </p>
 
@@ -3864,7 +3869,7 @@
       const stat = (label, value, tone) => `
         <div class="rounded-xl px-4 py-3" style="background:var(--p-${tone}-bg)">
           <div class="text-lg font-extrabold leading-none" style="color:var(--p-${tone}-fg)">${value}</div>
-          <div class="text-[11px] text-gray-500 mt-1.5">${label}</div>
+          <div class="text-xs text-gray-500 mt-1.5">${label}</div>
         </div>`;
 
       const cols = canEdit ? 7 : 6;
@@ -3886,8 +3891,8 @@
       const eraHeader = (label, sub) => `
         <tr class="bg-slate-50/80">
           <td colspan="${cols}" class="px-4 py-2 border-y border-slate-200">
-            <span class="text-[11px] font-bold text-slate-600">${esc(label)}</span>
-            ${sub ? `<span class="text-[11px] text-slate-400"> · ${esc(sub)}</span>` : ''}
+            <span class="text-xs font-bold text-slate-600">${esc(label)}</span>
+            ${sub ? `<span class="text-xs text-slate-400"> · ${esc(sub)}</span>` : ''}
           </td>
         </tr>`;
 
@@ -3956,7 +3961,7 @@
               <i class="ph-fill ph-clock-counter-clockwise text-sm"></i>
             </span>
             <span class="text-xs font-bold text-gray-600">ประวัติของเครื่องนี้</span>
-            <span class="text-[11px] text-gray-400">${rows.length} รายการ</span>
+            <span class="text-xs text-gray-400">${rows.length} รายการ</span>
           </div>
 
           ${rows.length ? `
@@ -4093,7 +4098,7 @@
               <span class="text-gray-700 break-words whitespace-pre-line min-w-0">${esc(u.Note)}</span>
             </div>` : ''}
           ${missing.length ? `
-            <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-1.5 text-[11px] text-gray-400">
+            <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-1.5 text-xs text-gray-400">
               <i class="ph ph-info text-sm leading-none mt-px flex-shrink-0"></i>
               <span>ยังไม่ได้กรอก: ${missing.map(esc).join(' · ')}</span>
             </div>` : ''}
@@ -4511,17 +4516,17 @@
 
       const changeRows = plan.updates.map(u => `
         <tr class="border-t border-gray-100">
-          <td class="px-2 py-1.5 font-mono text-[11px] text-slate-600 align-top">${esc(u.airCode)}</td>
+          <td class="px-2 py-1.5 font-mono text-xs text-slate-600 align-top">${esc(u.airCode)}</td>
           <td class="px-2 py-1.5">${u.changes.map(ch =>
             `<div class="text-xs"><span class="text-gray-500">${esc(ch.column)}:</span>
                <span class="line-through text-gray-400">${esc(ch.from) || '(ว่าง)'}</span>
-               <i class="ph ph-arrow-right text-[10px] text-gray-400"></i>
+               <i class="ph ph-arrow-right text-xs text-gray-400"></i>
                <span class="text-gray-800 font-medium">${esc(ch.to)}</span></div>`).join('')}</td>
         </tr>`).join('');
 
       const addRows = plan.adds.map(a => `
         <tr class="border-t border-gray-100">
-          <td class="px-2 py-1.5 font-mono text-[11px] text-emerald-700">${esc(a.airCode)}</td>
+          <td class="px-2 py-1.5 font-mono text-xs text-emerald-700">${esc(a.airCode)}</td>
           <td class="px-2 py-1.5 text-xs text-gray-600">${esc(a.nodeName)}</td>
         </tr>`).join('');
 
@@ -4875,7 +4880,7 @@
                 ${isEdit
                   ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label><select id="f_Status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">${isAwaitingInstall(data.Status) ? '' : '<option value=""></option>'}${opt(statusChoices(data.Status), data.Status)}</select></div>`
                   : `<div><label class="block text-sm font-medium text-gray-700 mb-1">สถานะ</label><div class="w-full rounded-lg border border-gray-200 bg-slate-50 text-sm px-3 py-2 text-gray-600">รอติดตั้ง</div>
-                     <p class="text-[11px] text-gray-400 mt-1">ขึ้นในรายการต่างๆ เมื่อใบติดตั้งอนุมัติครบทุกขั้น</p></div>`}
+                     <p class="text-xs text-gray-400 mt-1">ขึ้นในรายการต่างๆ เมื่อใบติดตั้งอนุมัติครบทุกขั้น</p></div>`}
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label>${dateField('f_InstallDate', data.InstallDate)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันหมดประกัน</label>${dateField('f_WarrantyExpire', data.WarrantyExpire)}</div>
 
@@ -5246,7 +5251,7 @@
 
       // บอกค่าเดิมไว้ใต้ช่อง เพราะคนกรอกต้องเทียบกับที่ติดอยู่บนเครื่องจริงหน้างาน
       // ไม่ใส่เป็นค่าเริ่มต้นในช่อง S/N เพราะถ้าลืมแก้จะกลายเป็นเครื่องใหม่ที่ใช้ S/N เดิม
-      const wasHint = v => (v ? `<p class="text-[11px] text-gray-400 mt-1">เดิม: ${esc(v)}</p>` : '');
+      const wasHint = v => (v ? `<p class="text-xs text-gray-400 mt-1">เดิม: ${esc(v)}</p>` : '');
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -5392,6 +5397,16 @@
       const dark = document.documentElement.classList.contains('dark');
       Chart.defaults.color = dark ? '#94a3b8' : '#666';
       Chart.defaults.borderColor = dark ? '#334155' : 'rgba(0,0,0,0.1)';
+      // กราฟวาดตัวหนังสือเองบน canvas ไม่ได้รับฟอนต์จาก CSS ต้องบอกแยก
+      Chart.defaults.font.family = "'Sarabun', sans-serif";
+    }
+
+    // canvas ไม่วาดใหม่เองเมื่อฟอนต์โหลดเสร็จ ถ้ากราฟถูกวาดก่อนฟอนต์มาจะค้างเป็นฟอนต์สำรอง
+    // จึงสั่งวาดกราฟที่มีอยู่ใหม่อีกครั้งหลังฟอนต์พร้อม
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        if (typeof Chart !== 'undefined') Object.values(Chart.instances || {}).forEach(c => c.update());
+      });
     }
 
     /** วาดหน้าที่เปิดอยู่ใหม่ ใช้ตอนสลับโหมดเพื่อให้กราฟเปลี่ยนสีตาม */
@@ -5604,8 +5619,8 @@
     function jobDateBox(d) {
       return d
         ? `<div class="text-lg font-bold text-gray-800 leading-none">${Number(String(d).slice(8, 10))}</div>
-           <div class="text-[10px] text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(String(d).slice(5, 7)) - 1]}</div>`
-        : `<div class="text-base font-bold text-gray-300 leading-none">—</div><div class="text-[10px] text-gray-400 mt-1">ยังไม่นัด</div>`;
+           <div class="text-xs text-gray-500 mt-1">${TH_MONTHS_SHORT[Number(String(d).slice(5, 7)) - 1]}</div>`
+        : `<div class="text-base font-bold text-gray-300 leading-none">—</div><div class="text-xs text-gray-400 mt-1">ยังไม่นัด</div>`;
     }
 
     /** แถวของนัดล้างหนึ่งนัด (กล่องข้างปฏิทินแคบ — วางเรียงลงล่าง) */
@@ -5616,21 +5631,21 @@
       const chips = j.units.map(u => {
         if (!u.done) return `
           <button onclick="openMyJobForm('${jsStr(u.code)}', '${jsStr(j.year)}', ${j.round})" title="กรอกใบล้างของ ${esc(u.code)}"
-            class="px-2 py-0.5 rounded-md text-[11px] font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
+            class="px-2 py-0.5 rounded-md text-xs font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
             <i class="ph ph-pencil-simple"></i>${esc(short(u.code))} · กรอกใบล้าง</button>`;
         const cls = u.waiting ? 'bg-blue-50 text-[#1153a1] border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
         const label = esc(short(u.code)) + (u.waiting ? ' รออนุมัติ' : ' เสร็จ');
         return u.form
           ? `<button onclick="openCleaningDoc(${Number(u.form._row)}, '${jsStr(u.form.ID)}')" title="เปิดใบล้าง ${esc(displayDocNo(u.form))}"
-               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
-          : `<span class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls}">${label}</span>`;
+               class="px-2 py-0.5 rounded-md text-xs font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
+          : `<span class="px-2 py-0.5 rounded-md text-xs font-medium border ${cls}">${label}</span>`;
       }).join('');
       return `
         <div class="flex gap-3 px-3 py-2.5">
           <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-gray-800 truncate">${esc(j.node)}</div>
-            <div class="text-[11px] text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}</div>
+            <div class="text-xs text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}</div>
             <div class="flex flex-wrap gap-1 mt-1.5">${chips}</div>
           </div>
         </div>`;
@@ -5642,30 +5657,30 @@
       const d = w.state === 'open' ? w.apptDate : ((w.doc && w.doc.date) || w.apptDate);
       const install = w.kind === 'install';
       const tag = install
-        ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-50 text-teal-700 border border-teal-200">ติดตั้ง</span>'
-        : '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">ซ่อม</span>';
+        ? '<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">ติดตั้ง</span>'
+        : '<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">ซ่อม</span>';
       const short = String(u.AirCode).startsWith(u.SiteCode + '-') ? String(u.AirCode).slice(String(u.SiteCode).length + 1) : String(u.AirCode);
       let chip = '';
       if (w.state === 'open') {
         chip = `<button onclick="openMyWorkForm('${jsStr(w.kind)}', '${jsStr(u.AirCode)}')" title="${install ? 'กรอกใบติดตั้ง' : 'กรอกใบซ่อม'}ของ ${esc(u.AirCode)}"
-          class="px-2 py-0.5 rounded-md text-[11px] font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
+          class="px-2 py-0.5 rounded-md text-xs font-medium border border-orange-300 bg-white text-[#d96615] hover:bg-orange-50 hover:border-[#f47920] inline-flex items-center gap-1 transition-colors">
           <i class="ph ph-pencil-simple"></i>${esc(short)} · ${install ? 'กรอกใบติดตั้ง' : 'กรอกใบซ่อม'}</button>`;
       } else if (w.doc) {
         const cls = w.doc.waiting ? 'bg-blue-50 text-[#1153a1] border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
         const label = esc(w.doc.docNo) + (w.doc.waiting ? ' รออนุมัติ' : ' เสร็จ');
         chip = install
           ? `<button onclick="openInstallDoc(${Number(w.doc.row)}, '${jsStr(w.doc.id)}')" title="เปิดใบติดตั้ง"
-               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
+               class="px-2 py-0.5 rounded-md text-xs font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`
           : `<button onclick="openRepairDoc(${Number(w.doc.row)}, '${jsStr(w.doc.id)}')" title="เปิดใบซ่อม"
-               class="px-2 py-0.5 rounded-md text-[11px] font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`;
+               class="px-2 py-0.5 rounded-md text-xs font-medium border ${cls} hover:underline inline-flex items-center gap-1"><i class="ph ph-file-text"></i>${label}</button>`;
       }
       return `
         <div class="flex gap-3 px-3 py-2.5">
           <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-gray-800 truncate flex items-center gap-1.5">${tag}<span class="truncate">${esc(u.NodeName)}</span></div>
-            <div class="text-[11px] text-gray-500">${esc(u.SiteCode)} · ${esc(short)}</div>
-            ${w.state === 'open' && w.note ? `<div class="text-[11px] text-amber-700 mt-0.5">หมายเหตุ: ${esc(w.note)}</div>` : ''}
+            <div class="text-xs text-gray-500">${esc(u.SiteCode)} · ${esc(short)}</div>
+            ${w.state === 'open' && w.note ? `<div class="text-xs text-amber-700 mt-0.5">หมายเหตุ: ${esc(w.note)}</div>` : ''}
             <div class="flex flex-wrap gap-1 mt-1.5">${chip}</div>
           </div>
         </div>`;
@@ -5825,20 +5840,20 @@
                         : weekend ? 'border-gray-100 bg-slate-50/60' : 'border-gray-100'}">
             <div class="flex items-center justify-between">
               <span class="text-sm font-semibold ${isToday || selected ? 'text-[#1153a1]' : weekend ? 'text-gray-400' : 'text-gray-600'}">${d}</span>
-              ${items.length ? `<span class="text-[11px] font-medium text-gray-500 bg-gray-100 rounded px-1.5">${items.length}</span>` : ''}
+              ${items.length ? `<span class="text-xs font-medium text-gray-500 bg-gray-100 rounded px-1.5">${items.length}</span>` : ''}
             </div>
             ${/* มือถือช่องแคบเกินกว่าจะอ่านรหัสเครื่องได้ (เหลือแค่ "A..") จึงแสดงจุดสีตามสถานะแทน
                  กดที่วันแล้วได้รายการเต็มเหมือนเดิม */ ''}
             <div class="flex flex-wrap gap-0.5 sm:hidden">${items.map(it =>
               `<span class="w-1.5 h-1.5 rounded-full ${dotOf(it)}"></span>`).join('')}</div>
             ${shown.map(it => `
-              <div class="hidden sm:flex items-center gap-1.5 text-[11px] leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
+              <div class="hidden sm:flex items-center gap-1.5 text-xs leading-snug ${it.state === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-700'}"
                    title="${esc(it.AirCode)} · ${it.kind ? esc(KIND_LABEL[it.kind]) : 'แผนปี ' + esc(it.planYear || '-') + ' รอบที่ ' + it.round}">
                 <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotOf(it)}"></span>
                 <span class="truncate">${esc(it.AirCode)}</span>
-                ${mixedYears && it.planYear ? `<span class="ml-auto text-[9px] text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
+                ${mixedYears && it.planYear ? `<span class="ml-auto text-xs text-gray-400 flex-shrink-0">'${esc(String(it.planYear).slice(-2))}</span>` : ''}
               </div>`).join('')}
-            ${rest > 0 ? `<div class="hidden sm:block text-[11px] font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
+            ${rest > 0 ? `<div class="hidden sm:block text-xs font-medium text-[#1153a1]">+ อีก ${rest} รายการ</div>` : ''}
           </div>`);
       }
 
@@ -5847,7 +5862,7 @@
         ['bg-emerald-500', 'ล้างเสร็จแล้ว'],
         ['bg-gray-300', 'ยกเลิก'],
         ...(withWork ? [[KIND_DOT.repair, KIND_LABEL.repair], [KIND_DOT.install, KIND_LABEL.install]] : [])
-      ].map(([c, t]) => `<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${t}</span>`).join('');
+      ].map(([c, t]) => `<span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${t}</span>`).join('');
 
       root.innerHTML = shell(`
         <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -5856,7 +5871,7 @@
             <div class="text-base font-bold text-gray-800 min-w-[170px] text-center">${TH_MONTHS[calMonth - 1]} ${calYear}</div>
             <button onclick="shiftPlanCalendar(1)" class="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600"><i class="ph ph-caret-right"></i></button>
           </div>
-          <div class="flex items-center gap-4 text-xs text-gray-600">${legend}</div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">${legend}</div>
         </div>
 
         <div class="grid grid-cols-7 gap-1 mb-1">
@@ -6117,7 +6132,7 @@
                   class="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 rounded-2xl transition-colors">
             <i class="ph-fill ph-clipboard-text text-[#1153a1]"></i>
             <span class="text-sm font-bold text-gray-800 flex-shrink-0">สรุปการล้างแอร์ปี ${esc(s.year)}</span>
-            <span class="text-[11px] text-gray-500 truncate">${esc(headline)}</span>
+            <span class="text-xs text-gray-500 truncate">${esc(headline)}</span>
             <i class="ph ${open ? 'ph-caret-up' : 'ph-caret-down'} ml-auto text-gray-400 flex-shrink-0"></i>
           </button>
 
@@ -6131,10 +6146,10 @@
               <div class="grid grid-cols-2 gap-2">
                 ${cards.map(c => `
                   <div class="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                    <div class="text-[11px] text-gray-500 flex items-center gap-1"><i class="ph ${c.icon}"></i>${c.label}</div>
+                    <div class="text-xs text-gray-500 flex items-start gap-1 leading-snug"><i class="ph ${c.icon} mt-0.5"></i>${c.label}</div>
                     <div class="flex items-baseline gap-1.5 flex-wrap">
                       <span class="text-lg font-bold leading-tight ${c.color}">${esc(c.value)}</span>
-                      <span class="text-[11px] text-gray-400">${esc(c.sub)}</span>
+                      <span class="text-xs text-gray-400">${esc(c.sub)}</span>
                     </div>
                   </div>`).join('')}
               </div>
@@ -6160,12 +6175,12 @@
             <div>
               <div class="flex items-baseline gap-2 mb-2 flex-wrap">
                 <span class="text-xs font-semibold text-gray-700">แยกตาม Region</span>
-                <span class="text-[11px] text-gray-400">กด Region เพื่อดูราย Node · กดชื่อ Node เพื่อกรองตารางข้างล่าง</span>
+                <span class="text-xs text-gray-400">กด Region เพื่อดูราย Node · กดชื่อ Node เพื่อกรองตารางข้างล่าง</span>
               </div>
               <div class="overflow-x-auto max-h-[22rem] overflow-y-auto border border-gray-100 rounded-lg">
                 <table class="w-full text-sm">
                   <thead>
-                    <tr class="text-slate-600 border-b border-gray-200 text-[11px] bg-slate-50 sticky top-0 z-10">
+                    <tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 sticky top-0 z-10 whitespace-nowrap">
                       <th class="py-1 px-3 text-left font-semibold">Region / Node</th>
                       <th class="py-1 px-3 text-right font-semibold">เครื่อง</th>
                       <th class="py-1 px-3 text-right font-semibold">ล้างแล้ว</th>
@@ -6200,21 +6215,21 @@
             <div class="flex items-center gap-1">
               <button type="button" onclick="togglePlanSummaryRegion('${jsStr(r.region)}')"
                       title="${open ? 'ยุบรายการ Node' : 'ดูราย Node'}"
-                      class="flex items-center gap-1.5 font-semibold text-gray-800 hover:text-[#1153a1]">
+                      class="flex items-center gap-1.5 font-semibold text-gray-800 hover:text-[#1153a1] whitespace-nowrap">
                 <!-- เขียนชื่อไอคอนเต็มทั้งสองแบบ ไม่ต่อสตริงเอา
                      เพราะเทสต์ตรวจว่าไอคอนที่ใช้มีอยู่จริงไหม โดยอ่านจากชื่อที่เขียนไว้ในไฟล์
                      ถ้าต่อสตริงมันจะตรวจไม่ได้ แล้วไอคอนที่พิมพ์ผิดจะกลายเป็นกล่องว่างโดยไม่มีใครรู้ -->
                 <i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'} text-xs"></i>
                 ${esc(regionLabel(r.region))}
-                <span class="text-[11px] font-normal text-gray-400">${r.nodes.length} Node</span>
+                <span class="text-xs font-normal text-gray-400">${r.nodes.length} Node</span>
               </button>
               <button type="button" onclick="filterPlanBy('${jsStr(r.region)}')" title="กรองตารางข้างล่างด้วย Region นี้"
                       class="ml-1 text-gray-300 hover:text-[#1153a1] p-0.5"><i class="ph ph-funnel text-xs"></i></button>
             </div>
           </td>
-          <td class="py-1.5 px-3 text-right">${r.units}</td>
-          <td class="py-1.5 px-3 text-right ${r.done ? 'font-semibold text-gray-800' : 'text-gray-400'}">${r.done} / ${target}</td>
-          <td class="py-1.5 px-3 text-right">${r.cost ? baht(r.cost) : '-'}</td>
+          <td class="py-1.5 px-3 text-right whitespace-nowrap">${r.units}</td>
+          <td class="py-1.5 px-3 text-right whitespace-nowrap ${r.done ? 'font-semibold text-gray-800' : 'text-gray-400'}">${r.done} / ${target}</td>
+          <td class="py-1.5 px-3 text-right whitespace-nowrap">${r.cost ? baht(r.cost) : '-'}</td>
         </tr>`;
 
       if (!open) return head;
@@ -6237,8 +6252,8 @@
           <tr class="bg-slate-50/60 hover:bg-blue-50/50 transition-colors cursor-pointer"
               onclick="filterPlanBy('${jsStr(r.region)}', '${jsStr(n.node)}')" title="กรองตารางข้างล่างด้วย Node นี้">
             <td class="py-1.5 px-3 pl-8">
-              <div class="text-gray-800">${esc(n.node)}<span class="text-[11px] text-gray-400"> ${esc(n.siteCode)}</span></div>
-              <div class="text-[11px]">${note}</div>
+              <div class="text-gray-800">${esc(n.node)}<span class="text-xs text-gray-400"> ${esc(n.siteCode)}</span></div>
+              <div class="text-xs">${note}</div>
             </td>
             <td class="py-1.5 px-3 text-right align-top text-gray-600">${n.units}</td>
             <td class="py-1.5 px-3 text-right align-top ${n.done ? 'text-gray-800' : 'text-gray-400'}">${n.done} / ${t}</td>
@@ -6328,7 +6343,7 @@
         // แยกสองคำ เพราะคนอ่านต้องรู้ว่าต้องไปทำอะไรต่อ — ถูกลบคือทะเบียนหาย ต้องเพิ่มกลับ
         const gone = p.Removed ? 'ถูกลบแล้ว' : (p.Retired ? 'รื้อถอนแล้ว' : '');
         const retiredTag = gone
-          ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 align-middle">${gone}</span>`
+          ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 align-middle">${gone}</span>`
           : '';
 
         return `
@@ -6338,7 +6353,7 @@
           </td>
           <td class="px-3 py-2 text-gray-600 border-r border-gray-100 bg-white group-hover:bg-gray-50">
             <div class="text-[13px] font-medium text-gray-800">${esc(p.NodeName)}</div>
-            <div class="text-[11px] text-gray-400">${esc(p.SiteCode)}</div>
+            <div class="text-xs text-gray-400">${esc(p.SiteCode)}</div>
           </td>
           <td class="px-3 py-2 text-gray-600 border-r border-gray-100 bg-white group-hover:bg-gray-50">${esc(p.BTU)}</td>
           <td class="px-3 py-2 text-gray-600 border-r border-gray-100 bg-white group-hover:bg-gray-50">${esc(brand)}</td>
@@ -6424,7 +6439,7 @@
       if (p['R'+r+'_Mine'] === false) {
         const muted = 'px-1.5 py-1.5 text-center align-middle text-gray-300 bg-slate-50/60';
         return `
-        <td class="${muted}"><div class="text-[10px]">แผน ${esc(fmtDate(plan))}</div><div class="text-[10px]">ไม่ใช่งานของคุณ</div></td>
+        <td class="${muted}"><div class="text-xs">แผน ${esc(fmtDate(plan))}</div><div class="text-xs">ไม่ใช่งานของคุณ</div></td>
         <td class="${muted}">-</td><td class="${muted}">-</td>
         <td class="${muted} border-r ${borderClass}">-</td>`;
       }
@@ -6433,9 +6448,9 @@
       return `
         <td class="${tdClass}" onclick="openRoundModal(${origIdx},${r})">
           <div class="flex flex-col items-center justify-center">
-            <span class="text-[10px] text-gray-400">แผน ${esc(fmtDate(plan))}</span>
+            <span class="text-xs text-gray-400">แผน ${esc(fmtDate(plan))}</span>
             <span class="${statusStyle}">${esc(fmtDate(actual))}</span>
-            <div class="flex items-center text-[10px] mt-0.5 text-gray-500">${dot}${esc(status)}</div>
+            <div class="flex items-center text-xs mt-0.5 text-gray-500">${dot}${esc(status)}</div>
             ${p['R'+r+'_FormUrl'] ? `<a href="${esc(p['R'+r+'_FormUrl'])}" target="_blank" onclick="event.stopPropagation()" title="เปิดฟอร์ม PDF" class="text-[#1153a1] hover:text-[#f47920] text-sm mt-0.5"><i class="ph ph-file-pdf"></i></a>` : ''}
           </div>
         </td>
@@ -6513,7 +6528,7 @@
                   ${contractorSelect('rp_contractor', p['R'+r+'_ContractorID'], 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white')}
                   ${// ข้อความเก่าที่เคยพิมพ์ไว้ก่อนมีรายชื่อ — โชว์ให้รู้ว่าเดิมเป็นใคร จะได้เลือกให้ตรง
                     !p['R'+r+'_ContractorID'] && p['R'+r+'_Technician']
-                      ? `<p class="text-[11px] text-gray-400 mt-1">เดิมพิมพ์ไว้ว่า: ${esc(p['R'+r+'_Technician'])}</p>` : ''}</div>
+                      ? `<p class="text-xs text-gray-400 mt-1">เดิมพิมพ์ไว้ว่า: ${esc(p['R'+r+'_Technician'])}</p>` : ''}</div>
               </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">PR</label><textarea id="rp_note" rows="2" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none resize-none">${esc(p['R'+r+'_Note'])}</textarea></div>
 
@@ -6528,7 +6543,7 @@
                     <i class="ph ph-paperclip text-base"></i> แนบเอกสาร
                   </button>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-2">ทั้งสองทางจะลงวันที่ ราคา ช่าง สถานะ และประวัติให้เองครบ — ปิดงานจากช่องสถานะข้างบนไม่ได้</p>
+                <p class="text-xs text-gray-500 mt-2">ทั้งสองทางจะลงวันที่ ราคา ช่าง สถานะ และประวัติให้เองครบ — ปิดงานจากช่องสถานะข้างบนไม่ได้</p>
               </div>`}
             </div>
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
@@ -6714,7 +6729,7 @@
           <span class="font-mono text-slate-700">${esc(u.airCode)}</span>
           ${u.changes.map(ch => `<span class="ml-2 text-gray-500">${esc(ch.column)}:</span>
             <span class="line-through text-gray-400">${esc(ch.from) || '(ว่าง)'}</span>
-            <i class="ph ph-arrow-right text-[10px] text-gray-400"></i>
+            <i class="ph ph-arrow-right text-xs text-gray-400"></i>
             <span class="text-gray-800 font-medium">${esc(ch.to)}</span>`).join('')}</div>`).join('');
       const block = (title, count, body) => !count ? '' : `
         <details class="border border-gray-200 rounded-lg" ${count <= 20 ? 'open' : ''}>
@@ -7437,9 +7452,9 @@
       if (!stockTb || !retTb) return;
       const q = ((document.getElementById('whSearch') || {}).value || '').trim().toLowerCase();
       const hit = o => !q || searchText(o).includes(q);
-      const spec = o => `<div>${esc(o.Brand) || '-'}</div><div class="text-[11px] text-gray-400">${o.BTU ? esc(Number(o.BTU).toLocaleString()) + ' BTU' : ''}</div>`;
+      const spec = o => `<div>${esc(o.Brand) || '-'}</div><div class="text-xs text-gray-400">${o.BTU ? esc(Number(o.BTU).toLocaleString()) + ' BTU' : ''}</div>`;
       const ids = o => `<div class="text-[12px]">${esc([o.IndoorSN, o.OutdoorSN].filter(Boolean).join(' / ')) || '-'}</div>
-        <div class="text-[11px] text-gray-400">${esc([o.IndoorAsset, o.OutdoorAsset].filter(Boolean).join(' / '))}</div>`;
+        <div class="text-xs text-gray-400">${esc([o.IndoorAsset, o.OutdoorAsset].filter(Boolean).join(' / '))}</div>`;
       const badge = st => st === 'Write off'
         ? '<span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-medium">Write off</span>'
         : '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">อยู่ในคลัง</span>';
@@ -7451,16 +7466,16 @@
         <tr class="hover:bg-slate-50 align-top">
           <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(o.ID)}</td>
           <td class="px-4 py-3"><div class="font-medium">${esc(o.AirCode)}</div>
-            <div class="text-[11px] text-gray-400">${esc(o.NodeName)} · ${esc(regionLabel(o.Region))}</div></td>
+            <div class="text-xs text-gray-400">${esc(o.NodeName)} · ${esc(regionLabel(o.Region))}</div></td>
           <td class="px-4 py-3">${spec(o)}</td>
           <td class="px-4 py-3">${ids(o)}</td>
           <td class="px-4 py-3"><div>${esc(fmtDate(o.InDate))}</div>
-            <div class="text-[11px] text-gray-400 whitespace-normal max-w-[14rem]">${esc(o.InReason)}${o.Note ? ' · ' + esc(o.Note) : ''}</div></td>
-          <td class="px-4 py-3">${badge(o.Status)}${out && o.WriteOffDate ? `<div class="text-[11px] text-gray-400 mt-1">${esc(fmtDate(o.WriteOffDate))}</div>` : ''}</td>
+            <div class="text-xs text-gray-400 whitespace-normal max-w-[14rem]">${esc(o.InReason)}${o.Note ? ' · ' + esc(o.Note) : ''}</div></td>
+          <td class="px-4 py-3">${badge(o.Status)}${out && o.WriteOffDate ? `<div class="text-xs text-gray-400 mt-1">${esc(fmtDate(o.WriteOffDate))}</div>` : ''}</td>
           <td class="px-4 py-3 whitespace-normal min-w-[12rem] max-w-[18rem]">${o.Remark
             ? `<button onclick="openStockRemarkModal('${jsStr(o.ID)}')" title="แก้บันทึก" class="group text-left w-full">
                 <span class="block text-[13px] text-gray-700 whitespace-pre-line break-words group-hover:text-[#1153a1]">${esc(o.Remark)}</span>
-                <span class="block text-[11px] text-gray-400 mt-0.5"><i class="ph ph-pencil-simple"></i> ${esc(o.RemarkBy)}${o.RemarkAt ? ' · ' + esc(fmtDate(o.RemarkAt)) : ''}</span></button>`
+                <span class="block text-xs text-gray-400 mt-0.5"><i class="ph ph-pencil-simple"></i> ${esc(o.RemarkBy)}${o.RemarkAt ? ' · ' + esc(fmtDate(o.RemarkAt)) : ''}</span></button>`
             : `<button onclick="openStockRemarkModal('${jsStr(o.ID)}')" class="text-xs text-gray-400 hover:text-[#1153a1] inline-flex items-center gap-1"><i class="ph ph-plus"></i> เพิ่มโน้ต</button>`}</td>
           <td class="px-4 py-3 text-right">${out ? '' : `<button onclick="writeOffStockRow('${jsStr(o.ID)}')"
               class="text-slate-600 hover:text-white hover:bg-slate-600 px-3 py-1.5 rounded-lg transition border border-slate-400 bg-white text-xs font-medium inline-flex items-center gap-1">
@@ -7473,7 +7488,7 @@
         <tr class="hover:bg-slate-50 align-top">
           <td class="px-4 py-3">${airCodeBtn(o.AirCode)}</td>
           <td class="px-4 py-3"><div class="text-[13px] font-medium text-gray-800">${esc(o.NodeName)}</div>
-            <div class="text-[11px] text-gray-400">${esc(o.SiteCode)}</div></td>
+            <div class="text-xs text-gray-400">${esc(o.SiteCode)}</div></td>
           <td class="px-4 py-3">${spec(o)}</td>
           <td class="px-4 py-3">${ids(o)}</td>
           <td class="px-4 py-3">${esc(o.Status)}</td>
@@ -7705,7 +7720,7 @@
         }
         if (count) {
           count.textContent = g.hits.length;
-          count.className = 'min-w-[22px] px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-center ' +
+          count.className = 'min-w-[22px] px-1.5 py-0.5 rounded-full text-xs font-semibold text-center ' +
             (g.hits.length ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-400');
         }
         const box = document.querySelector('#view-approvals [data-apv-kind="' + k + '"]');
@@ -7900,7 +7915,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-medium text-gray-800">${esc(fmtDate(h.Date))}</span>
             ${eventTypeBadge(h.EventType)}
-            <span class="text-[11px] text-gray-400 font-mono">${esc(h.ID)}</span>
+            <span class="text-xs text-gray-400 font-mono">${esc(h.ID)}</span>
           </div>
           <p class="text-sm text-gray-700 mt-1 whitespace-pre-line">${esc(h.Detail) || '-'}</p>
           <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -8127,7 +8142,7 @@
           <td class="px-4 py-3 font-medium text-gray-900">${airCodeBtn(h.AirCode)}</td>
           <td class="px-4 py-3 text-gray-600">
             <div class="text-[13px] font-medium text-gray-800">${esc(u.NodeName)}</div>
-            <div class="text-[11px] text-gray-400">${esc(u.SiteCode)}</div>
+            <div class="text-xs text-gray-400">${esc(u.SiteCode)}</div>
           </td>
           <td class="px-4 py-3">
             <span class="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">${esc(JOB[ev] || ev)}</span>
@@ -8264,11 +8279,11 @@
               <td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">${airCodeBtn(a.AirCode)}</td>
               <td class="px-4 py-3 text-gray-600">
                 <div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
-                <div class="text-[11px] text-gray-400">${esc(a.SiteCode)}</div>
+                <div class="text-xs text-gray-400">${esc(a.SiteCode)}</div>
               </td>
               <td class="px-4 py-3">
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${step.cls}">${esc(step.label)}</span>
-                <div class="text-[11px] text-gray-400 mt-1 whitespace-normal max-w-[16rem]">${esc(step.hint)}</div>
+                <div class="text-xs text-gray-400 mt-1 whitespace-normal max-w-[16rem]">${esc(step.hint)}</div>
               </td>
               <td class="px-4 py-3 text-red-600 text-sm whitespace-normal max-w-xs">${esc(a.Note) || '-'}</td>
               <td class="px-4 py-3 text-right whitespace-nowrap">
@@ -8408,7 +8423,7 @@
       const picker = unit
         ? `<input type="hidden" id="rr_air" value="${esc(unit.AirCode)}">
            <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-             <div class="text-[11px] text-gray-400">เครื่องที่แจ้ง</div>
+             <div class="text-xs text-gray-400">เครื่องที่แจ้ง</div>
              <div class="text-sm font-semibold text-gray-800">${esc(unit.AirCode)}
                <span class="font-normal text-gray-500">· ${esc(unit.NodeName) || '-'}</span></div>
            </div>`
@@ -8523,7 +8538,7 @@
         <datalist id="${listId}">
           ${(o.units || []).map(a => `<option value="${esc(airPickerLabel(a))}"></option>`).join('')}
         </datalist>
-        <p class="text-[11px] text-gray-400 mt-1">${esc(o.note || ('มีเครื่องให้เลือก ' + (o.units || []).length.toLocaleString() + ' ตัว'))}</p>`;
+        <p class="text-xs text-gray-400 mt-1">${esc(o.note || ('มีเครื่องให้เลือก ' + (o.units || []).length.toLocaleString() + ' ตัว'))}</p>`;
     }
 
     function rrSyncHint(code) {
@@ -8748,7 +8763,7 @@
               <input type="number" id="m_bdg_year" value="${y}" min="${BUDGET_YEAR_MIN}" max="${BUDGET_YEAR_MAX}" step="1"
                      onchange="loadBudgetYearIntoModal()"
                      class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none font-bold">
-              <p id="m_bdg_hint" class="text-[11px] text-gray-500 mt-1"></p></div>
+              <p id="m_bdg_hint" class="text-xs text-gray-500 mt-1"></p></div>
               
               <div><label class="block text-sm font-medium text-[#1153a1] mb-1"><i class="ph-fill ph-drop"></i> งบประมาณล้างแอร์ (฿)</label>
               <input type="number" id="m_bdg_clean" value="${currentClean}" class="w-full rounded-lg border-[#1153a1] border focus:ring-2 focus:ring-[#1153a1] text-lg font-bold px-3 py-2 outline-none text-[#1153a1] bg-blue-50"></div>
@@ -9238,18 +9253,18 @@ const CLEANING_CHECKLIST_ITEMS = [
         <td class="px-4 py-3 font-medium">
           ${esc(f.NodeName)}
           ${isRepair
-            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-medium align-middle">ซ่อม</span>'
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium align-middle">ซ่อม</span>'
             : ''}
           ${isInstall
-            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">ติดตั้ง</span>'
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-xs font-medium align-middle">ติดตั้ง</span>'
             : ''}
           ${isAttach
-            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-medium align-middle">เอกสารแนบ</span>'
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-xs font-medium align-middle">เอกสารแนบ</span>'
             : ''}
         </td>
         <td class="px-4 py-3">
           ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
-          ${isRepair ? '' : `<span class="ml-1 text-[10px] text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}
+          ${isRepair ? '' : `<span class="ml-1 text-xs text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}
         </td>
         <td class="px-4 py-3">${
           // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
@@ -9453,7 +9468,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         const inner = src
           ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
              <button type="button" onclick="event.stopPropagation(); cfRemovePhoto(${u.slot}, ${index})"
-               class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] leading-5 hover:bg-red-500"
+               class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-5 hover:bg-red-500"
                title="ลบรูปช่องนี้">&times;</button>`
           : `<span class="${required ? 'text-red-300' : 'text-gray-300'} text-lg"><i class="ph ph-plus"></i></span>`;
 
@@ -9469,7 +9484,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
               ${inner}
             </div>
-            <div class="text-[9px] ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+            <div class="text-xs ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
           </div>`;
       }).join('');
 
@@ -9479,13 +9494,13 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="border border-gray-200 rounded-lg p-3 mb-3">
           <div class="flex items-center justify-between mb-2 gap-2">
             <div class="text-xs font-semibold text-gray-700 truncate">เครื่องที่ ${u.slot + cfPickUnits().base} · ${esc(u.airCode)}</div>
-            <div class="text-[11px] flex-shrink-0 ${done === PHOTO_SLOTS ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/${PHOTO_SLOTS} ช่อง</div>
+            <div class="text-xs flex-shrink-0 ${done === PHOTO_SLOTS ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/${PHOTO_SLOTS} ช่อง</div>
           </div>
           <button type="button" onclick="cfPickManyPhotos(${u.slot})"
             class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
             <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-${PHOTO_BULK} พร้อมกัน
           </button>
-          <p class="text-[10px] text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
+          <p class="text-xs text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
           <div class="grid grid-cols-3 gap-2">${cells}</div>
         </div>`;
     }).join('');
@@ -9695,7 +9710,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
             ${inner}
           </div>
-          <div class="text-[9px] ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+          <div class="text-xs ${required && !src ? 'text-red-500' : 'text-gray-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
         </div>`;
     }).join('');
 
@@ -9704,9 +9719,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     box.innerHTML = `
       <div class="flex items-center justify-between mb-2 gap-2">
         <div class="text-xs font-semibold text-gray-700">${peKind === 'repair' ? 'รูปประกอบการซ่อม' : 'เครื่องที่ ' + peNo}</div>
-        <div class="text-[11px] flex-shrink-0 ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
+        <div class="text-xs flex-shrink-0 ${done === 9 ? 'text-emerald-600' : 'text-gray-400'}">${done}/9 ช่อง</div>
       </div>
-      <p class="text-[11px] text-gray-500 mb-2 leading-tight">กดที่รูปเพื่อเปลี่ยน · กดกากบาทเพื่อลบ</p>
+      <p class="text-xs text-gray-500 mb-2 leading-tight">กดที่รูปเพื่อเปลี่ยน · กดกากบาทเพื่อลบ</p>
       <div class="grid grid-cols-3 gap-2">${cells}</div>`;
   }
 
@@ -10202,10 +10217,10 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!a) return '<span class="text-gray-300" title="ใบนี้ออกก่อนมีขั้นอนุมัติ หรือเป็นเอกสารแนบ">-</span>';
     const trail = esc(approvalTrail(a));
     if (a.done) {
-      return '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-medium inline-flex items-center gap-1" title="' + trail + '">' +
+      return '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium inline-flex items-center gap-1" title="' + trail + '">' +
         '<i class="ph ph-seal-check"></i> อนุมัติครบ</span>';
     }
-    const chip = '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-medium" title="' + trail + '">' +
+    const chip = '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium" title="' + trail + '">' +
       'รอ ' + esc(APPROVAL_STAGE_WHO[a.next]) + ' · ' + (a.next - 1) + '/4</span>';
     if (!a.canApprove) return chip;
     return chip + ` <button onclick="approveDocRow('${jsStr(kind)}','${jsStr(f.ID)}', '${jsStr(displayDocNo(f))}')"
@@ -10512,7 +10527,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         return `<input data-no="${item.no}" data-col="${col}" class="${inputCls}" type="number" step="any" inputmode="decimal" placeholder="${esc(item.unit || '')}">`;
       };
 
-      const slotLabel = n => `<div class="text-[11px] text-gray-500 mb-1">${cfContext ? 'ผลตรวจเช็ค' : 'ตัวที่ ' + (n + cfPickUnits().base)}</div>`;
+      const slotLabel = n => `<div class="text-xs text-gray-500 mb-1">${cfContext ? 'ผลตรวจเช็ค' : 'ตัวที่ ' + (n + cfPickUnits().base)}</div>`;
 
       return `
         <div class="bg-white rounded-xl border border-gray-200 p-3">
@@ -10520,7 +10535,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-medium flex items-center justify-center flex-shrink-0">${item.no}</span>
             <div class="min-w-0">
               <div class="text-sm text-gray-800 leading-snug">${esc(item.label)}</div>
-              ${item.unit ? `<div class="text-[11px] text-gray-400 mt-0.5">เกณฑ์: ${esc(item.unit)}</div>` : ''}
+              ${item.unit ? `<div class="text-xs text-gray-400 mt-0.5">เกณฑ์: ${esc(item.unit)}</div>` : ''}
             </div>
           </div>
           <div class="grid ${cfContext ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
@@ -10861,7 +10876,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                 class="w-full px-4 py-3.5 text-base font-medium text-white bg-[#f47920] rounded-lg hover:bg-[#d96615] shadow-sm flex items-center justify-center gap-2">
                 <i class="ph ph-floppy-disk text-lg"></i> ${link ? 'ส่งเอกสาร' : 'บันทึกและออกเอกสาร'}
               </button>
-              <p class="text-[11px] text-gray-500 mt-2 text-center">
+              <p class="text-xs text-gray-500 mt-2 text-center">
                 ${link
                   ? 'ส่งได้ครั้งเดียว — ส่งแล้วงานซ่อมนี้ปิดทันที และดาวน์โหลดไฟล์ PDF ได้'
                   : 'บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เอง'}
@@ -10894,7 +10909,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="border border-gray-200 rounded-lg p-3">
           <div class="flex items-start justify-between gap-2 mb-2">
             <div class="text-sm text-gray-800"><span class="text-gray-400 mr-1">${item.no}.</span>${esc(item.label)}</div>
-            ${item.unit ? `<span class="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">${esc(item.unit)}</span>` : ''}
+            ${item.unit ? `<span class="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">${esc(item.unit)}</span>` : ''}
           </div>
           <div class="grid grid-cols-2 gap-2">
             ${input}
@@ -10934,7 +10949,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const inner = src
         ? `<img src="${src}" alt="" class="absolute inset-0 w-full h-full object-cover rounded">
            <button type="button" onclick="event.stopPropagation(); rfRemovePhoto(${index})"
-             class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] leading-5 hover:bg-red-500"
+             class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-5 hover:bg-red-500"
              title="ลบรูปช่องนี้">&times;</button>`
         : '<span class="text-red-300 text-lg"><i class="ph ph-plus"></i></span>';
 
@@ -10948,7 +10963,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             class="relative aspect-[4/3] border ${border} rounded flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
             ${inner}
           </div>
-          <div class="text-[9px] ${src ? 'text-gray-500' : 'text-red-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
+          <div class="text-xs ${src ? 'text-gray-500' : 'text-red-500'} leading-tight truncate" title="${esc(cap)}">${index}. ${esc(cap)}</div>
         </div>`;
     }).join('');
 
@@ -10957,13 +10972,13 @@ const CLEANING_CHECKLIST_ITEMS = [
     box.innerHTML = `
       <div class="flex items-center justify-between mb-2">
         <div class="text-xs font-semibold text-gray-700">รูปประกอบการซ่อม</div>
-        <div class="text-[11px] ${done === 9 ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/9 ช่อง</div>
+        <div class="text-xs ${done === 9 ? 'text-emerald-600' : 'text-red-500 font-medium'}">${done}/9 ช่อง</div>
       </div>
       <button type="button" onclick="rfPickManyPhotos()"
         class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
         <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-6 พร้อมกัน
       </button>
-      <p class="text-[10px] text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
+      <p class="text-xs text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
       <div class="grid grid-cols-3 gap-2">${cells}</div>`;
   }
 
@@ -11316,7 +11331,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         <button type="button" onclick="repairLinkAddPhoto('${jsStr(token)}', ${index})"
           class="text-left border rounded-lg p-2 ${ok ? 'border-emerald-300 bg-emerald-50' : 'border-dashed border-red-300 bg-red-50/40'}">
           <div class="text-lg ${ok ? 'text-emerald-600' : 'text-red-400'}"><i class="ph ${ok ? 'ph-check-circle' : 'ph-plus'}"></i></div>
-          <div class="text-[10px] leading-tight ${ok ? 'text-gray-600' : 'text-red-500'}">${index}. ${esc(cap)}</div>
+          <div class="text-xs leading-tight ${ok ? 'text-gray-600' : 'text-red-500'}">${index}. ${esc(cap)}</div>
         </button>`;
     }).join('');
 
@@ -11338,7 +11353,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="grid grid-cols-3 gap-2">${cells}</div>
         <input type="file" id="rl_photoFile" accept="image/*" class="hidden">
       </div>
-      <p class="text-[11px] text-gray-400 text-center mt-4">ลิงก์นี้ใช้เพิ่มรูปและดาวน์โหลด PDF ได้ถึง ${esc(fmtDate(String(info.readableUntil || '').slice(0, 10)))}</p>`, info.kind);
+      <p class="text-xs text-gray-400 text-center mt-4">ลิงก์นี้ใช้เพิ่มรูปและดาวน์โหลด PDF ได้ถึง ${esc(fmtDate(String(info.readableUntil || '').slice(0, 10)))}</p>`, info.kind);
   }
 
   function repairLinkAddPhoto(token, index) {
@@ -11412,7 +11427,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   function assignBadge(kind, airCode) {
     const a = jobAssignments[linkKey(kind, airCode)];
     if (!a) return '';
-    return `<div class="text-[11px] text-gray-500 mt-1 text-right"><i class="ph ph-user-check"></i> มอบหมาย: ${esc(a.contractorName)}${a.apptDate ? ' · นัด ' + esc(fmtDate(a.apptDate)) : ' · ยังไม่นัดวัน'}</div>`;
+    return `<div class="text-xs text-gray-500 mt-1 text-right"><i class="ph ph-user-check"></i> มอบหมาย: ${esc(a.contractorName)}${a.apptDate ? ' · นัด ' + esc(fmtDate(a.apptDate)) : ' · ยังไม่นัดวัน'}</div>`;
   }
 
   /** หน้าต่างมอบหมายงาน — เลือกผู้รับเหมา (ที่มีบัญชี) + วันนัด + หมายเหตุ */
@@ -11528,7 +11543,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       done: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo,
       closed: 'กรอกผ่านลิงก์แล้ว · ' + l.DocNo
     }[l.state];
-    return text ? `<div class="text-[11px] text-gray-400 mt-1 text-right"><i class="ph ph-link"></i> ${esc(text)}</div>` : '';
+    return text ? `<div class="text-xs text-gray-400 mt-1 text-right"><i class="ph ph-link"></i> ${esc(text)}</div>` : '';
   }
 
   /** ที่อยู่เต็มของลิงก์ — รหัสอยู่หลัง # (ดู repairLinkTokenFromUrl) */
@@ -12051,7 +12066,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                 class="w-full px-4 py-3.5 text-base font-medium text-white bg-teal-700 rounded-lg hover:bg-teal-800 shadow-sm flex items-center justify-center gap-2">
                 <i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร
               </button>
-              <p class="text-[11px] text-gray-500 mt-2 text-center">
+              <p class="text-xs text-gray-500 mt-2 text-center">
                 บันทึกแล้วระบบลงเลขเอกสารในประวัติติดตั้งให้เอง
               </p>
             </div>
@@ -12108,7 +12123,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     box.innerHTML = INSTALL_CHECKLIST_ITEMS.map(item => {
       const cells = ifUnits.map(({ slot }) => `
         <div class="flex-1">
-          <div class="text-[10px] text-gray-400 mb-0.5">เครื่องที่ ${slot + ifBase}</div>
+          <div class="text-xs text-gray-400 mb-0.5">เครื่องที่ ${slot + ifBase}</div>
           ${item.type === 'check'
             ? `<select id="if_c${item.no}_${slot}"
                  class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">
@@ -12126,7 +12141,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             <span class="text-xs font-bold text-gray-400 w-5 flex-shrink-0">${item.no}</span>
             <div class="min-w-0 flex-1">
               <div class="text-sm text-gray-800 leading-snug">${esc(item.label)}</div>
-              ${item.unit ? `<div class="text-[11px] text-gray-400">${esc(item.unit)}</div>` : ''}
+              ${item.unit ? `<div class="text-xs text-gray-400">${esc(item.unit)}</div>` : ''}
             </div>
           </div>
           <div class="flex gap-2 pl-7">${cells}</div>
@@ -12154,7 +12169,7 @@ const CLEANING_CHECKLIST_ITEMS = [
                 ? `<img src="${got}" class="w-full h-full object-cover">`
                 : '<i class="ph ph-camera text-2xl text-gray-300"></i>'}
             </div>
-            <div class="px-1.5 py-1 text-[10px] leading-tight ${got ? 'text-teal-700' : 'text-gray-500'}">
+            <div class="px-1.5 py-1 text-xs leading-tight ${got ? 'text-teal-700' : 'text-gray-500'}">
               ${index}. ${esc(cap)}
             </div>
           </button>`;
@@ -12166,9 +12181,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           <div class="flex items-center justify-between mb-1.5">
             <div class="text-xs font-semibold text-gray-700">เครื่องที่ ${slot + ifBase} · ${esc(u.AirCode)}</div>
             <div class="flex items-center gap-2">
-              <span class="text-[11px] ${done === 9 ? 'text-teal-700' : 'text-red-600'}">${done}/9</span>
+              <span class="text-xs ${done === 9 ? 'text-teal-700' : 'text-red-600'}">${done}/9</span>
               <button type="button" onclick="ifPickManyPhotos(${slot})"
-                class="text-[11px] text-teal-700 border border-teal-300 rounded px-2 py-1 hover:bg-teal-50">
+                class="text-xs text-teal-700 border border-teal-300 rounded px-2 py-1 hover:bg-teal-50">
                 <i class="ph ph-images"></i> เลือกหลายรูป
               </button>
             </div>
@@ -13094,7 +13109,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             onchange="apToggleUnit(${idx}, this.checked)">
           <span class="min-w-0 flex-1">
             <span class="text-sm font-semibold text-gray-800">${esc(u.airCode)}</span>
-            ${u.done ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-medium">รอบนี้ปิดไปแล้ว</span>' : ''}
+            ${u.done ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">รอบนี้ปิดไปแล้ว</span>' : ''}
           </span>
         </label>
         ${u.on && isContractor() ? `
@@ -13373,8 +13388,8 @@ const CLEANING_CHECKLIST_ITEMS = [
         <span class="min-w-0 flex-1">
           <span class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-semibold text-gray-800">${esc(u.AirCode)}</span>
-            <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium">เครื่องตัวที่ ${i + 1} ของ Node</span>
-            ${slot ? `<span class="px-1.5 py-0.5 rounded bg-blue-50 text-[#1153a1] border border-blue-200 text-[10px] font-medium">จะลงช่อง "ตัวที่ ${slot}" ในฟอร์ม</span>` : ''}
+            <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-xs font-medium">เครื่องตัวที่ ${i + 1} ของ Node</span>
+            ${slot ? `<span class="px-1.5 py-0.5 rounded bg-blue-50 text-[#1153a1] border border-blue-200 text-xs font-medium">จะลงช่อง "ตัวที่ ${slot}" ในฟอร์ม</span>` : ''}
           </span>
           <span class="block text-xs text-gray-500 mt-0.5">${esc(u.Brand || '-')} · ${esc(u.BTU || '-')} BTU</span>
           <span class="block text-xs text-gray-400 truncate">Serial ใน ${esc(u.IndoorSerial || '-')} / นอก ${esc(u.OutdoorSerial || '-')}</span>
@@ -13734,7 +13749,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         const cls = done
           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
           : 'bg-slate-50 text-slate-500 border-slate-200';
-        return `<span class="px-1.5 py-0.5 rounded border text-[10px] font-medium ${cls}">รอบ ${r} ${done ? 'เสร็จแล้ว' : 'ยังไม่ล้าง'}</span>`;
+        return `<span class="px-1.5 py-0.5 rounded border text-xs font-medium ${cls}">รอบ ${r} ${done ? 'เสร็จแล้ว' : 'ยังไม่ล้าง'}</span>`;
       }).join('');
 
       return `
@@ -13744,7 +13759,7 @@ const CLEANING_CHECKLIST_ITEMS = [
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-semibold text-gray-800">${esc(u.AirCode)}</span>
             <span class="block text-xs text-gray-500 mb-1.5">${esc(u.Brand || '-')} · ${esc(u.BTU || '-')} BTU · SN ${esc(u.IndoorSerial || '-')}</span>
-            <span class="flex flex-wrap gap-1">${row ? pills : '<span class="text-[10px] text-gray-400">ไม่มีเครื่องนี้ในแผนปีที่เลือก</span>'}</span>
+            <span class="flex flex-wrap gap-1">${row ? pills : '<span class="text-xs text-gray-400">ไม่มีเครื่องนี้ในแผนปีที่เลือก</span>'}</span>
           </span>
         </label>`;
     }).join('');
@@ -13897,7 +13912,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       <div class="bg-white border border-slate-200 rounded-lg p-3">
         <div class="text-xs font-semibold text-gray-700 mb-2">ผลการล้างแยกรายเครื่อง</div>
         ${unitRows}
-        <p class="text-[11px] text-gray-500">กรอกราคาของแต่ละเครื่องแยกกัน ไม่ใช่ยอดรวม เพื่อไม่ให้งบประมาณถูกนับซ้ำ<br>
+        <p class="text-xs text-gray-500">กรอกราคาของแต่ละเครื่องแยกกัน ไม่ใช่ยอดรวม เพื่อไม่ให้งบประมาณถูกนับซ้ำ<br>
           ผลประเมินก็แยกรายเครื่อง แนบไฟล์เดียวแต่ล้างสองตัว ก็บอกได้ว่าตัวไหนสมบูรณ์ ตัวไหนควรปรับปรุง</p>
       </div>`;
   }
