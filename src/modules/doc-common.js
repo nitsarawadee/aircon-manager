@@ -287,6 +287,13 @@ td.unit { color: #7F7F7F; }
 tr.sec td { background: #ECECEC; font-weight: 700; font-size: 8pt;
             padding: 0.9mm 2mm !important; border-left: none; border-right: none; }
 
+/* เส้นขอบนอกเป็นของกรอบ (.frame) เส้นเดียวทั้งหน้าเหมือนแบบฟอร์ม Excel
+   ช่องที่ชิดขอบซ้าย/ขวา และแถวแรกที่ชิดเส้นใต้หัวกระดาษ จึงไม่วาดเส้นซ้ำ
+   ถ้าวาดซ้ำ ขอบจะหนาเฉพาะแถวข้อมูลแต่บางตรงแถบหัวข้อส่วน (ซึ่งไม่มีเส้นข้าง) เส้นเลยดูซ้อนไม่เท่ากัน */
+table.main tr > :first-child, table.info tr > :first-child { border-left: none; }
+table.main tr > :last-child, table.info tr > :last-child { border-right: none; }
+table.main tr:first-child > *, table.info tr:first-child > * { border-top: none; }
+
 td.choices .box { font-size: 10pt; line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
 
