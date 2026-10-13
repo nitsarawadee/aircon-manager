@@ -9,10 +9,10 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  */
 const KIND = 'cleaning';
 import { cleanFormValue, isAwaitingInstall, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
-import { addHistoryRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
-import { closePlanRound } from './plan.js';
+import { closePlanRound, reopenPlanRoundRaw } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -1231,11 +1231,38 @@ export async function getCleaningDocPdf(ctx, row, expectId) {
   return { fileName: docNo + (draft ? '-รออนุมัติ' : '') + '.pdf', mime: 'application/pdf', base64 };
 }
 
+/**
+ * ย้อนสิ่งที่ใบล้างทำไว้ตอนบันทึก — เปิดรอบในแผนกลับเป็น "รอดำเนินการ" และลบประวัติ "ล้างแอร์" ของใบนี้
+ *
+ * เจ้าของงานกำหนด: ลบเอกสารแล้วต้องย้อน เพราะต้องกรอกเอกสารใหม่
+ * (เดิมลบใบแล้วรอบยังขึ้นล้างเสร็จ และค่าล้างยังนับในงบ ทั้งที่ไม่มีเอกสารรองรับ)
+ * ประวัติของใบนี้ใช้เลขเดียวกับเลขที่เอกสารของเครื่องนั้น (ดู writeCleaningHistory) จึงหาได้ตรงตัว
+ */
+async function revertCleaningEffects(ctx, form) {
+  if (!form) return;
+  const slots = [[form.AirCode1, form.DocNo], [form.AirCode2, form.DocNo2]]
+    .map(([c, d]) => [plainText(c).trim(), plainText(d).trim()])
+    .filter(([c]) => c);
+
+  const year = plainText(form.PlanYear).trim();
+  const round = plainText(form.PlanRound).trim();
+  if (year && round) {
+    for (const [code] of slots) {
+      await reopenPlanRoundRaw(ctx, { year, round, airCode: code, actualDate: form.Date });
+    }
+  }
+
+  const ids = new Set(slots.map(([, d]) => d).filter(Boolean));
+  await deleteHistoryWhereRaw(ctx, h =>
+    ids.has(plainText(h.ID).trim()) && plainText(h.EventType).trim() === 'ล้างแอร์');
+}
+
 export async function deleteCleaningForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('cleaningform');
-    // ลบแล้วรูปถ่าย ไฟล์ PDF และไฟล์ที่ช่างแนบมาหายตามไปด้วย กู้คืนไม่ได้ จึงให้เฉพาะเจ้าหน้าที่
-    await ctx.assertStaff('ลบเอกสาร');
+    // ลบแล้วรูปถ่าย ไฟล์ PDF และไฟล์ที่ช่างแนบมาหายตามไปด้วย กู้คืนไม่ได้
+    // เจ้าของงานกำหนด: ลบเอกสารได้เฉพาะ Infrastructure
+    await ctx.assertAdmin();
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -1256,6 +1283,9 @@ export async function deleteCleaningForm(ctx, row, expectId) {
     const docNo = plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('DocNo') + 1)) ||
                   plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('ID') + 1));
     const formId = plainText(ctx.ss.cell(SHEETS.CLEANFORM, row, headers.indexOf('ID') + 1));
+
+    // ย้อนงานที่ใบนี้ปิดไว้ ต้องทำก่อนลบแถว เพราะต้องอ่านเครื่อง รอบ และเลขที่จากใบ
+    await revertCleaningEffects(ctx, ctx.ss.objects(SHEETS.CLEANFORM).find(f => f._row === Number(row)));
 
     await ctx.ss.deleteRow(SHEETS.CLEANFORM, row);
     await removeApproval(ctx, KIND, formId);
@@ -1343,7 +1373,15 @@ export async function uploadNodeDocuments(ctx, payload) {
       units = wanted.map(w => {
         const code = plainText(w.airCode).trim();
         const found = nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(code));
-        if (!found) throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
+        if (!found) {
+          // ผู้รับเหมาเห็นเฉพาะเครื่องที่มอบหมายให้ — เครื่องอยู่ใน Node นี้จริงแต่ไม่ใช่งานของบริษัทนี้
+          // ต้องบอกให้ตรง ไม่งั้นคนอ่านจะงงว่าเครื่องก็อยู่ใน Node นี้ชัดๆ
+          if (isContractor && ctx.ss.objects(SHEETS.AIRLIST).some(a =>
+            normalizeCode(a.AirCode) === normalizeCode(code) && plainText(a.NodeName).trim() === nodeName)) {
+            throw new Error('เครื่อง "' + code + '" ไม่ได้มอบหมายให้บริษัทของคุณ — แนบได้เฉพาะเครื่องที่ได้รับมอบหมายในแผนล้าง');
+          }
+          throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
+        }
         // ผลประเมินเป็นของรายเครื่อง หน้าเว็บจึงส่งมาให้ทีละเครื่อง
         // แนบไฟล์เดียวแต่ล้างสองตัว ก็ยังบอกได้ว่าตัวไหนสมบูรณ์ ตัวไหนควรปรับปรุง
         //

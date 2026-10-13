@@ -182,3 +182,13 @@ test('แนบใบล้าง: ปิดรอบในแผนทันท
   const plan = db.prepare("SELECT R1_Status FROM plans WHERE AirCode = 'AYA-WNI-AIR-2'").get();
   assert.equal(plan.R1_Status, 'ล้างเสร็จสิ้น');
 });
+
+test('แนบใบล้าง: ผู้รับเหมาเลือกเครื่องที่ไม่ได้มอบหมาย — บอกตรงๆ ว่าไม่ได้มอบหมาย ไม่ใช่ "ไม่อยู่ใน Node"', async () => {
+  const db = freshDb();
+  // CT001 ได้งานเฉพาะ AIR-2 · AIR-1 อยู่ Node เดียวกันแต่ไม่ได้มอบหมาย
+  db.prepare("UPDATE plans SET R1_ContractorID = 'CT001' WHERE AirCode = 'AYA-WNI-AIR-2'").run();
+  await assert.rejects(() => uploadNodeDocuments(as(db, 'sub', { attachments: fakeAttachments() }), {
+    nodeName: 'วังน้อย', files: FILE,
+    closeout: { year: 2026, round: 1, date: '2026-10-14', units: [{ airCode: 'AYA-WNI-AIR-1' }] }
+  }), /AYA-WNI-AIR-1.*ไม่ได้มอบหมายให้บริษัทของคุณ/);
+});

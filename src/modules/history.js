@@ -238,6 +238,18 @@ export async function addHistoryRecord(ctx, record) {
   });
 }
 
+/**
+ * ลบแถวประวัติทุกแถวที่ตรงเงื่อนไข — ใช้ตอนลบเอกสารแล้วต้องย้อนประวัติที่ใบนั้นลงไว้
+ * ลบจากแถวล่างขึ้นบน เพราะลบแถวแล้วลำดับแถวที่อยู่ล่างกว่าเลื่อนขึ้นหมด
+ * ไม่ล็อก ไม่ flush — ผู้เรียกถือล็อกแล้ว
+ * @returns {Promise<number>} จำนวนแถวที่ลบ
+ */
+export async function deleteHistoryWhereRaw(ctx, match) {
+  const rows = ctx.ss.objects(SHEETS.HISTORY).filter(match).map(h => h._row).sort((a, b) => b - a);
+  for (const r of rows) await ctx.ss.deleteRow(SHEETS.HISTORY, r);
+  return rows.length;
+}
+
 export async function deleteHistoryRecord(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('history');

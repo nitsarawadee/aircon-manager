@@ -382,7 +382,7 @@ test('ใบติดตั้ง — กรอกได้เฉพาะงา
   assert.deepEqual((await getInstallForms(as(db, 'ctB'))).length, 0, 'ใบของเจ้า A — เจ้า B ต้องไม่เห็น แม้มีงานล้างบนเครื่องนี้');
 
   await assert.rejects(
-    () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'AYA-WNI-AIR-1', Date: '2026-09-20' }), /ไม่พบเครื่อง/);
+    () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'AYA-WNI-AIR-1', Date: '2026-09-20' }), /ไม่ได้มอบหมายงานติดตั้งให้บริษัทของคุณ/);
 });
 
 test('ใบติดตั้งใบเดียว ใส่เครื่องจากสอง Node ไม่ได้', async () => {
@@ -399,8 +399,8 @@ test('ผู้รับเหมาลบเอกสารไม่ได้ �
   const cf = (await getCleaningForms(as(db, 'ctA')))[0];
   const inf = (await getInstallForms(as(db, 'ctA')))[0];
 
-  await assert.rejects(() => deleteCleaningForm(as(db, 'ctA'), cf._row, cf.ID), /ผู้รับเหมา/);
-  await assert.rejects(() => deleteInstallForm(as(db, 'ctA'), inf._row, inf.ID), /ผู้รับเหมา/);
+  await assert.rejects(() => deleteCleaningForm(as(db, 'ctA'), cf._row, cf.ID), /เฉพาะบทบาท Infrastructure/);
+  await assert.rejects(() => deleteInstallForm(as(db, 'ctA'), inf._row, inf.ID), /เฉพาะบทบาท Infrastructure/);
 });
 
 test('แก้ทะเบียนเครื่องเองไม่ได้', async () => {

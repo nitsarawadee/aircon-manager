@@ -1,7 +1,7 @@
 import { Ctx } from './context.js';
 
 import {
-  getAirList, getConfig, saveAirUnit, moveAirUnit, replaceAirUnit, deleteAirUnit,
+  getAirList, getConfig, saveAirUnit, moveAirUnit, moveAirUnitToStock, moveAirUnitToNewNode, replaceAirUnit, deleteAirUnit,
   getAirUnitImportFile, getAirUnitImportTemplate, planAirUnitImport, applyAirUnitImport
 } from './modules/airlist.js';
 import { getPlanYears, getCleaningPlan, getCleaningSummary, getPlanCalendar, getUpcomingCleanings, createCleaningPlan, deleteCleaningPlan, syncCleaningPlan, updateCleaningRound, updatePlanDatesByNode, updatePlanBulk } from './modules/plan.js';
@@ -80,6 +80,8 @@ const API_FUNCTIONS = {
   planAirUnitImport,
   applyAirUnitImport,
   moveAirUnit,
+  moveAirUnitToStock,
+  moveAirUnitToNewNode,
   replaceAirUnit,
 
   getHistory,

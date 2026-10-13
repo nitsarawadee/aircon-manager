@@ -235,6 +235,9 @@ export async function approveDoc(ctx, kind, formId) {
 
     const form = ctx.ss.objects(spec.sheet).find(f => plainText(f.ID) === id);
     if (!form) throw new Error('ไม่พบเอกสารใบนี้ (อาจถูกลบไปแล้ว)');
+    const info = await ctx.userInfo();
+    // ตรวจก่อนภูมิภาค — ผู้รับเหมาไม่มีภูมิภาค ถ้าตรวจภูมิภาคก่อนจะได้ข้อความที่ไม่ตรงสาเหตุ
+    if (info.role === 'Contractor') throw new Error('บัญชี Subcontract (ผู้รับเหมา) อนุมัติเอกสารไม่ได้');
     await ctx.assertRegionAccess(form.Region);
 
     const row = approvalRowOf(ctx, kind, id);
@@ -242,7 +245,6 @@ export async function approveDoc(ctx, kind, formId) {
     const next = nextStage(row);
     if (!next) throw new Error('เอกสารใบนี้อนุมัติครบทุกขั้นแล้ว');
 
-    const info = await ctx.userInfo();
     if (!canApproveStage(info, next)) {
       throw new Error('ใบนี้รออนุมัติขั้น ' + next + ' ซึ่งต้องเป็นบทบาท ' + rolesText(next) +
         ' (บัญชีของคุณเป็น ' + (info.title || info.role) + ')');

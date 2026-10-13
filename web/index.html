@@ -2352,7 +2352,10 @@
       authToken = '';
       localStorage.removeItem('acmgr_token');
       currentUserInfo = null;
-      showAuthScreen('login');
+      // โหลดหน้าใหม่ทั้งหน้า ล้างข้อมูลที่จำไว้ของบัญชีเดิมทิ้งให้หมด (รายการเครื่อง Node แผน ฯลฯ)
+      // ไม่งั้นออกจากระบบแล้วเข้าด้วยบัญชีอื่นในหน้าเดิม บัญชีใหม่จะเห็นรายการของบัญชีก่อนหน้า
+      // เช่นผู้รับเหมาเห็นเครื่องที่ไม่ได้มอบหมายให้ (เซิร์ฟเวอร์ปฏิเสธอยู่ดี แต่หน้าจอหลอกให้เลือกได้)
+      location.reload();
     }
 
     async function doLogin() {
@@ -2738,7 +2741,7 @@
      */
     const EDIT_ACTIONS = {
       // รายการเครื่อง
-      openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist',
+      openAirModal: 'airlist', saveAir: 'airlist', openMoveModal: 'airlist', moveAir: 'airlist', syncMoveMode: 'airlist', syncNewNodeCode: 'airlist',
       openReplaceModal: 'airlist', replaceAir: 'airlist', deleteAir: 'airlist',
       fileImportAir: 'airlist', confirmAirImport: 'airlist', downloadAirTemplate: 'airlist', writeOffStockRow: 'admin',
       openStockRemarkModal: 'admin', saveStockRemark: 'admin',
@@ -5179,14 +5182,40 @@
                 <div>เครื่องที่จะย้าย: <span class="font-semibold text-gray-800">${esc(machineSummary(data))}</span></div>
                 <div class="text-xs mt-0.5">ตอนนี้อยู่ที่ ${esc(data.NodeName) || '-'} (${esc(data.SiteCode) || '-'})</div>
               </div>
-              <div><label class="block text-sm font-medium text-gray-700 mb-1">ย้ายไปแทนตำแหน่ง <span class="text-red-500">*</span></label>
+              <div><label class="block text-sm font-medium text-gray-700 mb-1">ย้ายไปที่ <span class="text-red-500">*</span></label>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                  ${[['replace', 'แทนตำแหน่งที่มี'], ['stock', 'เข้าคลัง'], ['newnode', 'Node ใหม่']].map(([v, t], i) => `
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50">
+                      <input type="radio" name="m_mode" value="${v}" ${i === 0 ? 'checked' : ''} onchange="syncMoveMode()" class="accent-teal-600"> ${t}</label>`).join('')}
+                </div>
+              </div>
+              <div id="m_box_replace">
                 ${airPickerInput({
                   id: 'm_dest', units: targets, oninput: 'syncMovePreview()',
                   focusCls: 'focus:border-teal-500 focus:ring-1 focus:ring-teal-500',
                   note: 'เลือกรหัสเครื่องที่ปลายทาง เช่น BKK-LKB-AIR-1'
                 })}
+                <div id="m_preview" class="mt-3"></div>
               </div>
-              <div id="m_preview"></div>
+              <div id="m_box_stock" class="hidden">
+                <div class="border border-teal-200 bg-teal-50/60 rounded-lg p-3 text-xs text-gray-700 space-y-1">
+                  <div class="font-semibold text-teal-800">หลังย้าย</div>
+                  <div>ตัวเครื่อง (${esc(machineSummary(data))}) ไปอยู่หน้า<b>คลังแอร์</b> พร้อม Serial / Asset</div>
+                  <div><b>${esc(data.AirCode)}</b> · ตำแหน่งว่าง รอเครื่องใหม่ (ขึ้นในหน้างานซ่อมเป็น "รอเครื่องใหม่มาแทน")</div>
+                </div>
+              </div>
+              <div id="m_box_newnode" class="hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">Node Name <span class="text-red-500">*</span></label><input id="m_n_NodeName" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">Site Code <span class="text-red-500">*</span></label><input id="m_n_SiteCode" oninput="syncNewNodeCode()" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">Region <span class="text-red-500">*</span></label><input id="m_n_Region" value="${esc(data.Region)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">จังหวัด</label><input id="m_n_Province" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">ประเภทสถานที่</label><select id="m_n_LocationType" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none bg-white"><option value=""></option>${(currentConfig.LocationType || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select></div>
+                  <div><label class="block text-xs font-medium text-gray-600 mb-1">รหัสเครื่องที่ปลายทาง <span class="text-red-500">*</span></label><input id="m_n_AirCode" oninput="this.dataset.edited = '1'" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                  <div class="sm:col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">ที่อยู่รายละเอียด</label><input id="m_n_Address" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none"></div>
+                </div>
+                <p class="text-xs text-gray-500">สำหรับ Node ที่ยังไม่มีแอร์ — ระบบสร้างตำแหน่งใหม่ที่ Node นี้แล้วย้ายตัวเครื่องเข้าไป (ข้อมูลเครื่องติดไปด้วย) · ปลายทางขึ้นงานรอเอกสารติดตั้ง · ${esc(data.AirCode)} ว่าง รอเครื่องใหม่</p>
+              </div>
               <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
               <textarea id="m_Note" rows="2" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-teal-500 text-sm px-3 py-2 outline-none resize-none" placeholder="เช่น เหตุผลที่ย้าย"></textarea></div>
             </div>
@@ -5201,6 +5230,26 @@
 
     /** เครื่องที่กำลังจะย้าย (ของหน้าต่างย้ายเครื่องที่เปิดอยู่) */
     let moveFromCode = '';
+
+    /** ย้ายไปแบบไหน — replace แทนตำแหน่งที่มีอยู่ · stock เข้าคลัง · newnode Node ใหม่ */
+    const moveMode = () => ((document.querySelector('input[name="m_mode"]:checked') || {}).value || 'replace');
+
+    function syncMoveMode() {
+      const mode = moveMode();
+      for (const m of ['replace', 'stock', 'newnode']) {
+        const box = document.getElementById('m_box_' + m);
+        if (box) box.classList.toggle('hidden', m !== mode);
+      }
+    }
+    window.syncMoveMode = syncMoveMode;
+
+    /** Node ใหม่ยังไม่มีแอร์ — เครื่องแรกของ Node คือ <SiteCode>-AIR-1 (ถ้าแก้รหัสเองแล้วไม่เขียนทับ) */
+    function syncNewNodeCode() {
+      const site = document.getElementById('m_n_SiteCode').value.trim().toUpperCase();
+      const code = document.getElementById('m_n_AirCode');
+      if (!code.dataset.edited) code.value = site ? site + '-AIR-1' : '';
+    }
+    window.syncNewNodeCode = syncNewNodeCode;
 
     /** สรุปให้เห็นก่อนกดยืนยัน ว่าแต่ละตำแหน่งจะเป็นยังไงหลังย้าย */
     function syncMovePreview() {
@@ -5227,9 +5276,38 @@
     window.syncMovePreview = syncMovePreview;
 
     async function moveAir(row, code) {
+      const mode = moveMode();
+      const note = document.getElementById('m_Note').value.trim();
+      if (mode !== 'replace') {
+        let result;
+        try {
+          if (mode === 'stock') {
+            result = await call('moveAirUnitToStock', row, note, code);
+          } else {
+            const place = {};
+            for (const f of ['NodeName', 'SiteCode', 'Region', 'Province', 'LocationType', 'AirCode', 'Address']) {
+              place[f] = document.getElementById('m_n_' + f).value.trim();
+            }
+            if (!place.NodeName || !place.SiteCode || !place.Region || !place.AirCode) {
+              showToast('กรุณากรอก Node Name, Site Code, Region และรหัสเครื่องที่ปลายทาง', 'error');
+              return;
+            }
+            result = await call('moveAirUnitToNewNode', row, place, note, code);
+          }
+        } catch (e) { return; }
+        currentAirList = result.air;
+        currentHistory = result.history;
+        renderAirTable(currentAirList);
+        if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
+        closeModal();
+        showToast(mode === 'stock'
+          ? 'ย้ายเครื่องเข้าคลังแล้ว (เลขที่ ' + result.stockId + ') — ' + code + ' รอเครื่องใหม่'
+          : 'ย้ายเครื่องไป ' + result.destCode + ' แล้ว — ' + code + ' รอเครื่องใหม่', 'success');
+        loadDashboard();
+        return;
+      }
       const typed = document.getElementById('m_dest').value.trim();
       const dest = airPickerCode(typed);
-      const note = document.getElementById('m_Note').value.trim();
       if (!dest) {
         showToast(typed ? `ไม่พบตำแหน่ง "${typed}" กรุณาเลือกจากรายการ` : 'กรุณาเลือกตำแหน่งปลายทาง', 'error');
         return;
@@ -9311,8 +9389,8 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${
             // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
             // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
-            // ผู้รับเหมาลบเอกสารไม่ได้ แม้เป็นใบของตัวเอง (เซิร์ฟเวอร์ปฏิเสธอยู่แล้ว ไม่ต้องโชว์ปุ่ม)
-            (!r.first || !canEditRow || isContractor()) ? ''
+            // ลบเอกสารได้เฉพาะ Infrastructure (เซิร์ฟเวอร์ปฏิเสธบทบาทอื่นอยู่แล้ว ไม่ต้องโชว์ปุ่ม)
+            (!r.first || !canEditRow || currentUserInfo.role !== 'Admin') ? ''
               : isRepair
               ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
               : isInstall
@@ -10134,26 +10212,43 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.openBlankCleaningDoc = openBlankCleaningDoc;
 
   async function deleteCleaningFormRow(row, id) {
-    const confirmed = await showConfirm('ยืนยันการลบบันทึกฟอร์มนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย');
+    const confirmed = await showConfirm(
+      'ยืนยันการลบเอกสารล้างใบนี้? รูปถ่าย ไฟล์ PDF และไฟล์แนบจะถูกลบตามไปด้วย\n' +
+      '(ระบบย้อนให้: รอบในแผนกลับเป็น "รอดำเนินการ" และประวัติการล้าง/ค่าล้างของใบนี้ถูกลบ — กรอกเอกสารใหม่ได้)'
+    );
     if (!confirmed) return;
     try {
       // ส่งเลขที่ภายในไปด้วย ให้เซิร์ฟเวอร์ตรวจว่าแถวนั้นยังเป็นใบเดิมอยู่จริง
       currentCleaningForms = await call('deleteCleaningForm', row, id);
       renderCleaningFormTable();
-      showToast('ลบบันทึกสำเร็จ');
+      showToast('ลบเอกสารล้างสำเร็จ');
+      await refreshAfterFormDeleted();
+    } catch (e) {}
+  }
+
+  /** หลังลบเอกสาร — ระบบย้อนแผน ประวัติ สถานะเครื่องให้แล้ว ให้หน้าอื่นเห็นผลทันทีโดยไม่ต้องรีเฟรชเอง */
+  async function refreshAfterFormDeleted() {
+    await refreshAfterFormSaved();
+    try {
+      if (typeof currentYear !== 'undefined' && currentYear) {
+        currentPlan = (await callQuiet('getCleaningPlan', currentYear)) || currentPlan;
+        if (typeof renderPlanTable === 'function') renderPlanTable(planLastQuery, true);
+      }
     } catch (e) {}
   }
 
   async function deleteInstallFormRow(row, id) {
     const confirmed = await showConfirm(
       'ยืนยันการลบเอกสารติดตั้งใบนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย\n' +
-      '(ใบประวัติ "ติดตั้ง" และข้อมูลเครื่องที่อัปเดตไปแล้วในทะเบียน จะไม่ย้อนกลับให้)'
+      '(ระบบย้อนให้: งานกลับไปรอเอกสารติดตั้ง เครื่องที่เพิ่มใหม่กลับเป็น "รอติดตั้ง" — กรอกเอกสารใหม่ได้\n' +
+      'ส่วนข้อมูลเครื่องที่ใบนี้แก้ในทะเบียนไปแล้ว เช่น Serial ไม่ย้อนกลับ)'
     );
     if (!confirmed) return;
     try {
       currentInstallForms = await call('deleteInstallForm', row, id);
       renderCleaningFormTable();
       showToast('ลบเอกสารติดตั้งสำเร็จ');
+      await refreshAfterFormDeleted();
     } catch (e) {}
   }
   window.deleteInstallFormRow = deleteInstallFormRow;
@@ -10264,13 +10359,14 @@ const CLEANING_CHECKLIST_ITEMS = [
   async function deleteRepairFormRow(row, id) {
     const confirmed = await showConfirm(
       'ยืนยันการลบเอกสารซ่อมใบนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย\n' +
-      '(ใบประวัติ "ซ่อมแล้ว" ที่ลงไว้ตอนบันทึก จะไม่ถูกลบตาม ต้องไปลบเองที่หน้าประวัติถ้าต้องการ)'
+      '(ระบบย้อนให้: ประวัติ "ซ่อมแล้ว" และค่าซ่อมของใบนี้ถูกลบ เครื่องกลับเป็น "รอซ่อม" — กรอกเอกสารใหม่ได้)'
     );
     if (!confirmed) return;
     try {
       currentRepairForms = await call('deleteRepairForm', row, id);
       renderCleaningFormTable();
       showToast('ลบเอกสารซ่อมสำเร็จ');
+      await refreshAfterFormDeleted();
     } catch (e) {}
   }
   window.deleteRepairFormRow = deleteRepairFormRow;
@@ -11907,17 +12003,14 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เลือกเครื่องก่อนเปิดฟอร์มซ่อม
    *
    * เปิดจากหน้างานซ่อมจะรู้เครื่องมาแล้ว แต่เปิดจากแท็บเอกสารยังไม่รู้
-   * จึงต้องให้เลือกก่อน — เรียงเครื่องที่กำลังรอซ่อมขึ้นก่อน เพราะเป็นตัวที่
-   * คนมากรอกเอกสารให้บ่อยที่สุด ส่วนเครื่องปกติก็ยังเลือกได้ เพราะช่างซ่อม
-   * หน้างานเลยโดยไม่ได้แจ้งล่วงหน้าเป็นเรื่องที่เกิดจริง
+   * จึงต้องให้เลือกก่อน — เฉพาะเครื่อง "รอซ่อม" (ดู repairPickUnits)
    */
   function openRepairFormPicker() {
     // ใช้รายการเดียวกับฟอร์มเปล่า ไม่งั้นสองปุ่มนี้จะค่อยๆ เลือกได้ไม่เหมือนกัน
-    const list = unitsForRepairDoc();
+    const list = repairPickUnits('rfp');
 
-    if (!list.length) { showToast('ยังไม่มีข้อมูลเครื่องในระบบ', 'error'); return; }
+    if (!list.length) { showToast('ยังไม่มีเครื่องที่อนุมัติซ่อมแล้ว (สถานะ "รอซ่อม") — ต้องแจ้งซ่อมและให้ Infrastructure อนุมัติก่อน', 'error'); return; }
 
-    const waiting = list.filter(a => a.Status === 'รอซ่อม' || a.Status === 'ชำรุด').length;
     resetRepairAirPick('rfp');
 
     document.getElementById('modalRoot').innerHTML = `
@@ -11932,10 +12025,10 @@ const CLEANING_CHECKLIST_ITEMS = [
             <div class="bg-orange-50 text-orange-800 text-xs p-3 rounded-lg flex gap-2">
               <i class="ph ph-info text-lg shrink-0"></i>
               <p>บันทึกแล้วระบบจะลงประวัติ "ซ่อมแล้ว" และปิดเคสงานซ่อมของเครื่องนั้นให้เอง
-                 ${waiting ? '· ตอนนี้มีเครื่องรอซ่อม/ชำรุดอยู่ <b>' + waiting + '</b> เครื่อง' : ''}</p>
+                 · ตอนนี้มีเครื่องรอซ่อมอยู่ <b>${list.length}</b> เครื่อง</p>
             </div>
             ${repairAirPickerHtml('rfp', 'เลือกเครื่องที่ซ่อม',
-              'เลือกได้ทุกเครื่อง' + (waiting ? ' · เครื่องที่รอซ่อม/ชำรุดถูกจัดไว้บนสุดให้แล้ว' : ''))}
+              'เลือกได้เฉพาะเครื่องที่ Infrastructure อนุมัติซ่อมแล้ว (สถานะ "รอซ่อม")')}
           </div>
           <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
             <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
@@ -12726,6 +12819,15 @@ const CLEANING_CHECKLIST_ITEMS = [
              String(a.AirCode).localeCompare(String(b.AirCode));
     });
 
+  /**
+   * รายการของแต่ละกล่อง — กล่องกรอกเอกสาร (rfp) ให้เลือกเฉพาะ "รอซ่อม"
+   * เจ้าของงานกำหนด: ส่งเอกสารซ่อมได้เฉพาะงานที่ Infrastructure อนุมัติซ่อมแล้ว เหมือนส่งผ่านลิงก์
+   * (เซิร์ฟเวอร์ปฏิเสธเครื่องสถานะอื่นอยู่แล้ว ซ่อนไว้ไม่ให้เลือกแล้วค่อยโดนปฏิเสธ)
+   * ฟอร์มเปล่ายังเลือกได้ทุกเครื่อง — ปริ้นไปหน้างานก่อนแจ้งซ่อมได้
+   */
+  const repairPickUnits = box =>
+    box === 'rfp' ? unitsForRepairDoc().filter(a => a.Status === 'รอซ่อม') : unitsForRepairDoc();
+
   /** ป้ายสถานะท้ายชื่อเครื่องในรายการเลือก — ใส่เฉพาะตัวที่มีงานค้าง */
   const repairStatusTag = status =>
     status === 'รอซ่อม' ? ' — รอซ่อม' : status === 'ชำรุด' ? ' — ชำรุด' : '';
@@ -12769,7 +12871,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!el) return;
 
     const q = ((document.getElementById(box + '_search') || {}).value || '').trim().toLowerCase();
-    const list = unitsForRepairDoc().filter(a => !q
+    const list = repairPickUnits(box).filter(a => !q
       || String(a.AirCode || '').toLowerCase().includes(q)
       || String(a.NodeName || '').toLowerCase().includes(q));
 
@@ -12811,7 +12913,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   /** เริ่มกล่องใหม่ด้วยเครื่องตัวบนสุด เหมือนที่ <select> เคยเลือกตัวแรกให้เอง */
   function resetRepairAirPick(box) {
-    const first = unitsForRepairDoc()[0];
+    const first = repairPickUnits(box)[0];
     repairAirPick = { box, code: first ? first.AirCode : '' };
   }
 

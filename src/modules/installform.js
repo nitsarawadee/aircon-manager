@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
-import { cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
-import { addHistoryRaw, historyPrefix, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { unitsInScope } from './airlist.js';
+import { AWAITING_INSTALL_STATUS, cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
+import { addHistoryRaw, deleteHistoryWhereRaw, historyPrefix, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -141,7 +141,7 @@ const docNoOf = form =>
 async function unitOf(ctx, airCode) {
   const nc = normalizeCode(airCode);
   const found = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
-  if (!found) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' ในทะเบียนเครื่อง');
+  if (!found) throw new Error(await unitNotInScopeMessage(ctx, plainText(airCode), 'งานติดตั้ง'));
   return found;
 }
 
@@ -415,11 +415,60 @@ async function attachedFormOf(ctx, row) {
 
 /* ==================== ลบ ==================== */
 
+/**
+ * ย้อนสิ่งที่ใบติดตั้งทำไว้ตอนบันทึก (ดู writeInstallForm) — เจ้าของงานกำหนด: ลบแล้วต้องย้อน เพราะต้องกรอกเอกสารใหม่
+ *
+ *   งานที่รอเอกสารอยู่ก่อน (เพิ่ม / เปลี่ยน / ย้ายเครื่อง)  ป้ายกลับเป็น "รอเอกสารติดตั้ง" งานกลับไปขึ้นให้กรอกใหม่
+ *   ประวัติ "ติดตั้ง" ที่ใบนี้ลงเอง                          ลบทิ้ง
+ *   เครื่องที่เพิ่มใหม่และใบนี้อนุมัติครบไปแล้ว              สถานะกลับเป็น "รอติดตั้ง" (รอใบใหม่อนุมัติครบ)
+ */
+async function revertInstallEffects(ctx, form) {
+  if (!form) return;
+  for (const slot of [1, 2]) {
+    const code = normalizeCode(form['AirCode' + slot]);
+    const docNo = plainText(form[slot === 2 ? 'DocNo2' : 'DocNo']).trim();
+    if (!code || !docNo) continue;
+
+    const rows = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
+      normalizeCode(h.AirCode) === code && plainText(h.Note).trim() === 'เอกสาร ' + docNo);
+    // ใบนี้ลงเอง = แถว "ติดตั้ง" เลขเดียวกับเอกสาร ข้อความตามที่ writeInstallForm เขียน
+    // (แถวที่รอเอกสารอยู่ก่อน — เพิ่มเครื่อง "ติดตั้งเครื่องใหม่ที่ Node …" / ย้ายมา "ย้ายเครื่องมาจาก …" — ไม่ใช่)
+    const ownRow = h => {
+      const d = plainText(h.Detail);
+      return plainText(h.EventType).trim() === EVENT && plainText(h.ID).trim() === docNo &&
+        (d === 'ติดตั้งเครื่องใหม่' || d.startsWith('ติดตั้งเครื่องใหม่ — '));
+    };
+
+    const accept = plainText(form['AcceptResult' + slot]).trim();
+    let addedUnit = false;
+    for (const h of rows.filter(h => !ownRow(h))) {
+      const suffix = ' — ผลตรวจรับ: ' + accept;
+      const detail = plainText(h.Detail);
+      ctx.ss.writeByHeaders(SHEETS.HISTORY, h._row, {
+        Note: INSTALL_PENDING_NOTE,
+        Detail: accept && detail.endsWith(suffix) ? detail.slice(0, -suffix.length) : detail
+      });
+      // เครื่องที่เพิ่มใหม่ (addNewAirUnitRaw) — สถานะเคยเป็น "รอติดตั้ง" จนใบนี้อนุมัติครบ
+      if (plainText(h.EventType).trim() === EVENT && detail.startsWith('ติดตั้งเครื่องใหม่ที่ Node')) addedUnit = true;
+    }
+    await deleteHistoryWhereRaw(ctx, h =>
+      normalizeCode(h.AirCode) === code && plainText(h.Note).trim() === 'เอกสาร ' + docNo && ownRow(h));
+
+    const unit = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === code);
+    if (addedUnit && unit && plainText(unit.Status).trim() === 'ใช้งานปกติ') {
+      ctx.ss.writeByHeaders(SHEETS.AIRLIST, unit._row, {
+        Status: AWAITING_INSTALL_STATUS, UpdatedAt: ymdhms(new Date()), UpdatedBy: await ctx.currentUser()
+      });
+    }
+  }
+}
+
 export async function deleteInstallForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('installform');
-    // ลบแล้วรูปถ่ายกับไฟล์ PDF หายตามไปด้วย กู้คืนไม่ได้ จึงให้เฉพาะเจ้าหน้าที่
-    await ctx.assertStaff('ลบเอกสาร');
+    // ลบแล้วรูปถ่ายกับไฟล์ PDF หายตามไปด้วย กู้คืนไม่ได้
+    // เจ้าของงานกำหนด: ลบเอกสารได้เฉพาะ Infrastructure
+    await ctx.assertAdmin();
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -434,6 +483,9 @@ export async function deleteInstallForm(ctx, row, expectId) {
     const cell = name => ctx.ss.cell(SHEETS.INSTALLFORM, row, headers.indexOf(name) + 1);
     const docNo = docNoOf({ DocNo: cell('DocNo'), DocNo2: cell('DocNo2'), ID: cell('ID') });
     const formId = plainText(cell('ID'));
+
+    // ย้อนงานที่ใบนี้ปิดไว้ ต้องทำก่อนลบแถว เพราะต้องอ่านเครื่องและเลขที่จากใบ
+    await revertInstallEffects(ctx, ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row)));
 
     await ctx.ss.deleteRow(SHEETS.INSTALLFORM, row);
     await removeApproval(ctx, KIND, formId);

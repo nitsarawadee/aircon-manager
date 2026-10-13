@@ -46,6 +46,8 @@ const repair = () => ({
 });
 
 async function newRepair(db) {
+  // ส่งเอกสารซ่อมได้เฉพาะงานที่อนุมัติซ่อมแล้ว
+  db.exec("UPDATE air_units SET Status = 'รอซ่อม' WHERE AirCode = 'AYA-WNI-AIR-1'");
   await saveRepairForm(as(db, 'infra'), repair());
   const [form] = await getRepairForms(as(db, 'infra'));
   return form;

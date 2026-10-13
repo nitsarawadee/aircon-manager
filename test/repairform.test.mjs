@@ -50,6 +50,9 @@ const ctxOf = (db, services = {}) => {
   return c;
 };
 
+/** ส่งเอกสารซ่อมได้เฉพาะเครื่องที่ "รอซ่อม" — ใบแรกปิดงานไปแล้ว ใบถัดไปต้องอนุมัติซ่อมใหม่ */
+const readyForRepair = db => db.exec("UPDATE air_units SET Status = 'รอซ่อม' WHERE AirCode = 'KKN-CPE-AIR-1'");
+
 const payload = (over = {}) => ({
   AirCode: 'KKN-CPE-AIR-1',
   Date: '2026-09-22',
@@ -170,6 +173,7 @@ test('ไม่มีเคสเปิดอยู่ ต้องเปิด�
 test('เลขเอกสารซ่อมต้องไม่ซ้ำกับใบประวัติที่ออกไปแล้ว', async () => {
   const db = freshDb();
   const a = await saveRepairForm(ctxOf(db), payload());
+  readyForRepair(db);
   const b = await saveRepairForm(ctxOf(db), payload());
 
   const hist = await getHistory(ctxOf(db));
@@ -191,6 +195,7 @@ test('เลขเอกสารซ่อมต้องไม่ซ้ำก�
     Date: '2026-09-22', PlanYear: 2026, PlanRound: 1,
     AirCode1: 'KKN-CPE-AIR-1', Price1: 450, Checklist: []
   });
+  readyForRepair(db);
   const r2 = await saveRepairForm(ctxOf(db), payload());
 
   const all = [r1.docNo, c.docNo, r2.docNo];
@@ -203,6 +208,7 @@ test('ซ่อมเครื่องเดียวกันวันเด�
   // ต่างจากใบล้างที่รวมใบ เพราะซ่อมสองครั้งคือสองเหตุการณ์ ไม่ใช่งานเดียวต่อเนื่อง
   const db = freshDb();
   await saveRepairForm(ctxOf(db), payload({ Symptom: 'ไม่เย็น' }));
+  readyForRepair(db);
   await saveRepairForm(ctxOf(db), payload({ Symptom: 'มีเสียงดัง' }));
 
   const forms = await getRepairForms(ctxOf(db));
@@ -326,24 +332,16 @@ test('คนกรอกลบอาการที่แจ้งไว้ท�
   assert.ok(String(h.Detail).includes('น้ำยารั่ว'));
 });
 
-test('เครื่องที่ใช้งานปกติอยู่ ต้องไม่ถูกแตะสถานะ', async () => {
-  // ช่างซ่อมหน้างานเลยโดยไม่ได้แจ้งล่วงหน้า เครื่องยังปกติอยู่ ไม่ต้องไปเปลี่ยนอะไร
-  const db = freshDb();
-  db.prepare("UPDATE air_units SET Status = 'ใช้งานปกติ', Note = 'หมายเหตุอื่น' WHERE AirCode = ?")
-    .run('KKN-CPE-AIR-1');
+// เจ้าของงานกำหนด (14/10/2569): ส่งเอกสารซ่อมได้เฉพาะงานที่ Infrastructure อนุมัติซ่อมแล้ว เหมือนส่งผ่านลิงก์
+// เดิมเครื่องที่ใช้งานปกติ (ซ่อมหน้างานโดยไม่ได้แจ้ง) และเครื่องที่ยัง "ชำรุด" ออกเอกสารปิดงานได้เลย
+for (const status of ['ใช้งานปกติ', 'ชำรุด']) {
+  test('เครื่องที่ยัง "' + status + '" ส่งเอกสารซ่อมไม่ได้ — ต้องอนุมัติซ่อมก่อน', async () => {
+    const db = freshDb();
+    db.prepare('UPDATE air_units SET Status = ? WHERE AirCode = ?').run(status, 'KKN-CPE-AIR-1');
 
-  await saveRepairForm(ctxOf(db), payload());
+    await assert.rejects(() => saveRepairForm(ctxOf(db), payload()), /ต้องแจ้งซ่อม แล้วให้ Infrastructure อนุมัติซ่อม/);
 
-  const after = db.prepare('SELECT Status s, Note n FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1');
-  assert.equal(after.s, 'ใช้งานปกติ');
-  assert.equal(after.n, 'หมายเหตุอื่น', 'หมายเหตุที่ไม่เกี่ยวกับงานซ่อม ต้องไม่ถูกล้าง');
-});
-
-test('เครื่องที่ยังอยู่ขั้น "ชำรุด" ออกเอกสารแล้วต้องปิดงานให้ด้วย', async () => {
-  const db = freshDb();
-  db.prepare("UPDATE air_units SET Status = 'ชำรุด' WHERE AirCode = ?").run('KKN-CPE-AIR-1');
-
-  await saveRepairForm(ctxOf(db), payload());
-
-  assert.equal(db.prepare('SELECT Status s FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1').s, 'ใช้งานปกติ');
-});
+    assert.equal((await getRepairForms(ctxOf(db))).length, 0, 'ต้องไม่มีใบงอกออกมา');
+    assert.equal(db.prepare('SELECT Status s FROM air_units WHERE AirCode = ?').get('KKN-CPE-AIR-1').s, status);
+  });
+}

@@ -159,6 +159,10 @@ export async function getBudgetSummary(ctx, year) {
 export async function saveBudgetRecord(ctx, year, budgetCleaning, budgetRepair, note) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('budget');
+    for (const [label, v] of [['งบล้างแอร์', budgetCleaning], ['งบซ่อมแอร์', budgetRepair]]) {
+      if (v === '' || v === null || v === undefined) continue;
+      if (!Number.isFinite(Number(v)) || Number(v) < 0) throw new Error(label + 'ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป');
+    }
     await ctx.ensureBase();
     await ensureBudgetSheet(ctx);
 

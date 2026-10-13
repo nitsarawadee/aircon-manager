@@ -82,6 +82,24 @@ export async function unitsInScope(ctx) {
   return ctx.ss.objects(SHEETS.AIRLIST).filter(await ctx.scopeFilter());
 }
 
+/**
+ * ข้อความเมื่อหาเครื่องใน unitsInScope ไม่เจอ — แยกให้ตรงสาเหตุ
+ * ไม่มีในทะเบียนจริง / ผู้รับเหมาไม่ได้รับมอบหมาย / อยู่นอกภูมิภาคที่ดูแล
+ * (เดิมตอบ "ไม่พบในทะเบียน" ทุกกรณี คนที่เห็นเครื่องอยู่ในทะเบียนจะงง)
+ *
+ * @param {string} job ชื่องาน เช่น 'งานซ่อม' 'งานติดตั้ง'
+ */
+export async function unitNotInScopeMessage(ctx, airCode, job) {
+  const code = String(airCode == null ? '' : airCode).trim();
+  const unit = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === normalizeCode(code));
+  if (!unit) return 'ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง';
+  const info = await ctx.userInfo();
+  if (info.role === 'Contractor') {
+    return 'เครื่อง "' + code + '" ไม่ได้มอบหมาย' + job + 'ให้บริษัทของคุณ — ทำได้เฉพาะเครื่องที่ได้รับมอบหมาย';
+  }
+  return 'คุณไม่มีสิทธิ์จัดการข้อมูลในภูมิภาค "' + (unit.Region || '-') + '" (เครื่อง ' + code + ')';
+}
+
 export async function getAirList(ctx) {
   await ctx.requireAccess();
   if (!(await ctx.canView('airlist'))) return [];
@@ -385,6 +403,137 @@ export async function moveAirUnit(ctx, row, destCode, note, expectCode) {
 
     await ctx.ss.flush();
     return { air: await getAirList(ctx), history: await getHistory(ctx), destCode: dest.AirCode };
+  });
+}
+
+/* ==================== ย้ายเครื่องเข้าคลัง / ไป Node ใหม่ ====================
+ *
+ * เจ้าของงานกำหนด (14/10/2569): นอกจากย้ายไปแทนตำแหน่งที่มีอยู่ (moveAirUnit)
+ * ต้องย้ายเครื่องเข้าคลังได้ และย้ายไป Node ใหม่ที่ยังไม่มีแอร์ได้
+ * ต้นทางเป็นแบบเดียวกับ moveAirUnit ทุกแบบ — ตำแหน่งว่าง สถานะ "รื้อถอน/ปลดระวาง" = รอเครื่องใหม่
+ */
+
+/** อ่านเครื่องต้นทางของการย้าย พร้อมตรวจสิทธิ์และสถานะ — กติกาเดียวกับ moveAirUnit */
+async function movableSource(ctx, row, expectCode) {
+  await ctx.assertModuleEdit('airlist');
+  await ctx.ensureBase();
+  ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
+
+  const headers = ctx.ss.headers(SHEETS.AIRLIST);
+  const src = {};
+  headers.forEach((h, i) => { if (h) src[h] = ctx.ss.cell(SHEETS.AIRLIST, row, i + 1); });
+  await ctx.assertRegionAccess(src.Region);
+
+  const status = String(src.Status || '').trim();
+  if (isAwaitingInstall(status)) {
+    throw new Error('เครื่องที่รอใบติดตั้งอนุมัติ (' + src.AirCode + ') ย้ายไม่ได้ — รอใบติดตั้งอนุมัติครบก่อน');
+  }
+  if (isRepairStatus(status) || isRetiredStatus(status)) {
+    throw new Error('เครื่อง ' + src.AirCode + ' สถานะ "' + status + '" ย้ายไม่ได้ — ' +
+                    'ต้องเป็นเครื่องที่ใช้งานได้และไม่มีงานซ่อมค้าง');
+  }
+  return src;
+}
+
+/** ต้นทางหลังย้าย: ล้างตัวเครื่องออก ตำแหน่งว่าง รอเครื่องใหม่ + ประวัติ "เปลี่ยนเครื่อง" */
+async function vacateMoveSource(ctx, row, src, where, why) {
+  const today = ymd(new Date());
+  const toSrc = {
+    Status: 'รื้อถอน/ปลดระวาง',
+    Note: 'ย้ายเครื่อง' + where + ' เมื่อ ' + today.split('-').reverse().join('/') + ' — รอเครื่องใหม่',
+    UpdatedAt: ymdhms(new Date()), UpdatedBy: await ctx.currentUser()
+  };
+  for (const f of MACHINE_FIELDS) toSrc[f] = '';
+  ctx.ss.writeByHeaders(SHEETS.AIRLIST, row, toSrc);
+
+  // ไม่เปิดเคสงานซ่อม — เครื่องไม่ได้เสีย แค่ย้ายออกไป (เหตุผลเดียวกับ moveAirUnit)
+  await addHistoryRaw(ctx, {
+    AirCode: src.AirCode,
+    Date: today,
+    EventType: 'เปลี่ยนเครื่อง',
+    Detail: 'ย้ายเครื่องออก' + where + ' — เครื่องเดิม: ' + describeMachine(src) +
+            ' → ตำแหน่งว่าง รอเครื่องใหม่' + (why ? ' | เหตุผล: ' + why : ''),
+    Cost: '',
+    Technician: ''
+  });
+}
+
+/**
+ * ย้ายเครื่องเข้าคลัง — ตัวเครื่องไปอยู่หน้าคลังพร้อม Serial/Asset ตำแหน่งเดิมว่าง รอเครื่องใหม่
+ * (หน้างานซ่อมโชว์ตำแหน่งนี้เป็น "รอเครื่องใหม่มาแทน" แล้วกดเปลี่ยนเครื่องทีหลังได้)
+ */
+export async function moveAirUnitToStock(ctx, row, note, expectCode) {
+  return ctx.withLock(async () => {
+    const src = await movableSource(ctx, row, expectCode);
+    const why = String(note || '').trim();
+
+    const stockId = await stockOldMachine(ctx, src, 'ย้ายเข้าคลัง' + (why ? ' — ' + why : ''));
+    // ไม่มีข้อมูลตัวเครื่องเลย = ไม่มีอะไรให้เก็บในคลัง (stockOldMachine ไม่เขียนอะไร จึงยังไม่มีอะไรค้าง)
+    if (!stockId) {
+      throw new Error('เครื่อง ' + src.AirCode + ' ไม่มีข้อมูลตัวเครื่อง (ยี่ห้อ / Serial / Asset) — ' +
+                      'กรอกข้อมูลเครื่องก่อนย้ายเข้าคลัง');
+    }
+    await vacateMoveSource(ctx, row, src, 'เข้าคลัง (เลขที่ ' + stockId + ')', why);
+
+    await ctx.ss.flush();
+    return { air: await getAirList(ctx), history: await getHistory(ctx), stockId };
+  });
+}
+
+/**
+ * ย้ายเครื่องไป Node ใหม่ที่ยังไม่มีแอร์ — ระบบสร้างตำแหน่งใหม่ให้แล้วย้ายตัวเครื่องเข้าไป
+ *
+ * ต่างจาก "เพิ่มเครื่องใหม่" ตรงที่เป็นเครื่องเดิม — ข้อมูลตัวเครื่องติดไปด้วย ไม่ต้องพิมพ์ใหม่
+ * และต้นทางว่างลง (เพิ่มเครื่องใหม่แทนการย้าย = เครื่องตัวเดียวอยู่ในระบบสองที่)
+ * ปลายทางใช้งานได้ทันทีเหมือนย้ายไปแทนตำแหน่งที่มีอยู่ และขึ้นงานรอเอกสารติดตั้ง
+ *
+ * @param {Object} place AirCode, NodeName, SiteCode, Region, Province, LocationType, Address
+ */
+export async function moveAirUnitToNewNode(ctx, row, place, note, expectCode) {
+  return ctx.withLock(async () => {
+    const src = await movableSource(ctx, row, expectCode);
+    const why = String(note || '').trim();
+
+    const p = {};
+    for (const f of ['AirCode', 'NodeName', 'SiteCode', 'Region', 'Province', 'LocationType', 'Address']) {
+      p[f] = String((place || {})[f] == null ? '' : place[f]).trim();
+    }
+    if (!p.NodeName) throw new Error('กรุณาระบุชื่อ Node ปลายทาง');
+    if (!p.SiteCode) throw new Error('กรุณาระบุ Site Code ของ Node ปลายทาง');
+    if (!p.Region) throw new Error('กรุณาระบุภูมิภาคของ Node ปลายทาง');
+    if (!p.AirCode) throw new Error('กรุณาระบุรหัสเครื่องที่ปลายทาง');
+
+    // Node ที่มีแอร์อยู่แล้ว ต้องย้ายไปแทนตำแหน่งที่มีอยู่ ไม่ใช่สร้างซ้ำ
+    const same = ctx.ss.objects(SHEETS.AIRLIST).find(a =>
+      String(a.NodeName || '').trim() === p.NodeName ||
+      normalizeCode(a.SiteCode) === normalizeCode(p.SiteCode));
+    if (same) {
+      throw new Error('Node "' + (same.NodeName || p.NodeName) + '" (' + (same.SiteCode || p.SiteCode) + ') มีแอร์อยู่แล้ว — ' +
+                      'เลือกปลายทางแบบ "แทนตำแหน่งที่มีอยู่"');
+    }
+    await ctx.assertRegionAccess(p.Region);
+
+    const dest = { ...p, Status: String(src.Status || '').trim() || 'ใช้งานปกติ', Note: src.Note || '' };
+    for (const f of MACHINE_FIELDS) dest[f] = src[f] === undefined ? '' : src[f];
+    await insertAirUnitRaw(ctx, dest);   // รหัสซ้ำ = ปฏิเสธก่อนเขียนอะไร
+
+    const place2 = u => u.AirCode + ' (Node "' + (u.NodeName || '-') + '")';
+    await vacateMoveSource(ctx, row, src, 'ไปติดตั้งที่ ' + place2(p), why);
+
+    await addHistoryRaw(ctx, {
+      AirCode: p.AirCode,
+      Date: ymd(new Date()),
+      EventType: 'ติดตั้ง',
+      Detail: 'ย้ายเครื่องมาจาก ' + place2(src) + ' — เครื่อง: ' + describeMachine(src) +
+              (why ? ' | เหตุผล: ' + why : ''),
+      Cost: '',
+      Technician: '',
+      // เครื่องถูกติดตั้งที่ปลายทางจริง — รอเอกสารติดตั้ง (เหมือน moveAirUnit)
+      Note: INSTALL_PENDING_NOTE
+    });
+
+    await ctx.ss.flush();
+    return { air: await getAirList(ctx), history: await getHistory(ctx), destCode: p.AirCode };
   });
 }
 

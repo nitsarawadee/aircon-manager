@@ -1,7 +1,7 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
 import { cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
-import { addHistoryRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { unitsInScope } from './airlist.js';
+import { addHistoryRaw, deleteHistoryWhereRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
+import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
 import { assertOwnAssigned, isOwnDoc } from './assign.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
@@ -40,6 +40,9 @@ export { KIND as REPAIR_KIND };
 
 /** ประเภทเหตุการณ์ที่ใบนี้ลงในประวัติ — ตัวเดียวกับที่ปุ่มปิดงานซ่อมเดิมใช้ */
 const CLOSE_EVENT = 'ซ่อมแล้ว';
+
+/** สถานะที่ส่งเอกสารซ่อมได้ = อนุมัติซ่อมแล้ว */
+const REPAIR_READY_STATUS = 'รอซ่อม';
 
 export { settleDocPdfQueue };
 
@@ -99,7 +102,7 @@ function nextDocNo(ctx, date) {
 async function unitOf(ctx, airCode) {
   const nc = normalizeCode(airCode);
   const found = (await unitsInScope(ctx)).find(u => normalizeCode(u.AirCode) === nc);
-  if (!found) throw new Error('ไม่พบเครื่องรหัส ' + plainText(airCode) + ' ในทะเบียนเครื่อง');
+  if (!found) throw new Error(await unitNotInScopeMessage(ctx, plainText(airCode), 'งานซ่อม'));
   return found;
 }
 
@@ -222,6 +225,17 @@ async function attachedFormOf(ctx, row) {
  * @returns {Promise<Object>}  แถวที่เขียนลงไป (มี DocNo, CaseID)
  */
 export async function writeRepairForm(ctx, unit, record, recordedBy) {
+  // ส่งเอกสารซ่อมได้เฉพาะงานที่ Infrastructure อนุมัติซ่อมแล้ว (สถานะ "รอซ่อม") — ทุกทางเหมือนกัน
+  // ทั้งกรอกในระบบ แนบไฟล์ และส่งผ่านลิงก์ (เจ้าของงานกำหนด: เอาให้เหมือนกัน)
+  // เดิมกรอกในระบบ/แนบไฟล์ได้ตั้งแต่ยัง "ชำรุด" หรือเครื่องที่ไม่ได้แจ้งซ่อม = ปิดงานโดยไม่ผ่านการอนุมัติซ่อม
+  // อ่านสถานะจากทะเบียนในล็อก ไม่ใช้ของ unit ที่ส่งมา (อาจอ่านมาก่อนถือล็อก)
+  const live = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === normalizeCode(unit.AirCode));
+  const status = plainText(live ? live.Status : unit.Status).trim();
+  if (status !== REPAIR_READY_STATUS) {
+    throw new Error('เครื่อง ' + plainText(unit.AirCode) + ' อยู่ในสถานะ "' + (status || '-') + '" ยังส่งเอกสารซ่อมไม่ได้ — ' +
+      'ต้องแจ้งซ่อม แล้วให้ Infrastructure อนุมัติซ่อม (สถานะ "' + REPAIR_READY_STATUS + '") ก่อน');
+  }
+
   // อาการที่แจ้งไว้ตอนเปิดเคส — เก็บไว้ก่อน เพราะจะถูกล้างออกจากข้อมูลเครื่องตอนปิดงาน
   // ไม่พึ่งข้อความที่หน้าเว็บส่งมา เพราะคนกรอกลบทิ้งได้ ถ้าไม่ดักตรงนี้
   // อาการเสียที่แจ้งไว้จะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
@@ -317,9 +331,56 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
 
 /* ==================== ลบ ==================== */
 
+/**
+ * ย้อนการปิดงานของใบซ่อม — ลบประวัติ "ซ่อมแล้ว" ของใบนี้ แล้วเครื่องกลับไปรอส่งเอกสาร
+ *
+ * เจ้าของงานกำหนด: ลบเอกสารแล้วต้องย้อน เพราะต้องกรอกเอกสารใหม่
+ * (เดิมลบใบแล้วประวัติซ่อมแล้วกับค่าซ่อมยังอยู่ เครื่องใช้งานปกติ ไม่มีงานให้ส่งเอกสารใหม่)
+ *
+ * เคสกลับมาเปิดเองเมื่อใบปิดเคสหายไป (เคสอ่านจากประวัติ ดู repair-case.js)
+ * สถานะเครื่องย้อนเฉพาะตอนที่ยัง "ใช้งานปกติ" จากใบนี้อยู่ — ถ้ามีเคสใหม่ตามมาแล้วไม่แตะ
+ */
+async function revertRepairEffects(ctx, form) {
+  if (!form) return;
+  const docNo = plainText(form.DocNo).trim();
+  const caseId = plainText(form.CaseID).trim();
+  const code = normalizeCode(form.AirCode);
+  if (!docNo || !code) return;
+
+  const removed = await deleteHistoryWhereRaw(ctx, h =>
+    normalizeCode(h.AirCode) === code &&
+    plainText(h.EventType).trim() === CLOSE_EVENT &&
+    plainText(h.Note).trim() === 'เอกสาร ' + docNo);
+  if (!removed || !caseId) return;
+
+  const unit = ctx.ss.objects(SHEETS.AIRLIST).find(a => normalizeCode(a.AirCode) === code);
+  if (!unit || plainText(unit.Status).trim() !== 'ใช้งานปกติ') return;
+
+  const mine = ctx.ss.objects(SHEETS.HISTORY).filter(h => normalizeCode(h.AirCode) === code);
+  // มีเคสอื่นของเครื่องนี้เกิดหลังใบนี้ = เครื่องเดินต่อไปแล้ว ไม่ย้อนสถานะ
+  const formAt = plainText(form.CreatedAt);
+  if (mine.some(h => plainText(h.CaseID).trim() && plainText(h.CaseID).trim() !== caseId &&
+                     plainText(h.CreatedAt) > formAt)) return;
+  const events = mine.filter(h => plainText(h.CaseID).trim() === caseId);
+  // ใบเก่าที่เปิดและปิดเคสในใบเดียว (ก่อนบังคับ "รอซ่อม") — ไม่มีขั้นให้ย้อนไป เครื่องใช้งานปกติอยู่แล้ว
+  if (!events.length) return;
+
+  const report = events.find(h => plainText(h.EventType).trim() === 'แจ้งซ่อม');
+  const approved = events.some(h => plainText(h.EventType).trim() === REPAIR_READY_STATUS);
+  ctx.ss.writeByHeaders(SHEETS.AIRLIST, unit._row, {
+    Status: approved ? REPAIR_READY_STATUS : 'ชำรุด',
+    // อาการที่แจ้งไว้กลับมาขึ้นที่เครื่อง (ตอนปิดงานถูกย้ายไปไว้ในประวัติใบที่เพิ่งลบ)
+    Note: report ? plainText(report.Detail) : '',
+    UpdatedAt: ymdhms(new Date()),
+    UpdatedBy: await ctx.currentUser()
+  });
+}
+
 export async function deleteRepairForm(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('repairform');
+    // เจ้าของงานกำหนด: ลบเอกสารได้เฉพาะ Infrastructure
+    await ctx.assertAdmin();
     await ctx.ensureBase();
 
     // เลขแถวคือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบใบข้างบนไป
@@ -334,6 +395,9 @@ export async function deleteRepairForm(ctx, row, expectId) {
     const docNo = plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('DocNo') + 1)) ||
                   plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('ID') + 1));
     const formId = plainText(ctx.ss.cell(SHEETS.REPAIRFORM, row, headers.indexOf('ID') + 1));
+
+    // ย้อนการปิดงาน ต้องทำก่อนลบแถว เพราะต้องอ่านเครื่อง เลขที่ และเลขเคสจากใบ
+    await revertRepairEffects(ctx, ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row)));
 
     await ctx.ss.deleteRow(SHEETS.REPAIRFORM, row);
     await removeApproval(ctx, KIND, formId);

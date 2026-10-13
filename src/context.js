@@ -452,7 +452,8 @@ export class Ctx {
     if (info.role === 'Admin') return;
     const allowed = await this.allowedAirCodes();
     if (!allowed.has(normalizeCode(airCode))) {
-      throw new Error('คุณไม่มีสิทธิ์จัดการแผนล้างแอร์ของเครื่อง ' + airCode);
+      // ใช้ทั้งหน้าแผนล้างและหน้าประวัติ ข้อความจึงไม่ระบุว่าเป็นของหน้าไหน
+      throw new Error('คุณไม่มีสิทธิ์จัดการข้อมูลของเครื่อง ' + airCode + ' (อยู่นอกขอบเขตที่บัญชีนี้ดูแล)');
     }
   }
 

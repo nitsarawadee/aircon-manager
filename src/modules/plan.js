@@ -1115,3 +1115,41 @@ export async function closePlanRound(ctx, opts) {
 
   return 1;
 }
+
+/**
+ * เปิดรอบที่ปิดไปแล้วกลับเป็น "รอดำเนินการ" — คู่กลับของ closePlanRound
+ *
+ * ใช้ตอน Infrastructure ลบใบล้าง (เจ้าของงานกำหนด: ลบแล้วต้องย้อน เพราะต้องกรอกเอกสารใหม่)
+ * เปิดเฉพาะรอบที่ปิดด้วยวันที่เดียวกับใบที่ลบ — รอบที่ถูกปิดด้วยใบอื่นทีหลังไม่แตะ
+ * ราคาและชื่อช่างคงไว้ (เป็นราคาตามแผน/ราคาผู้รับเหมาอยู่แล้ว) ล้างแค่วันที่ล้างจริงกับสถานะ
+ *
+ * ไม่ล็อก ไม่ flush — ผู้เรียกถือล็อกแล้ว
+ * @returns {Promise<number>} 1 = เปิดรอบกลับแล้ว · 0 = ไม่มีอะไรต้องทำ
+ */
+export async function reopenPlanRoundRaw(ctx, opts) {
+  const round = String(opts.round);
+  if (['1', '2', '3'].indexOf(round) === -1) return 0;
+
+  const name = planSheet(opts.year);
+  if (!(await ctx.ss.hasSheet(name))) return 0;
+  await ctx.ss.load(name);
+
+  const headers = ctx.ss.headers(name);
+  const codeIdx = headers.indexOf('AirCode');
+  const values = ctx.ss.values(name);
+  const want = normalizeCode(opts.airCode);
+  const i = values.findIndex((r, n) => n > 0 && normalizeCode((r || [])[codeIdx]) === want);
+  if (i === -1) return 0;
+  const row = i + 1;
+
+  const col = f => headers.indexOf('R' + round + '_' + f) + 1;
+  if (col('Status') <= 0 || col('ActualDate') <= 0) return 0;
+  if (String(ctx.ss.cell(name, row, col('Status')) || '').trim() !== 'ล้างเสร็จสิ้น') return 0;
+  if (dateOut(ctx.ss.cell(name, row, col('ActualDate'))) !== dateOut(opts.actualDate)) return 0;
+
+  ctx.ss.setValue(name, row, col('Status'), 'รอดำเนินการ');
+  ctx.ss.setValue(name, row, col('ActualDate'), '');
+  const byCol = headers.indexOf('UpdatedBy') + 1;
+  if (byCol > 0) ctx.ss.setValue(name, row, byCol, await ctx.currentUser());
+  return 1;
+}
