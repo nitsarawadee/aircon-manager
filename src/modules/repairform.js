@@ -136,6 +136,79 @@ export async function saveRepairForm(ctx, record) {
 }
 
 /**
+ * แนบไฟล์เอกสารซ่อมแทนการกรอกในระบบ (ช่างเขียนใบซ่อมด้วยมือหรือกรอกไฟล์ Excel มาแล้ว)
+ *
+ * ทำงานเหมือนกรอกในระบบทุกอย่าง — ออกเลขที่ ลงประวัติ "ซ่อมแล้ว" ปิดเคส คืนสถานะเครื่อง
+ * และเข้าขั้นอนุมัติ 4 ขั้นเหมือนกัน (เจ้าของงานกำหนด: ทุกเอกสารต้องรออนุมัติ)
+ * ต่างกันแค่ตัวเอกสารคือไฟล์ที่แนบมา จึงไม่สร้าง PDF จากข้อมูลในระบบ
+ *
+ * @param {Object} payload
+ * @param {Object} payload.record  AirCode, Date, CompanyName, TechnicianName, Cost, Symptom
+ * @param {Array}  payload.files   [{name, mimeType, data(base64)}]
+ */
+export async function attachRepairDocument(ctx, payload) {
+  await ctx.assertModuleEdit('repairform');
+  let record = { ...((payload || {}).record || {}) };
+  const files = checkAttachFiles(ctx, (payload || {}).files);
+
+  if (!plainText(record.AirCode).trim()) throw new Error('กรุณาเลือกเครื่องปรับอากาศ');
+  if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ซ่อมเสร็จ');
+
+  const unit = await unitOf(ctx, record.AirCode);
+  const info = await ctx.userInfo();
+  if (info.role !== 'Contractor') await ctx.assertRegionAccess(unit.Region);
+
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    assertOwnAssigned(ctx, info, 'repair', unit.AirCode);
+    if (info.role === 'Contractor') record = { ...record, CompanyName: info.contractorName };
+    // ช่องรายละเอียดอยู่ในไฟล์ที่แนบ ในระบบเก็บเฉพาะที่ต้องใช้ปิดงาน (วันที่ ช่าง ค่าใช้จ่าย)
+    record = { ...record, Source: 'attach', Checklist: [], Parts: [] };
+    const row = await writeRepairForm(ctx, unit, record, await ctx.currentUser());
+    const stored = ctx.attachments.save(row.DocNo, row.Date, files);
+    await ctx.ss.flush();
+    return { docNo: row.DocNo, caseId: row.CaseID, count: stored.length, forms: await getRepairForms(ctx) };
+  });
+}
+
+/** จำนวนไฟล์ที่แนบได้ต่อครั้ง — เท่ากับหน้าแนบเอกสารใบล้าง */
+const ATTACH_MAX_FILES = 10;
+
+/** ตรวจไฟล์ที่แนบมาและที่เก็บไฟล์ ใช้ร่วมกับใบติดตั้ง (installform.js) */
+export function checkAttachFiles(ctx, files) {
+  const list = Array.isArray(files) ? files : [];
+  if (!list.length) throw new Error('กรุณาเลือกไฟล์เอกสารอย่างน้อย 1 ไฟล์');
+  if (list.length > ATTACH_MAX_FILES) throw new Error('แนบได้ครั้งละไม่เกิน ' + ATTACH_MAX_FILES + ' ไฟล์');
+  if (!ctx.attachments) throw new Error('เครื่องที่รันระบบอยู่เก็บไฟล์แนบไม่ได้ (ไม่มีที่เก็บไฟล์)');
+  return list;
+}
+
+/** รายชื่อไฟล์ที่แนบไว้กับใบซ่อม (ส่งแค่ชื่อกับขนาด ไม่ส่งตัวไฟล์) */
+export async function getRepairAttachments(ctx, row) {
+  const { docNo } = await attachedFormOf(ctx, row);
+  return ctx.attachments ? ctx.attachments.list(docNo) : [];
+}
+
+/** อ่านไฟล์แนบหนึ่งไฟล์ — ชื่อไฟล์ถูกเทียบกับรายการจริงที่ชั้น platform (กันอ่านไฟล์นอกโฟลเดอร์) */
+export async function getRepairAttachment(ctx, payload) {
+  const { docNo } = await attachedFormOf(ctx, (payload || {}).row);
+  if (!ctx.attachments) throw new Error('เครื่องที่รันระบบอยู่ไม่มีที่เก็บไฟล์แนบ');
+  const file = ctx.attachments.read(docNo, (payload || {}).name);
+  if (!file) throw new Error('ไม่พบไฟล์แนบที่ขอ');
+  return file;
+}
+
+async function attachedFormOf(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('repairform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  await ctx.ensureBase();
+  const form = ctx.ss.objects(SHEETS.REPAIRFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+  await assertDocAccess(ctx, form);
+  return { form, docNo: plainText(form.DocNo) || plainText(form.ID) };
+}
+
+/**
  * เขียนเอกสารซ่อมหนึ่งใบ + ลงประวัติ "ซ่อมแล้ว" + คืนสถานะเครื่อง (ยังไม่ flush)
  *
  * แยกออกมาให้ทั้งการกรอกในระบบ (saveRepairForm) และการกรอกผ่านลิงก์ (repairlink.js)
@@ -186,7 +259,9 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
     // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
     DocNo: nextDocNo(ctx, record.Date),
     // เกาะเคสที่เปิดค้างอยู่ของเครื่องนี้ ไม่มีก็เปิดเคสใหม่ให้
-    CaseID: ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode)
+    CaseID: ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode),
+    // 'attach' = แนบไฟล์เอกสารแทนการกรอก (ดู attachRepairDocument)
+    Source: record.Source === 'attach' ? 'attach' : ''
   };
 
   const headers = ctx.ss.headers(SHEETS.REPAIRFORM);
@@ -272,6 +347,10 @@ export async function deleteRepairForm(ctx, row, expectId) {
       // ยกเลิกงานสร้างไฟล์ที่ค้างอยู่ก่อน ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว
       cancelDocPdf(docNo);
       try { ctx.docs.remove(KIND, docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
+    }
+    // ใบแบบแนบไฟล์ — ไฟล์ที่แนบคือตัวเอกสาร ไม่มีสำเนาที่อื่น ลบตามใบไปด้วย
+    if (ctx.attachments && docNo) {
+      try { ctx.attachments.removeAll(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
 
     return getRepairForms(ctx);

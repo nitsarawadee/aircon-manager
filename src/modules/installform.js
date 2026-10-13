@@ -7,6 +7,7 @@ import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
 } from './approval.js';
 import { assertOwnAssigned, isOwnDoc } from './assign.js';
+import { checkAttachFiles } from './repairform.js';
 
 /**
  * เอกสารบันทึกผลการติดตั้ง ตามแบบฟอร์มควบคุม ITEL-FM-NE-006
@@ -230,7 +231,9 @@ export async function writeInstallForm(ctx, record, { units, first, slotBase, co
     Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
     CreatedAt: ymdhms(new Date()),
     RecordedBy: recordedBy === undefined ? await ctx.currentUser() : recordedBy,
-    SlotBase: slotBase
+    SlotBase: slotBase,
+    // 'attach' = แนบไฟล์เอกสารแทนการกรอก (ดู attachInstallDocument)
+    Source: record.Source === 'attach' ? 'attach' : ''
   };
 
   // ข้อมูลเครื่องมาจากทะเบียนล้วนๆ ไม่รับจากหน้าเว็บ เพื่อไม่ให้มีความจริงสองชุด
@@ -356,6 +359,60 @@ export async function saveInstallForm(ctx, record) {
   return saved;
 }
 
+/**
+ * แนบไฟล์เอกสารติดตั้งแทนการกรอกในระบบ (เขียนใบติดตั้งด้วยมือหรือกรอกไฟล์ Excel มาแล้ว)
+ *
+ * ทำงานเหมือนกรอกในระบบทุกอย่าง — ออกเลขที่ ลงประวัติ และเข้าขั้นอนุมัติ 4 ขั้น
+ * เครื่องใหม่ยังเป็น "รอติดตั้ง" จนกว่าใบนี้จะอนุมัติครบ เหมือนใบที่กรอกในระบบ
+ * ต่างกันแค่ตัวเอกสารคือไฟล์ที่แนบมา จึงไม่สร้าง PDF จากข้อมูลในระบบ
+ *
+ * @param {Object} payload
+ * @param {Object} payload.record  AirCode1, AirCode2, SlotBase, Date, CompanyName, TechnicianName
+ * @param {Array}  payload.files   [{name, mimeType, data(base64)}]
+ */
+export async function attachInstallDocument(ctx, payload) {
+  await ctx.assertModuleEdit('installform');
+  const files = checkAttachFiles(ctx, (payload || {}).files);
+  // ช่องรายละเอียดอยู่ในไฟล์ที่แนบ ในระบบเก็บเฉพาะที่ต้องใช้ (เครื่อง วันที่ ช่าง)
+  const record = { ...((payload || {}).record || {}), Source: 'attach', Checklist: [] };
+  const prep = await prepareInstall(ctx, record);
+  const info = await ctx.userInfo();
+
+  return ctx.withLock(async () => {
+    await ctx.ensureBase();
+    for (const u of Object.values(prep.units)) assertOwnAssigned(ctx, info, 'install', u.AirCode);
+    const row = await writeInstallForm(ctx, record, prep);
+    const stored = ctx.attachments.save(docNoOf(row), row.Date, files);
+    await ctx.ss.flush();
+    return { ...(await installSavedOf(ctx, row)), count: stored.length };
+  });
+}
+
+/** รายชื่อไฟล์ที่แนบไว้กับใบติดตั้ง (ส่งแค่ชื่อกับขนาด ไม่ส่งตัวไฟล์) */
+export async function getInstallAttachments(ctx, row) {
+  const { docNo } = await attachedFormOf(ctx, row);
+  return ctx.attachments ? ctx.attachments.list(docNo) : [];
+}
+
+/** อ่านไฟล์แนบหนึ่งไฟล์ — ชื่อไฟล์ถูกเทียบกับรายการจริงที่ชั้น platform (กันอ่านไฟล์นอกโฟลเดอร์) */
+export async function getInstallAttachment(ctx, payload) {
+  const { docNo } = await attachedFormOf(ctx, (payload || {}).row);
+  if (!ctx.attachments) throw new Error('เครื่องที่รันระบบอยู่ไม่มีที่เก็บไฟล์แนบ');
+  const file = ctx.attachments.read(docNo, (payload || {}).name);
+  if (!file) throw new Error('ไม่พบไฟล์แนบที่ขอ');
+  return file;
+}
+
+async function attachedFormOf(ctx, row) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('installform'))) throw new Error('คุณไม่มีสิทธิ์ดูเอกสารส่วนนี้');
+  await ctx.ensureBase();
+  const form = ctx.ss.objects(SHEETS.INSTALLFORM).find(f => f._row === Number(row));
+  if (!form) throw new Error('ไม่พบเอกสารใบนี้');
+  await assertDocAccess(ctx, form);
+  return { form, docNo: docNoOf(form) };
+}
+
 /* ==================== ลบ ==================== */
 
 export async function deleteInstallForm(ctx, row, expectId) {
@@ -390,6 +447,10 @@ export async function deleteInstallForm(ctx, row, expectId) {
       // ยกเลิกงานสร้างไฟล์ที่ค้างอยู่ก่อน ไม่งั้นไฟล์จะถูกสร้างกลับมาหลังลบไปแล้ว
       cancelDocPdf(docNo);
       try { ctx.docs.remove(KIND, docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
+    }
+    // ใบแบบแนบไฟล์ — ไฟล์ที่แนบคือตัวเอกสาร ไม่มีสำเนาที่อื่น ลบตามใบไปด้วย
+    if (ctx.attachments && docNo) {
+      try { ctx.attachments.removeAll(docNo); } catch { /* ไฟล์ค้างดีกว่าผู้ใช้สับสน */ }
     }
 
     return getInstallForms(ctx);

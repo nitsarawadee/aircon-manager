@@ -2757,10 +2757,12 @@
       // เอกสารซ่อม + ลิงก์งานซ่อม
       openRepairFormPicker: 'repairform', startRepairFormFromPicker: 'repairform', openRepairForm: 'repairform',
       submitRepairForm: 'repairform', deleteRepairFormRow: 'repairform',
+      openRepairAttach: 'repairform', submitRepairAttach: 'repairform',
       openRepairLinkModal: 'repairform', createRepairLinkFor: 'repairform', revokeRepairLinkRow: 'repairform',
       // เอกสารติดตั้ง
       openInstallFormPicker: 'installform', startInstallFormFromPicker: 'installform', openInstallFormFor: 'installform',
       submitInstallForm: 'installform', deleteInstallFormRow: 'installform',
+      openInstallAttach: 'installform', submitInstallAttach: 'installform',
       // งบประมาณ
       openBudgetModal: 'budget', saveBudget: 'budget',
       // จัดการผู้ใช้
@@ -7627,9 +7629,9 @@
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
           <td class="px-4 py-3 whitespace-normal max-w-xs">${esc(f.Symptom) || '-'}</td>
           <td class="px-4 py-3 text-right whitespace-nowrap">
-            <button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดูก่อนอนุมัติ"
+            <button onclick="${f.Source === 'attach' ? `openAttachmentList(${f._row}, 'repair')` : `openRepairDoc(${f._row}, '${jsStr(f.ID)}')`}" title="เปิดเอกสารซ่อมเพื่อดูก่อนอนุมัติ"
               class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
-              <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+              ${f.Source === 'attach' ? '<i class="ph ph-paperclip"></i> ไฟล์ที่แนบ' : '<i class="ph ph-file-text"></i> เปิดเอกสาร'}</button>
             <button onclick="approveDocRow('repair', '${jsStr(f.ID)}', '${jsStr(f.DocNo || f.ID)}')"
               title="อนุมัติขั้น ${f.Approval.next}/4"
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
@@ -7652,9 +7654,9 @@
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
           <td class="px-4 py-3">${esc(f.TechnicianName) || '-'}</td>
           <td class="px-4 py-3 text-right whitespace-nowrap">
-            <button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารล้างเพื่อดูก่อนอนุมัติ"
+            <button onclick="${f.Source === 'attach' ? `openAttachmentList(${f._row}, 'cleaning')` : `openCleaningDoc(${f._row}, '${jsStr(f.ID)}')`}" title="เปิดเอกสารล้างเพื่อดูก่อนอนุมัติ"
               class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-              <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+              ${f.Source === 'attach' ? '<i class="ph ph-paperclip"></i> ไฟล์ที่แนบ' : '<i class="ph ph-file-text"></i> เปิดเอกสาร'}</button>
             <button onclick="approveDocRow('cleaning', '${jsStr(f.ID)}', '${jsStr(displayDocNo(f))}')"
               title="อนุมัติขั้น ${f.Approval.next}/4"
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
@@ -7679,9 +7681,9 @@
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
           <td class="px-4 py-3">${esc(f.CompanyName || f.TechnicianName) || '-'}</td>
           <td class="px-4 py-3 text-right whitespace-nowrap">
-            <button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดูก่อนอนุมัติ"
+            <button onclick="${f.Source === 'attach' ? `openAttachmentList(${f._row}, 'install')` : `openInstallDoc(${f._row}, '${jsStr(f.ID)}')`}" title="เปิดเอกสารติดตั้งเพื่อดูก่อนอนุมัติ"
               class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
-              <i class="ph ph-file-text"></i> เปิดเอกสาร</button>
+              ${f.Source === 'attach' ? '<i class="ph ph-paperclip"></i> ไฟล์ที่แนบ' : '<i class="ph ph-file-text"></i> เปิดเอกสาร'}</button>
             <button onclick="approveDocRow('install', '${jsStr(f.ID)}', '${jsStr(docNo)}')"
               title="อนุมัติขั้น ${f.Approval.next}/4"
               class="ml-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium inline-flex items-center gap-1">
@@ -9238,7 +9240,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       const f = r.form;
       const isRepair = r.kind === 'repair';
       const isInstall = r.kind === 'install';
-      const isAttach = !isRepair && !isInstall && f.Source === 'attach';
+      // ใบที่แนบไฟล์แทนการกรอก มีได้ทั้งใบล้าง ใบซ่อม ใบติดตั้ง — ตัวเอกสารคือไฟล์ที่แนบ
+      const isAttach = f.Source === 'attach';
 
       // ปุ่มลบ ขึ้นเฉพาะคนที่แก้ไขเอกสารแบบนั้นได้ (ปุ่มแก้รูปเอาออกแล้ว — รูปใส่ได้ตอนกรอกฟอร์มเท่านั้น)
       // ตัดสินรายแถวตามแบบเอกสารของแถวนั้น ไม่ใช่ล็อกทั้งหน้าด้วยสิทธิ์ใบล้างแบบเดิม
@@ -9282,7 +9285,11 @@ const CLEANING_CHECKLIST_ITEMS = [
         <td class="px-4 py-3 whitespace-nowrap">${
           // ทั้งสองแถวเปิดเอกสารได้ เพราะกระดาษใบนั้นมีทั้งสองเครื่องอยู่แล้ว
           // กดจากแถวไหนก็ได้ใบเดียวกัน ซึ่งถูกต้อง ไม่ใช่เอกสารคนละใบ
-          isRepair
+          isAttach
+            ? `<button onclick="openAttachmentList(${f._row}, '${jsStr(r.kind)}')" title="ดูไฟล์เอกสารที่แนบเข้ามา"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
+          : isRepair
             ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
                  class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
@@ -9290,10 +9297,6 @@ const CLEANING_CHECKLIST_ITEMS = [
             ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
                  class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
                  <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
-          : isAttach
-            ? `<button onclick="openAttachmentList(${f._row})" title="ดูไฟล์ที่ช่างถ่ายส่งมา"
-                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
-                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
             // ปุ่มดาวน์โหลด PDF ย้ายไปอยู่บนหน้าเอกสารที่เปิดดู ไม่ใช่ตรงนี้
             // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
             : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
@@ -10051,9 +10054,17 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ไฟล์ไม่มีที่อยู่สาธารณะให้ลิงก์ตรงๆ (เหมือนรูปถ่ายและไฟล์ PDF)
    * จึงต้องขอผ่านคำสั่งที่ตรวจสิทธิ์แล้ว แล้วค่อยเปิดจากข้อมูลที่ได้กลับมา
    */
-  async function openAttachmentList(row) {
+  /** คำสั่งอ่านไฟล์แนบของเอกสารแต่ละแบบ */
+  const ATTACH_API = {
+    cleaning: ['getCleaningAttachments', 'getCleaningAttachment'],
+    repair: ['getRepairAttachments', 'getRepairAttachment'],
+    install: ['getInstallAttachments', 'getInstallAttachment']
+  };
+
+  async function openAttachmentList(row, kind = 'cleaning') {
+    const api = ATTACH_API[kind] || ATTACH_API.cleaning;
     let files;
-    try { files = await call('getCleaningAttachments', row); } catch (e) { return; }
+    try { files = await call(api[0], row); } catch (e) { return; }
 
     const rows = (files || []).length
       ? files.map((f, i) => `
@@ -10062,7 +10073,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <div class="text-sm text-gray-800 truncate">${esc(f.name)}</div>
               <div class="text-xs text-gray-400">${esc(fileSize(f.bytes))}</div>
             </div>
-            <button onclick="openAttachmentFile(${row}, '${jsStr(f.name)}', this)"
+            <button onclick="openAttachmentFile(${row}, '${jsStr(f.name)}', this, '${jsStr(kind)}')"
               class="flex-shrink-0 text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
               <i class="ph ph-arrow-square-out"></i> เปิด</button>
           </div>`).join('')
@@ -10086,12 +10097,12 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.openAttachmentList = openAttachmentList;
 
   /** เปิดไฟล์แนบหนึ่งไฟล์ในแท็บใหม่ */
-  async function openAttachmentFile(row, name, btn) {
+  async function openAttachmentFile(row, name, btn, kind = 'cleaning') {
     const old = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
 
     try {
-      const res = await call('getCleaningAttachment', { row, name });
+      const res = await call((ATTACH_API[kind] || ATTACH_API.cleaning)[1], { row, name });
       if (!res || !res.base64) throw new Error('ไม่ได้รับไฟล์กลับมา');
 
       const bin = atob(res.base64);
@@ -10816,6 +10827,8 @@ const CLEANING_CHECKLIST_ITEMS = [
                 SN ${esc(found.IndoorSN || '-')} / ${esc(found.OutdoorSN || '-')}
               </div>`)}
 
+            ${link ? '' : formAttachCard('repair')}
+
             ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
 
             ${card(`
@@ -11174,6 +11187,229 @@ const CLEANING_CHECKLIST_ITEMS = [
     }
   }
   window.submitRepairForm = submitRepairForm;
+
+  /* ==================== แนบไฟล์เอกสารแทนการกรอก (ใบซ่อม · ใบติดตั้ง) ==================== */
+
+  /**
+   * ช่างเขียนใบด้วยมือหรือกรอกไฟล์ Excel มาแล้ว — แนบไฟล์เข้าระบบแทนการกรอกซ้ำ
+   *
+   * ทำงานเหมือนกรอกในระบบทุกอย่าง (เจ้าของงานกำหนด): ออกเลขที่ ลงประวัติ ปิดงานซ่อม
+   * และรออนุมัติ 4 ขั้น · ใบติดตั้ง เครื่องใหม่เริ่มใช้งานเมื่ออนุมัติครบ
+   * ในระบบเก็บเฉพาะข้อมูลที่ใช้ปิดงาน (วันที่ ช่าง ค่าใช้จ่าย) รายละเอียดอยู่ในไฟล์ที่แนบ
+   *
+   * เปิดซ้อนบนฟอร์มที่กำลังกรอกอยู่ ยกเลิกแล้วกลับไปกรอกต่อได้ ข้อมูลในฟอร์มไม่หาย
+   * ลิงก์ให้ช่าง (ไม่ได้ล็อกอิน) ไม่มีปุ่มนี้ — ส่งไฟล์ผ่านลิงก์ต้องเปิดช่องทางสาธารณะเพิ่ม
+   */
+  let faKind = '';     // 'repair' | 'install'
+  let faFiles = [];    // [{name, size, mimeType, data}]
+
+  /** การ์ดชวนแนบไฟล์ ใส่ไว้บนฟอร์มซ่อม/ติดตั้ง */
+  function formAttachCard(kind) {
+    const open = kind === 'repair' ? 'openRepairAttach()' : 'openInstallAttach()';
+    return `
+      <section class="bg-sky-50 border border-sky-200 rounded-xl p-3 flex items-center gap-3">
+        <i class="ph ph-paperclip text-xl text-[#1153a1] flex-shrink-0"></i>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-800">มีใบที่เขียนมือหรือกรอก Excel มาแล้ว?</div>
+          <div class="text-xs text-gray-500">แนบไฟล์แทนการกรอกได้ · ปิดงานและรออนุมัติเหมือนกรอกในระบบ</div>
+        </div>
+        <button type="button" onclick="${open}"
+          class="flex-shrink-0 min-h-[44px] px-3 rounded-lg border border-[#1153a1] text-[#1153a1] bg-white hover:bg-[#1153a1] hover:text-white text-sm font-medium whitespace-nowrap">
+          แนบไฟล์</button>
+      </section>`;
+  }
+
+  function openRepairAttach() { openFormAttach('repair'); }
+  function openInstallAttach() { openFormAttach('install'); }
+  window.openRepairAttach = openRepairAttach;
+  window.openInstallAttach = openInstallAttach;
+
+  function openFormAttach(kind) {
+    faKind = kind;
+    faFiles = [];
+    const isRepair = kind === 'repair';
+    const field = 'w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base outline-none focus:border-[#1153a1] focus:ring-1 focus:ring-[#1153a1]';
+    // ตั้งต้นจากช่องในฟอร์มที่กรอกไว้แล้ว ไม่ต้องพิมพ์ซ้ำ
+    const val = id => ((document.getElementById(id) || {}).value || '').trim();
+    const p = isRepair ? 'rf' : 'if';
+    const date = val(p + '_date') || new Date().toISOString().slice(0, 10);
+    const what = isRepair
+      ? esc(rfUnit.AirCode) + ' · ' + esc(rfUnit.NodeName)
+      : esc(ifNode.NodeName) + ' · ' + ifUnits.map(e => esc(e.unit.AirCode)).join(', ');
+
+    const old = document.getElementById('formAttachRoot');
+    if (old) old.remove();
+    const box = document.createElement('div');
+    box.id = 'formAttachRoot';
+    box.innerHTML = `
+      <div class="fixed inset-0 z-[60] flex items-center justify-center p-3">
+        <div class="fixed inset-0 bg-black/50" onclick="closeFormAttach()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 max-h-[92vh] flex flex-col">
+          <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+              <h3 class="text-lg font-bold text-gray-800">แนบไฟล์${isRepair ? 'ใบซ่อม' : 'ใบติดตั้ง'}</h3>
+              <p class="text-xs text-gray-500 truncate">${what}</p>
+            </div>
+            <button onclick="closeFormAttach()" class="text-gray-400 hover:text-gray-600 w-11 h-11 -mr-2 -mt-2 flex items-center justify-center"><i class="ph ph-x text-2xl"></i></button>
+          </div>
+          <div class="px-5 py-4 space-y-3 overflow-y-auto">
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">${isRepair ? 'วันที่ซ่อมเสร็จ' : 'วันที่ติดตั้ง'} <span class="text-red-500">*</span></label>
+              ${dateField('fa_date', date, field)}</div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
+              ${companyInput('fa_company', field)}</div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
+              <input id="fa_tech" value="${esc(val(p + '_tech'))}" class="${field}"></div>
+            ${isRepair ? `<div><label class="block text-sm font-medium text-gray-700 mb-1">ค่าใช้จ่ายรวม (฿)</label>
+              <input type="number" id="fa_cost" min="0" step="0.01" inputmode="decimal" value="${esc(val('rf_cost'))}" placeholder="0.00" class="${field}"></div>` : ''}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ไฟล์เอกสาร <span class="text-red-500">*</span></label>
+              <label class="flex flex-col items-center justify-center gap-1 min-h-[88px] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#1153a1] hover:bg-blue-50/40 text-center px-3 py-3">
+                <i class="ph ph-upload-simple text-2xl text-gray-400"></i>
+                <span class="text-sm text-gray-600">กดเพื่อเลือกไฟล์ (รูปถ่าย PDF หรือ Excel)</span>
+                <span class="text-xs text-gray-400">ครั้งละ ${AD_MAX_FILES} ไฟล์ ไฟล์ละไม่เกิน ${AD_MAX_MB_EACH} MB (รวมไม่เกิน ${AD_MAX_MB_TOTAL} MB)</span>
+                <input type="file" multiple class="hidden" onchange="faOnPick(event)">
+              </label>
+              <div id="fa_fileList" class="space-y-1.5 mt-2"></div>
+            </div>
+            <p class="text-xs text-gray-500">${isRepair
+              ? 'ยืนยันแล้วระบบจะลงประวัติ "ซ่อมแล้ว" ปิดเคส และส่งใบนี้เข้าคิวอนุมัติ 4 ขั้น'
+              : 'ยืนยันแล้วระบบจะลงประวัติ และส่งใบนี้เข้าคิวอนุมัติ 4 ขั้น · เครื่องใหม่เริ่มใช้งานเมื่ออนุมัติครบ'}</p>
+          </div>
+          <div class="px-5 py-4 border-t border-gray-100 flex gap-2 justify-end">
+            <button onclick="closeFormAttach()" class="min-h-[44px] px-4 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ยกเลิก</button>
+            <button id="fa_submitBtn" onclick="${isRepair ? 'submitRepairAttach()' : 'submitInstallAttach()'}"
+              class="min-h-[44px] px-4 rounded-lg bg-[#1153a1] hover:bg-[#0e4485] text-white text-sm font-medium inline-flex items-center gap-2">
+              <i class="ph ph-paperclip"></i> แนบไฟล์และปิดงาน</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(box);
+  }
+
+  function closeFormAttach() {
+    const el = document.getElementById('formAttachRoot');
+    if (el) el.remove();
+    faFiles = [];
+  }
+  window.closeFormAttach = closeFormAttach;
+
+  /** อ่านไฟล์ที่เลือกเป็น base64 — ขีดจำกัดเดียวกับหน้าแนบเอกสารใบล้าง */
+  async function faOnPick(ev) {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = '';   // ล้างค่า จะได้เลือกไฟล์เดิมซ้ำได้
+    for (const f of files) {
+      if (faFiles.length >= AD_MAX_FILES) { showToast('แนบได้ครั้งละไม่เกิน ' + AD_MAX_FILES + ' ไฟล์', 'error'); break; }
+      if (f.size / 1024 / 1024 > AD_MAX_MB_EACH) { showToast('ไฟล์ "' + f.name + '" ใหญ่เกิน ' + AD_MAX_MB_EACH + ' MB', 'error'); continue; }
+      const total = faFiles.reduce((a, x) => a + x.size, 0) + f.size;
+      if (total / 1024 / 1024 > AD_MAX_MB_TOTAL) { showToast('ไฟล์รวมกันเกิน ' + AD_MAX_MB_TOTAL + ' MB', 'error'); break; }
+      try {
+        const data = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onerror = () => rej(new Error('อ่านไฟล์ไม่สำเร็จ'));
+          r.onload = () => res(String(r.result).split(',')[1]);
+          r.readAsDataURL(f);
+        });
+        faFiles.push({ name: f.name, size: f.size, mimeType: f.type || 'application/octet-stream', data });
+      } catch (e) {
+        showToast('อ่านไฟล์ "' + f.name + '" ไม่สำเร็จ', 'error');
+      }
+    }
+    renderFaFiles();
+  }
+  window.faOnPick = faOnPick;
+
+  function faRemoveFile(i) {
+    faFiles.splice(i, 1);
+    renderFaFiles();
+  }
+  window.faRemoveFile = faRemoveFile;
+
+  function renderFaFiles() {
+    const box = document.getElementById('fa_fileList');
+    if (!box) return;
+    box.innerHTML = faFiles.map((f, i) => `
+      <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+        <i class="ph ph-file text-[#1153a1] flex-shrink-0"></i>
+        <span class="text-sm text-gray-700 truncate flex-1">${esc(f.name)}</span>
+        <span class="text-xs text-gray-500 flex-shrink-0">${adSize(f.size)}</span>
+        <button type="button" onclick="faRemoveFile(${i})" title="เอาไฟล์นี้ออก"
+          class="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-red-500 flex-shrink-0"><i class="ph ph-x"></i></button>
+      </div>`).join('');
+  }
+
+  /** ข้อมูลร่วมของใบแนบ — ตรวจช่องบังคับก่อนส่ง */
+  function faCommon() {
+    const date = ((document.getElementById('fa_date') || {}).value || '').trim();
+    if (!date) { showToast('กรุณาระบุวันที่', 'error'); return null; }
+    if (!faFiles.length) { showToast('กรุณาเลือกไฟล์เอกสารอย่างน้อย 1 ไฟล์', 'error'); return null; }
+    return {
+      Date: date,
+      CompanyName: ((document.getElementById('fa_company') || {}).value || '').trim(),
+      TechnicianName: ((document.getElementById('fa_tech') || {}).value || '').trim()
+    };
+  }
+
+  const faFilesPayload = () => faFiles.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.data }));
+
+  function faBusy(on) {
+    const btn = document.getElementById('fa_submitBtn');
+    if (!btn) return;
+    btn.disabled = on;
+    btn.innerHTML = on ? '<i class="ph ph-spinner animate-spin"></i> กำลังส่ง...' : '<i class="ph ph-paperclip"></i> แนบไฟล์และปิดงาน';
+  }
+
+  /** ทะเบียนเครื่อง ประวัติ และแดชบอร์ดเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที (เหมือนหลังกรอกในระบบ) */
+  async function refreshAfterFormSaved() {
+    try {
+      const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
+      if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
+      if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
+      renderRepairView((document.getElementById('repairSearch') || {}).value || '');
+    } catch (e) {}
+    loadDashboard();
+    loadBudget();
+  }
+
+  async function submitRepairAttach() {
+    const common = faCommon();
+    if (!common) return;
+    const cost = ((document.getElementById('fa_cost') || {}).value || '').trim();
+    // อาการที่แจ้งไว้ตอนเปิดเคสติดไปในใบด้วย (ช่องรายละเอียดอื่นอยู่ในไฟล์ที่แนบ)
+    const record = { ...common, AirCode: rfUnit.AirCode, Cost: cost, Symptom: rfUnit.Note || '' };
+    faBusy(true);
+    try {
+      const res = await call('attachRepairDocument', { record, files: faFilesPayload() });
+      if (res && Array.isArray(res.forms)) currentRepairForms = res.forms;
+      closeFormAttach();
+      closeModal();
+      renderCleaningFormTable();
+      showToast('แนบใบซ่อม ' + ((res && res.docNo) || '') + ' แล้ว · ลงประวัติ "ซ่อมแล้ว" ปิดเคส และส่งเข้าคิวอนุมัติ');
+      refreshAfterFormSaved();
+    } catch (e) {
+      faBusy(false);
+    }
+  }
+  window.submitRepairAttach = submitRepairAttach;
+
+  async function submitInstallAttach() {
+    const common = faCommon();
+    if (!common) return;
+    const record = { ...common, SlotBase: ifBase };
+    for (const { slot, unit } of ifUnits) record['AirCode' + slot] = unit.AirCode;
+    faBusy(true);
+    try {
+      const res = await call('attachInstallDocument', { record, files: faFilesPayload() });
+      if (res && Array.isArray(res.forms)) currentInstallForms = res.forms;
+      closeFormAttach();
+      closeModal();
+      renderCleaningFormTable();
+      showToast('แนบใบติดตั้ง ' + ((res && res.docNo) || '') + ' แล้ว · ส่งเข้าคิวอนุมัติ — เครื่องใหม่เริ่มใช้งานเมื่ออนุมัติครบ');
+      refreshAfterFormSaved();
+    } catch (e) {
+      faBusy(false);
+    }
+  }
+  window.submitInstallAttach = submitInstallAttach;
 
   /** ส่งรูปขึ้นทีละใบ เหมือนใบล้าง — ฝั่งเซิร์ฟเวอร์รับทีละช่องและหน่วงสร้าง PDF ให้เอง */
   async function uploadRfPhotos(row) {
@@ -12006,6 +12242,8 @@ const CLEANING_CHECKLIST_ITEMS = [
                 </div>
                 <span class="px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 text-xs font-medium">ITEL-FM-NE-006</span>
               </div>`)}
+
+            ${link ? '' : formAttachCard('install')}
 
             ${card(`
               <div class="space-y-3">
@@ -13652,10 +13890,19 @@ const CLEANING_CHECKLIST_ITEMS = [
 
   /* ---------- ขั้นที่ 2: เลือกเครื่อง ---------- */
 
-  /** ปีของแผนที่กำลังเลือกอยู่ (ยังไม่ได้เลือก = ใช้ปีล่าสุด) */
+  /**
+   * ปีของแผนที่กำลังเลือกอยู่ (ยังไม่ได้เลือก = ปีของ Dashboard เหมือนหน้าอื่น ปกติคือปีนี้)
+   *
+   * ห้ามตั้งเป็น "ปีล่าสุด" — แผนปีหน้ามักถูกสร้างไว้ล่วงหน้า ถ้าตั้งเป็นปีล่าสุด
+   * เอกสารของงานที่ล้างปีนี้จะไปปิดรอบในแผนปีหน้าแทน โดยที่แผนปีนี้ยังค้างเป็นรอดำเนินการ
+   */
   function adCurrentYear() {
     if (adSelectedYear) return adSelectedYear;
-    return adYears.length ? String(adYears[0]).replace('Plan_', '') : '';
+    const years = adYears.map(y => String(y).replace('Plan_', ''));
+    if (!years.length) return '';
+    if (years.includes(String(dashYear))) return String(dashYear);
+    const now = String(new Date().getFullYear());
+    return years.includes(now) ? now : years[0];
   }
 
   /** แถวในแผนของเครื่องนี้ ใช้ดูว่ารอบไหนล้างไปแล้วบ้าง */

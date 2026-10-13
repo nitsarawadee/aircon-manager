@@ -24,12 +24,14 @@ import {
 import {
   getRepairForms, saveRepairForm, deleteRepairForm,
   getRepairDocHtml, getRepairBlankDocHtml, getRepairBlankXlsx, getRepairDocPdf,
-  saveRepairPhoto, deleteRepairPhoto, getRepairPhotos
+  saveRepairPhoto, deleteRepairPhoto, getRepairPhotos,
+  attachRepairDocument, getRepairAttachments, getRepairAttachment
 } from './modules/repairform.js';
 import {
   getInstallForms, saveInstallForm, deleteInstallForm,
   getInstallDocHtml, getInstallBlankDocHtml, getInstallBlankXlsx, getInstallDocPdf,
-  saveInstallPhoto, deleteInstallPhoto, getInstallPhotos
+  saveInstallPhoto, deleteInstallPhoto, getInstallPhotos,
+  attachInstallDocument, getInstallAttachments, getInstallAttachment
 } from './modules/installform.js';
 import { getContractors } from './modules/contractors.js';
 import {
@@ -135,6 +137,10 @@ const API_FUNCTIONS = {
   // เอกสารซ่อม ITEL-FM-NE-005
   getRepairForms,
   saveRepairForm,
+  // แนบไฟล์เอกสารซ่อมแทนการกรอก (ปิดงานและรออนุมัติเหมือนกรอกในระบบ)
+  attachRepairDocument,
+  getRepairAttachments,
+  getRepairAttachment,
   deleteRepairForm,
   getRepairDocHtml,
   getRepairBlankDocHtml,
@@ -157,6 +163,10 @@ const API_FUNCTIONS = {
   // เอกสารติดตั้ง ITEL-FM-NE-006
   getInstallForms,
   saveInstallForm,
+  // แนบไฟล์เอกสารติดตั้งแทนการกรอก (รออนุมัติเหมือนกรอกในระบบ)
+  attachInstallDocument,
+  getInstallAttachments,
+  getInstallAttachment,
   deleteInstallForm,
   getInstallDocHtml,
   getInstallBlankDocHtml,

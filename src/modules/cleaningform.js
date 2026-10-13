@@ -1476,6 +1476,9 @@ export async function uploadNodeDocuments(ctx, payload) {
 
     const cfHeaders = ctx.ss.headers(SHEETS.CLEANFORM);
     ctx.ss.appendRow(SHEETS.CLEANFORM, cfHeaders.map(h => (record[h] !== undefined ? record[h] : '')));
+    // ใบแนบก็ต้องรออนุมัติ 4 ขั้นเหมือนใบที่กรอกในระบบ (เจ้าของงานกำหนด: ทุกเอกสาร)
+    // ใบแนบเก่าที่ส่งก่อนมีกติกานี้ไม่มีแถวขั้นอนุมัติ = ถือว่าเซ็นบนกระดาษแล้ว (ดู approval.js)
+    await startApproval(ctx, KIND, record.ID);
 
     await ctx.ss.flush();
 

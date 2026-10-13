@@ -137,7 +137,8 @@ export const TABLES = {
       Cost: N,
       CreatedAt: DT, RecordedBy: S,
       DocNo: S,
-      CaseID: S
+      CaseID: S,
+      Source: S
     },
     indexes: [['AirCode'], ['Region'], ['CaseID'], ['CreatedAt']]
   },
@@ -168,7 +169,8 @@ export const TABLES = {
       CreatedAt: DT, RecordedBy: S,
       DocNo: S, DocNo2: S,
       // เครื่องคู่ไหนของ Node (ดู INSTALLFORM_HEADERS)
-      SlotBase: N
+      SlotBase: N,
+      Source: S
     },
     indexes: [['AirCode1'], ['AirCode2'], ['Region'], ['CreatedAt']]
   },
