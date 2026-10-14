@@ -8,7 +8,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
  */
 const KIND = 'cleaning';
-import { cleanFormValue, isAwaitingInstall, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
+import { cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
@@ -132,8 +132,10 @@ export async function getCleaningFormNodes(ctx) {
       // ราคาต่อรอบที่ตั้งไว้ในรายการเครื่อง ใช้เติมช่องราคาให้อัตโนมัติ
       CleaningPrice: plainText(a.CleaningPricePerRound),
       // รอใบติดตั้งอนุมัติ — ยังอยู่ในรายการนี้เพราะฟอร์มติดตั้งต้องใช้ (ลำดับเครื่องใน Node)
-      // แต่ฝั่งใบล้างซ่อนไว้ (หน้าเว็บ cleanUnitsOf) และบันทึกใบล้างไม่ได้ (bindToRegistry)
-      Awaiting: isAwaitingInstall(a.Status)
+      // แต่ฝั่งใบล้างซ่อนไว้ (หน้าเว็บ cleanUnitsOf) และบันทึกใบล้างไม่ได้ (assertCleanable)
+      Awaiting: isAwaitingInstall(a.Status),
+      // ตำแหน่งที่ไม่มีเครื่อง (ย้ายออก/รอเปลี่ยนเครื่อง/Write off) — ฝั่งใบล้างซ่อนไว้เหมือนกัน
+      Retired: isRetiredStatus(a.Status)
     });
   });
 
@@ -406,6 +408,23 @@ async function assertCanSeeForm(ctx, form) {
  *
  * Admin ยังบันทึกเครื่องที่ไม่มีในทะเบียนได้เหมือนเดิม (เอกสารย้อนหลังของเครื่องที่ลบไปแล้ว)
  */
+/**
+ * เครื่องที่ออกใบล้างได้ — ใช้ทั้งกรอกในระบบ (bindToRegistry) และแนบไฟล์ (uploadNodeDocuments)
+ *
+ *   รอใบติดตั้งอนุมัติ        ยังไม่นับว่ามีเครื่องอยู่จริง
+ *   รื้อถอน/ปลดระวาง/Write off  ตำแหน่งที่ไม่มีเครื่องอยู่ (ย้ายออก รอเปลี่ยนเครื่อง)
+ *                               เดิมกรอกได้ ได้ใบที่ไม่มีข้อมูลเครื่อง แต่ค่าล้างเข้างบ (เจอตอนตรวจทุกบทบาท 14/10)
+ */
+function assertCleanable(unit) {
+  const status = plainText(unit.Status).trim();
+  if (isAwaitingInstall(status)) {
+    throw new Error('เครื่อง ' + unit.AirCode + ' รอใบติดตั้งอนุมัติครบ ยังออกใบล้างไม่ได้');
+  }
+  if (isRetiredStatus(status)) {
+    throw new Error('ตำแหน่ง ' + unit.AirCode + ' สถานะ "' + status + '" ไม่มีเครื่องใช้งานอยู่ จึงออกใบล้างไม่ได้');
+  }
+}
+
 async function bindToRegistry(ctx, record, bySlot) {
   const info = await ctx.userInfo();
   const scope = await unitsInScope(ctx);
@@ -418,9 +437,7 @@ async function bindToRegistry(ctx, record, bySlot) {
       if (info.role === 'Admin') continue;
       throw new Error('ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง หรือไม่มีสิทธิ์เข้าถึง');
     }
-    if (isAwaitingInstall(unit.Status)) {
-      throw new Error('เครื่อง ' + unit.AirCode + ' รอใบติดตั้งอนุมัติครบ ยังออกใบล้างไม่ได้');
-    }
+    assertCleanable(unit);
     found.push({ slot, unit });
   }
   if (!found.length) return;
@@ -1382,6 +1399,7 @@ export async function uploadNodeDocuments(ctx, payload) {
           }
           throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
         }
+        assertCleanable(found);
         // ผลประเมินเป็นของรายเครื่อง หน้าเว็บจึงส่งมาให้ทีละเครื่อง
         // แนบไฟล์เดียวแต่ล้างสองตัว ก็ยังบอกได้ว่าตัวไหนสมบูรณ์ ตัวไหนควรปรับปรุง
         //

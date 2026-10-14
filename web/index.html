@@ -1653,8 +1653,9 @@
      */
     const AWAITING_INSTALL_STATUS = 'รอติดตั้ง';
     const isAwaitingInstall = status => String(status == null ? '' : status).trim() === AWAITING_INSTALL_STATUS;
-    /** เครื่องใน Node ที่ใบล้างใช้ได้ (ตัดเครื่องที่รอใบติดตั้งอนุมัติ — เซิร์ฟเวอร์ติดป้าย Awaiting ให้) */
-    const cleanUnitsOf = node => ((node && node.units) || []).filter(u => !u.Awaiting);
+    /** เครื่องใน Node ที่ใบล้างใช้ได้ — ตัดเครื่องที่รอใบติดตั้งอนุมัติ (Awaiting) และตำแหน่งที่ไม่มีเครื่อง (Retired)
+     *  เซิร์ฟเวอร์ติดป้ายให้ และปฏิเสธซ้ำอีกชั้น (assertCleanable ใน cleaningform.js) */
+    const cleanUnitsOf = node => ((node && node.units) || []).filter(u => !u.Awaiting && !u.Retired);
     /** Node ที่มีเครื่องให้ล้างอย่างน้อย 1 ตัว (Node ใหม่ที่มีแต่เครื่องรอติดตั้งไม่ขึ้น) */
     const cleanNodes = () => (cleaningFormNodes || []).filter(n => cleanUnitsOf(n).length);
 
@@ -2613,8 +2614,9 @@
         document.getElementById('view-warehouse')?.remove();
       }
 
-      // เอกสารรออนุมัติเป็นเรื่องของงานซ่อม — ไม่เห็นงานซ่อมก็ไม่เห็นหน้านี้
-      if (moduleLevel('repair') === 'none') {
+      // เอกสารรออนุมัติมีทั้งใบล้าง ใบซ่อม ใบติดตั้ง — ซ่อนเมื่อไม่มีสิทธิ์เอกสารสักแบบ
+      // (เดิมผูกกับสิทธิ์งานซ่อม ตั้งงานซ่อม "ไม่เห็น" แล้วหน้านี้หาย ทั้งที่ยังต้องอนุมัติใบล้าง)
+      if (docPageLevel() === 'none') {
         document.querySelector('[data-tab="approvals"]')?.remove();
         document.getElementById('view-approvals')?.remove();
       }
@@ -6365,6 +6367,14 @@
      * แผนปีที่เปิดอยู่ล้างกี่รอบ (1–3) — เลือกตอนสร้างแผน เก็บไว้ในทุกแถว (Rounds)
      * แผนเก่าก่อนมีตัวเลือกนี้ไม่มีค่า = 3 รอบ (กติกาเดียวกับ planRounds ฝั่งเซิร์ฟเวอร์)
      */
+    /**
+     * แถวแผนที่แสดงในหน้าแผน — ซ่อนตำแหน่งที่ไม่มีเครื่องแล้ว (รื้อถอน/ปลดระวาง/Write off)
+     * เจ้าของงานกำหนด (14/10/2569): ไม่ต้องเห็นในแผน · แถวยังอยู่ในฐานข้อมูล (รอบที่ล้างไปแล้วเป็นเงินที่จ่ายจริง
+     * และงบคิดจากประวัติ ไม่ได้คิดจากแถวแผน) · สรุปความคืบหน้าไม่นับอยู่แล้ว (summarizeCleaning)
+     * แถวที่ถูกลบออกจากทะเบียน (Removed) ยังแสดง เพราะต้องมีคนไปเพิ่มเครื่องกลับ
+     */
+    const visiblePlanRows = () => (currentPlan || []).filter(p => !p.Retired);
+
     function planRoundCount(rows = currentPlan) {
       const ns = (rows || []).map(p => Number(p.Rounds)).filter(n => n >= 1 && n <= 3);
       return ns.length ? Math.max(...ns) : 3;
@@ -6384,7 +6394,7 @@
       const ROUND_BORDER = ['border-blue-200', 'border-indigo-200', 'border-transparent'];
 
       const region = syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
-      let displayPlan = currentPlan || [];
+      let displayPlan = visiblePlanRows();
       if (region) displayPlan = displayPlan.filter(p => sameRegion(p.Region, region));
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -6956,7 +6966,7 @@
     }
 
     function openNodeDateModal() {
-      const nodes = [...new Set(currentPlan.map(p => p.NodeName).filter(n => n))].sort();
+      const nodes = [...new Set(visiblePlanRows().map(p => p.NodeName).filter(n => n))].sort();
       if(nodes.length === 0) { showToast('ไม่พบข้อมูล Node ในแผนปีปัจจุบัน', 'error'); return; }
       // เดาว่าจะตั้งวันของ Node ไหน จากสิ่งที่กำลังค้นหาอยู่ ถ้าตรงกับชื่อ Node พอดี
       const typed = (document.getElementById('planSearch')?.value || '').trim();
@@ -7095,7 +7105,7 @@
      */
     function renderNodeUnitPicks() {
       const node = document.getElementById('nd_node').value.trim();
-      const rows = currentPlan.filter(p => p.NodeName === node)
+      const rows = visiblePlanRows().filter(p => p.NodeName === node)
         .sort((a, b) => String(a.AirCode).localeCompare(String(b.AirCode)));
       for (const r of [1, 2, 3]) {
         const box = document.getElementById('nd_u' + r);
@@ -7150,7 +7160,7 @@
     function exportPlanTemplate() {
       if(!currentPlan || currentPlan.length === 0) { showToast('ไม่มีข้อมูลในแผนปีนี้', 'error'); return; }
       // ผู้รับเหมาใส่เป็น "ชื่อ" — ต้องตรงกับผู้รับเหมาที่มี User ในระบบ ไม่งั้นไม่นำเข้าทั้งไฟล์ (ดู updatePlanBulk)
-      const template = currentPlan.map(p => ({
+      const template = visiblePlanRows().map(p => ({
         AirCode: p.AirCode,
         NodeName: p.NodeName,
         R1_PlanDate: p.R1_PlanDate || '',
@@ -7644,7 +7654,7 @@
     async function refreshApprovalBadge() {
       refreshRepairBadge();   // จุดที่ต้องนับใหม่เป็นชุดเดียวกัน (เปลี่ยนเมนู เปลี่ยนสถานะ ทุก 1 นาที)
       const badge = document.getElementById('apvBadge');
-      if (!badge || !currentUserInfo) return;   // ไม่เห็นงานซ่อม = ไม่มีเมนูนี้
+      if (!badge || !currentUserInfo) return;   // ไม่มีสิทธิ์เอกสารสักแบบ = ไม่มีเมนูนี้
       let n = 0;
       try { n = ((await callQuiet('getApprovalCount')) || {}).total || 0; } catch (e) { return; }
       badge.textContent = n > 99 ? '99+' : String(n);
@@ -10240,8 +10250,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   async function deleteInstallFormRow(row, id) {
     const confirmed = await showConfirm(
       'ยืนยันการลบเอกสารติดตั้งใบนี้? รูปถ่ายและไฟล์ PDF ที่เก็บไว้บนเซิร์ฟเวอร์จะถูกลบตามไปด้วย\n' +
-      '(ระบบย้อนให้: งานกลับไปรอเอกสารติดตั้ง เครื่องที่เพิ่มใหม่กลับเป็น "รอติดตั้ง" — กรอกเอกสารใหม่ได้\n' +
-      'ส่วนข้อมูลเครื่องที่ใบนี้แก้ในทะเบียนไปแล้ว เช่น Serial ไม่ย้อนกลับ)'
+      '(ระบบย้อนให้: งานกลับไปรอเอกสารติดตั้ง เครื่องที่เพิ่มใหม่กลับเป็น "รอติดตั้ง" — กรอกเอกสารใหม่ได้)'
     );
     if (!confirmed) return;
     try {

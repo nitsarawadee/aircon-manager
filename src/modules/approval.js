@@ -297,7 +297,8 @@ async function storeFinalPdf(ctx, kind, form) {
  */
 export async function getApprovalCount(ctx) {
   await ctx.requireAccess();
-  if (!(await ctx.canView('repair'))) return { docs: 0, cleaning: 0, install: 0, total: 0 };
+  // นับตามสิทธิ์เอกสารแต่ละแบบ (เช็คใน waiting) ไม่ผูกกับสิทธิ์งานซ่อม
+  // เดิมไม่เห็นงานซ่อม = ตัวเลขเป็น 0 ทั้งที่ยังต้องอนุมัติใบล้าง/ใบติดตั้ง (เจอตอนตรวจทุกบทบาท 14/10)
   await ctx.ensureBase();
 
   const info = await ctx.userInfo();
