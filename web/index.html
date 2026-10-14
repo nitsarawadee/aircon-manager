@@ -662,8 +662,9 @@
             <button onclick="document.getElementById('fileImportAir').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="นำเข้าไฟล์ที่แก้จาก Excel — ดูผลก่อนยืนยันเสมอ">
               <i class="ph ph-upload-simple"></i> นำเข้า (Excel/CSV)
             </button>
-            <button onclick="openAirModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-              <i class="ph ph-plus"></i> เพิ่มเครื่องใหม่
+            <button onclick="openAirModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+              title="กรอกฟอร์มเพิ่มเครื่องใหม่ บันทึกแล้วงานติดตั้งไปรอที่หน้างานซ่อมและติดตั้ง ให้กรอกเอกสาร ส่งลิงก์ หรือมอบหมายผู้รับเหมา">
+              <i class="ph ph-plus-circle"></i> ติดตั้งเครื่องใหม่
             </button>
           </div>
         </div>
@@ -4874,7 +4875,7 @@
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative z-10 animate-[fadeIn_0.2s_ease]">
             <div class="sticky top-0 bg-white px-6 py-4 border-b border-gray-100 flex justify-between items-center z-20">
-              <h3 class="text-xl font-bold text-gray-800">${isEdit ? 'แก้ไขเครื่อง: ' + esc(data.AirCode) : 'เพิ่มเครื่องปรับอากาศใหม่'}</h3>
+              <h3 class="text-xl font-bold text-gray-800">${isEdit ? 'แก้ไขเครื่อง: ' + esc(data.AirCode) : 'ติดตั้งเครื่องใหม่'}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition"><i class="ph ph-x text-2xl"></i></button>
             </div>
             <div class="p-6">
