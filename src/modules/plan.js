@@ -1066,6 +1066,46 @@ function writeBackColumns(ctx, name, values, cols) {
  * @param {string} [opts.docUrl]           ลิงก์เอกสาร (PDF ที่ระบบสร้าง หรือไฟล์ที่แนบมา)
  * @returns {Promise<number>} 1 ถ้าปิดงานสำเร็จ, 0 ถ้าหาแถวไม่เจอ
  */
+/**
+ * ล้างต้องทำทีละรอบ — รอบก่อนหน้าของเครื่องนั้นต้องปิดเรียบร้อยก่อน (เจ้าของงานกำหนด 15/10/2569)
+ *
+ * ไม่งั้นกรอกผิดรอบได้เงียบๆ: ผู้รับเหมากรอกรอบ 3 ทั้งที่รอบ 1 ยังไม่ปิด รอบ 3 ถูกปิดแล้วรอบ 1 ยังค้าง
+ * ตรวจก่อนเขียนอะไรทั้งสิ้น (ผู้เรียกเรียกก่อนบันทึกเอกสาร) · รอบที่ "ยกเลิก" ถือว่าผ่านไปแล้ว
+ * ไม่ส่งปี/รอบ = ไม่ผูกกับแผน ไม่มีอะไรต้องตรวจ · เครื่องที่ไม่อยู่ในแผนปีนั้นก็ไม่ตรวจ
+ *
+ * ตรวจเป็นรายเครื่อง ไม่ได้บังคับให้ปิดครบทั้ง Node ก่อน
+ *
+ * @param {Object} opts { year, round, airCodes: [รหัสเครื่อง] }
+ */
+export async function assertRoundsInOrder(ctx, opts) {
+  const year = opts && opts.year, round = Number(opts && opts.round);
+  if (!year || !Number.isInteger(round) || round <= 1) return;
+
+  const name = planSheet(year);
+  if (!(await ctx.ss.hasSheet(name))) return;
+  await ctx.ss.load(name);
+  await ctx.ss.ensureColumns(name, PLAN_HEADERS);
+
+  const headers = ctx.ss.headers(name);
+  const values = ctx.ss.values(name);
+  const codeIdx = headers.indexOf('AirCode');
+
+  for (const code of opts.airCodes || []) {
+    const want = normalizeCode(code);
+    const i = values.findIndex((v, n) => n > 0 && normalizeCode((v || [])[codeIdx]) === want);
+    if (i < 0) continue;
+
+    for (let r = 1; r < round; r++) {
+      const col = headers.indexOf('R' + r + '_Status');
+      if (col < 0) continue;
+      const status = String((values[i] || [])[col] || '').trim();
+      if (status === 'ล้างเสร็จสิ้น' || status === ROUND_CANCELLED) continue;
+      throw new Error('เครื่อง ' + code + ' ยังไม่ได้ปิดรอบที่ ' + r + ' ของปี ' + year +
+                      ' — ล้างต้องทำทีละรอบ ปิดรอบที่ ' + r + ' ให้เรียบร้อยก่อนจึงบันทึกรอบที่ ' + round + ' ได้');
+    }
+  }
+}
+
 export async function closePlanRound(ctx, opts) {
   const round = String(opts.round);
   if (['1', '2', '3'].indexOf(round) === -1) return 0;

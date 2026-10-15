@@ -50,7 +50,7 @@ function freshDb() {
     ' VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).run('AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '1', 'อยุธยา', 'ใช้งานปกติ', 'Carrier', 24000, 'IN-2', 'OUT-2');
 
-  db.prepare('INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)')
+  db.prepare("INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R1_Status) VALUES (?,?,?,?,?,?,'ล้างเสร็จสิ้น')")
     .run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
   return db;
 }

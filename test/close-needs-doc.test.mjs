@@ -45,7 +45,7 @@ function freshDb() {
   ).run('AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '1', 'อยุธยา', 'Container', 'ใช้งานปกติ', 'Daikin', 18000);
 
   db.prepare(
-    'INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)'
+    "INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R1_Status) VALUES (?,?,?,?,?,?,'ล้างเสร็จสิ้น')"
   ).run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
   return db;
 }
@@ -145,7 +145,7 @@ test('เอกสารที่ครอบสองเครื่อง ต�
     ' VALUES (?,?,?,?,?,?,?)'
   ).run('AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '1', 'อยุธยา', 'Container', 'ใช้งานปกติ');
   db.prepare(
-    'INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)'
+    "INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R1_Status) VALUES (?,?,?,?,?,?,'ล้างเสร็จสิ้น')"
   ).run(2026, 'AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
 
   await saveForm(db, { AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier' });

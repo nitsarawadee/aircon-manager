@@ -71,8 +71,8 @@ function freshDb() {
   unit.run('ATG-SWH-AIR-1', 'แสวงหา', 'ATG-SWH', '1', 'อ่างทอง', 'Shop House', 'ใช้งานปกติ', 'LG', 12000, 'IN-X', 450);
 
   const plan = db.prepare(`INSERT INTO plans
-      (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R2_Price, R2_ContractorID, R3_Status, R3_Price, R3_ContractorID)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+      (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R2_Price, R2_ContractorID, R3_Status, R3_Price, R3_ContractorID, R1_Status)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,'ล้างเสร็จสิ้น')`);   // รอบ 1 ปิดแล้ว — ล้างต้องทำทีละรอบ (ดู round-order.test.mjs)
   plan.run(2026, 'ATG-PMK-AIR-1', 'ป่าโมก', 'ATG-PMK', '2026-09-10', 'รอดำเนินการ', 480, 'CT001', 'รอดำเนินการ', 520, 'CT002');
   plan.run(2026, 'ATG-PMK-AIR-2', 'ป่าโมก', 'ATG-PMK', '2026-09-10', 'รอดำเนินการ', 480, 'CT001', 'รอดำเนินการ', '', '');
   plan.run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ', 700, 'CT002', 'รอดำเนินการ', '', '');
@@ -258,8 +258,10 @@ test('รายการใบล้าง — เห็นเฉพาะใบ
 
 test('เปิดใบล้างของเจ้าอื่นด้วยเลขแถวตรงๆ ไม่ได้ แม้เป็นเครื่องที่ตัวเองก็มีงาน', async () => {
   const db = freshDb();
+  // ล้างต้องทำทีละรอบ — ปิดรอบ 2 (งานของ A) ก่อน แล้วค่อยรอบ 3 (งานของ B)
+  await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 2 }));
   await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3, Date: '2026-12-01' }));
-  const row = (await getCleaningForms(as(db, 'boss')))[0]._row;
+  const row = (await getCleaningForms(as(db, 'boss'))).find(f => String(f.PlanRound) === '3')._row;
 
   await assert.rejects(() => getCleaningDocHtml(as(db, 'ctA'), row), /ไม่มีสิทธิ์/);
 });

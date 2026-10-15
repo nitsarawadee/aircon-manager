@@ -326,7 +326,7 @@ test('กรอกสองเครื่องในครั้งเดี�
 /** ตั้งแผนปี 2026 รอบ 2 ให้ทั้งสองเครื่อง เพื่อดูว่าปิดงานถูกแถว */
 function addPlans(db) {
   const add = db.prepare(
-    'INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status) VALUES (?,?,?,?,?,?)'
+    "INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R2_PlanDate, R2_Status, R1_Status) VALUES (?,?,?,?,?,?,'ล้างเสร็จสิ้น')"
   );
   add.run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
   add.run(2026, 'AYA-WNI-AIR-2', 'วังน้อย', 'AYA-WNI', '2026-09-10', 'รอดำเนินการ');
