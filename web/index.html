@@ -1108,8 +1108,11 @@
           <i class="ph ph-eye"></i> คุณมีสิทธิ์ดูเอกสารประเภทนี้เท่านั้น (กรอกหรือลบไม่ได้)
         </div>
 
-        <div id="cleaningFormCards" class="grid grid-cols-1 xl:grid-cols-2 gap-3"></div>
-        <div id="cleaningFormPaginationBar" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 mt-3 bg-white rounded-xl border border-gray-200 text-sm text-gray-600"></div>
+        <div class="text-xs text-gray-400 mb-2 flex items-center gap-1"><i class="ph ph-sort-descending"></i> เรียงตามวันที่ล่าสุดก่อน</div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div id="cleaningFormCards" class="divide-y divide-gray-100"></div>
+          <div id="cleaningFormPaginationBar" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-slate-50 text-sm text-gray-600"></div>
+        </div>
       </section>
 
       <!-- ============================ VIEW: BUDGET (งบประมาณ) ============================ -->
@@ -9388,7 +9391,11 @@
     // ใบที่ยังรออนุมัติขึ้นทุกปี — งานค้างข้ามปีต้องไม่หายจากตา
     const waiting = d => !!(d.Approval && d.Approval.next && !d.Approval.done);
     const all = docs.filter(f => f.kind === docTypeFilter && (!docMineOnly || waitsForMe(f)) &&
-                                 (!year || yearOf(f.Date) === year || waiting(f)));
+                                 (!year || yearOf(f.Date) === year || waiting(f)))
+      // เรียงตามวันที่ทำงาน (วันที่ที่เห็นบนรายการ) ล่าสุดก่อน — วันเดียวกันใบที่บันทึกทีหลังขึ้นก่อน
+      // (เดิมเรียงตามเวลาบันทึก ใบที่แนบย้อนหลังจึงขึ้นก่อนใบที่วันที่ใหม่กว่า ดูเหมือนไม่เรียง)
+      .sort((a, b) => String(b.Date || '').slice(0, 10).localeCompare(String(a.Date || '').slice(0, 10)) ||
+                      String(b.CreatedAt || '').localeCompare(String(a.CreatedAt || '')));
     if (!q) return all;
 
     return all.filter(f =>
@@ -9488,7 +9495,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   /** แถบขั้นอนุมัติ 4 ช่อง: ขั้น 1 ผู้รับเหมา (เสร็จเสมอเมื่อมีเอกสาร) · ขั้น 2 Staff · 3 Supervisor/Regional · 4 Infrastructure */
   function approvalSteps(a) {
     const names = ['ผู้รับเหมา', 'Staff', 'Supervisor', 'Infra'];
-    return '<div class="flex gap-1 flex-1 min-w-[150px]" title="' + esc(approvalTrail(a)) + '">' + names.map((nm, i) => {
+    return '<div class="flex gap-1 w-full" title="' + esc(approvalTrail(a)) + '">' + names.map((nm, i) => {
       const n = i + 1;
       const done = n === 1 || a.done || n < a.next;
       const cur = !done && n === a.next;
@@ -9514,7 +9521,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         : 'ยังไม่มีการบันทึก' + ofKind;
       const year = (document.getElementById('docYearFilter') || {}).value || '';
       const inYear = year ? '<div class="text-xs mt-1">แสดงเฉพาะปี ' + esc(year) + ' — เลือก "ทุกปี" เพื่อดูปีอื่น</div>' : '';
-      box.innerHTML = '<div class="xl:col-span-2 bg-white rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-gray-400">' + why + inYear + '</div>';
+      box.innerHTML = '<div class="px-4 py-10 text-center text-gray-400">' + why + inYear + '</div>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
     }
@@ -9531,25 +9538,20 @@ const CLEANING_CHECKLIST_ITEMS = [
       const isRepair = kind === 'repair', isInstall = kind === 'install';
       const isAttach = f.Source === 'attach';
       const canEditRow = docLevel(kind) === 'edit';
-      const color = DOC_KIND_COLOR[kind];
       const total = rows.reduce((a, r) => a + (r.price || 0), 0);
 
       const btnBase = 'px-2 py-1 rounded-lg transition border bg-white text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap';
       const openBtn = isAttach
         ? `<button onclick="openAttachmentList(${f._row}, '${jsStr(kind)}')" title="ดูไฟล์เอกสารที่แนบเข้ามา"
-             class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]">
-             <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
+             class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]"><i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
         : isRepair
           ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
-               class="${btnBase} text-amber-700 hover:text-white hover:bg-amber-600 border-amber-500">
-               <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
+               class="${btnBase} text-amber-700 hover:text-white hover:bg-amber-600 border-amber-500"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
         : isInstall
           ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด"
-               class="${btnBase} text-teal-700 hover:text-white hover:bg-teal-700 border-teal-600">
-               <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
+               class="${btnBase} text-teal-700 hover:text-white hover:bg-teal-700 border-teal-600"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
           : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
-               class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]">
-               <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`;
+               class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`;
 
       const delBtn = (!canEditRow || currentUserInfo.role !== 'Admin') ? ''
         : isRepair
@@ -9558,39 +9560,39 @@ const CLEANING_CHECKLIST_ITEMS = [
           ? `<button onclick="deleteInstallFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารติดตั้งใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
           : `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`;
 
-      // เครื่องละบรรทัดเดียว: รหัส · เลขที่ · ผล · ราคา
+      // เครื่องละบรรทัด: รหัส ตัวที่ · เลขที่ · ผล · ราคา
       const unitLine = r => {
         const cond = isRepair
           ? (esc(r.cond) ? `<span class="text-slate-600 text-xs truncate" title="${esc(r.cond)}">${esc(r.cond.slice(0, 40))}${r.cond.length > 40 ? '…' : ''}</span>` : '')
           : isInstall ? acceptBadge(r.cond) : conditionBadge(r.cond);
         return `
-          <div class="flex items-center gap-x-3 gap-y-1 flex-wrap px-2.5 py-1.5">
-            <span class="font-medium text-sm text-gray-800 whitespace-nowrap">${esc(r.airCode) || '-'}${isRepair ? '' : `<span class="ml-1 text-xs font-normal text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}</span>
+          <div class="flex items-center gap-x-3 gap-y-1 flex-wrap text-sm">
+            <span class="font-medium text-gray-800 whitespace-nowrap">${esc(r.airCode) || '-'}${isRepair ? '' : `<span class="ml-1 text-xs font-normal text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}</span>
             <span class="font-mono text-[11px] text-slate-500">${esc(r.docNo) || '-'}</span>
             <span class="min-w-0">${cond}</span>
-            <span class="ml-auto tabular-nums text-sm text-gray-700">${r.price ? '฿' + r.price.toLocaleString() : ''}</span>
+            ${r.price ? `<span class="tabular-nums text-gray-600">฿${r.price.toLocaleString()}</span>` : ''}
           </div>`;
       };
 
       const a = f.Approval;
       const approval = a
-        ? approvalSteps(a) + '<div class="flex items-center gap-1 flex-shrink-0">' + approvalCell(f, kind) + '</div>'
-        : '<div class="text-xs text-gray-400 flex items-center gap-1"><i class="ph ph-minus-circle"></i> ไม่มีขั้นอนุมัติ</div>';
+        ? approvalSteps(a) + '<div class="mt-1.5">' + approvalCell(f, kind) + '</div>'
+        : '<div class="text-xs text-gray-400">ไม่มีขั้นอนุมัติ</div>';
 
       return `
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-3 py-2.5 hover:border-slate-300 transition-colors" style="border-left:3px solid ${color}">
-        <div class="flex items-center justify-between gap-2">
-          <div class="min-w-0 flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
+      <div class="flex flex-wrap md:flex-nowrap items-start gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
             <span class="font-semibold text-gray-800">${esc(f.NodeName)}</span>
             ${isRepair ? '<span class="px-1.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-medium">ซ่อม</span>' : ''}
             ${isInstall ? '<span class="px-1.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-medium">ติดตั้ง</span>' : ''}
             ${isAttach ? '<span class="px-1.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-medium">เอกสารแนบ</span>' : ''}
             <span class="text-xs text-gray-500">${esc(fmtDate(f.Date))} · ${esc(f.TechnicianName) || '-'}${rows.length > 1 && total ? ' · รวม ฿' + total.toLocaleString() : ''}</span>
           </div>
-          <div class="flex items-center gap-1 flex-shrink-0">${openBtn}${delBtn}</div>
+          <div class="mt-1 space-y-1">${rows.map(unitLine).join('')}</div>
         </div>
-        <div class="mt-1.5 rounded-lg bg-slate-50 border border-slate-100 divide-y divide-slate-100">${rows.map(unitLine).join('')}</div>
-        <div class="mt-2 flex items-center gap-3 flex-wrap">${approval}</div>
+        <div class="w-full md:w-56 flex-shrink-0">${approval}</div>
+        <div class="flex items-center gap-1 flex-shrink-0 ml-auto md:ml-0">${openBtn}${delBtn}</div>
       </div>`;
     }).join('');
 
