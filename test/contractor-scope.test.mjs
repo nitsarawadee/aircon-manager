@@ -384,7 +384,7 @@ test('ใบติดตั้ง — กรอกได้เฉพาะงา
   assert.deepEqual((await getInstallForms(as(db, 'ctB'))).length, 0, 'ใบของเจ้า A — เจ้า B ต้องไม่เห็น แม้มีงานล้างบนเครื่องนี้');
 
   await assert.rejects(
-    () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'AYA-WNI-AIR-1', Date: '2026-09-20' }), /ไม่ได้มอบหมายงานติดตั้งให้บริษัทของคุณ/);
+    () => saveInstallForm(as(db, 'ctA'), { AirCode1: 'AYA-WNI-AIR-1', Date: '2026-09-20' }), /ไม่ได้มอบหมายงานติดตั้งให้คุณ/);
 });
 
 test('ใบติดตั้งใบเดียว ใส่เครื่องจากสอง Node ไม่ได้', async () => {
@@ -441,7 +441,7 @@ test('สร้างบัญชีผู้รับเหมาต้อง�
   const db = freshDb();
   const base = { Username: 'ctX', Password: 'secret1', Role: 'Contractor' };
 
-  await assert.rejects(() => saveUser(as(db, 'boss'), base), /ชื่อบริษัทผู้รับเหมา/);
+  await assert.rejects(() => saveUser(as(db, 'boss'), base), /ชื่อผู้รับเหมา/);
   await assert.rejects(() => saveUser(as(db, 'boss'), { ...base, ContractorID: 'CT404' }), /ไม่พบผู้รับเหมา/);
 
   await saveUser(as(db, 'boss'), { ...base, ContractorID: 'CT002', Regions: ['1', '2'], Permissions: { budget: 'edit' } });

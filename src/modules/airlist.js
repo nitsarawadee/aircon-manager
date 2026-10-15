@@ -95,7 +95,7 @@ export async function unitNotInScopeMessage(ctx, airCode, job) {
   if (!unit) return 'ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง';
   const info = await ctx.userInfo();
   if (info.role === 'Contractor') {
-    return 'เครื่อง "' + code + '" ไม่ได้มอบหมาย' + job + 'ให้บริษัทของคุณ — ทำได้เฉพาะเครื่องที่ได้รับมอบหมาย';
+    return 'เครื่อง "' + code + '" ไม่ได้มอบหมาย' + job + 'ให้คุณ — ทำได้เฉพาะเครื่องที่ได้รับมอบหมาย';
   }
   return 'คุณไม่มีสิทธิ์จัดการข้อมูลในภูมิภาค "' + (unit.Region || '-') + '" (เครื่อง ' + code + ')';
 }

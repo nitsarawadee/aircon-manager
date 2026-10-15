@@ -2978,9 +2978,9 @@
           </div>
           <div class="flex flex-wrap gap-2 mt-2.5 ml-7">
             ${missing.map(c => `<span class="inline-flex items-stretch bg-white border border-amber-300 rounded-lg text-xs font-medium text-amber-800 overflow-hidden">
-                <button onclick="openUserModal({ ContractorID: '${jsStr(c.ID)}' })" title="สร้างบัญชีให้บริษัทนี้"
+                <button onclick="openUserModal({ ContractorID: '${jsStr(c.ID)}' })" title="สร้างบัญชีให้ผู้รับเหมานี้"
                   class="hover:bg-amber-100 px-3 py-1.5 inline-flex items-center gap-1.5"><i class="ph ph-user-plus"></i> ${esc(c.Name)}</button>
-                <button onclick="deleteContractorRow('${jsStr(c.ID)}', '${jsStr(c.Name)}')" title="ลบบริษัทนี้ (เช่น พิมพ์ชื่อผิดหรือซ้ำ)"
+                <button onclick="deleteContractorRow('${jsStr(c.ID)}', '${jsStr(c.Name)}')" title="ลบผู้รับเหมานี้ (เช่น พิมพ์ชื่อผิดหรือซ้ำ)"
                   class="border-l border-amber-300 text-red-500 hover:text-red-700 hover:bg-red-50 px-2"><i class="ph ph-trash"></i></button>
               </span>`).join('')}
           </div>
@@ -3350,16 +3350,16 @@
                 <option value="Contractor" ${role === 'Contractor' ? 'selected' : ''}>Subcontract (ผู้รับเหมา)</option>
               </select></div>
               <div id="u_contractorBox" class="${role === 'Contractor' ? '' : 'hidden'}">
-                <label class="block text-sm font-medium text-gray-700 mb-1">บริษัทผู้รับเหมา <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">ผู้รับเหมา <span class="text-red-500">*</span></label>
                 <select id="u_ContractorID" onchange="document.getElementById('u_NewContractor').classList.toggle('hidden', this.value !== '__new')"
                   class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white">
-                  <option value="" ${contractorList.length ? '' : 'disabled'}>— เลือกบริษัท —</option>
+                  <option value="" ${contractorList.length ? '' : 'disabled'}>— เลือกผู้รับเหมา —</option>
                   ${contractorOpts}
-                  <option value="__new" ${contractorList.length ? '' : 'selected'}>+ บริษัทใหม่ (พิมพ์ชื่อ)</option>
+                  <option value="__new" ${contractorList.length ? '' : 'selected'}>+ ผู้รับเหมาใหม่ (พิมพ์ชื่อ)</option>
                 </select>
-                <input id="u_NewContractor" placeholder="ชื่อบริษัท / หจก. เต็มตามที่จะขึ้นบนเอกสาร"
+                <input id="u_NewContractor" placeholder="ชื่อบริษัท / หจก. หรือชื่อช่าง เต็มตามที่จะขึ้นบนเอกสาร"
                   class="${contractorList.length ? 'hidden' : ''} mt-2 w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none">
-                <p class="text-xs text-gray-400 mt-1">ชื่อบริษัทนี้จะขึ้นเป็นตัวเลือกในช่อง "ผู้รับเหมา" ของแผนล้าง — เลือกให้รอบไหน บัญชีนี้จะเห็นเฉพาะรอบนั้น · ช่างหลายคนของบริษัทเดียวกันเลือกบริษัทเดิม จะเห็นงานชุดเดียวกัน</p>
+                <p class="text-xs text-gray-400 mt-1">ชื่อนี้จะขึ้นเป็นตัวเลือกในช่อง "ผู้รับเหมา" ของแผนล้าง — เลือกให้รอบไหน บัญชีนี้จะเห็นเฉพาะรอบนั้น · ช่างหลายคนของผู้รับเหมาเดียวกันเลือกชื่อเดิม จะเห็นงานชุดเดียวกัน</p>
               </div>
               <div id="u_regionBox" class="${isRegionalRole(role) ? '' : 'hidden'}">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Region ที่รับผิดชอบ</label>
@@ -3397,7 +3397,7 @@
       const newCompany = picked === '__new' ? document.getElementById('u_NewContractor').value.trim() : '';
       const contractorId = picked === '__new' ? '' : picked;
       if (role === 'Contractor' && !contractorId && !newCompany) {
-        showToast('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมา', 'error'); return;
+        showToast('กรุณาเลือกหรือพิมพ์ชื่อผู้รับเหมา', 'error'); return;
       }
       const regions = isRegionalRole(role) ? Array.from(document.querySelectorAll('.u_region_chk:checked')).map(c => c.value) : [];
       if (isRegionalRole(role) && regions.length === 0) { showToast('กรุณาเลือกอย่างน้อย 1 Region สำหรับบทบาท ' + ROLE_TITLES[role], 'error'); return; }
@@ -3435,12 +3435,12 @@
 
     /** ลบบริษัทผู้รับเหมา — เซิร์ฟเวอร์ไม่ยอมถ้ายังมีบัญชี แผนล้าง หรืองานที่มอบหมายอ้างถึง (ดู deleteContractor) */
     async function deleteContractorRow(id, name) {
-      const confirmed = await showConfirm('ยืนยันการลบบริษัท "' + name + '" ออกจากรายชื่อผู้รับเหมา?');
+      const confirmed = await showConfirm('ยืนยันการลบ "' + name + '" ออกจากรายชื่อผู้รับเหมา?');
       if (!confirmed) return;
       try {
         contractorList = (await call('deleteContractor', id)) || [];
         renderUsersTable();
-        showToast('ลบบริษัทผู้รับเหมาสำเร็จ', 'success');
+        showToast('ลบผู้รับเหมาสำเร็จ', 'success');
       } catch (e) {}
     }
 

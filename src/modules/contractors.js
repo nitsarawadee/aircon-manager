@@ -67,7 +67,7 @@ export async function getContractors(ctx) {
  */
 export async function findOrCreateContractor(ctx, rawName) {
   const name = plainText(rawName).trim().replace(/\s+/g, ' ');
-  if (!name) throw new Error('กรุณาระบุชื่อบริษัทผู้รับเหมา');
+  if (!name) throw new Error('กรุณาระบุชื่อผู้รับเหมา');
 
   const existing = ctx.ss.objects(SHEETS.CONTRACTOR).find(c => nameKey(c.Name) === nameKey(name));
   const now = ymdhms(new Date());
@@ -104,7 +104,7 @@ export async function deleteContractor(ctx, id) {
     const want = plainText(id).trim().toUpperCase();
     const same = v => String(v || '').trim().toUpperCase() === want;
     const c = want && ctx.ss.objects(SHEETS.CONTRACTOR).find(x => same(x.ID));
-    if (!c) throw new Error('ไม่พบบริษัทผู้รับเหมานี้ — อาจถูกลบไปแล้ว กรุณารีเฟรชหน้าจอ');
+    if (!c) throw new Error('ไม่พบผู้รับเหมานี้ — อาจถูกลบไปแล้ว กรุณารีเฟรชหน้าจอ');
     const name = plainText(c.Name) || want;
 
     const users = ctx.ss.objects(SHEETS.USERS).filter(u => same(u.ContractorID)).map(u => plainText(u.Username));
@@ -122,7 +122,7 @@ export async function deleteContractor(ctx, id) {
 
     const jobs = ctx.ss.objects(SHEETS.ASSIGN).filter(a => same(a.ContractorID)).length;
     if (jobs) {
-      throw new Error('ลบ "' + name + '" ไม่ได้ เพราะมีงานซ่อม/ติดตั้งที่มอบหมายให้บริษัทนี้ ' + jobs + ' งาน (เก็บไว้เป็นประวัติว่าใครทำ)');
+      throw new Error('ลบ "' + name + '" ไม่ได้ เพราะมีงานซ่อม/ติดตั้งที่มอบหมายให้ผู้รับเหมานี้ ' + jobs + ' งาน (เก็บไว้เป็นประวัติว่าใครทำ)');
     }
 
     await ctx.ss.deleteRow(SHEETS.CONTRACTOR, c._row);

@@ -341,7 +341,7 @@ export async function writeUserRecord(ctx, user) {
       // บริษัทที่ยังไม่มีในรายชื่อ — เพิ่มให้เลย แล้วจะไปโผล่เป็นตัวเลือกในแผนล้างทันที
       contractorId = await findOrCreateContractor(ctx, user.NewContractorName);
     } else {
-      throw new Error('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมาที่บัญชีนี้สังกัด');
+      throw new Error('กรุณาเลือกหรือพิมพ์ชื่อผู้รับเหมาที่บัญชีนี้สังกัด');
     }
   }
 

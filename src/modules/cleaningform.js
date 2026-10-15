@@ -1399,7 +1399,7 @@ export async function uploadNodeDocuments(ctx, payload) {
           // ต้องบอกให้ตรง ไม่งั้นคนอ่านจะงงว่าเครื่องก็อยู่ใน Node นี้ชัดๆ
           if (isContractor && ctx.ss.objects(SHEETS.AIRLIST).some(a =>
             normalizeCode(a.AirCode) === normalizeCode(code) && plainText(a.NodeName).trim() === nodeName)) {
-            throw new Error('เครื่อง "' + code + '" ไม่ได้มอบหมายให้บริษัทของคุณ — แนบได้เฉพาะเครื่องที่ได้รับมอบหมายในแผนล้าง');
+            throw new Error('เครื่อง "' + code + '" ไม่ได้มอบหมายให้คุณ — แนบได้เฉพาะเครื่องที่ได้รับมอบหมายในแผนล้าง');
           }
           throw new Error('เครื่อง "' + code + '" ไม่ได้อยู่ใน Node "' + nodeName + '"');
         }

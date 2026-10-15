@@ -91,10 +91,10 @@ test('มอบหมายงานซ่อม → ผู้รับเหม
 test('ผู้รับเหมากรอกงานที่ไม่ได้มอบหมายให้ไม่ได้ · เปลี่ยนผู้รับเหมาแล้วเจ้าเดิมกรอกไม่ได้', async () => {
   const db = freshDb();
   await assignJob(as(db, 'boss'), 'repair', 'ATG-PMK-AIR-1', 'CT001', '', '');
-  await assert.rejects(() => saveRepairForm(as(db, 'ctB'), repairRecord), /ไม่ได้มอบหมายงานซ่อมให้บริษัทของคุณ|ไม่ได้มอบหมายให้คุณ/);
+  await assert.rejects(() => saveRepairForm(as(db, 'ctB'), repairRecord), /ไม่ได้มอบหมายงานซ่อมให้คุณ|ไม่ได้มอบหมายให้คุณ/);
 
   await assignJob(as(db, 'boss'), 'repair', 'ATG-PMK-AIR-1', 'CT002', '', '');
-  await assert.rejects(() => saveRepairForm(as(db, 'ctA'), repairRecord), /ไม่ได้มอบหมายงานซ่อมให้บริษัทของคุณ|ไม่ได้มอบหมายให้คุณ/);
+  await assert.rejects(() => saveRepairForm(as(db, 'ctA'), repairRecord), /ไม่ได้มอบหมายงานซ่อมให้คุณ|ไม่ได้มอบหมายให้คุณ/);
   await saveRepairForm(as(db, 'ctB'), repairRecord);   // เจ้าใหม่กรอกได้
 });
 

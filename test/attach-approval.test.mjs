@@ -190,5 +190,5 @@ test('แนบใบล้าง: ผู้รับเหมาเลือก
   await assert.rejects(() => uploadNodeDocuments(as(db, 'sub', { attachments: fakeAttachments() }), {
     nodeName: 'วังน้อย', files: FILE,
     closeout: { year: 2026, round: 1, date: '2026-10-14', units: [{ airCode: 'AYA-WNI-AIR-1' }] }
-  }), /AYA-WNI-AIR-1.*ไม่ได้มอบหมายให้บริษัทของคุณ/);
+  }), /AYA-WNI-AIR-1.*ไม่ได้มอบหมายให้คุณ/);
 });
