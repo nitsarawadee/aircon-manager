@@ -85,3 +85,48 @@ export async function findOrCreateContractor(ctx, rawName) {
   ctx.ss.appendRow(SHEETS.CONTRACTOR, headers.map(h => (row[h] !== undefined ? row[h] : '')));
   return row.ID;
 }
+
+/**
+ * ลบบริษัทผู้รับเหมา — ไว้ลบชื่อที่พิมพ์ผิด/ซ้ำตอนสร้างบัญชี (เจ้าของงานขอ 15/10/2569)
+ *
+ * Infrastructure เท่านั้น เหมือนการลบเครื่องและลบผู้ใช้
+ * ลบได้เฉพาะบริษัทที่ยังไม่มีอะไรอ้างถึง เพราะทุกที่เก็บแค่รหัส (CT…)
+ * ถ้าลบทั้งที่ยังมีบัญชี แผนล้าง หรืองานที่มอบหมายอยู่ ที่เหล่านั้นจะเหลือรหัสลอยๆ ไม่รู้ว่าเป็นของใคร
+ * และบัญชีของบริษัทนั้นจะล็อกอินแล้วไม่มีสิทธิ์อะไร (Ctx ถือว่าบริษัทที่ไม่มีในรายชื่อ = ไม่ให้เข้าถึง)
+ *
+ * @param {string} id รหัสบริษัท เช่น CT002
+ */
+export async function deleteContractor(ctx, id) {
+  return ctx.withLock(async () => {
+    await ctx.assertAdmin();
+    await ctx.ensureBase();
+
+    const want = plainText(id).trim().toUpperCase();
+    const same = v => String(v || '').trim().toUpperCase() === want;
+    const c = want && ctx.ss.objects(SHEETS.CONTRACTOR).find(x => same(x.ID));
+    if (!c) throw new Error('ไม่พบบริษัทผู้รับเหมานี้ — อาจถูกลบไปแล้ว กรุณารีเฟรชหน้าจอ');
+    const name = plainText(c.Name) || want;
+
+    const users = ctx.ss.objects(SHEETS.USERS).filter(u => same(u.ContractorID)).map(u => plainText(u.Username));
+    if (users.length) {
+      throw new Error('ลบ "' + name + '" ไม่ได้ เพราะยังมีบัญชีผู้ใช้สังกัดอยู่ (' + users.join(', ') + ') — ลบหรือย้ายบัญชีเหล่านั้นก่อน');
+    }
+
+    const planNames = (await ctx.ss.sheetNames()).filter(n => /^Plan_\d{4}$/.test(n));
+    await ctx.ss.load(planNames);
+    const years = planNames.filter(n => ctx.ss.objects(n).some(p => [1, 2, 3].some(r => same(p['R' + r + '_ContractorID']))));
+    if (years.length) {
+      throw new Error('ลบ "' + name + '" ไม่ได้ เพราะยังถูกเลือกเป็นผู้รับเหมาในแผนล้างปี ' +
+        years.map(n => n.slice(5)).join(', ') + ' — เปลี่ยนผู้รับเหมาในแผนก่อน');
+    }
+
+    const jobs = ctx.ss.objects(SHEETS.ASSIGN).filter(a => same(a.ContractorID)).length;
+    if (jobs) {
+      throw new Error('ลบ "' + name + '" ไม่ได้ เพราะมีงานซ่อม/ติดตั้งที่มอบหมายให้บริษัทนี้ ' + jobs + ' งาน (เก็บไว้เป็นประวัติว่าใครทำ)');
+    }
+
+    await ctx.ss.deleteRow(SHEETS.CONTRACTOR, c._row);
+    await ctx.ss.flush();
+    return getContractors(ctx);
+  });
+}

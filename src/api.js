@@ -34,7 +34,7 @@ import {
   saveInstallPhoto, deleteInstallPhoto, getInstallPhotos,
   attachInstallDocument, getInstallAttachments, getInstallAttachment
 } from './modules/installform.js';
-import { getContractors } from './modules/contractors.js';
+import { getContractors, deleteContractor } from './modules/contractors.js';
 import {
   getRepairLink, submitRepairLink, submitInstallLink, saveRepairLinkPhoto, getRepairLinkPdf,
   createRepairLink, getRepairLinks, revokeRepairLink
@@ -120,6 +120,7 @@ const API_FUNCTIONS = {
 
   // รายชื่อผู้รับเหมา (ตัวเลือกในแผนล้างและหน้าจัดการผู้ใช้)
   getContractors,
+  deleteContractor,
 
   changeOwnPassword,
   logout,

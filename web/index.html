@@ -2733,7 +2733,7 @@
       // งบประมาณ
       openBudgetModal: 'budget', saveBudget: 'budget',
       // จัดการผู้ใช้
-      openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin',
+      openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin', deleteContractorRow: 'admin',
       fileImportUsers: 'admin', downloadUserTemplate: 'admin', confirmUserImport: 'admin'
     };
 
@@ -2975,9 +2975,12 @@
               — ล็อกอินไม่ได้ จึงไม่เห็นงานที่มอบหมาย กดสร้างบัญชีให้ได้เลย</div>
           </div>
           <div class="flex flex-wrap gap-2 mt-2.5 ml-7">
-            ${missing.map(c => `<button onclick="openUserModal({ ContractorID: '${jsStr(c.ID)}' })"
-                class="bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-medium inline-flex items-center gap-1.5">
-                <i class="ph ph-user-plus"></i> ${esc(c.Name)}</button>`).join('')}
+            ${missing.map(c => `<span class="inline-flex items-stretch bg-white border border-amber-300 rounded-lg text-xs font-medium text-amber-800 overflow-hidden">
+                <button onclick="openUserModal({ ContractorID: '${jsStr(c.ID)}' })" title="สร้างบัญชีให้บริษัทนี้"
+                  class="hover:bg-amber-100 px-3 py-1.5 inline-flex items-center gap-1.5"><i class="ph ph-user-plus"></i> ${esc(c.Name)}</button>
+                <button onclick="deleteContractorRow('${jsStr(c.ID)}', '${jsStr(c.Name)}')" title="ลบบริษัทนี้ (เช่น พิมพ์ชื่อผิดหรือซ้ำ)"
+                  class="border-l border-amber-300 text-red-500 hover:text-red-700 hover:bg-red-50 px-2"><i class="ph ph-trash"></i></button>
+              </span>`).join('')}
           </div>
         </div>`;
     }
@@ -3425,6 +3428,17 @@
         renderUsersTable();
         closeModal();
         showToast('บันทึกผู้ใช้งานสำเร็จ', 'success');
+      } catch (e) {}
+    }
+
+    /** ลบบริษัทผู้รับเหมา — เซิร์ฟเวอร์ไม่ยอมถ้ายังมีบัญชี แผนล้าง หรืองานที่มอบหมายอ้างถึง (ดู deleteContractor) */
+    async function deleteContractorRow(id, name) {
+      const confirmed = await showConfirm('ยืนยันการลบบริษัท "' + name + '" ออกจากรายชื่อผู้รับเหมา?');
+      if (!confirmed) return;
+      try {
+        contractorList = (await call('deleteContractor', id)) || [];
+        renderUsersTable();
+        showToast('ลบบริษัทผู้รับเหมาสำเร็จ', 'success');
       } catch (e) {}
     }
 
