@@ -150,6 +150,7 @@ export function checkContractorId(ctx, id) {
 
 const ROUND_DONE = 'ล้างเสร็จสิ้น';
 const ROUND_CANCELLED = 'ยกเลิก';
+const ROUND_SCHEDULED = 'นัดหมายแล้ว';
 
 /**
  * ปีนี้ล้างกี่รอบ (1–3) — เลือกตอนสร้างแผน เพราะบางปีล้างไม่ครบ 3 รอบ (เจ้าของงานขอ)
@@ -756,9 +757,11 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
       );
     }
 
+    // ลงวันตามแผนแล้ว = นัดหมายแล้ว ทุกแผน (เจ้าของงานกำหนด 15/10/2569) — ล้างแล้ว/ยกเลิก คงตามที่เลือก
+    const status = data.planDate && (!data.status || data.status === 'รอดำเนินการ') ? ROUND_SCHEDULED : (data.status || 'รอดำเนินการ');
     ctx.ss.setValues(name, row, startCol, [[
       data.planDate || '', data.actualDate || '', data.price || '',
-      data.technician || '', data.status || 'รอดำเนินการ', data.note || ''
+      data.technician || '', status, data.note || ''
     ]]);
     ctx.ss.setValue(name, row, headers.indexOf('UpdatedBy') + 1, await ctx.currentUser());
 
@@ -1010,9 +1013,14 @@ export async function updatePlanBulk(ctx, year, importedData) {
 
       // รอบที่ปีนี้ไม่มี ไม่รับวัน/ผู้รับเหมาจากไฟล์
       const n = roundsInRow(headers, c => row[c]);
-      if (isoOf(imp.R1_PlanDate)) row[idx.r1] = isoOf(imp.R1_PlanDate);
-      if (isoOf(imp.R2_PlanDate) && n >= 2) row[idx.r2] = isoOf(imp.R2_PlanDate);
-      if (isoOf(imp.R3_PlanDate) && n >= 3) row[idx.r3] = isoOf(imp.R3_PlanDate);
+      for (const r of [1, 2, 3]) {
+        const iso = isoOf(imp['R' + r + '_PlanDate']);
+        if (!iso || r > n) continue;
+        row[idx['r' + r]] = iso;
+        // ลงวันแล้ว = นัดหมายแล้ว (เจ้าของงานกำหนด) — ล้างแล้ว/ยกเลิก ไม่แตะ
+        const st = String(row[idx['s' + r]] || '').trim();
+        if (idx['s' + r] > -1 && (!st || st === 'รอดำเนินการ')) row[idx['s' + r]] = ROUND_SCHEDULED;
+      }
       for (const r of [1, 2, 3]) {
         const cname = String(imp['R' + r + '_Contractor'] || '').trim();
         if (!cname || r > n || idx['c' + r] < 0) continue;
@@ -1030,7 +1038,8 @@ export async function updatePlanBulk(ctx, year, importedData) {
 
     writeBackColumns(ctx, name, values, [
       [idx.r1, dateOut], [idx.r2, dateOut], [idx.r3, dateOut], [idx.by, String],
-      [idx.c1, String], [idx.c2, String], [idx.c3, String]
+      [idx.c1, String], [idx.c2, String], [idx.c3, String],
+      [idx.s1, String], [idx.s2, String], [idx.s3, String]
     ]);
 
     await ctx.ss.flush();

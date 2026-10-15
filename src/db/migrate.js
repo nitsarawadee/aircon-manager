@@ -243,3 +243,55 @@ export function caseIdsToFirstEventNo(db) {
   }
   return n;
 }
+
+/**
+ * แผนล้างทุกปี: วันตามแผนเป็นรูปแบบเดียวกัน + รอบที่มีวันแล้วเป็น "นัดหมายแล้ว" (เจ้าของงานกำหนด 15/10/2569)
+ *
+ * ทำไมต้องซ่อม: การนำเข้าแผนจากไฟล์เคยเก็บวันที่ตามที่พิมพ์มา (15/10/2026)
+ * ส่วนหน้าเว็บบันทึกเป็น ปปปป-ดด-วว — ช่องวันที่ในหน้าต่างแก้แผนอ่านแบบแรกไม่ออก จึงขึ้นว่าง
+ * และรอบที่ลงวันแล้วยังค้างเป็น "รอดำเนินการ" ทั้งที่มีนัดแล้ว
+ *
+ * แตะเฉพาะ: วัน/เดือน/ปี ค.ศ. ที่เป็นวันจริง → ปปปป-ดด-วว (ค่าอื่นที่อ่านไม่ออกคงไว้ตามเดิม)
+ * และรอบที่มีวันตามแผน + สถานะว่าง/รอดำเนินการ → นัดหมายแล้ว (ล้างแล้ว/ยกเลิก ไม่แตะ)
+ * รอบที่เกินจำนวนรอบของแผน (Rounds) ไม่แตะ · รันซ้ำได้ แถวที่ซ่อมแล้วไม่เข้าเงื่อนไขอีก
+ *
+ * @returns {number} จำนวนรอบที่เปลี่ยน
+ */
+export function normalizePlanDatesAndScheduled(db) {
+  const text = v => (v == null ? '' : String(v).trim());
+  const dmyToIso = v => {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v);
+    if (!m) return null;
+    const [d, mo, y] = [+m[1], +m[2], +m[3]];
+    if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > new Date(Date.UTC(y, mo, 0)).getUTCDate()) return null;
+    return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  };
+
+  let changed = 0;
+  const rows = db.prepare('SELECT * FROM plans').all();
+  db.exec('BEGIN');
+  try {
+    for (const row of rows) {
+      const n = [1, 2, 3].includes(Number(row.Rounds)) ? Number(row.Rounds) : 3;
+      for (let r = 1; r <= n; r++) {
+        const pd = text(row['R' + r + '_PlanDate']);
+        if (!pd) continue;
+        const iso = dmyToIso(pd);
+        const st = text(row['R' + r + '_Status']);
+        const sets = {};
+        if (iso) sets['R' + r + '_PlanDate'] = iso;
+        if (st === '' || st === 'รอดำเนินการ') sets['R' + r + '_Status'] = 'นัดหมายแล้ว';
+        const cols = Object.keys(sets);
+        if (!cols.length) continue;
+        db.prepare('UPDATE plans SET ' + cols.map(c => c + ' = ?').join(', ') + ' WHERE row_id = ?')
+          .run(...cols.map(c => sets[c]), row.row_id);
+        changed++;
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return changed;
+}

@@ -1793,6 +1793,7 @@
         hidden.value = iso;
         el.value = isoToThai(iso);        // จัดรูปแบบให้เรียบร้อย เช่น 3/9/2026 เป็น 03/09/2026
         el.classList.remove('border-rose-400');
+        hidden.dispatchEvent(new Event('change'));   // ให้หน้าต่างที่สนใจวันที่ทำงานต่อได้ (เช่น ตั้งแผนรอบ → นัดหมายแล้ว)
       } else {
         // ไม่ล้างสิ่งที่พิมพ์ทิ้ง เพราะคนอาจพิมพ์ยังไม่จบ แค่ทำขอบแดงให้รู้ว่ายังไม่ผ่าน
         hidden.value = '';
@@ -1875,6 +1876,7 @@
       text.value = isoToThai(iso);
       text.classList.remove('border-rose-400');
       wrap.querySelector('.df-pop').remove();
+      wrap.querySelector('input[type="hidden"]').dispatchEvent(new Event('change'));
     }
 
     /**
@@ -6807,6 +6809,11 @@
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
+      // ลงวันแล้ว = นัดหมายแล้ว (เซิร์ฟเวอร์ก็ทำแบบเดียวกัน) — เปลี่ยนให้เห็นทันที ไม่ต้องรอบันทึก
+      document.getElementById('rp_plan').addEventListener('change', e => {
+        const st = document.getElementById('rp_status');
+        if (e.target.value && st && st.value === 'รอดำเนินการ') st.value = 'นัดหมายแล้ว';
+      });
     }
 
     /** หน้าต่างรอบแบบอ่านอย่างเดียว สำหรับคนที่ดูแผนได้แต่กรอกใบล้างได้ (ดู openRoundModal) */

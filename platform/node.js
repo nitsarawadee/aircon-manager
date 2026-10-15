@@ -42,7 +42,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
 const { backupDatabase, pruneBackups } = await import('./backup.js');
-const { addMissingTables, addMissingColumns, repairShiftedPlanRows, renameRepairCaseIds, caseIdsToFirstEventNo } = await import('../src/db/migrate.js');
+const { addMissingTables, addMissingColumns, repairShiftedPlanRows, renameRepairCaseIds, caseIdsToFirstEventNo, normalizePlanDatesAndScheduled } = await import('../src/db/migrate.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -305,6 +305,14 @@ try {
   if (unified) console.log('เปลี่ยนเลขเคสงานซ่อมเป็นเลข CM ของใบแจ้งซ่อม: ' + unified + ' เคส');
 } catch (err) {
   console.error('⚠️  เปลี่ยนเลขเคสเป็น CM ไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
+}
+
+// แผนล้างทุกปี: วันตามแผนเป็น ปปปป-ดด-วว + รอบที่มีวันแล้วเป็น "นัดหมายแล้ว" (ดู normalizePlanDatesAndScheduled)
+try {
+  const planFixed = normalizePlanDatesAndScheduled(db);
+  if (planFixed) console.log('แผนล้าง: ปรับวันที่/สถานะนัดหมายแล้ว ' + planFixed + ' รอบ');
+} catch (err) {
+  console.error('⚠️  ปรับวันที่/สถานะแผนล้างไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
 }
 
 /**
