@@ -670,6 +670,8 @@ export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
 export async function deleteAirUnit(ctx, row, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
+    // ลบเครื่องออกจากระบบได้เฉพาะ Infrastructure (เจ้าของงานกำหนด 15/10/2569)
+    await ctx.assertAdmin();
     await ctx.ensureBase();
     ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 
