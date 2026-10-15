@@ -527,7 +527,7 @@
             </div>
             <div class="relative sm:w-72">
               <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-              <input type="text" id="apvSearch" oninput="setApvFilter()" placeholder="ค้นหารหัสเครื่อง, Node, เลขที่..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm shadow-sm">
+              <input type="text" id="apvSearch" oninput="setApvFilter()" placeholder="ค้นหารหัสเครื่อง, Node, เลขอ้างอิง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm shadow-sm">
             </div>
           </div>
         </div>
@@ -539,7 +539,7 @@
               <table id="apvDocTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead>
                   <tr class="bg-rose-50 border-b border-rose-200 text-rose-900 font-semibold">
-                    <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
+                    <th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">เลขอ้างอิง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10">อาการเสีย</th><th class="px-4 py-3 sticky top-0 bg-rose-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
@@ -555,7 +555,7 @@
               <table id="apvCleanTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead>
                   <tr class="bg-blue-50 border-b border-blue-200 text-[#0e4485] font-semibold">
-                    <th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">ช่าง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10 text-right">จัดการ</th>
+                    <th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">เลขอ้างอิง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10">ช่าง</th><th class="px-4 py-3 sticky top-0 bg-blue-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
@@ -571,7 +571,7 @@
               <table id="apvInstallTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead>
                   <tr class="bg-teal-50 border-b border-teal-200 text-teal-900 font-semibold">
-                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">ผู้ติดตั้ง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10 text-right">จัดการ</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขอ้างอิง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">วันที่</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">รหัสเครื่อง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">Node</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">ผู้ติดตั้ง</th><th class="px-4 py-3 sticky top-0 bg-teal-50 z-10 text-right">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
@@ -604,7 +604,7 @@
             <div class="table-container overflow-x-auto">
               <table id="whStockTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead><tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
-                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ถอดจากตำแหน่ง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เข้าคลัง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">บันทึกเพิ่มเติม</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขอ้างอิง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ถอดจากตำแหน่ง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ยี่ห้อ / BTU</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Serial / Asset</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เข้าคลัง</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">สถานะ</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">บันทึกเพิ่มเติม</th><th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
               </table>
@@ -955,7 +955,7 @@
               <table id="installPendingTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
                 <thead>
                   <tr class="bg-teal-50 border-b border-teal-200 text-teal-900 font-semibold">
-                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขที่</th>
+                    <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">เลขอ้างอิง</th>
                     <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">วันที่</th>
                     <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">รหัสเครื่อง</th>
                     <th class="px-4 py-3 sticky top-0 bg-teal-50 z-10">Node/Site</th>
@@ -1048,7 +1048,7 @@
           </div>
           <div class="relative ml-2 w-full sm:w-72 pb-2">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-            <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขที่, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
+            <input type="text" id="cleaningFormSearch" placeholder="ค้นหาเลขอ้างอิง, Node, รหัสเครื่อง, ช่าง..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
           </div>
         </div>
 
@@ -1062,7 +1062,7 @@
             <table id="cleaningFormTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
-                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขอ้างอิง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
@@ -4103,7 +4103,7 @@
             <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
-                  <th class="px-4 py-3">เลขที่</th>
+                  <th class="px-4 py-3">เลขอ้างอิง</th>
                   <th class="px-4 py-3">วันที่</th>
                   <th class="px-4 py-3">เหตุการณ์</th>
                   <th class="px-4 py-3 w-full">รายละเอียด</th>
@@ -5423,7 +5423,7 @@
         if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
         closeModal();
         showToast(mode === 'stock'
-          ? 'ย้ายเครื่องเข้าคลังแล้ว (เลขที่ ' + result.stockId + ') — ' + code + ' รอเครื่องใหม่'
+          ? 'ย้ายเครื่องเข้าคลังแล้ว (เลขอ้างอิง ' + result.stockId + ') — ' + code + ' รอเครื่องใหม่'
           : 'ย้ายเครื่องไป ' + result.destCode + ' แล้ว — ' + code + ' รอเครื่องใหม่', 'success');
         loadDashboard();
         return;
@@ -9848,7 +9848,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       pePhotos = (res && res.photos) || {};
       peDocNo = (res && res.docNo) || '';
       const sub = document.getElementById('pe_sub');
-      if (sub) sub.textContent = peDocNo ? 'เอกสารเลขที่ ' + peDocNo : '';
+      if (sub) sub.textContent = peDocNo ? 'เลขอ้างอิง ' + peDocNo : '';
       renderPhotoEditor();
     } catch (e) {
       const box = document.getElementById('pe_box');
@@ -11811,7 +11811,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     repairLinkShell(`
       <div class="bg-white rounded-xl border border-emerald-200 p-5 mb-4">
         <div class="flex items-center gap-2 text-emerald-700 font-bold"><i class="ph-fill ph-check-circle text-2xl"></i> ส่งเอกสารเรียบร้อยแล้ว</div>
-        <p class="text-sm text-gray-600 mt-1">เลขที่เอกสาร <b>${esc(info.docNo)}</b> · ${esc(info.unit.AirCode)} ${esc(info.unit.NodeName)}</p>
+        <p class="text-sm text-gray-600 mt-1">เลขอ้างอิง <b>${esc(info.docNo)}</b> · ${esc(info.unit.AirCode)} ${esc(info.unit.NodeName)}</p>
         <p class="text-sm text-gray-600">${install ? 'งานติดตั้งนี้' : 'งานซ่อมนี้'}ปิดในระบบเรียบร้อยแล้ว</p>
         <button onclick="repairLinkDownloadPdf('${jsStr(token)}')"
           class="mt-4 w-full px-4 py-3 text-base font-medium text-white bg-[#1153a1] rounded-lg hover:bg-[#0e4485] flex items-center justify-center gap-2">
