@@ -2771,7 +2771,7 @@
       openCannotRepairModal: 'repair', submitCannotRepair: 'repair',
       // เอกสารล้าง
       openCleaningFormModal: 'cleaningform', submitCleaningForm: 'cleaningform', openFormForPlanUnit: 'cleaningform',
-      openAttachFromPlan: 'cleaningform', submitAttachFromPlan: 'cleaningform', openAttachDocsDialog: 'cleaningform',
+      openAttachFromPlan: 'cleaningform', openAttachDocsDialog: 'cleaningform',
       submitAttachDocs: 'cleaningform', deleteCleaningFormRow: 'cleaningform',
       // เอกสารซ่อม + ลิงก์งานซ่อม
       openRepairFormPicker: 'repairform', startRepairFormFromPicker: 'repairform', openRepairForm: 'repairform',
@@ -13790,204 +13790,15 @@ const CLEANING_CHECKLIST_ITEMS = [
     return (bytes / 1024 / 1024).toFixed(1) + ' MB';
   }
 
-  /* ============ แนบเอกสารแล้วปิดงาน — เข้าจากหน้าแผนโดยตรง ============
-     ต่างจากการแนบผ่านหน้าฟอร์มตรงที่ ปี / รอบ / เครื่อง ระบบรู้เองหมด
-     จากช่องที่ผู้ใช้คลิกในตาราง จึงกรอกผิดไม่ได้เลย
-     เหลือให้ทำอย่างเดียวคือเลือกไฟล์
-
-     รองรับกรณีล้างหลายเครื่องใน Node เดียวกันด้วยเอกสารใบเดียว
-     โดยแสดงเครื่องอื่นของ Node นั้นให้ติ๊กเพิ่มได้ ไม่ต้องมาแนบซ้ำทีละแถว
+  /* ============ แนบเอกสารแล้วปิดงาน — เข้าจากช่องรอบในหน้าแผน
+     ใช้หน้าต่างแนบเดียวกับหน้าเอกสาร (openAttachDocsDialog) โดยเลือก Node / ปี / รอบ / เครื่องไว้ให้
+     เดิมเป็นหน้าต่างแยกอีกแบบ — รวมเป็นแบบเดียวให้ทุกทางทำงานเหมือนกัน (เจ้าของงานกำหนด 15/10/2569)
      ================================================================= */
-
-  let apCtx = null;   // { round, year, nodeName, units: [...] }
 
   function openAttachFromPlan(i, r) {
     const p = currentPlan[i];
     if (!p) return;
-
-    const nodeName = p.NodeName || '';
-    const clicked = String(p.AirCode || '');
-
-    // หาเครื่องทุกตัวของ Node นี้ที่อยู่ในแผนปีเดียวกัน
-    // บัญชีผู้รับเหมา: เอาเฉพาะเครื่องที่รอบนี้เป็นงานของตัวเอง เครื่องอื่นใน Node เดียวกันอาจเป็นของเจ้าอื่น
-    const siblings = currentPlan.filter(x => (x.NodeName || '') === nodeName && x['R' + r + '_Mine'] !== false);
-
-    apCtx = {
-      round: r,
-      year: currentYear,
-      nodeName,
-      units: siblings.map(x => ({
-        airCode: String(x.AirCode || ''),
-        price: x['R' + r + '_Price'] || '',
-        done: String(x['R' + r + '_Status'] || '') === 'ล้างเสร็จสิ้น',
-        // ติ๊กเฉพาะเครื่องที่คลิกมาเท่านั้น เครื่องอื่นให้ผู้ใช้ตัดสินใจเอง
-        // ถ้าติ๊กให้ล่วงหน้าทั้งหมด คนที่ล้างแค่ตัวเดียวจะเผลอปิดงานเครื่องที่ยังไม่ได้ล้าง
-        on: String(x.AirCode || '') === clicked
-      }))
-    };
-
-    adFiles = [];
-
-    const old = document.getElementById('attachPlanRoot');
-    if (old) old.remove();
-
-    const box = document.createElement('div');
-    box.id = 'attachPlanRoot';
-    box.innerHTML = `
-      <div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" onclick="closeAttachFromPlan()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 max-h-[92vh] flex flex-col">
-
-          <div class="px-6 py-4 flex justify-between items-start flex-shrink-0">
-            <div>
-              <h3 class="text-xl font-bold text-gray-800">แนบเอกสารแล้วปิดงาน</h3>
-              <p class="text-xs text-gray-500 mt-0.5">
-                Node <b>${esc(nodeName)}</b> · รอบที่ <b>${esc(r)}</b> · ปี <b>${esc(currentYear)}</b>
-              </p>
-            </div>
-            <button onclick="closeAttachFromPlan()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-2xl"></i></button>
-          </div>
-
-          <div class="px-6 pb-2 overflow-y-auto">
-            <div class="text-sm font-semibold text-gray-800 mb-2">เครื่องที่ล้างรอบนี้</div>
-            <div id="ap_units" class="mb-4"></div>
-
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">วันที่ล้างจริง <span class="text-rose-500">*</span></label>
-                ${dateField('ap_date', p['R' + r + '_ActualDate'] || new Date().toISOString().slice(0, 10), 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]')}
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">ผู้รับเหมา / ช่าง</label>
-                <input type="text" id="ap_tech" value="${esc(p['R' + r + '_Technician'] || '')}" placeholder="ชื่อช่าง"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]">
-              </div>
-            </div>
-
-            <div class="text-sm font-semibold text-gray-800 mb-2">ไฟล์เอกสารที่ถ่ายมา</div>
-            <div id="ad_drop"
-              ondragover="event.preventDefault(); this.classList.add('border-[#1153a1]','bg-blue-50/40');"
-              ondragleave="this.classList.remove('border-[#1153a1]','bg-blue-50/40');"
-              ondrop="adOnDrop(event, this)"
-              onclick="document.getElementById('ad_fileInput').click()"
-              class="border-2 border-dashed border-gray-300 rounded-lg py-8 px-4 text-center cursor-pointer transition-colors hover:border-[#1153a1] hover:bg-blue-50/30">
-              <i class="ph ph-file-cloud text-4xl text-gray-300"></i>
-              <p class="mt-2 text-sm font-medium text-gray-700">ลากไฟล์มาวาง หรือ <span class="text-[#1153a1] underline">ค้นหา</span> จากเครื่อง</p>
-            </div>
-            <input type="file" id="ad_fileInput" multiple class="hidden" onchange="adOnPick(event)">
-            <div id="ad_fileList" class="mt-3 space-y-2 mb-2"></div>
-          </div>
-
-          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
-            <button onclick="closeAttachFromPlan()" class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50">ยกเลิก</button>
-            <button onclick="submitAttachFromPlan()" id="ap_btn" class="px-8 py-2 text-sm font-medium text-white bg-teal-600 rounded-full hover:bg-teal-700 shadow-sm">ปิดงาน</button>
-          </div>
-        </div>
-      </div>`;
-    document.body.appendChild(box);
-    renderAttachPlanUnits();
-    renderAttachFileList();
-  }
-
-  function closeAttachFromPlan() {
-    const el = document.getElementById('attachPlanRoot');
-    if (el) el.remove();
-    apCtx = null;
-    adFiles = [];
-  }
-
-  function apToggleUnit(idx, on) {
-    if (!apCtx) return;
-    apCtx.units[idx].on = on;
-    renderAttachPlanUnits();
-  }
-
-  function apSetPrice(idx, v) {
-    if (apCtx) apCtx.units[idx].price = v;
-  }
-
-  function renderAttachPlanUnits() {
-    const box = document.getElementById('ap_units');
-    if (!box || !apCtx) return;
-
-    box.innerHTML = apCtx.units.map((u, idx) => `
-      <div class="border rounded-lg mb-2 ${u.on ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'}">
-        <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
-          <input type="checkbox" ${u.on ? 'checked' : ''} class="accent-teal-600 mt-0.5 flex-shrink-0"
-            onchange="apToggleUnit(${idx}, this.checked)">
-          <span class="min-w-0 flex-1">
-            <span class="text-sm font-semibold text-gray-800">${esc(u.airCode)}</span>
-            ${u.done ? '<span class="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">รอบนี้ปิดไปแล้ว</span>' : ''}
-          </span>
-        </label>
-        ${u.on && isContractor() ? `
-        <div class="px-3 pb-2.5 pl-10 text-xs text-gray-500">ค่าล้างใช้ราคาที่เจ้าหน้าที่ตั้งไว้สำหรับงานนี้</div>` : ''}
-        ${u.on && !isContractor() ? `
-        <div class="flex items-center gap-2 px-3 pb-2.5 pl-10">
-          <span class="text-xs text-gray-600 flex-shrink-0">ค่าล้าง</span>
-          <input type="number" min="0" value="${esc(u.price)}" placeholder="0"
-            oninput="apSetPrice(${idx}, this.value)"
-            class="w-32 border border-gray-300 rounded-lg px-2.5 py-1 text-sm outline-none focus:border-[#1153a1]">
-          <span class="text-xs text-gray-500">บาท</span>
-        </div>` : ''}
-      </div>`).join('');
-
-    const on = apCtx.units.filter(u => u.on).length;
-    const others = apCtx.units.length - 1;
-    if (others > 0 && on === 1) {
-      box.innerHTML += `<p class="text-xs text-gray-500 flex items-start gap-1.5">
-        <i class="ph ph-info text-[#1153a1] mt-0.5"></i>
-        <span>Node นี้มีอีก ${others} เครื่อง ถ้าล้างพร้อมกันให้ติ๊กเพิ่ม จะได้ปิดงานทีเดียวไม่ต้องแนบซ้ำ</span></p>`;
-    }
-  }
-
-  async function submitAttachFromPlan() {
-    if (!apCtx) return;
-    const picked = apCtx.units.filter(u => u.on);
-    if (!picked.length) { showToast('กรุณาเลือกเครื่องอย่างน้อย 1 ตัว', 'error'); return; }
-    if (!adFiles.length) { showToast('กรุณาเลือกไฟล์เอกสารอย่างน้อย 1 ไฟล์', 'error'); return; }
-
-    const date = (document.getElementById('ap_date') || {}).value || '';
-    if (!date) { showToast('กรุณาระบุวันที่ล้างจริง', 'error'); return; }
-
-    // เก็บค่าที่ต้องใช้ในข้อความแจ้งผลไว้ก่อน เพราะ apCtx จะถูกล้างตอนปิดหน้าต่าง
-    const round = apCtx.round;
-    const nodeName = apCtx.nodeName;
-
-    const btn = document.getElementById('ap_btn');
-    btn.disabled = true;
-    btn.textContent = 'กำลังอัปโหลด...';
-    try {
-      const res = await call('uploadNodeDocuments', {
-        nodeName: apCtx.nodeName,
-        files: adFiles.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.data })),
-        closeout: {
-          year: apCtx.year,
-          round: apCtx.round,
-          date: date,
-          technician: (document.getElementById('ap_tech') || {}).value || '',
-          units: picked.map(u => ({ airCode: u.airCode, price: u.price }))
-        }
-      });
-      if (!res || !res.count) throw new Error('อัปโหลดไม่สำเร็จ');
-
-      const closed = res.planClosed || 0;
-      closeAttachFromPlan();
-      closeModal();
-
-      if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
-      if (Array.isArray(res.history)) currentHistory = res.history;
-      await loadPlan();
-      loadDashboard();
-      loadBudget();
-
-      showToast('ปิดงานรอบที่ ' + round + ' ให้ ' + closed + ' เครื่องเรียบร้อย — ' +
-                'เก็บไฟล์ ' + res.count + ' ไฟล์ไว้ในเอกสาร ' + res.docNo + ' แล้ว');
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = 'ปิดงาน';
-      showToast('ปิดงานไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
-    }
+    return openAttachDocsDialog(true, { nodeName: p.NodeName || '', airCode: String(p.AirCode || ''), year: currentYear, round: r });
   }
 
   /* ==================== ปริ้นฟอร์มเปล่าไปเขียนด้วยมือ ====================
@@ -14304,7 +14115,10 @@ const CLEANING_CHECKLIST_ITEMS = [
    * @param {boolean} [standalone] เปิดจากหน้าแรกโดยตรง (ไม่ได้เปิดจากในฟอร์ม)
    *   ต้องล้าง cfContext ทิ้งก่อน ไม่งั้นจะไปเลือก Node ค้างจากฟอร์มที่เคยเปิดค้างไว้รอบก่อน
    */
-  async function openAttachDocsDialog(standalone) {
+  /**
+   * @param {Object} [launch] เปิดจากหน้าแผน: { nodeName, airCode, year, round } — เลือกไว้ให้ (ดู adApplyLaunch)
+   */
+  async function openAttachDocsDialog(standalone, launch) {
     if (standalone) cfContext = null;
     if (!cleaningFormNodes || cleaningFormNodes.length === 0) {
       try {
@@ -14320,9 +14134,12 @@ const CLEANING_CHECKLIST_ITEMS = [
     adFiles = [];
     // ถ้ากำลังกรอกฟอร์มของ Node ไหนอยู่ ให้เลือก Node นั้นไว้ให้เลย
     const cur = document.getElementById('cf_node');
-    adSelectedNode = (cfContext && cfContext.airCode)
+    adSelectedNode = launch ? launch.nodeName
+      : (cfContext && cfContext.airCode)
       ? ((findUnitByAirCode(cfContext.airCode) || {}).node || {}).NodeName || ''
       : (cur ? cur.value : '');
+    // ผู้รับเหมาแนบได้เฉพาะแบบปิดงานในแผน (เซิร์ฟเวอร์บังคับ) — ไม่ต้องมีตัวเลือกให้เอาออก
+    adCloseEnabled = true;
 
     const old = document.getElementById('attachDocsRoot');
     if (old) old.remove();
@@ -14415,6 +14232,36 @@ const CLEANING_CHECKLIST_ITEMS = [
     }
 
     await adSetNode(adSelectedNode);
+    if (launch) await adApplyLaunch(launch);
+  }
+
+  /**
+   * เปิดจากช่องรอบในหน้าแผน: ใช้ปี/รอบนั้น ติ๊กเครื่องที่กดมา และเครื่องคู่กัน (ใบเดียวกัน)
+   * ถ้ารอบนั้นของเครื่องคู่ยังต้องล้าง — ส่วนใหญ่ล้างพร้อมกันสองตัว (กติกาเดียวกับฟอร์มกรอก ดู cfApplyLaunch)
+   */
+  async function adApplyLaunch(launch) {
+    if (!document.getElementById('attachDocsRoot')) return;
+    adSelectedYear = String(launch.year || '');
+    await adLoadPlan();
+    const round = Number(launch.round) || 0;
+    adSelectedRound = String(round || adSelectedRound || '1');
+    const closed = v => v === 'ล้างเสร็จสิ้น' || v === 'ยกเลิก';
+    const clicked = adUnits.find(u => sameCode(u.AirCode, launch.airCode));
+    adPicked = {};
+    if (clicked) {
+      adPicked[clicked.AirCode] = { on: true, price: '', cond: '' };
+      const base = unitBaseOfCode(clicked.AirCode);
+      const partner = adUnits.find(u => !sameCode(u.AirCode, clicked.AirCode) && unitBaseOfCode(u.AirCode) === base);
+      const row = partner ? adPlanRowOf(partner.AirCode) : null;
+      const ready = row && round && !closed(String(row['R' + round + '_Status'] || '')) &&
+        Array.from({ length: round - 1 }, (_, i) => i + 1).every(k => closed(String(row['R' + k + '_Status'] || '')));
+      if (ready) adPicked[partner.AirCode] = { on: true, price: '', cond: '' };
+    }
+    renderAttachUnitList();
+    renderAttachCloseout();
+    // รายชื่อ Node ยาว — เลื่อนไปที่ Node ที่เลือกไว้ให้เห็นเลย
+    const picked = document.querySelector('#ad_nodeList input[type=radio]:checked');
+    if (picked) picked.closest('label').scrollIntoView({ block: 'nearest' });
   }
 
   function closeAttachDocsDialog() {
@@ -14637,6 +14484,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       </label>`;
 
     if (!adCloseEnabled) { box.innerHTML = toggle; return; }
+    const toggleShown = isContractor() ? '' : toggle;
 
     const yearOptions = adYears.length
       ? adYears.map(y => {
@@ -14693,10 +14541,10 @@ const CLEANING_CHECKLIST_ITEMS = [
               <span class="text-xs text-gray-500 flex-shrink-0">บาท</span>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-500 w-14 flex-shrink-0">ผลประเมิน</span>
+              <span class="text-xs text-gray-500 w-14 flex-shrink-0">ผลประเมิน <span class="text-rose-500">*</span></span>
               <select onchange="adSetCond('${esc(u.AirCode)}', this.value)"
                 class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-[#1153a1]">
-                ${opt('', '— ไม่ระบุ —')}
+                <option value="" ${cond ? '' : 'selected'} disabled>— เลือกผลประเมิน —</option>
                 ${opt('สภาพเครื่องสมบูรณ์', 'สภาพเครื่องสมบูรณ์')}
                 ${opt('สภาพเครื่องควรปรับปรุง', 'สภาพเครื่องควรปรับปรุง')}
               </select>
@@ -14705,7 +14553,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </div>`;
     }).join('');
 
-    box.innerHTML = toggle + warn + `
+    box.innerHTML = toggleShown + warn + `
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">ปีของแผน</label>
@@ -14818,6 +14666,14 @@ const CLEANING_CHECKLIST_ITEMS = [
       const date = (document.getElementById('ad_date') || {}).value || '';
       if (!date) { showToast('กรุณาระบุวันที่ล้างจริง', 'error'); return; }
       if (!adCurrentYear()) { showToast('ยังไม่มีแผนล้างแอร์ในระบบ กรุณาสร้างแผนก่อน หรือเอาติ๊ก "ปิดงานในแผน" ออก', 'error'); return; }
+
+      // ผลประเมินสภาพเครื่องต้องเลือกทุกเครื่องที่ติ๊ก (กติกาเดียวกับฟอร์มกรอก)
+      const noCond = picked.filter(u => !adPicked[u.AirCode].cond);
+      if (noCond.length) {
+        showToast('กรุณาเลือกผลประเมินสภาพเครื่อง ' + noCond.map(u => u.AirCode).join(', ') +
+                  ' (สภาพเครื่องสมบูรณ์ / สภาพเครื่องควรปรับปรุง)', 'error');
+        return;
+      }
 
       payload.closeout = {
         year: adCurrentYear(),
