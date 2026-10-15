@@ -10822,8 +10822,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           //   1. ปริ้นฟอร์มเปล่าไปเขียนมือ แต่ใน PDF มีเครื่องหมายถูกติดมาครบ 21 ข้อแล้ว
           //   2. ร้ายแรงกว่า — ฟอร์มที่บันทึกจริงจะอ้างว่าตรวจครบทุกข้อและปกติหมด
           //      ทั้งที่ช่างอาจไม่ได้แตะเลยสักข้อ กลายเป็นเอกสารที่ข้อมูลไม่ตรงความจริง
-          return `<select data-no="${item.no}" data-col="${col}" class="${inputCls} bg-white">
-            <option value="" selected>-</option><option value="ปกติ">ปกติ</option><option value="ผิดปกติ">ผิดปกติ</option></select>`;
+          // แสดงเป็นปุ่ม ปกติ / ผิดปกติ (ดู passFailField) — ดรอปดาวน์ยังเป็นตัวเก็บค่า ตัวส่งข้อมูลไม่ต้องแก้
+          return passFailField(`<select data-no="${item.no}" data-col="${col}" class="${inputCls} bg-white">
+            <option value="" selected>-</option><option value="ปกติ">ปกติ</option><option value="ผิดปกติ">ผิดปกติ</option></select>`, ['ปกติ', 'ผิดปกติ']);
         }
         if (item.type === 'select') {
           return `<select data-no="${item.no}" data-col="${col}" class="${inputCls} bg-white">
@@ -10997,6 +10998,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const el = document.querySelector('.cf_val[data-no="' + no + '"][data-col="' + col + '"]');
       if (el) el.value = v;
     });
+    pfSyncAll(document.getElementById('cf_checklistBox'));   // ปุ่ม ปกติ/ผิดปกติ ต้องขึ้นสีตามค่าที่เอากลับมา
   }
 
   /* ---------- ปิดหน้า ---------- */
@@ -11207,20 +11209,21 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ดรอปดาวน์เดิมยังอยู่ (ซ่อนไว้) และปุ่มเป็นตัวตั้งค่าให้ — โค้ดที่อ่านค่าตอนบันทึกจึงไม่ต้องแก้อะไร
    * ค่าเริ่มต้นยังเป็น "ยังไม่ได้ตรวจ" (ว่าง) เหมือนเดิม · แตะปุ่มที่เลือกอยู่ซ้ำ = ยกเลิกกลับเป็นว่าง
    *
-   * @param {string} selectHtml ดรอปดาวน์เดิมทั้งก้อน (ต้องมี option ผ่าน / ไม่ผ่าน)
+   * @param {string} selectHtml ดรอปดาวน์เดิมทั้งก้อน (ต้องมี option ตรงกับ labels)
+   * @param {string[]} [labels] [ค่าดี, ค่าไม่ดี] — ฟอร์มล้างใช้ ปกติ / ผิดปกติ
    */
-  // สีอ่อนมี ✓ ✗ — แบบ ข ที่เจ้าของงานเลือกจากพรีวิว 4 แบบ (ผ่านเขียว ไม่ผ่านแดง)
+  // สีอ่อน ตัวหนังสืออย่างเดียว — แบบ ข ที่เจ้าของงานเลือกจากพรีวิว 4 แบบ แล้วให้เอา ✓ ✗ ออก (ดีเขียว ไม่ดีแดง)
   const PF_CLASS = {
     off: 'bg-white border-gray-300 text-gray-600',
     pass: 'bg-emerald-50 border-emerald-500 text-emerald-700',
     fail: 'bg-rose-50 border-rose-500 text-rose-700'
   };
 
-  function passFailField(selectHtml) {
+  function passFailField(selectHtml, labels = ['ผ่าน', 'ไม่ผ่าน']) {
     const btn = (v, tone) => `<button type="button" onclick="pfPick(this)" data-pf="${v}" data-tone="${tone}"
-        class="pf-btn min-h-[44px] rounded-lg border text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${PF_CLASS.off}"><i class="ph ${tone === 'pass' ? 'ph-check' : 'ph-x'}"></i>${v}</button>`;
+        class="pf-btn min-h-[44px] rounded-lg border text-sm font-medium transition-colors ${PF_CLASS.off}">${v}</button>`;
     return `<div class="pf-field">${selectHtml.replace('<select ', '<select hidden ')}
-      <div class="grid grid-cols-2 gap-1.5">${btn('ผ่าน', 'pass')}${btn('ไม่ผ่าน', 'fail')}</div></div>`;
+      <div class="grid grid-cols-2 gap-1.5">${btn(labels[0], 'pass')}${btn(labels[1], 'fail')}</div></div>`;
   }
 
   function pfPick(btn) {
@@ -11228,13 +11231,24 @@ const CLEANING_CHECKLIST_ITEMS = [
     const sel = wrap.querySelector('select');
     sel.value = sel.value === btn.dataset.pf ? '' : btn.dataset.pf;
     sel.dispatchEvent(new Event('change', { bubbles: true }));
+    pfPaint(wrap);
+  }
+  window.pfPick = pfPick;
+
+  /** ระบายปุ่มตามค่าในดรอปดาวน์ที่ซ่อนอยู่ */
+  function pfPaint(wrap) {
+    const val = wrap.querySelector('select').value;
     wrap.querySelectorAll('.pf-btn').forEach(b => {
-      const on = b.dataset.pf === sel.value;
+      const on = b.dataset.pf === val;
       [PF_CLASS.off, PF_CLASS.pass, PF_CLASS.fail].join(' ').split(' ').forEach(c => b.classList.remove(c));
       (on ? PF_CLASS[b.dataset.tone] : PF_CLASS.off).split(' ').forEach(c => b.classList.add(c));
     });
   }
-  window.pfPick = pfPick;
+
+  /** ตั้งค่าดรอปดาวน์ด้วยโค้ด (เช่น เอาร่างที่กรอกค้างกลับมา) แล้วต้องเรียกตัวนี้ ไม่งั้นปุ่มดูเหมือนยังไม่ได้เลือก */
+  function pfSyncAll(root) {
+    (root || document).querySelectorAll('.pf-field').forEach(pfPaint);
+  }
 
   /** รายการบันทึกผล 5 ข้อ — การ์ดต่อข้อ ให้กดง่ายบนมือถือ */
   function renderRfChecklist() {
