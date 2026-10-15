@@ -8215,7 +8215,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-medium text-gray-800">${esc(fmtDate(h.Date))}</span>
             ${eventTypeBadge(h.EventType)}
-            <span class="text-xs text-gray-400 font-mono">${esc(h.ID)}</span>
+            <span class="text-xs text-gray-400 font-mono">${esc(displayDocId(h))}</span>
           </div>
           <p class="text-sm text-gray-700 mt-1 whitespace-pre-line">${esc(h.Detail) || '-'}</p>
           <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
