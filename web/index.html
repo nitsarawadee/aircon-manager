@@ -3605,7 +3605,10 @@
          todayRaw.setHours(0,0,0,0);
 
          calContainer.innerHTML = upcoming.map(up => {
-            const pDate = new Date(up.PlanDate);
+            // PlanDate มาเป็น "15/10/2026" (วัน/เดือน/ปี) — new Date() อ่านเป็นเดือน 15 ได้ Invalid Date
+            // ใช้ RawDate ที่เซิร์ฟเวอร์แปลงมาให้แล้วแทน
+            const pDate = new Date(up.RawDate);
+            pDate.setHours(0, 0, 0, 0);
             const isToday = pDate.getTime() === todayRaw.getTime();
             
             return `
