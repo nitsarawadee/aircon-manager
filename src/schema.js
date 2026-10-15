@@ -356,6 +356,16 @@ export const MODULES = [
   'budget'
 ];
 
+/**
+ * สิทธิ์รายเมนูตั้งต้นของ Regional / Staff / Supervisor ที่สร้างใหม่ — ตามที่เจ้าของงานกำหนด
+ * ใช้ตอนนำเข้าผู้ใช้หลายคนทีเดียว (ไม่มีคอลัมน์สิทธิ์ในไฟล์) ให้ได้ค่าเดียวกับฟอร์มเพิ่มผู้ใช้
+ * ⚠️ มีค่าเดียวกันอยู่ที่ REGIONAL_DEFAULT_PERMS ใน web/index.html — แก้ต้องแก้ทั้ง 2 ที่
+ */
+export const REGIONAL_DEFAULT_PERMISSIONS = {
+  airlist: 'view', plan: 'edit', history: 'edit', repair: 'edit',
+  cleaningform: 'edit', repairform: 'edit', installform: 'edit', budget: 'none'
+};
+
 export const MODULE_LABELS_TH = {
   airlist: 'รายการเครื่อง',
   plan: 'แผนล้างแอร์',

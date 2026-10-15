@@ -1258,9 +1258,18 @@
             <h2 class="text-2xl font-bold text-gray-800">จัดการผู้ใช้งาน</h2>
             <p class="text-sm text-gray-500">บัญชีผู้ใช้งาน บทบาท และ Region ที่รับผิดชอบ</p>
           </div>
-          <button onclick="openUserModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-            <i class="ph ph-user-plus"></i> เพิ่มผู้ใช้งาน
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <input type="file" id="fileImportUsers" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+            <button onclick="downloadUserTemplate(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="โหลดไฟล์ Excel เปล่าไปกรอกรายชื่อผู้ใช้หลายคน">
+              <i class="ph ph-download-simple"></i> Template
+            </button>
+            <button onclick="document.getElementById('fileImportUsers').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2" title="สร้างบัญชีหลายคนทีเดียวจากไฟล์ Excel/CSV (หรือลากไฟล์มาวางที่หน้านี้) — ดูผลก่อนยืนยันเสมอ">
+              <i class="ph ph-upload-simple"></i> นำเข้า (Excel/CSV)
+            </button>
+            <button onclick="openUserModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+              <i class="ph ph-user-plus"></i> เพิ่มผู้ใช้งาน
+            </button>
+          </div>
         </div>
 
         <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800 flex items-start gap-2">
@@ -2772,7 +2781,8 @@
       // งบประมาณ
       openBudgetModal: 'budget', saveBudget: 'budget',
       // จัดการผู้ใช้
-      openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin'
+      openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin',
+      fileImportUsers: 'admin', downloadUserTemplate: 'admin', confirmUserImport: 'admin'
     };
 
     /** ทำคำสั่งของสิทธิ์นี้ได้ไหม */
@@ -3092,6 +3102,163 @@
           </td>
         </tr>`).join('');
     }
+
+    /* ============== นำเข้าผู้ใช้หลายคนทีเดียว (Excel/CSV) ============== */
+    // แถวที่อ่านจากไฟล์ เก็บไว้ระหว่างที่หน้าต่างยืนยันเปิดอยู่ — ส่งแถวชุดเดิมกลับไปตอนยืนยัน
+    // เซิร์ฟเวอร์คำนวณใหม่เอง ไม่เชื่อแผนที่หน้าเว็บส่งมา · ล้างทิ้งทันทีที่ปิดหน้าต่าง (มีรหัสผ่านอยู่ในนี้)
+    let userImportRows = null;
+
+    async function downloadUserTemplate(btn) {
+      const old = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>'; }
+      try {
+        const res = await call('getUserImportTemplate');
+        const cols = (res && res.columns) || [];
+        if (!cols.length) throw new Error('ไม่ได้รับรูปแบบคอลัมน์จากเซิร์ฟเวอร์');
+        const fill = XLSX.utils.aoa_to_sheet([cols.map(c => c.name)]);
+        fill['!cols'] = cols.map(c => ({ wch: Math.max(14, c.name.length + 4) }));
+        const help = XLSX.utils.aoa_to_sheet([
+          ['คอลัมน์', 'ต้องกรอก', 'คำอธิบาย', 'ตัวอย่าง'],
+          ...cols.map(c => [c.name, c.required ? 'ต้องกรอก' : '', c.desc, c.example]),
+          [],
+          ['วิธีใช้: กรอกในชีต "กรอกข้อมูล" แถวละ 1 คน (ห้ามแก้ชื่อหัวคอลัมน์) แล้วกด "นำเข้า (Excel/CSV)" ในหน้าจัดการผู้ใช้ หรือลากไฟล์มาวางที่หน้านั้น'],
+          ['Username ที่มีอยู่ในระบบแล้วจะถูกข้าม (ไม่แก้ข้อมูลและไม่เปลี่ยนรหัสผ่านเดิม) · สิทธิ์รายเมนูได้ค่าตั้งต้นเหมือนฟอร์มเพิ่มผู้ใช้ ปรับรายคนทีหลังได้ · ดูผลก่อนยืนยันทุกครั้ง']
+        ]);
+        help['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 70 }, { wch: 24 }];
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, fill, 'กรอกข้อมูล');
+        XLSX.utils.book_append_sheet(book, help, 'คำอธิบาย');
+        XLSX.writeFile(book, 'Users_Template.xlsx');
+        showToast('โหลด Template แล้ว — กรอกในชีตแรก แล้วกด "นำเข้า (Excel/CSV)"');
+      } catch (err) {
+        showToast('โหลด Template ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      }
+    }
+    window.downloadUserTemplate = downloadUserTemplate;
+
+    /** อ่านไฟล์ที่เลือก/ลากมาวาง → ขอผลตรวจจากเซิร์ฟเวอร์ → เปิดหน้าต่างให้ยืนยัน */
+    async function readUserImportFile(file) {
+      if (!file) return;
+      showLoading(true);
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const isCsv = file.name.toLowerCase().endsWith('.csv');
+        const book = isCsv ? XLSX.read(decodeCsvText(bytes), { type: 'string' }) : XLSX.read(bytes, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], { raw: false, defval: '' });
+        if (!rows.length) throw new Error('ไม่พบข้อมูลในไฟล์');
+        const missing = ['Username', 'บทบาท', 'รหัสผ่าน'].filter(h => !(h in rows[0]));
+        if (missing.length) {
+          throw new Error('ไฟล์ไม่มีคอลัมน์ ' + missing.join(', ') + ' — กดปุ่ม "Template" เพื่อโหลดไฟล์ที่มีคอลัมน์ครบไปกรอก');
+        }
+        userImportRows = rows;
+        const plan = await call('planUserImport', rows);
+        showLoading(false);
+        if (plan) showUserImportPreview(plan, file.name);
+        else userImportRows = null;
+      } catch (err) {
+        userImportRows = null;
+        showLoading(false);
+        showToast('อ่านไฟล์ไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+      }
+    }
+
+    function showUserImportPreview(plan, fileName) {
+      const c = plan.counts;
+      const blocked = c.errors > 0;
+      const tile = (label, n, tone) => `<div class="rounded-lg border ${tone} px-3 py-2 text-center">
+          <div class="text-xl font-bold tabular-nums">${n.toLocaleString()}</div><div class="text-xs">${esc(label)}</div></div>`;
+      const section = (title, n, body) => !n ? '' : `
+        <details class="border border-gray-200 rounded-lg" ${n <= 20 ? 'open' : ''}>
+          <summary class="px-3 py-2 text-sm font-medium text-gray-700 cursor-pointer">${esc(title)} (${n.toLocaleString()})</summary>
+          <div class="px-3 pb-3 max-h-64 overflow-y-auto">${body}</div>
+        </details>`;
+      const line = (row, who, text, cls = 'text-gray-600') => `<div class="text-xs py-1 border-t border-gray-100">
+          <span class="text-gray-400">แถว ${row}</span> <span class="font-mono font-medium text-gray-700">${esc(who)}</span> — <span class="${cls}">${esc(text)}</span></div>`;
+      const addRows = plan.adds.map(a => `<tr class="border-t border-gray-100">
+          <td class="px-2 py-1.5 font-mono text-xs text-emerald-700">${esc(a.username)}</td>
+          <td class="px-2 py-1.5 text-xs text-gray-700">${esc(a.name) || '-'}</td>
+          <td class="px-2 py-1.5 text-xs text-gray-600">${esc(a.roleTitle)}</td>
+          <td class="px-2 py-1.5 text-xs text-gray-600">${a.company ? esc(a.company) + (a.newCompany ? ' <span class="text-amber-600">(เพิ่มใหม่)</span>' : '') : (a.regions.length ? 'Region ' + esc(a.regions.join(', ')) : 'ทุก Region')}</td></tr>`).join('');
+
+      document.getElementById('modalRoot').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeUserImport()"></div>
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl relative z-10 animate-[fadeIn_0.2s_ease] max-h-[90vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-upload-simple text-emerald-600"></i> ตรวจก่อนนำเข้าผู้ใช้</h3>
+                <p class="text-xs text-gray-500 mt-0.5">${esc(fileName)}</p>
+              </div>
+              <button onclick="closeUserImport()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+              <div class="grid grid-cols-3 gap-2">
+                ${tile('สร้างบัญชีใหม่', c.adds, 'border-emerald-200 bg-emerald-50 text-emerald-700')}
+                ${tile('ข้าม (มีอยู่แล้ว)', c.skips, 'border-gray-200 bg-gray-50 text-gray-600')}
+                ${tile('ข้อผิดพลาด', c.errors, c.errors ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 bg-gray-50 text-gray-400')}
+              </div>
+              ${blocked ? `<div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg p-3 flex gap-2">
+                  <i class="ph ph-warning-circle text-lg shrink-0"></i>
+                  <p>มีข้อผิดพลาด ${c.errors.toLocaleString()} แถว — <b>ระบบจะไม่สร้างบัญชีใดเลยจนกว่าจะแก้ให้หมด</b> แก้ในไฟล์แล้วเลือกไฟล์ใหม่อีกครั้ง</p></div>` : ''}
+              ${section('ข้อผิดพลาด ต้องแก้ก่อน', c.errors, plan.errors.map(e => line(e.row, e.username || '(ไม่มี Username)', e.message, 'text-red-700')).join(''))}
+              ${section('บัญชีที่จะสร้าง', c.adds, `<table class="w-full text-sm"><tbody>${addRows}</tbody></table>`)}
+              ${section('ข้าม', c.skips, plan.skips.map(k => line(k.row, k.username, k.reason)).join(''))}
+              <div class="bg-blue-50 text-[#1153a1] text-xs p-3 rounded-lg space-y-1">
+                <p><i class="ph ph-info"></i> รหัสผ่านตามที่ใส่ในไฟล์ — ผู้ใช้เปลี่ยนเองได้หลังเข้าระบบ แล้วลบไฟล์นี้ทิ้งหลังแจกรหัส</p>
+                <p><i class="ph ph-info"></i> สิทธิ์รายเมนูของ Regional / Staff / Supervisor ได้ค่าตั้งต้นเหมือนฟอร์มเพิ่มผู้ใช้ ปรับรายคนทีหลังได้</p>
+                <p><i class="ph ph-info"></i> ระบบสำรองฐานข้อมูลให้อัตโนมัติก่อนสร้างบัญชี</p>
+              </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
+              <button onclick="closeUserImport()" class="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">ยกเลิก</button>
+              <button id="userImportConfirm" onclick="confirmUserImport(${c.adds}, this)" ${blocked || !c.adds ? 'disabled' : ''}
+                class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium">
+                สร้าง ${c.adds.toLocaleString()} บัญชี
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function closeUserImport() { userImportRows = null; closeModal(); }
+
+    /** ยืนยันแล้วสร้างจริง โดยส่งจำนวนที่เห็นไปให้เซิร์ฟเวอร์ตรวจซ้ำ */
+    async function confirmUserImport(adds, btn) {
+      if (!userImportRows) { showToast('กรุณาเลือกไฟล์ใหม่อีกครั้ง', 'error'); return; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> กำลังสร้าง...'; }
+      try {
+        const res = await call('applyUserImport', { rows: userImportRows, expect: { adds } });
+        if (!res) { if (btn) { btn.disabled = false; btn.textContent = 'สร้าง ' + adds + ' บัญชี'; } return; }
+        userImportRows = null;
+        closeModal();
+        showToast('สร้างบัญชีแล้ว ' + res.added + ' คน' + (res.skipped ? ' · ข้าม ' + res.skipped + ' คน' : ''));
+        await loadUsers();
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'สร้าง ' + adds + ' บัญชี'; }
+      }
+    }
+    Object.assign(window, { closeUserImport, confirmUserImport, showUserImportPreview });
+
+    // เลือกไฟล์ หรือลากไฟล์มาวางที่หน้าจัดการผู้ใช้
+    (() => {
+      const input = document.getElementById('fileImportUsers');
+      const view = document.getElementById('view-users');
+      if (!input || !view) return;
+      input.addEventListener('change', e => { const file = e.target.files[0]; e.target.value = ''; readUserImportFile(file); });
+      const ring = on => { view.classList.toggle('ring-2', on); view.classList.toggle('ring-[#f47920]', on); };
+      const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+      let depth = 0;
+      view.addEventListener('dragenter', e => { if (hasFiles(e)) { depth++; ring(true); } });
+      view.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) ring(false); });
+      view.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+      view.addEventListener('drop', e => {
+        if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+        e.preventDefault(); depth = 0; ring(false);
+        readUserImportFile(e.dataTransfer.files[0]);
+      });
+    })();
 
     // ชื่อโมดูลที่กำหนดสิทธิ์รายเมนูได้ พร้อมป้ายภาษาไทยสำหรับแสดงในหน้าจัดการผู้ใช้
     const PERMISSION_MODULES = [

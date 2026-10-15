@@ -249,127 +249,133 @@ export async function saveUser(ctx, user) {
   return ctx.withLock(async () => {
     await ctx.assertAdmin();
     await ctx.ensureBase();
-
-    const username = String(user.Username || '').trim();
-    assertUsernameFormat(username);
-
-    const list = ctx.ss.objects(SHEETS.USERS);
-    const isEdit = !!user._row;
-
-    // ตรวจว่าแถวนั้นยังเป็นผู้ใช้คนเดิมอยู่จริง ก่อนตรวจอย่างอื่นทั้งหมด
-    //
-    // _row คือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบแถวข้างบนไป
-    // ระหว่างที่อีกคนเปิดหน้าค้างไว้ คำสั่งนี้จะไปเขียนทับผู้ใช้คนถัดไปแทน
-    //
-    // เทียบกับชื่อ "ตอนที่เปิดหน้ามา" ไม่ใช่ชื่อใหม่ในฟอร์ม เพราะการแก้ไข
-    // เปลี่ยนชื่อผู้ใช้ได้ด้วย ถ้าเทียบกับชื่อใหม่จะไม่มีวันตรงกันเลย
-    //
-    // ต้องอยู่ก่อนด่านเช็คชื่อซ้ำ ไม่งั้นพอลำดับเลื่อน คนใช้จะได้ข้อความว่า
-    // "มี Username นี้อยู่แล้ว" ซึ่งชี้ไปผิดเรื่องจนหาสาเหตุไม่เจอ
-    if (isEdit) {
-      ctx.assertRowIs(SHEETS.USERS, Number(user._row), 'Username', user._expectUsername, 'ผู้ใช้');
-    }
-
-    // เช็ค Username ซ้ำกับผู้ใช้คนอื่น (ยกเว้นแถวของตัวเองตอนแก้ไข)
-    const clash = list.some(u =>
-      (!isEdit || u._row !== Number(user._row)) &&
-      String(u.Username || '').trim().toLowerCase() === username.toLowerCase()
-    );
-    if (clash) throw new Error('มี Username นี้อยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น');
-
-    // Permissions ส่งมาเป็น object เช่น {airlist:'edit', plan:'view', ...}
-    // เก็บลงชีตเป็นข้อความ "airlist:edit,plan:view,..." เฉพาะโมดูลที่รู้จัก
-    const permObj = user.Permissions && typeof user.Permissions === 'object' ? user.Permissions : {};
-    const permStr = MODULES
-      .map(m => m + ':' + (['edit', 'view', 'none'].includes(permObj[m]) ? permObj[m] : 'view'))
-      .join(',');
-
-    /**
-     * ช่องรหัสผ่านที่จะเขียนลงแถว
-     *
-     * ตั้งรหัสใหม่  -> เขียนแฮช และล้างสองช่องเดิมทิ้ง
-     * แก้ไขโดยไม่แตะรหัส -> ไม่ใส่ช่องรหัสลงใน payload เลยสักช่อง
-     *
-     * เหตุผลของกรณีที่สอง: writeByHeaders เขียนเฉพาะช่องที่ส่งไป ช่องที่ไม่ส่ง
-     * จะไม่ถูกแตะเลย การไม่ส่งจึงตรงกับเจตนา "ไม่ได้ตั้งใจเปลี่ยนรหัส" ที่สุด
-     *
-     * โค้ดเดิมอ่าน existing.Password มาเขียนกลับ ซึ่งไม่ได้ผิดจนข้อมูลหาย
-     * (เขียนค่าว่างทับช่องที่ว่างอยู่แล้ว ส่วนแฮชไม่ถูกแตะ) แต่เป็นรูปแบบที่
-     * เชิญชวนให้ผิดในอนาคต เพราะพอมีช่องรหัสสามช่องแล้ว คนที่มาเก็บกวาดโค้ด
-     * ทีหลังมีโอกาสใส่ทั้งสามช่องลง payload พร้อมกัน ซึ่งจะล้างรหัสทิ้งจริง
-     * เทสต์ "แก้ไขผู้ใช้โดยไม่แตะรหัสผ่าน" คุมกรณีนั้นไว้ (ลองแล้วแดงจริง)
-     */
-    let passwordFields;
-    if (user.Password) {
-      if (String(user.Password).length < 6) throw new Error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
-      passwordFields = {
-        PasswordHash: await makePasswordHash(user.Password),
-        PasswordSalt: '',
-        Password: ''
-      };
-    } else if (isEdit) {
-      passwordFields = {};
-    } else {
-      throw new Error('กรุณาตั้งรหัสผ่านสำหรับผู้ใช้ใหม่');
-    }
-
-    // บัญชีผู้รับเหมาต้องเลือกผู้รับเหมาจากรายชื่อที่มีอยู่ ห้ามพิมพ์ชื่อเอง
-    // ขอบเขตของบัญชีนี้มาจาก Node ที่มอบหมายให้รหัสนั้น พิมพ์ผิดคือเห็นงานผิดเจ้า
-    //
-    // ภูมิภาคกับสิทธิ์รายเมนูล้างทิ้ง เพราะผู้รับเหมาใช้สิทธิ์ตายตัว (CONTRACTOR_PERMISSIONS)
-    // ถ้าเก็บค่าเก่าค้างไว้ วันที่เปลี่ยนบัญชีกลับเป็นเจ้าหน้าที่ สิทธิ์เก่าจะกลับมาเองโดยไม่มีใครตั้ง
-    // Staff / Supervisor เก็บค่าของตัวเอง แต่ตรวจสิทธิ์แบบ Regional (ดู ROLE_TITLES ใน schema.js)
-    // ค่าอื่นที่ไม่รู้จัก ถือเป็น Regional — ปลอดภัยกว่าเดาให้เป็นบทบาทที่เห็นมากกว่า
-    const role = ['Admin', 'Contractor', ...REGIONAL_ROLES].includes(user.Role) ? user.Role : 'RegionAdmin';
-    let contractorId = '';
-    if (role === 'Contractor') {
-      contractorId = String(user.ContractorID || '').trim();
-      if (contractorId) {
-        const exists = ctx.ss.objects(SHEETS.CONTRACTOR)
-          .some(c => String(c.ID || '').trim().toUpperCase() === contractorId.toUpperCase());
-        if (!exists) throw new Error('ไม่พบผู้รับเหมารหัส ' + contractorId + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
-      } else if (String(user.NewContractorName || '').trim()) {
-        // บริษัทที่ยังไม่มีในรายชื่อ — เพิ่มให้เลย แล้วจะไปโผล่เป็นตัวเลือกในแผนล้างทันที
-        contractorId = await findOrCreateContractor(ctx, user.NewContractorName);
-      } else {
-        throw new Error('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมาที่บัญชีนี้สังกัด');
-      }
-    }
-
-    const isActive = !(user.Active === false || user.Active === 'false');
-    const payload = {
-      Username: username,
-      Email: user.Email || '',
-      Name: user.Name || '',
-      Role: role,
-      Regions: role === 'Contractor' ? ''
-        : (Array.isArray(user.Regions) ? user.Regions.join(',') : (user.Regions || '')),
-      // ไม่ใช้ค่าว่าง เพราะช่องว่าง = "แก้ไขได้ทุกเมนู" (ผู้ใช้ยุคก่อนมีระบบสิทธิ์)
-      Permissions: role === 'Contractor' ? MODULES.map(m => m + ':none').join(',') : permStr,
-      ContractorID: contractorId,
-      Active: isActive,
-      UpdatedAt: ymdhms(new Date()),
-      UpdatedBy: await ctx.currentUser(),
-      ...passwordFields
-    };
-
-    if (isEdit) {
-      ctx.ss.writeByHeaders(SHEETS.USERS, Number(user._row), payload);
-    } else {
-      const headers = ctx.ss.headers(SHEETS.USERS);
-      ctx.ss.appendRow(SHEETS.USERS, headers.map(h => (payload[h] !== undefined ? payload[h] : '')));
-    }
-
-    await ctx.ss.flush();
-
-    // ปิดบัญชีหรือเปลี่ยนรหัสผ่าน = ต้องเตะ session ที่ค้างอยู่ออกด้วย
-    // ไม่งั้นผู้ใช้ที่ถูกปิดบัญชีจะยังใช้งานต่อได้จนกว่า session จะหมดอายุเอง (นานถึง 6 ชั่วโมง)
-    if (!isActive || user.Password) {
-      await ctx.state.destroySessionsOf(username);
-    }
-
+    await writeUserRecord(ctx, user);
     return getUsers(ctx);
   });
+}
+
+/**
+ * เขียนผู้ใช้หนึ่งคนลงตาราง (สร้างใหม่/แก้ไข) — ผู้เรียกต้องถือล็อกและตรวจสิทธิ์ Admin มาแล้ว
+ * แยกออกมาให้นำเข้าผู้ใช้หลายคนทีเดียวเรียกซ้ำได้ใต้ล็อกเดียว (ล็อกของระบบซ้อนกันไม่ได้)
+ */
+export async function writeUserRecord(ctx, user) {
+  const username = String(user.Username || '').trim();
+  assertUsernameFormat(username);
+
+  const list = ctx.ss.objects(SHEETS.USERS);
+  const isEdit = !!user._row;
+
+  // ตรวจว่าแถวนั้นยังเป็นผู้ใช้คนเดิมอยู่จริง ก่อนตรวจอย่างอื่นทั้งหมด
+  //
+  // _row คือ "ลำดับที่เท่าไหร่ในตาราง" ไม่ใช่ id ถาวร มีคนลบแถวข้างบนไป
+  // ระหว่างที่อีกคนเปิดหน้าค้างไว้ คำสั่งนี้จะไปเขียนทับผู้ใช้คนถัดไปแทน
+  //
+  // เทียบกับชื่อ "ตอนที่เปิดหน้ามา" ไม่ใช่ชื่อใหม่ในฟอร์ม เพราะการแก้ไข
+  // เปลี่ยนชื่อผู้ใช้ได้ด้วย ถ้าเทียบกับชื่อใหม่จะไม่มีวันตรงกันเลย
+  //
+  // ต้องอยู่ก่อนด่านเช็คชื่อซ้ำ ไม่งั้นพอลำดับเลื่อน คนใช้จะได้ข้อความว่า
+  // "มี Username นี้อยู่แล้ว" ซึ่งชี้ไปผิดเรื่องจนหาสาเหตุไม่เจอ
+  if (isEdit) {
+    ctx.assertRowIs(SHEETS.USERS, Number(user._row), 'Username', user._expectUsername, 'ผู้ใช้');
+  }
+
+  // เช็ค Username ซ้ำกับผู้ใช้คนอื่น (ยกเว้นแถวของตัวเองตอนแก้ไข)
+  const clash = list.some(u =>
+    (!isEdit || u._row !== Number(user._row)) &&
+    String(u.Username || '').trim().toLowerCase() === username.toLowerCase()
+  );
+  if (clash) throw new Error('มี Username นี้อยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น');
+
+  // Permissions ส่งมาเป็น object เช่น {airlist:'edit', plan:'view', ...}
+  // เก็บลงชีตเป็นข้อความ "airlist:edit,plan:view,..." เฉพาะโมดูลที่รู้จัก
+  const permObj = user.Permissions && typeof user.Permissions === 'object' ? user.Permissions : {};
+  const permStr = MODULES
+    .map(m => m + ':' + (['edit', 'view', 'none'].includes(permObj[m]) ? permObj[m] : 'view'))
+    .join(',');
+
+  /**
+   * ช่องรหัสผ่านที่จะเขียนลงแถว
+   *
+   * ตั้งรหัสใหม่  -> เขียนแฮช และล้างสองช่องเดิมทิ้ง
+   * แก้ไขโดยไม่แตะรหัส -> ไม่ใส่ช่องรหัสลงใน payload เลยสักช่อง
+   *
+   * เหตุผลของกรณีที่สอง: writeByHeaders เขียนเฉพาะช่องที่ส่งไป ช่องที่ไม่ส่ง
+   * จะไม่ถูกแตะเลย การไม่ส่งจึงตรงกับเจตนา "ไม่ได้ตั้งใจเปลี่ยนรหัส" ที่สุด
+   *
+   * โค้ดเดิมอ่าน existing.Password มาเขียนกลับ ซึ่งไม่ได้ผิดจนข้อมูลหาย
+   * (เขียนค่าว่างทับช่องที่ว่างอยู่แล้ว ส่วนแฮชไม่ถูกแตะ) แต่เป็นรูปแบบที่
+   * เชิญชวนให้ผิดในอนาคต เพราะพอมีช่องรหัสสามช่องแล้ว คนที่มาเก็บกวาดโค้ด
+   * ทีหลังมีโอกาสใส่ทั้งสามช่องลง payload พร้อมกัน ซึ่งจะล้างรหัสทิ้งจริง
+   * เทสต์ "แก้ไขผู้ใช้โดยไม่แตะรหัสผ่าน" คุมกรณีนั้นไว้ (ลองแล้วแดงจริง)
+   */
+  let passwordFields;
+  if (user.Password) {
+    if (String(user.Password).length < 6) throw new Error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+    passwordFields = {
+      PasswordHash: await makePasswordHash(user.Password),
+      PasswordSalt: '',
+      Password: ''
+    };
+  } else if (isEdit) {
+    passwordFields = {};
+  } else {
+    throw new Error('กรุณาตั้งรหัสผ่านสำหรับผู้ใช้ใหม่');
+  }
+
+  // บัญชีผู้รับเหมาต้องเลือกผู้รับเหมาจากรายชื่อที่มีอยู่ ห้ามพิมพ์ชื่อเอง
+  // ขอบเขตของบัญชีนี้มาจาก Node ที่มอบหมายให้รหัสนั้น พิมพ์ผิดคือเห็นงานผิดเจ้า
+  //
+  // ภูมิภาคกับสิทธิ์รายเมนูล้างทิ้ง เพราะผู้รับเหมาใช้สิทธิ์ตายตัว (CONTRACTOR_PERMISSIONS)
+  // ถ้าเก็บค่าเก่าค้างไว้ วันที่เปลี่ยนบัญชีกลับเป็นเจ้าหน้าที่ สิทธิ์เก่าจะกลับมาเองโดยไม่มีใครตั้ง
+  // Staff / Supervisor เก็บค่าของตัวเอง แต่ตรวจสิทธิ์แบบ Regional (ดู ROLE_TITLES ใน schema.js)
+  // ค่าอื่นที่ไม่รู้จัก ถือเป็น Regional — ปลอดภัยกว่าเดาให้เป็นบทบาทที่เห็นมากกว่า
+  const role = ['Admin', 'Contractor', ...REGIONAL_ROLES].includes(user.Role) ? user.Role : 'RegionAdmin';
+  let contractorId = '';
+  if (role === 'Contractor') {
+    contractorId = String(user.ContractorID || '').trim();
+    if (contractorId) {
+      const exists = ctx.ss.objects(SHEETS.CONTRACTOR)
+        .some(c => String(c.ID || '').trim().toUpperCase() === contractorId.toUpperCase());
+      if (!exists) throw new Error('ไม่พบผู้รับเหมารหัส ' + contractorId + ' กรุณารีเฟรชหน้าจอแล้วเลือกใหม่');
+    } else if (String(user.NewContractorName || '').trim()) {
+      // บริษัทที่ยังไม่มีในรายชื่อ — เพิ่มให้เลย แล้วจะไปโผล่เป็นตัวเลือกในแผนล้างทันที
+      contractorId = await findOrCreateContractor(ctx, user.NewContractorName);
+    } else {
+      throw new Error('กรุณาเลือกหรือพิมพ์ชื่อบริษัทผู้รับเหมาที่บัญชีนี้สังกัด');
+    }
+  }
+
+  const isActive = !(user.Active === false || user.Active === 'false');
+  const payload = {
+    Username: username,
+    Email: user.Email || '',
+    Name: user.Name || '',
+    Role: role,
+    Regions: role === 'Contractor' ? ''
+      : (Array.isArray(user.Regions) ? user.Regions.join(',') : (user.Regions || '')),
+    // ไม่ใช้ค่าว่าง เพราะช่องว่าง = "แก้ไขได้ทุกเมนู" (ผู้ใช้ยุคก่อนมีระบบสิทธิ์)
+    Permissions: role === 'Contractor' ? MODULES.map(m => m + ':none').join(',') : permStr,
+    ContractorID: contractorId,
+    Active: isActive,
+    UpdatedAt: ymdhms(new Date()),
+    UpdatedBy: await ctx.currentUser(),
+    ...passwordFields
+  };
+
+  if (isEdit) {
+    ctx.ss.writeByHeaders(SHEETS.USERS, Number(user._row), payload);
+  } else {
+    const headers = ctx.ss.headers(SHEETS.USERS);
+    ctx.ss.appendRow(SHEETS.USERS, headers.map(h => (payload[h] !== undefined ? payload[h] : '')));
+  }
+
+  await ctx.ss.flush();
+
+  // ปิดบัญชีหรือเปลี่ยนรหัสผ่าน = ต้องเตะ session ที่ค้างอยู่ออกด้วย
+  // ไม่งั้นผู้ใช้ที่ถูกปิดบัญชีจะยังใช้งานต่อได้จนกว่า session จะหมดอายุเอง (นานถึง 6 ชั่วโมง)
+  if (!isActive || user.Password) {
+    await ctx.state.destroySessionsOf(username);
+  }
 }
 
 export async function deleteUser(ctx, row, expectUsername) {

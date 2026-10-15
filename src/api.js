@@ -15,6 +15,7 @@ import {
   getSystemStatus, setupFirstAdmin, login, logout, changeOwnPassword,
   getUsers, saveUser, deleteUser
 } from './modules/users.js';
+import { getUserImportTemplate, planUserImport, applyUserImport } from './modules/user-import.js';
 import {
   getCleaningFormNodes, getCleaningForms, saveCleaningForm, deleteCleaningForm,
   uploadNodeDocuments, getCleaningDocHtml, getCleaningBlankDocHtml, getCleaningBlankXlsx,
@@ -113,6 +114,9 @@ const API_FUNCTIONS = {
   getUsers,
   saveUser,
   deleteUser,
+  getUserImportTemplate,
+  planUserImport,
+  applyUserImport,
 
   // รายชื่อผู้รับเหมา (ตัวเลือกในแผนล้างและหน้าจัดการผู้ใช้)
   getContractors,
