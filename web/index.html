@@ -3418,6 +3418,10 @@
       };
       try {
         currentUsersList = await call('saveUser', user);
+        // บริษัทใหม่เพิ่งถูกสร้างที่เซิร์ฟเวอร์ — โหลดรายชื่อใหม่ ไม่งั้นตารางโชว์รหัส (CT001) แทนชื่อบริษัท
+        if (newCompany) {
+          try { contractorList = (await callQuiet('getContractors')) || contractorList; } catch (e) {}
+        }
         renderUsersTable();
         closeModal();
         showToast('บันทึกผู้ใช้งานสำเร็จ', 'success');
