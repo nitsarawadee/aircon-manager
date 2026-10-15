@@ -4051,7 +4051,7 @@
         ? `<tr><td colspan="${cols}" class="px-4 py-12 text-center text-gray-400">
              <i class="ph ph-clock-counter-clockwise text-3xl mb-2 block"></i>เครื่องนี้ยังไม่มีประวัติที่บันทึกไว้
            </td></tr>`
-        : rows.map(h => {
+        : groupHistoryByCase(rows).flatMap(g => g.map((h, k) => ({ h, child: k > 0 }))).map(({ h, child }) => {
             const isSwap = String(h.EventType || '').trim() === 'เปลี่ยนเครื่อง';
 
             // ช่องรายละเอียดของใบเปลี่ยนเครื่องเป็นที่เดียวที่เก็บสเปกของเครื่องที่ถูก
@@ -4089,8 +4089,8 @@
             }
 
             return head + `
-            <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : ''}">
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700 align-top" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${esc(displayDocId(h)) || '-'}</td>
+            <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : child ? ' bg-slate-50/60' : ''}">
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'} align-top" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : ''}${esc(displayDocId(h)) || '-'}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 align-top">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 align-top">${eventTypeBadge(h.EventType)}</td>
               ${detailCell}
@@ -7545,16 +7545,20 @@
         return;
       }
 
-      historyPage = clampPage(historyPage, displayHistory.length);
+      // เคสเดียวกันอยู่ติดกัน (ดู groupHistoryByCase) — กรองเฉพาะเหตุการณ์เดียวแล้วไม่จับกลุ่ม (แถวของเคสไม่ครบอยู่แล้ว)
+      const groups = eventType ? displayHistory.map(h => [h]) : groupHistoryByCase(displayHistory);
+      historyPage = clampPage(historyPage, groups.length);
       // กดเลขที่แล้วไปหน้าแบบฟอร์มเอกสารของเคส/ใบนั้น — เฉพาะคนที่มีเมนูแบบฟอร์มเอกสาร
       // เคสที่ปิดแบบซ่อมเองไม่มีเอกสาร กดแล้วเปิดสรุปเคสแทน ทุกคนที่เห็นหน้าประวัติกดได้
       const hasDocsMenu = !!document.querySelector('[data-tab="cleaningform"]');
       const selfCases = selfRepairCaseIds();
       const canOpenDocs = h => hasDocsMenu || !!String(h.CaseID || '').trim();
       // เลขอ้างอิง: งานซ่อมเรื่องเดียวกันใช้เลข CM ของใบแจ้งซ่อมทั้งเรื่อง (ดู displayDocId) — เจ้าของงานกำหนด 15/10/2569
-      tb.innerHTML = displayHistory.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE).map(h => `
-        <tr class="hover:bg-blue-50/50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium text-slate-700" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${
+      const pageRows = groups.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE)
+        .flatMap(g => g.map((h, k) => ({ h, child: k > 0 })));
+      tb.innerHTML = pageRows.map(({ h, child }) => `
+        <tr class="hover:bg-blue-50/50 transition-colors${child ? ' bg-slate-50/60' : ''}">
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'}" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : ''}${
             !displayDocId(h) ? '-'
             : canOpenDocs(h)
               ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
@@ -7562,7 +7566,7 @@
                     : !hasDocsMenu ? 'ดูสรุปเคสนี้'
                     : isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์'
                     : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
-                  class="text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
+                  class="${child ? 'text-slate-400 hover:text-[#1153a1]' : 'text-[#1153a1] hover:text-[#0e4485]'} underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
               : esc(displayDocId(h))
           }</td>
           <td class="px-4 py-3 whitespace-nowrap text-gray-600"><i class="ph ph-calendar-blank text-gray-400 mr-1"></i>${esc(fmtDate(h.Date))}</td>
@@ -7577,7 +7581,7 @@
             <button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
           </td>
         </tr>`).join('');
-      renderTablePager('historyPaginationBar', displayHistory.length, historyPage, 'goToHistoryPage');
+      renderTablePager('historyPaginationBar', groups.length, historyPage, 'goToHistoryPage');
       lockViewOnlySection('history');
     }
 
@@ -8312,6 +8316,30 @@
       const caseId = String(h.CaseID == null ? '' : h.CaseID).trim();
       return caseId || String(h.ID == null ? '' : h.ID).trim();
     }
+
+    /**
+     * จับแถวของเคสเดียวกัน (เลข CM เดียวกัน) มาอยู่ติดกัน — เจ้าของงานขอ 15/10/2569
+     *
+     * รายการเข้ามาเรียงใหม่ไปเก่า กลุ่มจึงอยู่ตรงเหตุการณ์ล่าสุดของเคส (เคสที่เพิ่งขยับขึ้นก่อน)
+     * ข้างในกลุ่มคงลำดับเดิม (ใหม่ไปเก่า) · แถวที่ไม่มีเลขเคส (ล้าง/ติดตั้ง) เป็นกลุ่มเดี่ยว
+     *
+     * @returns {Array<Array>} กลุ่มของแถว — แบ่งหน้าตามกลุ่ม เคสเดียวไม่ถูกตัดคนละหน้า
+     */
+    function groupHistoryByCase(rows) {
+      const groups = [];
+      const byCase = new Map();
+      for (const h of rows) {
+        const c = String(h.CaseID == null ? '' : h.CaseID).trim();
+        if (c && byCase.has(c)) { byCase.get(c).push(h); continue; }
+        const g = [h];
+        groups.push(g);
+        if (c) byCase.set(c, g);
+      }
+      return groups;
+    }
+
+    /** ช่องเลขอ้างอิงของแถวที่ต่อจากแถวแรกของเคส — ลูกศรนำ ตัวเลขจาง (แบบหน้าแบบฟอร์มเอกสาร) */
+    const caseChildMark = '<span class="mr-1 text-slate-300">&#8627;</span>';
 
     function openCaseIdOf(airCode) {
       const rows = (currentHistory || []).filter(h => sameCode(h.AirCode, airCode) && String(h.CaseID || '').trim());
