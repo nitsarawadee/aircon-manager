@@ -208,6 +208,20 @@ export async function prepareInstall(ctx, record, lookup = code => unitOf(ctx, c
  * @returns {Promise<Object>} แถวที่เขียนลงไป
  */
 export async function writeInstallForm(ctx, record, { units, first, slotBase, companyName }, recordedBy) {
+  // เครื่องเดียวกันออกใบติดตั้งได้ทีละใบ — ใบก่อนหน้าต้องอนุมัติครบ หรือถูกลบ (ยกเลิกการติดตั้ง) ก่อน
+  // ไม่งั้นได้สองใบที่ค้างอยู่พร้อมกัน แล้วอนุมัติใบหนึ่งจะปล่อยเฉพาะเครื่องของใบนั้น อีกใบค้างตลอด
+  // (เครื่องใหม่ตัวอื่นของ Node เดียวกัน เช่น ตัวที่ 3-4 ออกใบแยกได้ตามปกติ เพราะเป็นคนละเครื่อง)
+  for (const unit of Object.values(units)) {
+    const nc = normalizeCode(unit.AirCode);
+    const open = ctx.ss.objects(SHEETS.INSTALLFORM).find(f =>
+      (normalizeCode(f.AirCode1) === nc || normalizeCode(f.AirCode2) === nc) &&
+      isPending(approvalRowOf(ctx, KIND, f.ID)));
+    if (open) {
+      throw new Error('เครื่อง ' + unit.AirCode + ' มีใบติดตั้งเลขที่ ' + (docNoOf(open) || plainText(open.ID)) +
+                      ' ที่ยังอนุมัติไม่ครบ — ต้องอนุมัติให้ครบ หรือให้ Infrastructure ลบใบนั้น (ยกเลิกการติดตั้ง) ก่อนจึงออกใบใหม่ของเครื่องนี้ได้');
+    }
+  }
+
   const row = {
     ID: freshFormId(ctx, SHEETS.INSTALLFORM, 'IF'),
     Date: plainText(record.Date),
