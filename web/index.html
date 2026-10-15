@@ -11201,6 +11201,41 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.openRepairForm = openRepairForm;
 
+  /**
+   * ช่อง ผ่าน / ไม่ผ่าน แบบปุ่มสองปุ่ม แตะทีเดียวจบ — เดิมเป็นดรอปดาวน์ กดยากบนมือถือ (เจ้าของงานขอ 15/10/2569)
+   *
+   * ดรอปดาวน์เดิมยังอยู่ (ซ่อนไว้) และปุ่มเป็นตัวตั้งค่าให้ — โค้ดที่อ่านค่าตอนบันทึกจึงไม่ต้องแก้อะไร
+   * ค่าเริ่มต้นยังเป็น "ยังไม่ได้ตรวจ" (ว่าง) เหมือนเดิม · แตะปุ่มที่เลือกอยู่ซ้ำ = ยกเลิกกลับเป็นว่าง
+   *
+   * @param {string} selectHtml ดรอปดาวน์เดิมทั้งก้อน (ต้องมี option ผ่าน / ไม่ผ่าน)
+   */
+  // สีอ่อนมี ✓ ✗ — แบบ ข ที่เจ้าของงานเลือกจากพรีวิว 4 แบบ (ผ่านเขียว ไม่ผ่านแดง)
+  const PF_CLASS = {
+    off: 'bg-white border-gray-300 text-gray-600',
+    pass: 'bg-emerald-50 border-emerald-500 text-emerald-700',
+    fail: 'bg-rose-50 border-rose-500 text-rose-700'
+  };
+
+  function passFailField(selectHtml) {
+    const btn = (v, tone) => `<button type="button" onclick="pfPick(this)" data-pf="${v}" data-tone="${tone}"
+        class="pf-btn min-h-[44px] rounded-lg border text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${PF_CLASS.off}"><i class="ph ${tone === 'pass' ? 'ph-check' : 'ph-x'}"></i>${v}</button>`;
+    return `<div class="pf-field">${selectHtml.replace('<select ', '<select hidden ')}
+      <div class="grid grid-cols-2 gap-1.5">${btn('ผ่าน', 'pass')}${btn('ไม่ผ่าน', 'fail')}</div></div>`;
+  }
+
+  function pfPick(btn) {
+    const wrap = btn.closest('.pf-field');
+    const sel = wrap.querySelector('select');
+    sel.value = sel.value === btn.dataset.pf ? '' : btn.dataset.pf;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    wrap.querySelectorAll('.pf-btn').forEach(b => {
+      const on = b.dataset.pf === sel.value;
+      [PF_CLASS.off, PF_CLASS.pass, PF_CLASS.fail].join(' ').split(' ').forEach(c => b.classList.remove(c));
+      (on ? PF_CLASS[b.dataset.tone] : PF_CLASS.off).split(' ').forEach(c => b.classList.add(c));
+    });
+  }
+  window.pfPick = pfPick;
+
   /** รายการบันทึกผล 5 ข้อ — การ์ดต่อข้อ ให้กดง่ายบนมือถือ */
   function renderRfChecklist() {
     const box = document.getElementById('rf_checklist');
@@ -11208,9 +11243,9 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     box.innerHTML = REPAIR_CHECKLIST_ITEMS.map(item => {
       const input = item.type === 'check'
-        ? `<select class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none" data-no="${item.no}" data-col="value">
+        ? passFailField(`<select class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none" data-no="${item.no}" data-col="value">
              <option value=""></option><option>ผ่าน</option><option>ไม่ผ่าน</option>
-           </select>`
+           </select>`)
         : `<input class="rf_val w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm outline-none" data-no="${item.no}" data-col="value" inputmode="decimal">`;
 
       return `
@@ -12655,12 +12690,12 @@ const CLEANING_CHECKLIST_ITEMS = [
         <div class="flex-1">
           <div class="text-xs text-gray-400 mb-0.5">เครื่องที่ ${slot + ifBase}</div>
           ${item.type === 'check'
-            ? `<select id="if_c${item.no}_${slot}"
+            ? passFailField(`<select id="if_c${item.no}_${slot}"
                  class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm bg-white outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">
                  <option value="" selected>-</option>
                  <option value="ผ่าน">ผ่าน</option>
                  <option value="ไม่ผ่าน">ไม่ผ่าน</option>
-               </select>`
+               </select>`)
             : `<input id="if_c${item.no}_${slot}" inputmode="decimal"
                  class="w-full min-h-[44px] rounded-lg border-gray-300 border px-2 py-2 text-sm text-center outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600">`}
         </div>`).join('');
