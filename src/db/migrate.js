@@ -195,3 +195,51 @@ export function renameRepairCaseIds(db) {
   }
   return old.length;
 }
+
+/**
+ * เลขเคสงานซ่อม IC/RC → เลขอ้างอิง (CM) ของใบแรกของเคส
+ *
+ * เจ้าของงานกำหนด 15/10/2569: งานซ่อมเรื่องเดียวกันใช้เลข CM เลขเดียวกันทั้งหมด ไม่มีเลข IC แยก
+ * เคสใหม่ได้เลขของใบแจ้งซ่อมตั้งแต่ตอนเปิด (ดู NEW_CASE ใน repair-case.js) — ตัวนี้แปลงเคสที่มีอยู่ก่อน
+ *
+ * ใบแรก = ใบที่บันทึกก่อนสุดของเคส (CreatedAt แล้วลำดับแถว) — กติกาเดียวกับ buildCases
+ * เปลี่ยนพร้อมกันทุกที่ที่เก็บเลขเคส ในคำสั่งเดียว:
+ *   history.CaseID · repair_forms.CaseID · warehouse_units.CaseID · job_assignments.RefID (งานซ่อม)
+ * เลขที่ใบซ่อมเดิม (DocNo) ไม่ถูกแตะ — เป็นเลขที่พิมพ์ลงเอกสารไปแล้ว
+ *
+ * รันซ้ำได้ทุกครั้งที่เปิดเซิร์ฟเวอร์ ไม่เหลือ IC/RC ก็ไม่ทำอะไร
+ * @returns {number} จำนวนเคสที่เปลี่ยนเลข
+ */
+export function caseIdsToFirstEventNo(db) {
+  const old = db.prepare(
+    "SELECT DISTINCT CaseID FROM history WHERE CaseID GLOB 'IC[0-9]*' OR CaseID GLOB 'RC[0-9]*'"
+  ).all().map(r => String(r.CaseID).trim()).filter(Boolean);
+  if (!old.length) return 0;
+
+  const firstOf = db.prepare(
+    'SELECT ID FROM history WHERE CaseID = ? ORDER BY CreatedAt, rowid LIMIT 1');
+  const has = t => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+  const updates = [
+    db.prepare('UPDATE history SET CaseID = ? WHERE CaseID = ?'),
+    has('repair_forms') && db.prepare('UPDATE repair_forms SET CaseID = ? WHERE CaseID = ?'),
+    has('warehouse_units') && db.prepare('UPDATE warehouse_units SET CaseID = ? WHERE CaseID = ?'),
+    has('job_assignments') && db.prepare("UPDATE job_assignments SET RefID = ? WHERE RefID = ? AND Kind = 'repair'")
+  ].filter(Boolean);
+
+  let n = 0;
+  db.exec('BEGIN');
+  try {
+    for (const id of old) {
+      const first = firstOf.get(id);
+      const to = first && String(first.ID || '').trim();
+      if (!to) continue;
+      for (const u of updates) u.run(to, id);
+      n++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return n;
+}

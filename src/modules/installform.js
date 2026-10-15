@@ -281,7 +281,11 @@ export async function writeInstallForm(ctx, record, { units, first, slotBase, co
     if (!unit) continue;
     const pending = ctx.ss.objects(SHEETS.HISTORY).filter(h =>
       normalizeCode(h.AirCode) === normalizeCode(unit.AirCode) && plainText(h.Note).trim() === INSTALL_PENDING_NOTE);
-    const id = pending.length ? plainText(pending[pending.length - 1].ID).trim() : '';
+    // เปลี่ยนเครื่องที่ปิดเคสซ่อม: ใช้เลขของเคส (เลขเดียวทั้งเรื่อง — เจ้าของงานกำหนด 15/10/2569) ถ้ายังว่าง
+    const last = pending.length ? pending[pending.length - 1] : null;
+    const caseNo = last ? plainText(last.CaseID).trim() : '';
+    const id = caseNo && isOwnNo(caseNo) && !formNos.has(caseNo) ? caseNo
+      : (last ? plainText(last.ID).trim() : '');
     if (!id || !isOwnNo(id) || formNos.has(id)) continue;
     row[slot === 2 ? 'DocNo2' : 'DocNo'] = id;
     formNos.add(id);

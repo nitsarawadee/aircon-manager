@@ -2,7 +2,7 @@ import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import {
   assertMoney, formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms
 } from '../values.js';
-import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
+import { NEW_CASE, ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
 /**
  * ประวัติการทำงานและงานซ่อมบำรุง
@@ -217,7 +217,8 @@ export async function addHistoryRaw(ctx, record, opts = {}) {
     // ส่งมาเองได้ สำหรับงานที่ไม่ได้มาจากผู้ใช้ที่ล็อกอิน (เช่นใบซ่อมที่กรอกผ่านลิงก์)
     RecordedBy: record.RecordedBy || me,
     // ใบที่เป็นส่วนหนึ่งของเคสงานซ่อมจะถือเลขเคสไว้ ใบอื่นเว้นว่าง
-    CaseID: record.CaseID || ''
+    // เปิดเคสใหม่ = เลขเคสคือเลขของใบนี้เอง (ดู NEW_CASE)
+    CaseID: record.CaseID === NEW_CASE ? id : (record.CaseID || '')
   };
 
   // เรียงตามหัวตาราง "จริง" ในชีต ไม่ใช่ลำดับใน HISTORY_HEADERS ของโค้ด

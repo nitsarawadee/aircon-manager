@@ -42,7 +42,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
 const { handleApi, isApiPath } = await import('../src/api.js');
 const { LocalState } = await import('../src/local-state.js');
 const { backupDatabase, pruneBackups } = await import('./backup.js');
-const { addMissingTables, addMissingColumns, repairShiftedPlanRows, renameRepairCaseIds } = await import('../src/db/migrate.js');
+const { addMissingTables, addMissingColumns, repairShiftedPlanRows, renameRepairCaseIds, caseIdsToFirstEventNo } = await import('../src/db/migrate.js');
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const WEB_DIR = join(ROOT, 'web');
@@ -297,6 +297,14 @@ try {
   if (renamedCases) console.log('เปลี่ยนเลขเคสงานซ่อม RC → IC: ' + renamedCases + ' เคส');
 } catch (err) {
   console.error('⚠️  เปลี่ยนเลขเคส RC → IC ไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
+}
+
+// เลขเคส IC → เลขอ้างอิง CM ของใบแรกของเคส (ดู caseIdsToFirstEventNo) — หลังสำรองข้อมูลเหมือนกัน
+try {
+  const unified = caseIdsToFirstEventNo(db);
+  if (unified) console.log('เปลี่ยนเลขเคสงานซ่อมเป็นเลข CM ของใบแจ้งซ่อม: ' + unified + ' เคส');
+} catch (err) {
+  console.error('⚠️  เปลี่ยนเลขเคสเป็น CM ไม่สำเร็จ (ข้อมูลเดิมไม่ถูกแตะ): ' + String((err && err.message) || err));
 }
 
 /**

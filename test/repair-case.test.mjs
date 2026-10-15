@@ -73,7 +73,9 @@ test('แจ้งซ่อมต้องเปิดเคสใหม่ แ�
   const rows = await hist(db);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].EventType, 'แจ้งซ่อม');
-  assert.ok(/^IC\d{4}-\d+$/.test(rows[0].CaseID), 'ต้องได้เลขเคส: ' + rows[0].CaseID);
+  // เลขเคส = เลขอ้างอิง (CM) ของใบแจ้งซ่อมเอง — ไม่มีเลข IC แยกแล้ว (เจ้าของงานกำหนด 15/10/2569)
+  assert.equal(rows[0].CaseID, rows[0].ID, 'ต้องได้เลขเคส = เลขของใบแจ้งซ่อม: ' + rows[0].CaseID);
+  assert.ok(/^CM\d{4}-\d+$/.test(rows[0].CaseID));
 });
 
 test('เริ่มซ่อมต้องอยู่ในเคสเดิม และเครื่องเป็น "รอซ่อม"', async () => {
@@ -185,7 +187,7 @@ test('เครื่องที่ค้างสถานะซ่อมม�
   assert.equal((await unit(db)).Status, 'รอซ่อม');
   const withCase = (await hist(db)).filter(h => String(h.CaseID || '').trim());
   assert.equal(withCase.length, 1, 'ใบใหม่ต้องได้เลขเคส');
-  assert.ok(/^IC\d{4}-\d+$/.test(withCase[0].CaseID));
+  assert.equal(withCase[0].CaseID, withCase[0].ID, 'เปิดเคสใหม่ = เลขอ้างอิงของใบนั้นเอง');
 });
 
 test('openCaseOf ต้องคืนเฉพาะเคสที่ยังเปิดของเครื่องตัวนั้น', async () => {

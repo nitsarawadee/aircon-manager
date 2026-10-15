@@ -147,10 +147,16 @@ export function isRepairStatus(status) {
  *
  * กรณีที่สองคือเหตุผลหลักที่ต้องมีตัวนี้ แทนที่จะโยน error เมื่อหาเคสไม่เจอ
  */
+/**
+ * เคสใหม่ยังไม่มีเลข — เลขเคสคือเลขอ้างอิง (CM) ของใบแรกของเคส (ใบแจ้งซ่อม)
+ * ซึ่งออกตอนเขียนใบนั้น ผู้เรียกส่งค่านี้เป็น CaseID แล้ว addHistoryRaw ใส่เลขของใบให้เอง
+ * (เจ้าของงานกำหนด 15/10/2569: งานซ่อมเรื่องเดียวกันใช้เลข CM เลขเดียวกันทั้งหมด ไม่มีเลข IC แยกอีกแล้ว)
+ */
+export const NEW_CASE = '__NEW_CASE__';
+
 export function ensureCaseId(historyRows, airCode) {
   const open = openCaseOf(historyRows, airCode);
-  if (open) return open.caseId;
-  return makeCaseId((historyRows || []).map(r => r.CaseID));
+  return open ? open.caseId : NEW_CASE;
 }
 
 /** วันที่ล่าสุดของเคส ใช้เรียงลำดับในหน้าเว็บ */

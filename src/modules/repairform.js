@@ -2,7 +2,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
 import { assertMoney, cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
-import { ensureCaseId } from './repair-case.js';
+import { NEW_CASE, ensureCaseId } from './repair-case.js';
 import { assertOwnAssigned, isOwnDoc } from './assign.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
@@ -242,6 +242,14 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
   // อาการเสียที่แจ้งไว้จะหายไปจากระบบทั้งหมดโดยไม่มีใครรู้
   const reported = plainText(unit.Note).trim();
 
+  // เลขที่ใบซ่อม = เลขเคส (เลขอ้างอิง CM ของใบแจ้งซ่อม) — งานซ่อมเรื่องเดียวกันใช้เลข CM เลขเดียวทั้งหมด
+  // (เจ้าของงานกำหนด 15/10/2569) · ไม่มีเคสค้าง หรือเลขนั้นมีใบซ่อมใช้ไปแล้ว = ออกเลขใหม่ และใบนี้เปิดเคสด้วยเลขของตัวเอง
+  const caseOpen = ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode);
+  const caseTaken = caseOpen !== NEW_CASE &&
+    ctx.ss.objects(SHEETS.REPAIRFORM).some(f => plainText(f.DocNo).trim() === caseOpen);
+  // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
+  const docNo = caseOpen !== NEW_CASE && !caseTaken ? caseOpen : nextDocNo(ctx, record.Date);
+
   const row = {
     ID: freshFormId(ctx, SHEETS.REPAIRFORM, 'RF'),
     Date: plainText(record.Date),
@@ -271,10 +279,9 @@ export async function writeRepairForm(ctx, unit, record, recordedBy) {
     Cost: record.Cost === '' || record.Cost === undefined ? '' : Number(record.Cost) || '',
     CreatedAt: ymdhms(new Date()),
     RecordedBy: recordedBy,
-    // ออกเลขในล็อกเสมอ เพื่อไม่ให้สองคนที่บันทึกพร้อมกันได้เลขเดียวกัน
-    DocNo: nextDocNo(ctx, record.Date),
-    // เกาะเคสที่เปิดค้างอยู่ของเครื่องนี้ ไม่มีก็เปิดเคสใหม่ให้
-    CaseID: ensureCaseId(ctx.ss.objects(SHEETS.HISTORY), unit.AirCode),
+    DocNo: docNo,
+    // เกาะเคสที่เปิดค้างอยู่ของเครื่องนี้ ไม่มีก็เปิดเคสใหม่ด้วยเลขของใบนี้
+    CaseID: caseOpen === NEW_CASE ? docNo : caseOpen,
     // 'attach' = แนบไฟล์เอกสารแทนการกรอก (ดู attachRepairDocument)
     Source: record.Source === 'attach' ? 'attach' : ''
   };
