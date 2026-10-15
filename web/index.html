@@ -9665,6 +9665,19 @@ const CLEANING_CHECKLIST_ITEMS = [
   let cfNodePair = 0;
 
   /**
+   * โหมดทั้ง Node: ช่อง 1/2 ของคู่นี้ ล้างตัวไหนบ้าง (ติ๊กที่การ์ดเครื่อง)
+   * ล้างตัวเดียว = ใบนั้นมีเครื่องเดียว — ไม่ลงประวัติ/ไม่ปิดรอบให้เครื่องที่ไม่ได้ล้าง
+   */
+  let cfUnitOn = { 1: true, 2: true };
+
+  /** โหมดทั้ง Node: ปิดรอบไหนในแผน — year ว่าง = ไม่ผูกกับแผน (บันทึกเอกสารอย่างเดียว) */
+  let cfPlanSel = { year: '', round: '', touched: false };
+  let cfPlanYearsList = null;
+  let cfPriceVal = {};          // ช่อง 1/2 -> ค่าล้างที่พิมพ์ไว้ (ยังไม่พิมพ์ = ใช้ราคาในแผน)   // ปีที่มีแผน (โหลดครั้งเดียวต่อการเปิดฟอร์ม)
+  const cfPlanCache = {};       // ปี -> แถวแผนของปีนั้น
+  let cfPlanSeq = 0;            // ลำดับการวาดการ์ดรอบ (กันผลเก่าทับผลใหม่)
+
+  /**
    * เครื่องของฟอร์มล้างตอนนี้ — ช่อง 1/2 ของใบ และคู่เครื่อง (ดู SlotBase)
    * ใช้ที่เดียวทั้งตอนบันทึก ปริ้นตัวอย่าง รูปถ่าย และป้าย จะได้ไม่ลงช่องไม่ตรงกัน
    */
@@ -9681,9 +9694,12 @@ const CLEANING_CHECKLIST_ITEMS = [
     const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
     if (!node) return none;
     const inPair = cleanUnitsOf(node).filter(u => unitBaseOfCode(u.AirCode) === cfNodePair);
-    return { node, base: cfNodePair,
-             u1: inPair.find(u => unitSlotOfCode(u.AirCode) === 1) || null,
-             u2: inPair.find(u => unitSlotOfCode(u.AirCode) === 2) || null };
+    const raw1 = inPair.find(u => unitSlotOfCode(u.AirCode) === 1) || null;
+    const raw2 = inPair.find(u => unitSlotOfCode(u.AirCode) === 2) || null;
+    // u1/u2 = เครื่องที่ติ๊กว่าล้าง (ทุกจุดที่บันทึก/รูป/ตัวนับใช้ค่านี้) · raw = เครื่องทั้งคู่ของ Node ไว้วาดการ์ด
+    return { node, base: cfNodePair, raw1, raw2,
+             u1: cfUnitOn[1] ? raw1 : null,
+             u2: cfUnitOn[2] ? raw2 : null };
   }
 
   /** เครื่องที่ฟอร์มนี้กำลังจะบันทึก พร้อมเลขช่องจริงของแต่ละตัว */
@@ -10630,7 +10646,19 @@ const CLEANING_CHECKLIST_ITEMS = [
    * การ์ดทีละข้อยาวกว่าก็จริง แต่เลื่อนนิ้วเดียวลงไปเรื่อยๆ ได้ ไม่ต้องเล็งแตะ
    */
   function openCleaningFormModal(ctx) {
-    cfContext = (ctx && ctx.airCode) ? ctx : null;
+    // ทุกทางที่เปิดฟอร์มล้างใช้หน้าเดียวกัน (เลือก Node · ติ๊กเครื่องที่ล้าง · รอบในแผน)
+    // เปิดจากหน้าแผนหรือการ์ดงาน = เลือก Node/เครื่อง/รอบไว้ให้ก่อน (ดู cfApplyLaunch) ไม่ใช่อีกหน้าหนึ่ง
+    const launch = (ctx && ctx.airCode) ? ctx : null;
+    cfContext = null;
+    if (launch && !findUnitByAirCode(launch.airCode)) {
+      showToast('ไม่พบข้อมูลเครื่อง ' + launch.airCode + ' ในรายการเครื่อง', 'error');
+      return;
+    }
+    cfUnitOn = { 1: true, 2: true };
+    cfPriceVal = {};
+    cfPlanSel = { year: '', round: '', touched: false };
+    cfPlanYearsList = null;
+    for (const k of Object.keys(cfPlanCache)) delete cfPlanCache[k];
 
     let single = null;
     if (cfContext) {
@@ -10700,6 +10728,8 @@ const CLEANING_CHECKLIST_ITEMS = [
               </select>
               <div id="cf_unitInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3"></div>`)}
 
+            ${single ? '' : card(`<div id="cf_planPick"><div class="text-sm text-gray-400">เลือก Node ก่อน แล้วเลือกรอบในแผนที่จะปิด</div></div>`)}
+
             ${card(`
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ <span class="text-red-500">*</span></label>
@@ -10718,7 +10748,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             </div>
 
             ${card(`
-              <label class="block text-sm font-medium text-gray-700 mb-2">ผลประเมินสภาพเครื่องปรับอากาศ</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">ผลประเมินสภาพเครื่องปรับอากาศ <span class="text-red-500">*</span> <span class="font-normal text-xs text-gray-500">เลือกทุกเครื่องที่ล้าง</span></label>
               <!-- แยกผลรายเครื่อง เพราะไปล้างสองตัวแล้วเจอตัวหนึ่งไม่สมบูรณ์เป็นเรื่องปกติ
                    ไม่ติ๊กค่าเริ่มต้นไว้ ด้วยเหตุผลเดียวกับช่องตรวจเช็ค 21 ข้อ -->
               <div class="space-y-2">
@@ -10793,6 +10823,39 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     offerCfDraft();
     updateCfProgress();
+    if (launch) cfApplyLaunch(launch);
+  }
+
+  /**
+   * เปิดจากหน้าแผน/การ์ดงานของเครื่องหนึ่ง: เลือก Node · คู่เครื่อง · รอบ ให้ แล้วติ๊กเครื่องที่ยังต้องล้างรอบนั้น
+   * ส่วนใหญ่ล้างพร้อมกันสองตัว จึงติ๊กเครื่องคู่กันให้ด้วยถ้ารอบนั้นยังไม่ปิด (เอาติ๊กออกได้ถ้าล้างตัวเดียว)
+   */
+  async function cfApplyLaunch(launch) {
+    const found = findUnitByAirCode(launch.airCode);
+    const sel = document.getElementById('cf_node');
+    if (!found || !sel) return;
+    sel.value = found.node.NodeName;
+    cfNodePair = unitBaseOfCode(found.unit.AirCode);
+    cfPlanSel = { year: String(launch.year || ''), round: String(launch.round || ''), touched: true, touchedRound: !!launch.round };
+    onCleaningFormNodeChange(true);
+    const tech = document.getElementById('cf_tech');
+    if (tech && launch.technician && !tech.value) tech.value = launch.technician;
+
+    // เครื่องคู่กันไม่ต้องติ๊ก ถ้า: รอบนี้ปิดไปแล้ว (ล้าง/ยกเลิก) · รอบก่อนหน้ายังไม่ปิด (ล้างทีละรอบ) · ไม่อยู่ในแผน
+    const rows = launch.year ? (cfPlanCache[launch.year] ||
+      (cfPlanCache[launch.year] = (await callQuiet('getCleaningPlan', Number(launch.year)).catch(() => [])) || [])) : [];
+    if (!document.getElementById('cf_unitInfo')) return;
+    const { raw1, raw2 } = cfPickUnits();
+    const mineSlot = unitSlotOfCode(found.unit.AirCode);
+    const other = mineSlot === 1 ? raw2 : raw1;
+    const closed = v => v === 'ล้างเสร็จสิ้น' || v === 'ยกเลิก';
+    const oRow = other && rows.find(r => sameCode(r.AirCode, other.AirCode));
+    const round = Number(launch.round) || 0;
+    const otherDone = !other || !oRow || !round || closed(String(oRow['R' + round + '_Status'] || '')) ||
+      Array.from({ length: round - 1 }, (_, i) => i + 1).some(k => !closed(String(oRow['R' + k + '_Status'] || '')));
+    cfUnitOn = { 1: mineSlot === 1 || !otherDone, 2: mineSlot === 2 || !otherDone };
+    if (launch.price) cfPriceVal[mineSlot] = String(launch.price);
+    cfDrawUnitParts();
   }
 
   /**
@@ -10839,9 +10902,9 @@ const CLEANING_CHECKLIST_ITEMS = [
               ${item.unit ? `<div class="text-xs text-gray-400 mt-0.5">เกณฑ์: ${esc(item.unit)}</div>` : ''}
             </div>
           </div>
-          <div class="grid ${cfContext ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
-            <div>${slotLabel(1)}${inputHtml('val1')}</div>
-            <div class="${cfContext ? 'hidden' : ''}">${slotLabel(2)}${inputHtml('val2')}</div>
+          <div class="cf_colgrid grid ${cfContext ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
+            <div class="cf_col1">${slotLabel(1)}${inputHtml('val1')}</div>
+            <div class="cf_col2 ${cfContext ? 'hidden' : ''}">${slotLabel(2)}${inputHtml('val2')}</div>
           </div>
           <input data-no="${item.no}" data-col="note" placeholder="หมายเหตุ (ถ้ามี)"
             class="cf_val w-full min-h-[44px] rounded-lg border-gray-200 border px-3 py-2 text-sm mt-2 outline-none focus:border-[#1153a1]">
@@ -10856,7 +10919,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     const el = document.getElementById('cf_progress');
     if (!el) return;
 
-    const cols = cfContext ? ['val1'] : ['val1', 'val2'];
+    const pk = cfContext ? null : cfPickUnits();
+    const cols = cfContext ? ['val1'] : [pk.u1 && 'val1', pk.u2 && 'val2'].filter(Boolean);
     const wanted = CLEANING_CHECKLIST_ITEMS.length * cols.length;
     let done = 0;
     for (const col of cols) {
@@ -13245,22 +13309,28 @@ const CLEANING_CHECKLIST_ITEMS = [
     if (!sel || !box) return;   // หน้าถูกปิดไปแล้วระหว่างที่ยังมีงานค้างอยู่
     // เปลี่ยน Node = เริ่มที่คู่แรก (เครื่องที่ 1–2) เสมอ
     if (keepPair !== true) cfNodePair = 0;
+    cfUnitOn = { 1: true, 2: true };   // เปลี่ยน Node/คู่เครื่อง = เริ่มที่ล้างทั้งคู่
 
     const nodeName = sel.value;
     const node = cleaningFormNodes.find(n => n.NodeName === nodeName);
     if (!node) { box.innerHTML = ''; return; }
 
-    const unitCard = (u, label) => !u ? '' : `
-      <div class="border border-gray-200 rounded-lg p-3 bg-slate-50 text-xs space-y-1">
-        <div class="font-bold text-gray-700 mb-1">${label}: ${esc(u.AirCode)}</div>
+    // มีสองเครื่องในคู่นี้ = ติ๊กเลือกได้ว่าล้างตัวไหน (เครื่องเดียวไม่ต้องเลือก)
+    const unitCard = (u, label, slot, pickable) => !u ? '' : `
+      <label class="block border rounded-lg p-3 text-xs space-y-1 ${pickable ? 'cursor-pointer' : ''} ${cfUnitOn[slot] ? 'border-[#1153a1] bg-blue-50/40' : 'border-gray-200 bg-slate-50 opacity-60'}">
+        <div class="font-bold text-gray-700 mb-1 flex items-center gap-2">
+          ${pickable ? `<input type="checkbox" ${cfUnitOn[slot] ? 'checked' : ''} onchange="cfToggleUnit(${slot}, this.checked)" class="w-5 h-5 accent-[#1153a1] flex-shrink-0">` : ''}
+          <span>${label}: ${esc(u.AirCode)}</span>
+          ${pickable && !cfUnitOn[slot] ? '<span class="cf_offNote font-normal text-gray-500">— ไม่ได้ล้าง</span>' : ''}
+        </div>
         <div>ยี่ห้อ: ${esc(u.Brand || '-')} &nbsp;|&nbsp; BTU: ${esc(u.BTU || '-')}</div>
         <div>Serial (Indoor): ${esc(u.IndoorSerial || '-')} &nbsp;|&nbsp; Asset: ${esc(u.IndoorAsset || '-')}</div>
         <div>Serial (Outdoor): ${esc(u.OutdoorSerial || '-')} &nbsp;|&nbsp; Asset: ${esc(u.OutdoorAsset || '-')}</div>
-      </div>`;
+      </label>`;
 
     // ใบละ 2 เครื่องตามลำดับ (1–2, 3–4 ...) Node ที่มีเกิน 2 เครื่องเลือกคู่ได้ ใบละคู่
     const bases = [...new Set(cleanUnitsOf(node).map(u => unitBaseOfCode(u.AirCode)))].sort((a, b) => a - b);
-    const { u1, u2, base } = cfPickUnits();
+    const { u1, u2, base, raw1, raw2 } = cfPickUnits();
     const pairPick = bases.length > 1 ? `
       <div class="sm:col-span-2">
         <label class="block text-xs font-medium text-gray-600 mb-1">Node นี้มี ${cleanUnitsOf(node).length} เครื่อง — ใบละ 2 เครื่อง เลือกชุดเครื่องของใบนี้</label>
@@ -13268,7 +13338,10 @@ const CLEANING_CHECKLIST_ITEMS = [
           ${bases.map(b => `<option value="${b}" ${b === base ? 'selected' : ''}>เครื่องที่ ${b + 1}–${b + 2}</option>`).join('')}
         </select>
       </div>` : '';
-    box.innerHTML = pairPick + unitCard(u1, 'ตัวที่ ' + (base + 1)) + unitCard(u2, 'ตัวที่ ' + (base + 2));
+    const both = !!(raw1 && raw2);
+    box.innerHTML = pairPick +
+      (both ? '<div class="sm:col-span-2 text-xs text-gray-500 -mb-1">ติ๊กเครื่องที่ล้างครั้งนี้ — ล้างตัวเดียวก็เอาติ๊กอีกตัวออก</div>' : '') +
+      unitCard(raw1, 'ตัวที่ ' + (base + 1), 1, both) + unitCard(raw2, 'ตัวที่ ' + (base + 2), 2, both);
 
     const lbl1 = document.getElementById('cf_cond1Lbl');
     const lbl2 = document.getElementById('cf_cond2Lbl');
@@ -13277,6 +13350,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     // แถวผลประเมินของตัวที่ 2 โผล่เฉพาะตอนชุดนี้มีเครื่องที่สองจริง
     const cond2 = document.getElementById('cf_cond2Row');
     if (cond2) cond2.classList.toggle('hidden', !u2);
+    if (lbl1 && lbl1.parentElement) lbl1.parentElement.classList.toggle('hidden', !u1);
+    cfApplyUnitColumns();
+    cfRenderPlanPick();
 
     // ช่องใส่รูปยึดตามเครื่องของ Node ที่เพิ่งเลือก จึงต้องวาดใหม่ทุกครั้งที่เปลี่ยน Node
     // ล้างรูปที่เลือกไว้ด้วย เพราะมันเป็นรูปของ Node เดิม
@@ -13289,6 +13365,162 @@ const CLEANING_CHECKLIST_ITEMS = [
     box.dataset.siteCode = node.SiteCode || '';
     box.dataset.locationType = node.LocationType || '';
   }
+
+  /** ติ๊ก/เอาติ๊กออกเครื่องที่ล้าง (โหมดทั้ง Node) — ต้องเหลืออย่างน้อย 1 เครื่อง */
+  function cfToggleUnit(slot, on) {
+    const next = { ...cfUnitOn, [slot]: !!on };
+    const { raw1, raw2 } = cfPickUnits();
+    if (!(next[1] && raw1) && !(next[2] && raw2)) {
+      showToast('ต้องเลือกเครื่องที่ล้างอย่างน้อย 1 เครื่อง', 'error');
+      cfDrawUnitParts();   // คืนติ๊กกลับตามเดิม
+      return;
+    }
+    cfUnitOn = next;
+    cfDrawUnitParts();
+  }
+  window.cfToggleUnit = cfToggleUnit;
+
+  /** วาดเฉพาะส่วนที่ขึ้นกับเครื่องที่ติ๊ก (ไม่แตะ Node/คู่เครื่อง) */
+  function cfDrawUnitParts() {
+    const box = document.getElementById('cf_unitInfo');
+    if (!box) return;
+    const { u1, u2 } = cfPickUnits();
+    // การ์ดเครื่อง: อัปเดตเฉพาะสถานะติ๊ก
+    box.querySelectorAll('label input[type=checkbox]').forEach(cb => {
+      const slot = /cfToggleUnit\((\d)/.exec(cb.getAttribute('onchange') || '');
+      if (!slot) return;
+      const on = !!cfUnitOn[Number(slot[1])];
+      cb.checked = on;
+      const card = cb.closest('label');
+      card.classList.toggle('border-[#1153a1]', on); card.classList.toggle('bg-blue-50/40', on);
+      card.classList.toggle('border-gray-200', !on); card.classList.toggle('bg-slate-50', !on); card.classList.toggle('opacity-60', !on);
+      const note = card.querySelector('.cf_offNote');
+      if (note) note.remove();
+      if (!on) cb.parentElement.insertAdjacentHTML('beforeend', '<span class="cf_offNote font-normal text-gray-500">— ไม่ได้ล้าง</span>');
+    });
+    const lbl1 = document.getElementById('cf_cond1Lbl');
+    const cond2 = document.getElementById('cf_cond2Row');
+    if (cond2) cond2.classList.toggle('hidden', !u2);
+    if (lbl1 && lbl1.parentElement) lbl1.parentElement.classList.toggle('hidden', !u1);
+    cfApplyUnitColumns();
+    // รูปของเครื่องที่ไม่ได้ล้างไม่ต้องแนบ — ทิ้งรูปที่เลือกไว้ของเครื่องนั้น
+    for (const k of Object.keys(cfPhotos)) {
+      const slot = Number(String(k).split('-')[0]);
+      if ((slot === 1 && !u1) || (slot === 2 && !u2)) delete cfPhotos[k];
+    }
+    renderCfPhotos();
+    updateCfProgress();
+    cfRenderPlanPick();
+  }
+
+  /** ซ่อนคอลัมน์ "ตัวที่ 1/2" ของเช็คลิสต์ตามเครื่องที่ติ๊ก (โหมดทั้ง Node) */
+  function cfApplyUnitColumns() {
+    if (cfContext) return;
+    const { u1, u2 } = cfPickUnits();
+    document.querySelectorAll('.cf_col1').forEach(el => el.classList.toggle('hidden', !u1));
+    document.querySelectorAll('.cf_col2').forEach(el => el.classList.toggle('hidden', !u2));
+    document.querySelectorAll('.cf_colgrid').forEach(el => {
+      el.classList.toggle('grid-cols-2', !!(u1 && u2));
+      el.classList.toggle('grid-cols-1', !(u1 && u2));
+    });
+  }
+
+  /**
+   * เลือกปี/รอบในแผนที่ใบนี้จะปิดให้ (โหมดทั้ง Node)
+   * ค่าเริ่มต้น: ปีปัจจุบัน (ถ้ามีแผน) และรอบแรกที่ยังไม่ปิดของเครื่องที่ติ๊ก — ล้างต้องทำทีละรอบอยู่แล้ว
+   */
+  async function cfRenderPlanPick() {
+    const box = document.getElementById('cf_planPick');
+    if (!box || cfContext) return;
+    // วาดซ้อนกันได้ (โหลดแผนเป็นช่วงๆ) — ให้รอบล่าสุดชนะ รอบเก่าที่โหลดเสร็จทีหลังไม่ทับ
+    const seq = ++cfPlanSeq;
+
+    if (!cfPlanYearsList) {
+      try { cfPlanYearsList = ((await callQuiet('getPlanYears')) || []).map(y => String(y).replace('Plan_', '')).sort().reverse(); }
+      catch (e) { cfPlanYearsList = []; }
+    }
+    if (!cfPlanSel.touched && !cfPlanSel.year) {
+      const thisYear = String(new Date().getFullYear());
+      cfPlanSel.year = cfPlanYearsList.includes(thisYear) ? thisYear : (cfPlanYearsList[0] || '');
+    }
+    let rows = [];
+    if (cfPlanSel.year) {
+      if (!cfPlanCache[cfPlanSel.year]) {
+        try { cfPlanCache[cfPlanSel.year] = (await callQuiet('getCleaningPlan', Number(cfPlanSel.year))) || []; }
+        catch (e) { cfPlanCache[cfPlanSel.year] = []; }
+      }
+      rows = cfPlanCache[cfPlanSel.year];
+    }
+    if (!document.getElementById('cf_planPick') || seq !== cfPlanSeq) return;   // ปิดฟอร์มไปแล้ว หรือมีการวาดใหม่กว่า
+    const { u1, u2 } = cfPickUnits();
+    const codes = [u1, u2].filter(Boolean).map(u => u.AirCode);
+    const rowOf = code => rows.find(r => sameCode(r.AirCode, code));
+    const n = rows.length ? planRoundCount(rows) : 3;
+    const isClosed = st => st === 'ล้างเสร็จสิ้น' || st === 'ยกเลิก';
+    if (cfPlanSel.year && !cfPlanSel.touchedRound) {
+      // รอบแรกที่ยังไม่ปิดของเครื่องตัวแรกที่ติ๊ก
+      const r0 = codes.length ? rowOf(codes[0]) : null;
+      let pick = '1';
+      if (r0) { for (let r = 1; r <= n; r++) { if (!isClosed(String(r0['R' + r + '_Status'] || ''))) { pick = String(r); break; } if (r === n) pick = String(n); } }
+      cfPlanSel.round = pick;
+    }
+
+    const yearOpts = '<option value="">ไม่ผูกกับแผน (บันทึกเอกสารอย่างเดียว)</option>' +
+      cfPlanYearsList.map(y => `<option value="${esc(y)}" ${y === cfPlanSel.year ? 'selected' : ''}>แผนปี ${esc(y)}</option>`).join('');
+    const roundOpts = Array.from({ length: n }, (_, i) => String(i + 1))
+      .map(r => `<option value="${r}" ${r === String(cfPlanSel.round) ? 'selected' : ''}>รอบที่ ${r}</option>`).join('');
+
+    // สถานะของรอบที่เลือก รายเครื่อง — เตือนถ้าปิดไปแล้ว หรือรอบก่อนหน้ายังไม่ปิด
+    const lines = !cfPlanSel.year ? '' : codes.map(code => {
+      const row = rowOf(code);
+      if (!row) return `<div class="text-amber-700">${esc(code)} — ไม่อยู่ในแผนปี ${esc(cfPlanSel.year)} (บันทึกได้ แต่ไม่มีรอบให้ปิด)</div>`;
+      const r = Number(cfPlanSel.round);
+      const st = String(row['R' + r + '_Status'] || 'รอดำเนินการ');
+      const pd = row['R' + r + '_PlanDate'] ? ' · นัด ' + fmtDate(String(row['R' + r + '_PlanDate']).slice(0, 10)) : '';
+      const before = [];
+      for (let k = 1; k < r; k++) if (!isClosed(String(row['R' + k + '_Status'] || ''))) before.push(k);
+      if (st === 'ล้างเสร็จสิ้น') return `<div class="text-rose-600">${esc(code)} — รอบที่ ${r} ล้างเสร็จไปแล้ว เลือกรอบอื่น</div>`;
+      if (before.length) return `<div class="text-rose-600">${esc(code)} — รอบที่ ${before.join(', ')} ยังไม่ปิด (ล้างต้องทำทีละรอบ)</div>`;
+      return `<div class="text-gray-600">${esc(code)} — รอบที่ ${r}: ${esc(st)}${pd}</div>`;
+    }).join('');
+
+    // ค่าล้างรายเครื่อง: ราคาของรอบในแผน → ราคาต่อรอบในทะเบียน · ผู้รับเหมาดูได้อย่างเดียว (เซิร์ฟเวอร์ใช้ราคาในแผน)
+    const { base } = cfPickUnits();
+    const priceOf = (slot, u) => {
+      if (cfPriceVal[slot] !== undefined) return cfPriceVal[slot];
+      const row = cfPlanSel.year ? rowOf(u.AirCode) : null;
+      return String((row && row['R' + cfPlanSel.round + '_Price']) || u.CleaningPrice || '');
+    };
+    const priceRows = [[1, u1], [2, u2]].filter(([, u]) => u).map(([slot, u]) => `
+      <label class="flex items-center gap-3">
+        <span class="text-sm text-gray-600 w-40 truncate">ค่าล้าง ตัวที่ ${slot + base} (${esc(u.AirCode.split('-').slice(-2).join('-'))})</span>
+        <input type="number" id="cf_price${slot}" min="0" step="0.01" inputmode="decimal" placeholder="0.00"
+          value="${esc(priceOf(slot, u))}" ${isContractor() ? 'readonly' : ''}
+          oninput="cfSetPrice(${slot}, this.value)"
+          class="flex-1 min-h-[44px] rounded-lg border-gray-300 border px-3 py-2 text-base ${isContractor() ? 'bg-slate-50 text-gray-600' : ''}">
+        <span class="text-sm text-gray-500">บาท</span>
+      </label>`).join('');
+
+    box.innerHTML = `
+      <label class="block text-sm font-medium text-gray-700 mb-1">ปิดงานในแผนล้างแอร์</label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <select id="cf_planYear" onchange="cfSetPlan('year', this.value)" class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white">${yearOpts}</select>
+        <select id="cf_planRound" onchange="cfSetPlan('round', this.value)" ${cfPlanSel.year ? '' : 'disabled'} class="w-full min-h-[44px] rounded-lg border-gray-300 border px-3 py-2.5 text-base bg-white disabled:bg-slate-50 disabled:text-gray-400">${roundOpts}</select>
+      </div>
+      <div class="text-xs mt-2 space-y-0.5">${lines || (cfPlanSel.year ? '' : '<div class="text-gray-500">ไม่ปิดรอบใดในแผน — งานในแผนยังค้างอยู่</div>')}</div>
+      <div class="mt-3 pt-3 border-t border-gray-100 space-y-2">${priceRows}
+        ${isContractor() ? '<p class="text-xs text-gray-500">ราคาที่เจ้าหน้าที่ตั้งไว้สำหรับงานนี้ ถ้าไม่ตรงกับที่ตกลงกันให้แจ้งเจ้าหน้าที่</p>' : ''}</div>`;
+  }
+
+  function cfSetPlan(what, value) {
+    if (what === 'year') { cfPlanSel.year = value; cfPlanSel.touched = true; cfPlanSel.touchedRound = false; }
+    else { cfPlanSel.round = value; cfPlanSel.touchedRound = true; }
+    cfRenderPlanPick();
+  }
+  window.cfSetPlan = cfSetPlan;
+
+  function cfSetPrice(slot, v) { cfPriceVal[slot] = v; }
+  window.cfSetPrice = cfSetPrice;
 
   async function submitCleaningForm() {
     // บันทึกเอกสารไปแล้ว เหลือแค่รูปที่ยังส่งไม่ขึ้น — ปุ่มเดิมกลายเป็นปุ่มส่งรูปซ้ำ
@@ -13315,6 +13547,17 @@ const CLEANING_CHECKLIST_ITEMS = [
 
     const date = document.getElementById('cf_date').value;
     if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
+
+    // ผลประเมินสภาพเครื่องต้องเลือกทุกเครื่องที่ล้าง (สมบูรณ์ / ควรปรับปรุง) — ไม่มีแบบว่าง (เจ้าของงานกำหนด)
+    const noCond = [[u1, 'cf_condition', 1], [u2, 'cf_condition2', 2]]
+      .filter(([u, name]) => u && !document.querySelector(`input[name="${name}"]:checked`));
+    if (noCond.length) {
+      showToast('กรุณาเลือกผลประเมินสภาพเครื่อง ' + noCond.map(([u]) => u.AirCode).join(', ') +
+                ' (สภาพเครื่องสมบูรณ์ / สภาพเครื่องควรปรับปรุง)', 'error');
+      const radio = document.querySelector(`input[name="${noCond[0][1]}"]`);
+      if (radio) radio.closest('section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
 
     // ---------- รูปต้องครบก่อนถึงจะบันทึกได้ ----------
     //
@@ -13347,7 +13590,8 @@ const CLEANING_CHECKLIST_ITEMS = [
         const entered = val1El ? val1El.value : '';
         return { no: item.no, label: item.label, val1: cfUnitSlot === 2 ? '' : entered, val2: cfUnitSlot === 2 ? entered : '', note };
       }
-      return { no: item.no, label: item.label, val1: val1El ? val1El.value : '', val2: val2El ? val2El.value : '', note };
+      // โหมดทั้ง Node: คอลัมน์ของเครื่องที่ไม่ได้ล้างต้องว่าง (ช่องถูกซ่อนแต่ค่าอาจค้างอยู่)
+      return { no: item.no, label: item.label, val1: u1 && val1El ? val1El.value : '', val2: u2 && val2El ? val2El.value : '', note };
     });
 
     // ---------- เตือนถ้ายังมีข้อที่ไม่ได้เลือก ----------
@@ -13357,7 +13601,7 @@ const CLEANING_CHECKLIST_ITEMS = [
     //
     // เตือนให้ยืนยัน ไม่บังคับ เพราะบางข้อไม่เกี่ยวกับบางไซต์จริง
     // (เช่นข้อ 17–19 เรื่องชุดสลับการทำงานของแอร์ 2 ตัว ไซต์ที่มีตัวเดียวต้องเว้นว่างได้)
-    const blankCols = cfContext ? ['val1'] : ['val1'].concat(u2 ? ['val2'] : []);
+    const blankCols = cfContext ? ['val1'] : [u1 && 'val1', u2 && 'val2'].filter(Boolean);
     const blankEls = [];
     const blankNos = [];
     for (const item of CLEANING_CHECKLIST_ITEMS) {
@@ -13398,11 +13642,14 @@ const CLEANING_CHECKLIST_ITEMS = [
       Unit2_Brand: u2 ? u2.Brand : '', Unit2_BTU: u2 ? u2.BTU : '', Unit2_IndoorSerial: u2 ? u2.IndoorSerial : '', Unit2_IndoorAsset: u2 ? u2.IndoorAsset : '',
       Unit2_OutdoorSerial: u2 ? u2.OutdoorSerial : '', Unit2_OutdoorAsset: u2 ? u2.OutdoorAsset : '',
       Checklist: checklist,
-      PlanYear: cfContext ? cfContext.year : '',
-      PlanRound: cfContext ? cfContext.round : '',
-      Price: (document.getElementById('cf_price') || {}).value || '',
-      EquipmentCondition: (cfContext && cfUnitSlot === 2) ? '' : cond1,
-      EquipmentCondition2: (cfContext && cfUnitSlot === 2) ? cond1 : cond2,
+      // โหมดทั้ง Node: ปี/รอบที่เลือกในการ์ด "ปิดงานในแผนล้างแอร์" (ไม่ผูกกับแผน = ว่าง)
+      PlanYear: cfContext ? cfContext.year : (cfPlanSel.year || ''),
+      PlanRound: cfContext ? cfContext.round : (cfPlanSel.year ? cfPlanSel.round : ''),
+      // ค่าล้างรายเครื่อง (ผู้รับเหมา: เซิร์ฟเวอร์ใช้ราคาในแผนแทนเสมอ)
+      Price1: u1 ? ((document.getElementById('cf_price1') || {}).value || '') : '',
+      Price2: u2 ? ((document.getElementById('cf_price2') || {}).value || '') : '',
+      EquipmentCondition: ((cfContext && cfUnitSlot === 2) || (!cfContext && !u1)) ? '' : cond1,
+      EquipmentCondition2: (cfContext && cfUnitSlot === 2) ? cond1 : (u2 ? cond2 : ''),
       AdditionalNote: document.getElementById('cf_note').value,
       CompanyName: document.getElementById('cf_company').value,
       TechnicianName: document.getElementById('cf_tech').value,
