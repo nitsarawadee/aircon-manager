@@ -1110,7 +1110,25 @@
 
         <div class="text-xs text-gray-400 mb-2 flex items-center gap-1"><i class="ph ph-sort-descending"></i> เรียงตามวันที่ล่าสุดก่อน</div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div id="cleaningFormCards" class="divide-y divide-gray-100"></div>
+          <div class="table-container overflow-x-auto">
+            <table id="cleaningFormTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขที่</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">Node</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
+                  <th id="docCol_cond" class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ผลประเมิน</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">ช่าง</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right">ค่าใช้จ่าย</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">PDF</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">อนุมัติ</th>
+                  <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10 text-right"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 text-gray-700"></tbody>
+            </table>
+          </div>
           <div id="cleaningFormPaginationBar" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-slate-50 text-sm text-gray-600"></div>
         </div>
       </section>
@@ -9492,108 +9510,119 @@ const CLEANING_CHECKLIST_ITEMS = [
     } catch (e) {}
   }
 
-  /** แถบขั้นอนุมัติ 4 ช่อง: ขั้น 1 ผู้รับเหมา (เสร็จเสมอเมื่อมีเอกสาร) · ขั้น 2 Staff · 3 Supervisor/Regional · 4 Infrastructure */
-  function approvalSteps(a) {
-    const names = ['ผู้รับเหมา', 'Staff', 'Supervisor', 'Infra'];
-    return '<div class="flex gap-1 w-full" title="' + esc(approvalTrail(a)) + '">' + names.map((nm, i) => {
-      const n = i + 1;
-      const done = n === 1 || a.done || n < a.next;
-      const cur = !done && n === a.next;
-      const bar = done ? 'bg-emerald-500' : cur ? 'bg-amber-400' : 'bg-gray-200';
-      const txt = done ? 'text-emerald-700' : cur ? 'text-amber-700 font-medium' : 'text-gray-400';
-      return '<div class="flex-1 min-w-0"><div class="h-1 rounded-full ' + bar + '"></div>' +
-             '<div class="text-[10px] mt-0.5 truncate ' + txt + '">' + nm + '</div></div>';
-    }).join('') + '</div>';
-  }
-
   function renderCleaningFormTable(keepPage) {
-    const box = document.getElementById('cleaningFormCards');
-    if (!box) return;
+    const tbody = document.querySelector('#cleaningFormTable tbody');
+    if (!tbody) return;
     paintDocMineBtn();
     if (!keepPage) cleaningFormPage = 1;
     cleaningFormLastList = filterCleaningForms();
 
     if (cleaningFormLastList.length === 0) {
-      const sbox = document.getElementById('cleaningFormSearch');
+      // บอกให้ตรงว่าไม่เจอเพราะคำค้น ไม่งั้นจะเข้าใจว่าไม่มีเอกสารในระบบเลย
+      const box = document.getElementById('cleaningFormSearch');
       const ofKind = DOC_KIND_NAME[docTypeFilter] || 'เอกสารล้างแอร์';
-      const why = (sbox && sbox.value.trim())
+      const why = (box && box.value.trim())
         ? 'ไม่พบ' + ofKind + 'ที่ตรงกับคำค้นหา'
         : 'ยังไม่มีการบันทึก' + ofKind;
       const year = (document.getElementById('docYearFilter') || {}).value || '';
       const inYear = year ? '<div class="text-xs mt-1">แสดงเฉพาะปี ' + esc(year) + ' — เลือก "ทุกปี" เพื่อดูปีอื่น</div>' : '';
-      box.innerHTML = '<div class="px-4 py-10 text-center text-gray-400">' + why + inYear + '</div>';
+      tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400">' + why + inYear + '</td></tr>';
       renderTablePager('cleaningFormPaginationBar', 0, 1, 'goToCleaningFormPage');
       return;
     }
     cleaningFormPage = clampPage(cleaningFormPage, cleaningFormLastList.length);
 
+    // แบ่งหน้าตาม "เอกสาร" ไม่ใช่ตามแถว เพื่อไม่ให้สองแถวของใบเดียวกันถูกหั่นคนละหน้า
     const page = cleaningFormLastList.slice(
       (cleaningFormPage - 1) * TABLE_PAGE_SIZE,
       cleaningFormPage * TABLE_PAGE_SIZE
     );
 
-    box.innerHTML = page.map(f => {
-      const rows = cleaningFormUnitRows(f);
-      const kind = rows[0].kind;
-      const isRepair = kind === 'repair', isInstall = kind === 'install';
+    tbody.innerHTML = page.flatMap(cleaningFormUnitRows).map(r => {
+      const f = r.form;
+      const isRepair = r.kind === 'repair';
+      const isInstall = r.kind === 'install';
+      // ใบที่แนบไฟล์แทนการกรอก มีได้ทั้งใบล้าง ใบซ่อม ใบติดตั้ง — ตัวเอกสารคือไฟล์ที่แนบ
       const isAttach = f.Source === 'attach';
-      const canEditRow = docLevel(kind) === 'edit';
-      const total = rows.reduce((a, r) => a + (r.price || 0), 0);
 
-      const btnBase = 'px-2 py-1 rounded-lg transition border bg-white text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap';
-      const openBtn = isAttach
-        ? `<button onclick="openAttachmentList(${f._row}, '${jsStr(kind)}')" title="ดูไฟล์เอกสารที่แนบเข้ามา"
-             class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]"><i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
-        : isRepair
-          ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
-               class="${btnBase} text-amber-700 hover:text-white hover:bg-amber-600 border-amber-500"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
-        : isInstall
-          ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด"
-               class="${btnBase} text-teal-700 hover:text-white hover:bg-teal-700 border-teal-600"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
-          : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
-               class="${btnBase} text-[#1153a1] hover:text-white hover:bg-[#1153a1] border-[#1153a1]"><i class="ph ph-file-text"></i> เปิดเอกสาร</button>`;
-
-      const delBtn = (!canEditRow || currentUserInfo.role !== 'Admin') ? ''
-        : isRepair
-          ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
-        : isInstall
-          ? `<button onclick="deleteInstallFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารติดตั้งใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
-          : `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`;
-
-      // เครื่องละบรรทัด: รหัส ตัวที่ · เลขที่ · ผล · ราคา
-      const unitLine = r => {
-        const cond = isRepair
-          ? (esc(r.cond) ? `<span class="text-slate-600 text-xs truncate" title="${esc(r.cond)}">${esc(r.cond.slice(0, 40))}${r.cond.length > 40 ? '…' : ''}</span>` : '')
-          : isInstall ? acceptBadge(r.cond) : conditionBadge(r.cond);
-        return `
-          <div class="flex items-center gap-x-3 gap-y-1 flex-wrap text-sm">
-            <span class="font-medium text-gray-800 whitespace-nowrap">${esc(r.airCode) || '-'}${isRepair ? '' : `<span class="ml-1 text-xs font-normal text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}</span>
-            <span class="font-mono text-[11px] text-slate-500">${esc(r.docNo) || '-'}</span>
-            <span class="min-w-0">${cond}</span>
-            ${r.price ? `<span class="tabular-nums text-gray-600">฿${r.price.toLocaleString()}</span>` : ''}
-          </div>`;
-      };
-
-      const a = f.Approval;
-      const approval = a
-        ? approvalSteps(a) + '<div class="mt-1.5">' + approvalCell(f, kind) + '</div>'
-        : '<div class="text-xs text-gray-400">ไม่มีขั้นอนุมัติ</div>';
+      // ปุ่มลบ ขึ้นเฉพาะคนที่แก้ไขเอกสารแบบนั้นได้ (ปุ่มแก้รูปเอาออกแล้ว — รูปใส่ได้ตอนกรอกฟอร์มเท่านั้น)
+      // ตัดสินรายแถวตามแบบเอกสารของแถวนั้น ไม่ใช่ล็อกทั้งหน้าด้วยสิทธิ์ใบล้างแบบเดิม
+      const canEditRow = docLevel(r.kind) === 'edit';
 
       return `
-      <div class="flex flex-wrap md:flex-nowrap items-start gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
-            <span class="font-semibold text-gray-800">${esc(f.NodeName)}</span>
-            ${isRepair ? '<span class="px-1.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-medium">ซ่อม</span>' : ''}
-            ${isInstall ? '<span class="px-1.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-medium">ติดตั้ง</span>' : ''}
-            ${isAttach ? '<span class="px-1.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-medium">เอกสารแนบ</span>' : ''}
-            <span class="text-xs text-gray-500">${esc(fmtDate(f.Date))} · ${esc(f.TechnicianName) || '-'}${rows.length > 1 && total ? ' · รวม ฿' + total.toLocaleString() : ''}</span>
-          </div>
-          <div class="mt-1 space-y-1">${rows.map(unitLine).join('')}</div>
-        </div>
-        <div class="w-full md:w-56 flex-shrink-0">${approval}</div>
-        <div class="flex items-center gap-1 flex-shrink-0 ml-auto md:ml-0">${openBtn}${delBtn}</div>
-      </div>`;
+      <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
+        <td class="px-4 py-3 font-mono text-[12px] text-slate-600">
+          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${esc(r.docNo) || '-'}
+        </td>
+        <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
+        <td class="px-4 py-3 font-medium">
+          ${esc(f.NodeName)}
+          ${isRepair
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium align-middle">ซ่อม</span>'
+            : ''}
+          ${isInstall
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-xs font-medium align-middle">ติดตั้ง</span>'
+            : ''}
+          ${isAttach
+            ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-xs font-medium align-middle">เอกสารแนบ</span>'
+            : ''}
+        </td>
+        <td class="px-4 py-3">
+          ${esc(r.airCode) || '<span class="text-gray-300">-</span>'}
+          ${isRepair ? '' : `<span class="ml-1 text-xs text-gray-400">ตัวที่ ${r.slot + (Number(f.SlotBase) || 0)}</span>`}
+        </td>
+        <td class="px-4 py-3">${
+          // ใบซ่อมไม่มีผลประเมินแบบใบล้าง ช่องนี้จึงใช้แสดงอาการเสียแทน
+          isRepair
+            ? (esc(r.cond) ? `<span class="text-slate-600" title="${esc(r.cond)}">${esc(r.cond.slice(0, 28))}${r.cond.length > 28 ? '…' : ''}</span>` : '<span class="text-gray-300">-</span>')
+          // ใบติดตั้งใช้ช่องนี้แสดงผลตรวจรับ ผ่าน/ไม่ผ่าน ซึ่งเป็นสิ่งที่คนเปิดตารางมาหา
+          : isInstall
+            ? acceptBadge(r.cond)
+            : conditionBadge(r.cond)
+        }</td>
+        <td class="px-4 py-3">${esc(f.TechnicianName)}</td>
+        <td class="px-4 py-3 text-right tabular-nums">${
+          r.price ? '฿' + r.price.toLocaleString() : '<span class="text-gray-300">-</span>'
+        }</td>
+        <td class="px-4 py-3 whitespace-nowrap">${
+          // ทั้งสองแถวเปิดเอกสารได้ เพราะกระดาษใบนั้นมีทั้งสองเครื่องอยู่แล้ว
+          // กดจากแถวไหนก็ได้ใบเดียวกัน ซึ่งถูกต้อง ไม่ใช่เอกสารคนละใบ
+          isAttach
+            ? `<button onclick="openAttachmentList(${f._row}, '${jsStr(r.kind)}')" title="ดูไฟล์เอกสารที่แนบเข้ามา"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-paperclip"></i> ไฟล์ที่แนบ</button>`
+          : isRepair
+            ? `<button onclick="openRepairDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารซ่อมเพื่อดู ปริ้น หรือดาวน์โหลด"
+                 class="text-amber-700 hover:text-white hover:bg-amber-600 px-2.5 py-1.5 rounded-lg transition border border-amber-500 bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
+          : isInstall
+            ? `<button onclick="openInstallDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารติดตั้งเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
+                 class="text-teal-700 hover:text-white hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition border border-teal-600 bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
+            // ปุ่มดาวน์โหลด PDF ย้ายไปอยู่บนหน้าเอกสารที่เปิดดู ไม่ใช่ตรงนี้
+            // เพราะคนกดเปิดดูก่อนอยู่แล้ว ค่อยตัดสินใจว่าจะเอาไฟล์หรือไม่
+            : `<button onclick="openCleaningDoc(${f._row}, '${jsStr(f.ID)}')" title="เปิดเอกสารเพื่อดู ปริ้น หรือดาวน์โหลด (ใบนี้มีทั้งสองเครื่อง)"
+                 class="text-[#1153a1] hover:text-white hover:bg-[#1153a1] px-2.5 py-1.5 rounded-lg transition border border-[#1153a1] bg-white text-xs font-medium inline-flex items-center gap-1">
+                 <i class="ph ph-file-text"></i> เปิดเอกสาร</button>`
+        }</td>
+        <td class="px-4 py-3 whitespace-nowrap">${
+          // ขั้นอนุมัติเป็นของ "ใบ" ไม่ใช่ของเครื่อง จึงโชว์แถวแรกของใบเท่านั้น
+          r.first ? approvalCell(f, r.kind) : ''
+        }</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          ${
+            // ปุ่มลบขึ้นเฉพาะแถวแรก เพราะลบทีเดียวคือลบทั้งใบ ทั้งสองเครื่อง
+            // ถ้าขึ้นทุกแถว คนจะเข้าใจว่ากดแล้วลบเฉพาะเครื่องตัวนั้น ซึ่งระบบทำไม่ได้
+            // ลบเอกสารได้เฉพาะ Infrastructure (เซิร์ฟเวอร์ปฏิเสธบทบาทอื่นอยู่แล้ว ไม่ต้องโชว์ปุ่ม)
+            (!r.first || !canEditRow || currentUserInfo.role !== 'Admin') ? ''
+              : isRepair
+              ? `<button onclick="deleteRepairFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารซ่อมใบนี้"><i class="ph ph-trash"></i></button>`
+              : isInstall
+              ? `<button onclick="deleteInstallFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารติดตั้งใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
+              : `<button onclick="deleteCleaningFormRow(${f._row}, '${jsStr(f.ID)}')" class="text-gray-400 hover:text-red-500 p-1" title="ลบเอกสารใบนี้ทั้งใบ"><i class="ph ph-trash"></i></button>`
+          }
+        </td>
+      </tr>`;
     }).join('');
 
     renderTablePager('cleaningFormPaginationBar', cleaningFormLastList.length, cleaningFormPage, 'goToCleaningFormPage');
