@@ -2646,27 +2646,29 @@
               <h2 class="text-2xl font-bold text-gray-800">ตารางงาน</h2>
               <p class="text-sm text-gray-500">งานล้างเครื่องปรับอากาศที่ได้รับมอบหมายของ ${esc(currentUserInfo.contractorName || '')}</p>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-              <!-- มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
-              <div class="space-y-4">
-              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
-                  <i class="ph ph-calendar-check text-[#1153a1]"></i> งานล้างของฉัน
-                </h3>
-                <div class="relative mb-3">
-                  <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <input type="text" id="mjSearch" oninput="mjSetQuery(this.value)" placeholder="ค้นหา Node หรือรหัสเครื่อง"
-                    class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+              <!-- รายการงานเป็นแท็บ (งานล้าง | ซ่อมและติดตั้ง) สูงเท่าปฏิทิน เลื่อนอยู่ในกล่อง หน้าไม่ยาวลง
+                   มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
+              <div class="relative lg:min-h-[560px]">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col max-h-[75vh] lg:max-h-none lg:absolute lg:inset-0">
+                  <div class="flex gap-1 mb-3 flex-shrink-0">
+                    <button id="mjTab_clean" onclick="mjSetTab('clean')" class="flex-1 px-2 py-1.5 rounded-lg text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors">
+                      <i class="ph ph-calendar-check"></i> งานล้าง <span id="mjTabCnt_clean" class="font-semibold"></span>
+                    </button>
+                    <button id="mjTab_work" onclick="mjSetTab('work')" class="flex-1 px-2 py-1.5 rounded-lg text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors">
+                      <i class="ph ph-wrench"></i> ซ่อม/ติดตั้ง <span id="mjTabCnt_work" class="font-semibold"></span>
+                    </button>
+                  </div>
+                  <div class="relative mb-3 flex-shrink-0">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="mjSearch" oninput="mjSetQuery(this.value)" placeholder="ค้นหา Node หรือรหัสเครื่อง"
+                      class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
+                  </div>
+                  <div class="flex-1 min-h-0 overflow-y-auto pr-1">
+                    <div id="mjList" class="space-y-2"></div>
+                    <div id="mjWorkList" class="space-y-2 hidden"></div>
+                  </div>
                 </div>
-                <div id="mjList" class="space-y-2"></div>
-              </div>
-              <!-- งานซ่อม/ติดตั้งที่มอบหมาย — กล่องแยกใต้งานล้าง แบ่งเดือนแบบเดียวกัน (เจ้าของงานเลือก) -->
-              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
-                  <i class="ph ph-wrench text-[#f47920]"></i> งานซ่อมและติดตั้ง
-                </h3>
-                <div id="mjWorkList" class="space-y-2"></div>
-              </div>
               </div>
               <div id="myWorkCalendar" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-5"></div>
             </div>`;
@@ -5804,6 +5806,12 @@
       const wDone = mjWork.filter(w => w.state === 'done' && workHit(w)).sort((a, b) =>
         String((b.doc && b.doc.date) || '').localeCompare(String((a.doc && a.doc.date) || '')) || byWorkNode(a, b));
       renderJobBox('work', 'mjWorkList', wTodo, wDone, w => w.apptDate, myWorkRow, 'เสร็จแล้ว', 'ไม่มีงานซ่อมหรือติดตั้งที่ต้องทำ');
+
+      // จำนวนงานที่ยังต้องทำบนหัวแท็บ (ตามคำค้น) · วาดใหม่ทุกครั้งเพื่อให้แท็บที่เลือกไว้ไม่หลุด
+      const cc = document.getElementById('mjTabCnt_clean'), cw = document.getElementById('mjTabCnt_work');
+      if (cc) cc.textContent = todo.length ? '· ' + todo.length : '';
+      if (cw) cw.textContent = wTodo.length ? '· ' + wTodo.length : '';
+      mjSetTab(mjTabSel);
     }
 
     /**
@@ -5963,6 +5971,23 @@
     }
 
     function mjSetQuery(v) { mjQuery = v || ''; renderMyJobs(); }
+
+    /** สลับแท็บในกล่องรายการงาน — งานล้าง | ซ่อมและติดตั้ง (แสดงทีละกล่อง) */
+    let mjTabSel = 'clean';
+    function mjSetTab(which) {
+      mjTabSel = which === 'work' ? 'work' : 'clean';
+      const list = document.getElementById('mjList'), work = document.getElementById('mjWorkList');
+      if (list) list.classList.toggle('hidden', mjTabSel !== 'clean');
+      if (work) work.classList.toggle('hidden', mjTabSel !== 'work');
+      for (const k of ['clean', 'work']) {
+        const b = document.getElementById('mjTab_' + k);
+        if (!b) continue;
+        const on = k === mjTabSel;
+        b.classList.toggle('bg-blue-50', on); b.classList.toggle('text-[#1153a1]', on);
+        b.classList.toggle('text-gray-500', !on); b.classList.toggle('hover:bg-gray-50', !on);
+      }
+    }
+    window.mjSetTab = mjSetTab;
     function mjShowMore(which, key) { mjView[which].showAll.add(key); renderMyJobs(); }
     function mjToggleDone(which) { mjView[which].doneOpen = !mjView[which].doneOpen; renderMyJobs(); }
     function mjToggleMonth(which, key) {
