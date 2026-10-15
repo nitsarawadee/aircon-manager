@@ -54,11 +54,11 @@ export const COLUMNS = [
   { name: 'OutdoorSN', required: false, kind: 'text', text: true, label: 'Serial คอยล์ร้อน', example: '22600647' },
 
   { name: 'InstallDate', required: false, kind: 'date', label: 'วันที่ติดตั้ง',
-    desc: 'รูปแบบ เดือน/วัน/ปี ค.ศ. เช่น 4/26/2018 (26 เม.ย. 2018) — ใส่ได้จะดีมาก เพราะระบบใช้คำนวณอายุเครื่อง',
-    example: '4/26/2018' },
+    desc: 'รูปแบบ วว/ดด/ปปปป ค.ศ. เช่น 26/04/2018 (26 เม.ย. 2018) — ใส่ได้จะดีมาก เพราะระบบใช้คำนวณอายุเครื่อง',
+    example: '26/04/2018' },
 
   { name: 'WarrantyExpire', required: false, kind: 'date', label: 'วันหมดประกัน',
-    desc: 'รูปแบบเดียวกับวันที่ติดตั้ง (เดือน/วัน/ปี ค.ศ.)', example: '4/26/2021' },
+    desc: 'รูปแบบเดียวกับวันที่ติดตั้ง (วว/ดด/ปปปป ค.ศ.)', example: '26/04/2021' },
 
   { name: 'CleaningPricePerRound', required: false, kind: 'number', label: 'ค่าล้างต่อรอบ (บาท)',
     desc: 'ใส่เฉพาะตัวเลข ไม่ต้องใส่ลูกน้ำหรือคำว่าบาท', example: '450' },
@@ -86,7 +86,7 @@ export const HEADERS = COLUMNS.map(c => c.name);
  */
 export function canonicalize(column, value) {
   const v = String(value ?? '').trim();
-  // วันที่: รับ 4/26/2018 (เดือน/วัน/ปี ตาม Template) แล้วเก็บเป็นรูปแบบของระบบ 2018-04-26
+  // วันที่: รับ 26/04/2018 (วว/ดด/ปปปป ตาม Template) แล้วเก็บเป็นรูปแบบของระบบ 2018-04-26
   if (DATE_COLUMNS.has(column)) {
     const iso = toIsoDate(v);
     return iso === null ? v : iso;
@@ -104,7 +104,7 @@ const DATE_COLUMNS = new Set(COLUMNS.filter(c => c.kind === 'date').map(c => c.n
 /**
  * วันที่จากไฟล์นำเข้า → รูปแบบที่ระบบเก็บ (ปี-เดือน-วัน)
  *
- * รับสองแบบ: 4/26/2018 (เดือน/วัน/ปี ค.ศ. — แบบใน Template ตรงกับที่ Excel แสดง)
+ * รับสองแบบ: 26/04/2018 (วว/ดด/ปปปป ค.ศ. — แบบใน Template · เจ้าของงานเปลี่ยนจาก เดือน/วัน/ปี เมื่อ 15/10/2569)
  * และ 2018-04-26 (แบบที่ไฟล์สำหรับแก้และข้อมูลเดิมใช้)
  * ต้องเป็นวันที่มีอยู่จริง และปี ค.ศ. เท่านั้น — ใส่ปี พ.ศ. เช่น 2561 อายุเครื่องจะเพี้ยนไป 543 ปี
  *
@@ -116,7 +116,7 @@ export function toIsoDate(value) {
   let y, m, d;
   let hit = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
   if (hit) [y, m, d] = [hit[1], hit[2], hit[3]].map(Number);
-  else if ((hit = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v))) [m, d, y] = [hit[1], hit[2], hit[3]].map(Number);
+  else if ((hit = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v))) [d, m, y] = [hit[1], hit[2], hit[3]].map(Number);
   else return null;
   if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return null;
   if (d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return null;
@@ -168,14 +168,14 @@ export function validateRow(row) {
     }
 
     if (col.kind === 'date' && toIsoDate(v) === null) {
-      // ใส่วันก่อนเดือน (26/4/2018) หรือปี พ.ศ. เป็นอาการที่เจอบ่อยสุด บอกให้ตรงจุด
+      // ใส่เดือนก่อนวัน (4/26/2018 แบบ Excel ภาษาอังกฤษ) หรือปี พ.ศ. เป็นอาการที่เจอบ่อยสุด บอกให้ตรงจุด
       const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(v);
       const hint = !slash ? ''
-        : Number(slash[1]) > 12 ? ' — ดูเหมือนใส่วันก่อนเดือน ต้องเป็น เดือน/วัน/ปี'
+        : Number(slash[2]) > 12 ? ' — ดูเหมือนใส่เดือนก่อนวัน ต้องเป็น วว/ดด/ปปปป'
         : slash[3].length !== 4 ? ' — ปีต้องมี 4 หลัก'
         : Number(slash[3]) > 2400 ? ' — ใช้ปี ค.ศ. ไม่ใช่ พ.ศ.'
         : '';
-      add('error', col.name, `"${v}" ไม่ใช่วันที่ที่ถูกต้อง ใช้รูปแบบ เดือน/วัน/ปี ค.ศ. เช่น 4/26/2018` + hint);
+      add('error', col.name, `"${v}" ไม่ใช่วันที่ที่ถูกต้อง ใช้รูปแบบ วว/ดด/ปปปป ค.ศ. เช่น 26/04/2018` + hint);
     }
 
     // เลขศูนย์นำหน้าหายเป็นความเสียหายที่มองไม่เห็น ต้องให้คนยืนยันเอง

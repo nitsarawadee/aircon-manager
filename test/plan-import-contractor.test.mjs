@@ -108,3 +108,25 @@ test('คอลัมน์ R4 ขึ้นไปที่เติมเอง 
   const clean = await updatePlanBulk(boss(db), 2026, [{ AirCode: 'ATG-PMK-AIR-3', R2_PlanDate: '2026-10-21' }]);
   assert.deepEqual(clean.ignoredColumns, []);
 });
+
+test('วันที่ในไฟล์เป็น วว/ดด/ปปปป → เก็บเป็น ปปปป-ดด-วว แบบที่หน้าเว็บบันทึก (เจ้าของงานกำหนด 15/10/2569)', async () => {
+  const db = freshDb();
+  await updatePlanBulk(boss(db), 2026, [
+    { AirCode: 'ATG-PMK-AIR-2', R2_PlanDate: '05/11/2026' },
+    { AirCode: 'ATG-PMK-AIR-3', R1_PlanDate: '3/2/2026', R2_PlanDate: '2026-10-20' }
+  ]);
+  assert.equal(row(db, 'ATG-PMK-AIR-2').R2_PlanDate, '2026-11-05', '05/11 = 5 พ.ย. ไม่ใช่ 11 พ.ค.');
+  assert.equal(row(db, 'ATG-PMK-AIR-3').R1_PlanDate, '2026-02-03');
+  assert.equal(row(db, 'ATG-PMK-AIR-3').R2_PlanDate, '2026-10-20', 'ปปปป-ดด-วว เดิมยังรับ');
+});
+
+test('วันที่อ่านไม่ได้ (เดือนก่อนวัน · ปี พ.ศ. · ไม่มีวันจริง) — ไม่นำเข้าทั้งไฟล์ และบอกเครื่อง/รอบ', async () => {
+  const db = freshDb();
+  for (const bad of ['10/15/2026', '15/10/2569', '31/02/2026', 'พรุ่งนี้']) {
+    await assert.rejects(() => updatePlanBulk(boss(db), 2026, [
+      { AirCode: 'ATG-PMK-AIR-2', R2_PlanDate: '01/11/2026' },
+      { AirCode: 'ATG-PMK-AIR-3', R2_PlanDate: bad }
+    ]), err => err.message.includes('ATG-PMK-AIR-3 รอบ 2') && err.message.includes('วว/ดด/ปปปป'));
+  }
+  assert.equal(row(db, 'ATG-PMK-AIR-2').R2_PlanDate || '', '', 'แถวที่ถูกต้องในไฟล์เดียวกันก็ไม่ถูกเขียน');
+});

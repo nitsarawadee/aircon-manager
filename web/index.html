@@ -4614,12 +4614,12 @@
 
         // ไฟล์ .xlsx เป็นรูปแบบไบนารี ไม่มีปัญหาเรื่องรหัสภาษา
         // ส่วน .csv ต้องเดารหัสเอง ไม่งั้นภาษาไทยกลายเป็นตัวขยะแล้วนำเข้าไปเงียบๆ
-        // dateNF: ช่องที่เป็นวันที่จริง (Excel เก็บเป็นวันที่ / CSV ที่ตัวอ่านแปลงให้) ออกมาเป็น 4/26/2018
-        // เดือน/วัน/ปี 4 หลัก ตาม Template — ถ้าไม่ระบุ ได้ 4/26/18 แล้วถูกปฏิเสธเพราะปีไม่ครบ 4 หลัก
+        // dateNF: ช่องที่เป็นวันที่จริง (Excel เก็บเป็นวันที่ / CSV ที่ตัวอ่านแปลงให้) ออกมาเป็น 26/04/2018
+        // วว/ดด/ปปปป ตาม Template — ถ้าไม่ระบุ ได้ 4/26/18 (เดือน/วัน/ปี 2 หลัก) แล้วถูกปฏิเสธ
         // ต้องใส่ตอนอ่านไฟล์ ใส่ตอนแปลงเป็นแถวไม่มีผล (ข้อความของช่องถูกสร้างไว้ตั้งแต่ตอนอ่าน)
         const book = isCsv
-          ? XLSX.read(decodeCsvText(bytes), { type: 'string', dateNF: 'm/d/yyyy' })
-          : XLSX.read(bytes, { type: 'array', dateNF: 'm/d/yyyy' });
+          ? XLSX.read(decodeCsvText(bytes), { type: 'string', dateNF: 'dd/mm/yyyy' })
+          : XLSX.read(bytes, { type: 'array', dateNF: 'dd/mm/yyyy' });
         const sheet = book.Sheets[book.SheetNames[0]];
 
         // raw:false = ให้ทุกช่องออกมาเป็นข้อความ ไม่ให้ตัวเลขกับวันที่ถูกแปลงร่าง
@@ -7341,9 +7341,10 @@
       const template = visiblePlanRows().map(p => ({
         AirCode: p.AirCode,
         NodeName: p.NodeName,
-        R1_PlanDate: p.R1_PlanDate || '',
-        R2_PlanDate: p.R2_PlanDate || '',
-        R3_PlanDate: p.R3_PlanDate || '',
+        // วว/ดด/ปปปป เหมือนตอนนำเข้า — ค่าที่แก้จากหน้าเว็บเก็บเป็น ปปปป-ดด-วว
+        R1_PlanDate: fmtDate(p.R1_PlanDate),
+        R2_PlanDate: fmtDate(p.R2_PlanDate),
+        R3_PlanDate: fmtDate(p.R3_PlanDate),
         R1_Contractor: p.R1_ContractorName || '',
         R2_Contractor: p.R2_ContractorName || '',
         R3_Contractor: p.R3_ContractorName || ''
@@ -7362,9 +7363,10 @@
       reader.onload = async function(evt) {
         try {
           const data = new Uint8Array(evt.target.result);
-          const workbook = XLSX.read(data, {type: 'array'});
+          // ช่องที่เป็นวันที่จริงใน Excel ออกมาเป็น วว/ดด/ปปปป (ไม่ระบุ = 10/15/26 เดือน/วัน/ปี 2 หลัก)
+          const workbook = XLSX.read(data, {type: 'array', dateNF: 'dd/mm/yyyy'});
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const bulkData = XLSX.utils.sheet_to_json(worksheet, {raw: false}); 
+          const bulkData = XLSX.utils.sheet_to_json(worksheet, {raw: false});
           
           if(!bulkData || bulkData.length === 0) throw new Error('ไม่พบข้อมูลในไฟล์');
           if(!bulkData[0].AirCode) throw new Error('ไฟล์ไม่ถูกต้อง (ต้องมีคอลัมน์ AirCode)');

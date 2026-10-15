@@ -89,25 +89,26 @@ test('เลขที่มีลูกน้ำคั่นหลักต้�
   assert.ok(e[0].message.includes('18000'), 'ต้องบอกค่าที่แก้แล้วให้เลย');
 });
 
-test('วันที่ใส่วันก่อนเดือน (15/3/2020) ต้องถูกจับ พร้อมบอกว่าต้องเป็น เดือน/วัน/ปี', () => {
-  // Template ใช้ เดือน/วัน/ปี ค.ศ. (4/26/2018) ตามที่เจ้าของงานกำหนด
-  const row = ok(); row.InstallDate = '15/3/2020';
+test('วันที่ใส่เดือนก่อนวัน (3/15/2020) ต้องถูกจับ พร้อมบอกว่าต้องเป็น วว/ดด/ปปปป', () => {
+  // Template ใช้ วว/ดด/ปปปป ค.ศ. (26/04/2018) — เจ้าของงานเปลี่ยนจาก เดือน/วัน/ปี เมื่อ 15/10/2569
+  const row = ok(); row.InstallDate = '3/15/2020';
   const e = errorsOf(row);
   assert.equal(e.length, 1);
-  assert.ok(e[0].message.includes('วันก่อนเดือน'), 'ต้องบอกสาเหตุ ไม่ใช่แค่บอกว่ารูปแบบผิด');
+  assert.ok(e[0].message.includes('เดือนก่อนวัน'), 'ต้องบอกสาเหตุ ไม่ใช่แค่บอกว่ารูปแบบผิด');
 });
 
-test('วันที่ เดือน/วัน/ปี (4/26/2018) รับได้ และเก็บเป็นรูปแบบของระบบ · ปี-เดือน-วัน เดิมก็ยังรับ', async () => {
+test('วันที่ วว/ดด/ปปปป (26/04/2018) รับได้ และเก็บเป็นรูปแบบของระบบ · ปี-เดือน-วัน เดิมก็ยังรับ', async () => {
   const { toIsoDate, canonicalize } = await import('../src/import-spec.js');
-  const row = ok(); row.InstallDate = '4/26/2018';
+  const row = ok(); row.InstallDate = '26/04/2018';
   assert.equal(errorsOf(row).length, 0);
-  assert.equal(canonicalize('InstallDate', '4/26/2018'), '2018-04-26');
+  assert.equal(canonicalize('InstallDate', '26/04/2018'), '2018-04-26');
+  assert.equal(canonicalize('InstallDate', '5/4/2018'), '2018-04-05', '5/4 = 5 เม.ย. ไม่ใช่ 4 พ.ค.');
   assert.equal(toIsoDate('2018-04-26'), '2018-04-26');
-  assert.equal(toIsoDate('2/30/2020'), null, 'วันที่ไม่มีจริง');
+  assert.equal(toIsoDate('30/2/2020'), null, 'วันที่ไม่มีจริง');
 });
 
 test('ปี พ.ศ. ต้องถูกจับ — อายุเครื่องจะเพี้ยนไป 543 ปี', () => {
-  const row = ok(); row.InstallDate = '4/26/2561';
+  const row = ok(); row.InstallDate = '26/04/2561';
   const e = errorsOf(row);
   assert.equal(e.length, 1);
   assert.ok(e[0].message.includes('ค.ศ.'));
