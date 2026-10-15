@@ -6985,7 +6985,7 @@
               <div><label class="block text-sm font-medium text-gray-700 mb-1">เลือก Node</label>
                 <div class="relative">
                   <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                  <input id="nd_node" value="${esc(curFilter)}" autocomplete="off" placeholder="พิมพ์ชื่อ Node แล้วเลือก..."
+                  <input id="nd_node" value="${esc(curFilter)}" autocomplete="off" placeholder="พิมพ์ชื่อ Node หรือรหัส เช่น TAM แล้วเลือก..."
                     oninput="ndNodeInput()" onfocus="ndNodeOpen()" onblur="ndNodeClose()" onkeydown="ndNodeKey(event)"
                     class="w-full rounded-lg border-gray-300 border pl-9 pr-9 py-2 text-sm bg-white font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                   <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
@@ -7023,18 +7023,32 @@
       document.querySelectorAll('[data-nd-round]').forEach(el =>
         el.classList.toggle('hidden', Number(el.dataset.ndRound) > nRounds));
       nodeDateAllNodes = nodes;
+      // รหัสชุมสายและรหัสแอร์ของแต่ละ Node — ให้พิมพ์รหัส (เช่น TAM) หา Node ได้ นอกจากพิมพ์ชื่อ
+      nodeDateCodes = {};
+      visiblePlanRows().forEach(p => {
+        if (!p.NodeName) return;
+        const set = nodeDateCodes[p.NodeName] || (nodeDateCodes[p.NodeName] = new Set());
+        if (p.SiteCode) set.add(String(p.SiteCode).trim());
+        if (p.AirCode) set.add(String(p.AirCode).trim());
+      });
       renderNodeUnitPicks();
     }
 
     /** รายชื่อ Node ของหน้าต่างราย Node — ชื่อที่พิมพ์ต้องตรงกับในนี้ถึงจะบันทึกได้ */
     let nodeDateAllNodes = [];
+    let nodeDateCodes = {};   // ชื่อ Node → รหัสชุมสาย/รหัสแอร์ที่อยู่ใน Node นั้น
 
     /* ---------- ช่องเลือก Node: พิมพ์หาแล้วเลือก (ทำเอง ไม่ใช้ datalist ของเบราว์เซอร์ ซึ่งหน้าตาไม่เข้ากับหน้าต่าง) ---------- */
     let ndNodeActive = -1;
 
+    /** รหัสของ Node ที่ตรงกับที่พิมพ์ (ว่างถ้าตรงที่ชื่ออยู่แล้ว หรือไม่ได้พิมพ์) */
+    function ndNodeCodeHits(n, q) {
+      if (!q || String(n).toLowerCase().includes(q)) return [];
+      return [...(nodeDateCodes[n] || [])].filter(c => c.toLowerCase().includes(q));
+    }
     function ndNodeMatches() {
       const q = document.getElementById('nd_node').value.trim().toLowerCase();
-      return nodeDateAllNodes.filter(n => String(n).toLowerCase().includes(q));
+      return nodeDateAllNodes.filter(n => String(n).toLowerCase().includes(q) || ndNodeCodeHits(n, q).length);
     }
 
     /** ชื่อ Node พร้อมตัวหนาตรงส่วนที่ตรงกับที่พิมพ์ */
@@ -7053,7 +7067,7 @@
       list.innerHTML = hits.length
         ? hits.map((n, i) => `<button type="button" data-node="${esc(n)}" onmousedown="event.preventDefault()" onclick="ndNodePick(this.dataset.node)"
             class="w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${i === ndNodeActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-slate-50'}">
-            <span class="truncate">${ndNodeLabel(n, q)}</span>${n === input.value.trim() ? '<i class="ph ph-check text-indigo-600 shrink-0"></i>' : ''}</button>`).join('')
+            <span class="truncate">${ndNodeLabel(n, q)}</span>${ndNodeCodeHits(n, q).length ? '<span class="text-xs text-gray-400 shrink-0 font-mono">' + ndNodeLabel(ndNodeCodeHits(n, q)[0], q) + '</span>' : ''}${n === input.value.trim() ? '<i class="ph ph-check text-indigo-600 shrink-0"></i>' : ''}</button>`).join('')
         : '<div class="px-3 py-2 text-sm text-gray-400">ไม่พบ Node ที่ค้นหา</div>';
       const on = list.children[ndNodeActive];
       if (on) on.scrollIntoView({ block: 'nearest' });
