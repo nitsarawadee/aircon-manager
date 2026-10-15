@@ -1108,7 +1108,7 @@
           <i class="ph ph-eye"></i> คุณมีสิทธิ์ดูเอกสารประเภทนี้เท่านั้น (กรอกหรือลบไม่ได้)
         </div>
 
-        <div class="text-xs text-gray-400 mb-2 flex items-center gap-1"><i class="ph ph-sort-descending"></i> เรียงตามวันที่ล่าสุดก่อน</div>
+        <div class="text-xs text-gray-400 mb-2 flex items-center gap-1"><i class="ph ph-sort-descending"></i> เรียงตามเอกสารที่ส่งเข้าระบบล่าสุดก่อน</div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="table-container overflow-x-auto">
             <table id="cleaningFormTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
@@ -9409,11 +9409,9 @@
     // ใบที่ยังรออนุมัติขึ้นทุกปี — งานค้างข้ามปีต้องไม่หายจากตา
     const waiting = d => !!(d.Approval && d.Approval.next && !d.Approval.done);
     const all = docs.filter(f => f.kind === docTypeFilter && (!docMineOnly || waitsForMe(f)) &&
-                                 (!year || yearOf(f.Date) === year || waiting(f)))
-      // เรียงตามวันที่ทำงาน (วันที่ที่เห็นบนรายการ) ล่าสุดก่อน — วันเดียวกันใบที่บันทึกทีหลังขึ้นก่อน
-      // (เดิมเรียงตามเวลาบันทึก ใบที่แนบย้อนหลังจึงขึ้นก่อนใบที่วันที่ใหม่กว่า ดูเหมือนไม่เรียง)
-      .sort((a, b) => String(b.Date || '').slice(0, 10).localeCompare(String(a.Date || '').slice(0, 10)) ||
-                      String(b.CreatedAt || '').localeCompare(String(a.CreatedAt || '')));
+                                 (!year || yearOf(f.Date) === year || waiting(f)));
+    // ลำดับมาจาก allDocForms: เอกสารที่ส่งเข้าระบบล่าสุดก่อน (CreatedAt) — เจ้าของงานเลือกแบบนี้
+    // ไม่ใช่วันที่ทำงาน เพราะต้องการเห็นใบที่เพิ่งส่งมาบนสุด (ใบที่แนบย้อนหลังก็ขึ้นบนสุดตอนส่ง)
     if (!q) return all;
 
     return all.filter(f =>
