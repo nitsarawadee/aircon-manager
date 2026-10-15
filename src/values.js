@@ -123,6 +123,19 @@ export function safeParseDate(v) {
  * สำคัญ: Serial number ที่เป็นตัวเลขยาวๆ จะถูก JavaScript แสดงเป็น 5.230054E7
  * และ BTU จะกลายเป็น 18000.0 ถ้าไม่ดักไว้ ตรงนี้บังคับให้แสดงเป็นเลขเต็มเสมอ
  */
+/**
+ * ตรวจค่าเงินที่กรอกมา — ว่างได้ (ไม่ระบุ) ถ้าใส่ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป
+ *
+ * ติดลบหรือเป็นตัวอักษรเข้าไปแล้วยอดงบและแดชบอร์ดเพี้ยนโดยไม่มีใครรู้ (ค่าติดลบไปหักค่าใช้จ่ายรวม)
+ * หน้าเว็บมี min="0" อยู่บางช่อง แต่ไม่ใช่ด่านจริง — ต้องตรวจที่เซิร์ฟเวอร์ (กติกาเดียวกับงบประมาณ)
+ */
+export function assertMoney(label, v) {
+  if (v === '' || v === null || v === undefined) return;
+  if (typeof v === 'string' && !v.trim()) return;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) throw new Error(label + 'ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป');
+}
+
 export function plainText(v) {
   if (v === null || v === undefined) return '';
   if (typeof v === 'number') {

@@ -1,7 +1,7 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import { planImport, applyImport, toExportRows } from '../import.js';
 import { HEADERS as IMPORT_HEADERS, COLUMNS as IMPORT_COLUMNS, ALLOWED as IMPORT_ALLOWED } from '../import-spec.js';
-import {
+import { assertMoney,
   AWAITING_INSTALL_STATUS, formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeRegion, orderByNode, ymd, ymdhms
 } from '../values.js';
 import { addHistoryRaw, getHistory } from './history.js';
@@ -605,6 +605,7 @@ function describeMachine(u) {
 export async function replaceAirUnit(ctx, row, newUnit, expectCode) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('airlist');
+    assertMoney('ค่าเปลี่ยนเครื่อง', (newUnit || {}).ReplaceCost);
     await ctx.ensureBase();
     ctx.assertRowIs(SHEETS.AIRLIST, row, 'AirCode', expectCode, 'เครื่องรหัส');
 

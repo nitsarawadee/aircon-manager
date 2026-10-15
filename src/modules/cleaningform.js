@@ -8,7 +8,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
  */
 const KIND = 'cleaning';
-import { cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
+import { assertMoney, cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
@@ -738,6 +738,9 @@ export async function saveCleaningForm(ctx, record) {
   // จึงเช็คว่ามีเครื่องอย่างน้อย 1 ใน 2 ช่อง ไม่ใช่บังคับช่องแรกเสมอ
   if (!record.AirCode1 && !record.AirCode2) throw new Error('กรุณาเลือกเครื่องปรับอากาศอย่างน้อย 1 เครื่อง');
   if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
+  assertMoney('ค่าล้างเครื่องที่ 1', record.Price1);
+  assertMoney('ค่าล้างเครื่องที่ 2', record.Price2);
+  assertMoney('ค่าล้าง', record.Price);
 
   // จัดเครื่องลงช่องตามเลขเครื่องจริง ก่อนทำอย่างอื่นทั้งหมด
   const bySlot = unitsBySlot(record);
@@ -1406,6 +1409,7 @@ export async function uploadNodeDocuments(ctx, payload) {
         // ยังรับค่าเดียวทั้งใบ (closeout.condition) ไว้ด้วย เผื่อหน้าจออื่นที่ยัง
         // ไม่มีช่องรายเครื่อง เช่นหน้าปิดงานจากหน้าแผน
         const own = plainText(w.condition);
+        assertMoney('ค่าล้าง ' + plainText(w.airCode), w.price);
         return {
           airCode: plainText(found.AirCode),
           price: hasPrice(w.price) ? Number(w.price) : '',

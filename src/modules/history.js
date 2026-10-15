@@ -1,6 +1,6 @@
 import { SHEETS, INSTALL_PENDING_NOTE } from '../schema.js';
 import {
-  formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms
+  assertMoney, formatDate, isAwaitingInstall, isRetiredStatus, normalizeCode, partsOf, safeParseDate, ymd, ymdhms
 } from '../values.js';
 import { ensureCaseId, isRepairStatus, openCaseOf } from './repair-case.js';
 
@@ -231,6 +231,7 @@ export async function addHistoryRaw(ctx, record, opts = {}) {
 export async function addHistoryRecord(ctx, record) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('history');
+    assertMoney('ค่าใช้จ่าย', record.Cost);
     await ctx.assertAirCodeAccess(record.AirCode);
     await addHistoryRaw(ctx, record);
     await ctx.ss.flush();
@@ -400,6 +401,7 @@ export async function getRepairWorkCount(ctx) {
 export async function markCannotRepair(ctx, record) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('repair');
+    assertMoney('ค่าใช้จ่าย', record.Cost);
     await ctx.ensureBase();
 
     const reason = String(record.Reason || '').trim();
@@ -461,6 +463,7 @@ export async function completeRepairRecord(ctx, record) {
  * ไม่ล็อก ไม่ flush — ผู้เรียกถือล็อกและ ensureBase แล้ว (completeRepairRecord · closeRepairSelf ใน assign.js)
  */
 export async function closeRepairCaseRaw(ctx, record) {
+  assertMoney('ค่าซ่อม', record.Cost);
   const airHeaders = ctx.ss.headers(SHEETS.AIRLIST);
   const list = ctx.ss.objects(SHEETS.AIRLIST);
   const target = normalizeCode(record.AirCode);

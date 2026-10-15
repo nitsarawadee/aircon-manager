@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
-import { AWAITING_INSTALL_STATUS, cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
+import { AWAITING_INSTALL_STATUS, assertMoney, cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, historyPrefix, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
@@ -208,6 +208,7 @@ export async function prepareInstall(ctx, record, lookup = code => unitOf(ctx, c
  * @returns {Promise<Object>} แถวที่เขียนลงไป
  */
 export async function writeInstallForm(ctx, record, { units, first, slotBase, companyName }, recordedBy) {
+  assertMoney('ค่าติดตั้ง', record.Cost);
   // เครื่องเดียวกันออกใบติดตั้งได้ทีละใบ — ใบก่อนหน้าต้องอนุมัติครบ หรือถูกลบ (ยกเลิกการติดตั้ง) ก่อน
   // ไม่งั้นได้สองใบที่ค้างอยู่พร้อมกัน แล้วอนุมัติใบหนึ่งจะปล่อยเฉพาะเครื่องของใบนั้น อีกใบค้างตลอด
   // (เครื่องใหม่ตัวอื่นของ Node เดียวกัน เช่น ตัวที่ 3-4 ออกใบแยกได้ตามปกติ เพราะเป็นคนละเครื่อง)

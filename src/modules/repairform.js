@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
-import { cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
+import { assertMoney, cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { ensureCaseId } from './repair-case.js';
@@ -225,6 +225,7 @@ async function attachedFormOf(ctx, row) {
  * @returns {Promise<Object>}  แถวที่เขียนลงไป (มี DocNo, CaseID)
  */
 export async function writeRepairForm(ctx, unit, record, recordedBy) {
+  assertMoney('ค่าซ่อม', record.Cost);
   // ส่งเอกสารซ่อมได้เฉพาะงานที่ Infrastructure อนุมัติซ่อมแล้ว (สถานะ "รอซ่อม") — ทุกทางเหมือนกัน
   // ทั้งกรอกในระบบ แนบไฟล์ และส่งผ่านลิงก์ (เจ้าของงานกำหนด: เอาให้เหมือนกัน)
   // เดิมกรอกในระบบ/แนบไฟล์ได้ตั้งแต่ยัง "ชำรุด" หรือเครื่องที่ไม่ได้แจ้งซ่อม = ปิดงานโดยไม่ผ่านการอนุมัติซ่อม
