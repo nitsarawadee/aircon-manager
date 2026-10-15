@@ -1213,7 +1213,9 @@ export async function reopenPlanRoundRaw(ctx, opts) {
   if (String(ctx.ss.cell(name, row, col('Status')) || '').trim() !== 'ล้างเสร็จสิ้น') return 0;
   if (dateOut(ctx.ss.cell(name, row, col('ActualDate'))) !== dateOut(opts.actualDate)) return 0;
 
-  ctx.ss.setValue(name, row, col('Status'), 'รอดำเนินการ');
+  // ยังมีวันตามแผน = กลับเป็นนัดหมายแล้ว (กติกาเดียวกับทุกช่องทาง — เจ้าของงานกำหนด 15/10/2569) · ไม่มีวัน = รอดำเนินการ
+  const planDate = col('PlanDate') > 0 ? String(ctx.ss.cell(name, row, col('PlanDate')) || '').trim() : '';
+  ctx.ss.setValue(name, row, col('Status'), planDate ? ROUND_SCHEDULED : 'รอดำเนินการ');
   ctx.ss.setValue(name, row, col('ActualDate'), '');
   const byCol = headers.indexOf('UpdatedBy') + 1;
   if (byCol > 0) ctx.ss.setValue(name, row, byCol, await ctx.currentUser());

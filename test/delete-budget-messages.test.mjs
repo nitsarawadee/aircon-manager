@@ -114,25 +114,28 @@ test('ลบใบซ่อมที่อนุมัติครบแล้�
   assert.equal(cases.size, 1, 'ใบใหม่ต้องเกาะเคสเดิม');
 });
 
-test('ลบใบล้าง: รอบในแผนกลับเป็นรอดำเนินการ ประวัติ+ค่าล้างหาย', async () => {
-  const db = freshDb();
-  db.exec("UPDATE air_units SET Status = 'ใช้งานปกติ' WHERE AirCode = 'AYA-WNI-AIR-1'");
-  db.prepare('INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R1_PlanDate, R1_Price, R1_Status) VALUES (?,?,?,?,?,?,?)')
-    .run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', '2026-10-01', 550, 'รอดำเนินการ');
-  await saveCleaningForm(as(db, 'staff'), {
-    NodeName: 'วังน้อย', SiteCode: 'AYA-WNI', Region: '1', Province: 'อยุธยา',
-    Date: '2026-10-09', PlanYear: 2026, PlanRound: 1, AirCode1: 'AYA-WNI-AIR-1', Price1: 550, Checklist: []
+// รอบที่ยังมีวันตามแผน กลับเป็น "นัดหมายแล้ว" · ไม่มีวัน กลับเป็น "รอดำเนินการ" (กติกาเดียวกับทุกช่องทาง — 15/10/2569)
+for (const [planDate, back] of [['2026-10-01', 'นัดหมายแล้ว'], ['', 'รอดำเนินการ']]) {
+  test(`ลบใบล้าง: รอบในแผนกลับเป็น${back} (วันตามแผน "${planDate}") ประวัติ+ค่าล้างหาย`, async () => {
+    const db = freshDb();
+    db.exec("UPDATE air_units SET Status = 'ใช้งานปกติ' WHERE AirCode = 'AYA-WNI-AIR-1'");
+    db.prepare('INSERT INTO plans (Year, AirCode, NodeName, SiteCode, R1_PlanDate, R1_Price, R1_Status) VALUES (?,?,?,?,?,?,?)')
+      .run(2026, 'AYA-WNI-AIR-1', 'วังน้อย', 'AYA-WNI', planDate, 550, planDate ? 'นัดหมายแล้ว' : 'รอดำเนินการ');
+    await saveCleaningForm(as(db, 'staff'), {
+      NodeName: 'วังน้อย', SiteCode: 'AYA-WNI', Region: '1', Province: 'อยุธยา',
+      Date: '2026-10-09', PlanYear: 2026, PlanRound: 1, AirCode1: 'AYA-WNI-AIR-1', Price1: 550, Checklist: []
+    });
+    const plan = () => db.prepare('SELECT R1_Status s, R1_ActualDate d, R1_Price p FROM plans WHERE AirCode = ?').get('AYA-WNI-AIR-1');
+    assert.equal(plan().s, 'ล้างเสร็จสิ้น');
+    const [form] = await getCleaningForms(as(db, 'infra'));
+    await approveAll(db, 'cleaning', form.ID);
+
+    await deleteCleaningForm(as(db, 'infra'), form._row, form.ID);
+
+    assert.deepEqual({ ...plan() }, { s: back, d: '', p: 550 });
+    assert.equal(historyOf(db, 'AYA-WNI-AIR-1').filter(x => x.EventType === 'ล้างแอร์').length, 0);
   });
-  const plan = () => db.prepare('SELECT R1_Status s, R1_ActualDate d, R1_Price p FROM plans WHERE AirCode = ?').get('AYA-WNI-AIR-1');
-  assert.equal(plan().s, 'ล้างเสร็จสิ้น');
-  const [form] = await getCleaningForms(as(db, 'infra'));
-  await approveAll(db, 'cleaning', form.ID);
-
-  await deleteCleaningForm(as(db, 'infra'), form._row, form.ID);
-
-  assert.deepEqual({ ...plan() }, { s: 'รอดำเนินการ', d: '', p: 550 });
-  assert.equal(historyOf(db, 'AYA-WNI-AIR-1').filter(x => x.EventType === 'ล้างแอร์').length, 0);
-});
+}
 
 test('ลบใบติดตั้งที่อนุมัติครบแล้ว: งานกลับเป็นรอเอกสารติดตั้ง เครื่องกลับเป็นรอติดตั้ง', async () => {
   const db = freshDb();
