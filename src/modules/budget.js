@@ -31,40 +31,68 @@ export const MONTH_LABELS = [
  * เพราะกราฟที่ข้ามเดือนที่ไม่มีข้อมูลจะอ่านผิด — เดือนที่ไม่ได้ใช้เงิน
  * กับเดือนที่ยังไม่ถึง ดูเหมือนกันหมดถ้าไม่มีแกนครบ
  *
- * แยกล้าง/ซ่อมด้วยเกณฑ์เดียวกับยอดรวมทั้งปี เพื่อให้ผลบวก 12 เดือน
+ * แยกหมวดด้วยเกณฑ์เดียวกับยอดรวมทั้งปี เพื่อให้ผลบวก 12 เดือน
  * เท่ากับยอดรวมเสมอ ถ้าใช้คนละเกณฑ์ตัวเลขสองที่จะไม่ตรงกันแล้วไม่มีใครรู้ว่าอันไหนถูก
+ *
+ * 4 หมวดตามไฟล์งบของพี่เลี้ยง (15/10/2569) — ดู costCategory · ค่าติดตั้งอยู่ที่ใบติดตั้ง ไม่ได้ลงประวัติ
  *
  * @param {Array<Object>} historyRows แถวประวัติทั้งหมด
  * @param {number} year ปีที่ต้องการ
- * @returns {Array<{month:number,label:string,cleaning:number,repair:number,total:number}>}
+ * @param {Array<Object>} [installForms] ใบติดตั้งทั้งหมด — นับช่องค่าติดตั้งตามวันที่ของใบ
+ * @returns {Array<{month:number,label:string,cleaning:number,repair:number,purchase:number,install:number,total:number}>}
  */
-export function monthlyBreakdown(historyRows, year) {
+export function monthlyBreakdown(historyRows, year, installForms = []) {
   const months = MONTH_LABELS.map((label, i) => ({
-    month: i + 1, label, cleaning: 0, repair: 0, total: 0
+    month: i + 1, label, cleaning: 0, repair: 0, purchase: 0, install: 0, total: 0
   }));
 
-  for (const h of historyRows) {
-    const d = safeParseDate(h.Date);
-    if (!d) continue;
+  const add = (date, rawCost, cat) => {
+    const d = safeParseDate(date);
+    if (!d) return;
 
     // ใช้เวลาไทยเหมือนยอดรวมทั้งปี ไม่งั้นรายการวันที่ 1 ของเดือน
     // จะตกไปอยู่เดือนก่อนหน้าเวลารันบนเครื่องที่ใช้เวลา UTC
     const { y, m } = partsOf(d);
-    if (y !== Number(year)) continue;
+    if (y !== Number(year)) return;
 
-    const cost = Number(h.Cost) || 0;
-    if (!cost) continue;
+    const cost = Number(rawCost) || 0;
+    if (!cost) return;
 
     const slot = months[m - 1];
-    if (!slot) continue;
+    if (!slot) return;
 
-    if (String(h.EventType).includes('ล้าง')) slot.cleaning += cost;
-    else slot.repair += cost;
+    slot[cat] += cost;
     slot.total += cost;
-  }
+  };
+
+  for (const h of historyRows) add(h.Date, h.Cost, costCategory(h.EventType));
+  for (const f of installForms) add(f.Date, f.Cost, 'install');
 
   return months;
 }
+
+/**
+ * หมวดค่าใช้จ่ายของประวัติหนึ่งแถว
+ *   "ล้าง…"         → cleaning (ล้างแอร์)
+ *   "เปลี่ยนเครื่อง"   → purchase (จัดซื้อเครื่องใหม่ — ค่าเปลี่ยนเครื่องที่กรอกตอนกดเปลี่ยนเครื่อง)
+ *   "ติดตั้ง"         → install (ปกติไม่มีค่าใช้จ่าย ค่าติดตั้งอยู่ในใบติดตั้ง)
+ *   อื่นทั้งหมด        → repair (รวม "เปลี่ยนอะไหล่" — เทียบชื่อเหตุการณ์ตรงตัว ไม่ใช่แค่มีคำว่าเปลี่ยน)
+ */
+export function costCategory(eventType) {
+  const t = String(eventType == null ? '' : eventType).trim();
+  if (t.includes('ล้าง')) return 'cleaning';
+  if (t === 'เปลี่ยนเครื่อง') return 'purchase';
+  if (t === 'ติดตั้ง') return 'install';
+  return 'repair';
+}
+
+/** หมวดงบทั้งหมด — ชื่อช่องในตาราง Budget กับชื่อที่ส่งให้หน้าเว็บ */
+export const BUDGET_CATEGORIES = [
+  { key: 'cleaning', column: 'CleaningBudget', label: 'งบล้างแอร์' },
+  { key: 'repair', column: 'RepairBudget', label: 'งบซ่อมบำรุง' },
+  { key: 'purchase', column: 'PurchaseBudget', label: 'งบจัดซื้อเครื่องใหม่' },
+  { key: 'install', column: 'InstallBudget', label: 'งบติดตั้ง' }
+];
 
 /**
  * ปีที่ให้เลือกได้ในหน้างบประมาณ
@@ -108,11 +136,10 @@ export async function getBudgetSummary(ctx, year) {
   if (!(await ctx.canView('budget'))) {
     // ต้องคืน monthly ครบ 12 เดือนด้วย ไม่งั้นหน้าเว็บที่วาดกราฟจะพังทั้งหน้า
     // สำหรับคนที่ไม่มีสิทธิ์ดูงบ ซึ่งเป็นคนละเรื่องกับการไม่ให้เห็นตัวเลข
+    const zero = Object.fromEntries(BUDGET_CATEGORIES.flatMap(c => [[budgetKey(c), 0], [expenseKey(c), 0], [remainKey(c), 0]]));
     return {
       year: currentYear, availableYears: [currentYear],
-      budgetCleaning: 0, budgetRepair: 0, totalBudget: 0,
-      expenseCleaning: 0, expenseRepair: 0, totalExpense: 0,
-      remainCleaning: 0, remainRepair: 0, remaining: 0,
+      ...zero, totalBudget: 0, totalExpense: 0, remaining: 0,
       monthly: monthlyBreakdown([], currentYear), note: ''
     };
   }
@@ -120,46 +147,44 @@ export async function getBudgetSummary(ctx, year) {
   await ctx.ensureBase();
   await ensureBudgetSheet(ctx);
 
-  let budgetCleaning = 0;
-  let budgetRepair = 0;
-  let note = '';
-
   const row = ctx.ss.objects(SHEETS.BUDGET).find(r => Number(r.Year) === currentYear);
-  if (row) {
-    budgetCleaning = Number(row.CleaningBudget) || 0;
-    budgetRepair = Number(row.RepairBudget) || 0;
-    note = row.Note || '';
-  }
+  const note = row ? row.Note || '' : '';
 
-  // ค่าใช้จ่ายจริงคิดจากประวัติทั้งหมดของปีนั้น (ไม่กรองภูมิภาค เพราะเป็นงบรวมทั้งบริษัท)
+  // ค่าใช้จ่ายจริงคิดจากประวัติทั้งหมดของปีนั้น + ค่าติดตั้งในใบติดตั้ง (ไม่กรองภูมิภาค เพราะเป็นงบรวมทั้งบริษัท)
   //
   // ยอดรวมทั้งปีบวกมาจากรายเดือนโดยตรง ไม่ได้นับแยกกันคนละรอบ
   // เพื่อให้เป็นไปไม่ได้ที่ตัวเลขบนการ์ดสรุปกับตัวเลขบนกราฟจะไม่ตรงกัน
-  const monthly = monthlyBreakdown(ctx.ss.objects(SHEETS.HISTORY), currentYear);
-  const expenseCleaning = monthly.reduce((s, m) => s + m.cleaning, 0);
-  const expenseRepair = monthly.reduce((s, m) => s + m.repair, 0);
+  const monthly = monthlyBreakdown(ctx.ss.objects(SHEETS.HISTORY), currentYear, ctx.ss.objects(SHEETS.INSTALLFORM));
 
-  return {
-    year: currentYear,
-    availableYears: await budgetYears(ctx, currentYear),
-    budgetCleaning,
-    budgetRepair,
-    totalBudget: budgetCleaning + budgetRepair,
-    expenseCleaning,
-    expenseRepair,
-    totalExpense: expenseCleaning + expenseRepair,
-    remainCleaning: budgetCleaning - expenseCleaning,
-    remainRepair: budgetRepair - expenseRepair,
-    remaining: (budgetCleaning + budgetRepair) - (expenseCleaning + expenseRepair),
-    monthly,
-    note
-  };
+  // ชื่อช่องเดิม (budgetCleaning, expenseRepair, remainCleaning …) คงไว้ — หน้าเว็บและชุดทดสอบเดิมอ่านชื่อนี้
+  const out = { year: currentYear, availableYears: await budgetYears(ctx, currentYear) };
+  let totalBudget = 0, totalExpense = 0;
+  for (const c of BUDGET_CATEGORIES) {
+    const budget = row ? Number(row[c.column]) || 0 : 0;
+    const expense = monthly.reduce((s, m) => s + m[c.key], 0);
+    out[budgetKey(c)] = budget;
+    out[expenseKey(c)] = expense;
+    out[remainKey(c)] = budget - expense;
+    totalBudget += budget;
+    totalExpense += expense;
+  }
+  return { ...out, totalBudget, totalExpense, remaining: totalBudget - totalExpense, monthly, note };
 }
 
-export async function saveBudgetRecord(ctx, year, budgetCleaning, budgetRepair, note) {
+const cap = c => c.key[0].toUpperCase() + c.key.slice(1);
+const budgetKey = c => 'budget' + cap(c);
+const expenseKey = c => 'expense' + cap(c);
+const remainKey = c => 'remain' + cap(c);
+
+/**
+ * บันทึกงบของปีหนึ่ง
+ * งบจัดซื้อ/ติดตั้งต่อท้ายพารามิเตอร์เดิม — หน้าเว็บรุ่นเก่าไม่ส่งมา (undefined) = ไม่แตะค่าที่ตั้งไว้
+ */
+export async function saveBudgetRecord(ctx, year, budgetCleaning, budgetRepair, note, budgetPurchase, budgetInstall) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('budget');
-    for (const [label, v] of [['งบล้างแอร์', budgetCleaning], ['งบซ่อมแอร์', budgetRepair]]) {
+    for (const [label, v] of [['งบล้างแอร์', budgetCleaning], ['งบซ่อมแอร์', budgetRepair],
+      ['งบจัดซื้อเครื่องใหม่', budgetPurchase], ['งบติดตั้ง', budgetInstall]]) {
       if (v === '' || v === null || v === undefined) continue;
       if (!Number.isFinite(Number(v)) || Number(v) < 0) throw new Error(label + 'ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป');
     }
@@ -175,6 +200,8 @@ export async function saveBudgetRecord(ctx, year, budgetCleaning, budgetRepair, 
       UpdatedAt: ymdhms(new Date()),
       UpdatedBy: me
     };
+    if (budgetPurchase !== undefined) payload.PurchaseBudget = budgetPurchase;
+    if (budgetInstall !== undefined) payload.InstallBudget = budgetInstall;
 
     const existing = ctx.ss.objects(SHEETS.BUDGET).find(r => Number(r.Year) === Number(year));
     if (existing) {

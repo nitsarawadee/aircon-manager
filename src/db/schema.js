@@ -296,7 +296,9 @@ export const TABLES = {
   budgets: {
     sheet: 'Budget',
     columns: {
-      Year: N, CleaningBudget: N, RepairBudget: N, Note: S, UpdatedAt: DT, UpdatedBy: S
+      Year: N, CleaningBudget: N, RepairBudget: N, Note: S, UpdatedAt: DT, UpdatedBy: S,
+      // งบเปลี่ยนเครื่อง แยกจัดซื้อกับติดตั้ง (ดู BUDGET_HEADERS ใน src/schema.js)
+      PurchaseBudget: N, InstallBudget: N
     },
     unique: ['Year']
   },

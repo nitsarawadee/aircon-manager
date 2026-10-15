@@ -1086,7 +1086,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">การจัดการงบประมาณ</h2>
-            <p class="text-sm text-gray-500">งบประมาณและค่าใช้จ่ายประจำปี แยกตามงานล้างและงานซ่อมบำรุง</p>
+            <p class="text-sm text-gray-500">งบประมาณและค่าใช้จ่ายประจำปี แยกตามงานล้าง ซ่อมบำรุง จัดซื้อเครื่องใหม่ และติดตั้ง</p>
           </div>
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
@@ -1101,56 +1101,12 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          
-          <!-- Cleaning Budget Card -->
-          <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
-            <h3 class="text-lg font-bold text-[#1153a1] mb-5 flex items-center gap-2"><i class="ph-fill ph-drop"></i> งบประมาณล้างแอร์</h3>
-            <div class="grid grid-cols-3 gap-2 mb-5 text-center">
-              <div>
-                <div class="text-xs text-gray-500 mb-1">ตั้งงบ</div>
-                <div class="font-bold text-gray-800 text-lg sm:text-xl" id="bdg_clean_total">฿0</div>
-              </div>
-              <div>
-                <div class="text-xs text-gray-500 mb-1">ใช้ไป</div>
-                <div class="font-bold text-rose-600 text-lg sm:text-xl" id="bdg_clean_used">฿0</div>
-              </div>
-              <div>
-                <div class="text-xs text-gray-500 mb-1">คงเหลือ</div>
-                <div class="font-bold text-emerald-600 text-lg sm:text-xl" id="bdg_clean_remain">฿0</div>
-              </div>
-            </div>
-            <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-              <div id="bdg_bar_clean" class="bg-[#1153a1] h-full transition-all duration-500" style="width: 0%"></div>
-            </div>
-          </div>
-
-          <!-- Repair Budget Card -->
-          <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
-            <h3 class="text-lg font-bold text-[#f47920] mb-5 flex items-center gap-2"><i class="ph-fill ph-wrench"></i> งบประมาณซ่อมบำรุง</h3>
-            <div class="grid grid-cols-3 gap-2 mb-5 text-center">
-              <div>
-                <div class="text-xs text-gray-500 mb-1">ตั้งงบ</div>
-                <div class="font-bold text-gray-800 text-lg sm:text-xl" id="bdg_repair_total">฿0</div>
-              </div>
-              <div>
-                <div class="text-xs text-gray-500 mb-1">ใช้ไป</div>
-                <div class="font-bold text-rose-600 text-lg sm:text-xl" id="bdg_repair_used">฿0</div>
-              </div>
-              <div>
-                <div class="text-xs text-gray-500 mb-1">คงเหลือ</div>
-                <div class="font-bold text-emerald-600 text-lg sm:text-xl" id="bdg_repair_remain">฿0</div>
-              </div>
-            </div>
-            <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-              <div id="bdg_bar_repair" class="bg-[#f47920] h-full transition-all duration-500" style="width: 0%"></div>
-            </div>
-          </div>
-        </div>
+        <!-- การ์ดงบ 4 หมวด (ล้าง · ซ่อม · จัดซื้อ · ติดตั้ง) วาดจาก BUDGET_UI ใน loadBudget -->
+        <div id="bdg_cards" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"></div>
 
         <div class="bg-slate-900 rounded-2xl p-6 shadow-sm mb-6 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden">
             <div class="relative z-10">
-               <div class="text-sm text-slate-400">งบประมาณรวมทั้งปี (ล้าง + ซ่อม)</div>
+               <div class="text-sm text-slate-400">งบประมาณรวมทั้งปี (ล้าง + ซ่อม + จัดซื้อ + ติดตั้ง)</div>
                <div class="text-2xl sm:text-3xl font-bold mt-1" id="bdg_all_total">฿0</div>
                <p id="bdg_note_text" class="mt-2 text-xs text-slate-400 italic hidden"></p>
             </div>
@@ -1172,10 +1128,7 @@
               </h3>
               <p class="text-xs text-gray-500 mt-0.5">ปี <span id="bdg_monthly_year">-</span> · รวมทั้งปี <span id="bdg_monthly_total" class="font-semibold text-gray-700">฿0</span></p>
             </div>
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-              <span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-3 h-3 rounded-sm" style="background:#1153a1"></span> ล้างแอร์</span>
-              <span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-3 h-3 rounded-sm" style="background:#f47920"></span> ซ่อมบำรุง</span>
-            </div>
+            <div id="bdg_legend" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600"></div>
           </div>
 
           <div style="position:relative;height:260px"><canvas id="budgetMonthlyCanvas"></canvas></div>
@@ -1187,12 +1140,7 @@
           <div class="mt-5 overflow-x-auto">
             <table class="w-full text-sm text-left whitespace-nowrap">
               <thead>
-                <tr class="text-slate-600 border-b border-gray-200">
-                  <th class="py-2 pr-4 font-semibold">เดือน</th>
-                  <th class="py-2 px-4 font-semibold text-right">ล้างแอร์</th>
-                  <th class="py-2 px-4 font-semibold text-right">ซ่อมบำรุง</th>
-                  <th class="py-2 pl-4 font-semibold text-right">รวม</th>
-                </tr>
+                <tr id="bdg_monthly_head" class="text-slate-600 border-b border-gray-200"></tr>
               </thead>
               <tbody id="bdg_monthly_tbody" class="divide-y divide-gray-100 text-gray-700"></tbody>
             </table>
@@ -8827,29 +8775,27 @@
           `<option value="${yy}" ${yy === currentBudget.year ? 'selected' : ''}>${yy}</option>`).join('');
       }
 
-      // --- Cleaning Budget ---
-      document.getElementById('bdg_clean_total').innerText = `฿${Number(currentBudget.budgetCleaning).toLocaleString()}`;
-      document.getElementById('bdg_clean_used').innerText = `฿${Number(currentBudget.expenseCleaning).toLocaleString()}`;
-      
-      const cleanRemainEl = document.getElementById('bdg_clean_remain');
-      cleanRemainEl.innerText = `฿${Number(currentBudget.remainCleaning).toLocaleString()}`;
-      cleanRemainEl.className = currentBudget.remainCleaning < 0 ? 'font-bold text-rose-600 text-lg sm:text-xl' : 'font-bold text-emerald-600 text-lg sm:text-xl';
-
-      let pClean = currentBudget.budgetCleaning > 0 ? (currentBudget.expenseCleaning / currentBudget.budgetCleaning) * 100 : 0;
-      document.getElementById('bdg_bar_clean').style.width = `${Math.min(pClean, 100)}%`;
-      document.getElementById('bdg_bar_clean').className = pClean > 100 ? 'bg-rose-500 h-full transition-all duration-500' : 'bg-[#1153a1] h-full transition-all duration-500';
-
-      // --- Repair Budget ---
-      document.getElementById('bdg_repair_total').innerText = `฿${Number(currentBudget.budgetRepair).toLocaleString()}`;
-      document.getElementById('bdg_repair_used').innerText = `฿${Number(currentBudget.expenseRepair).toLocaleString()}`;
-      
-      const repairRemainEl = document.getElementById('bdg_repair_remain');
-      repairRemainEl.innerText = `฿${Number(currentBudget.remainRepair).toLocaleString()}`;
-      repairRemainEl.className = currentBudget.remainRepair < 0 ? 'font-bold text-rose-600 text-lg sm:text-xl' : 'font-bold text-emerald-600 text-lg sm:text-xl';
-
-      let pRepair = currentBudget.budgetRepair > 0 ? (currentBudget.expenseRepair / currentBudget.budgetRepair) * 100 : 0;
-      document.getElementById('bdg_bar_repair').style.width = `${Math.min(pRepair, 100)}%`;
-      document.getElementById('bdg_bar_repair').className = pRepair > 100 ? 'bg-rose-500 h-full transition-all duration-500' : 'bg-[#f47920] h-full transition-all duration-500';
+      // --- การ์ดงบ 4 หมวด ---
+      const baht = v => `฿${Number(v || 0).toLocaleString()}`;
+      document.getElementById('bdg_cards').innerHTML = BUDGET_UI.map(c => {
+        const budget = Number(currentBudget['budget' + c.key]) || 0;
+        const used = Number(currentBudget['expense' + c.key]) || 0;
+        const remain = Number(currentBudget['remain' + c.key]) || 0;
+        const pct = budget > 0 ? (used / budget) * 100 : 0;
+        return `
+          <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+            <h3 class="text-lg font-bold mb-1 flex items-center gap-2" style="color:${c.color}"><i class="ph-fill ${c.icon}"></i> ${c.title}</h3>
+            <p class="text-xs text-gray-400 mb-4">ใช้ไปนับจาก${c.source}</p>
+            <div class="grid grid-cols-3 gap-2 mb-5 text-center">
+              <div><div class="text-xs text-gray-500 mb-1">ตั้งงบ</div><div class="font-bold text-gray-800 text-lg sm:text-xl">${baht(budget)}</div></div>
+              <div><div class="text-xs text-gray-500 mb-1">ใช้ไป</div><div class="font-bold text-rose-600 text-lg sm:text-xl">${baht(used)}</div></div>
+              <div><div class="text-xs text-gray-500 mb-1">คงเหลือ</div><div class="font-bold text-lg sm:text-xl ${remain < 0 ? 'text-rose-600' : 'text-emerald-600'}">${baht(remain)}</div></div>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+              <div class="h-full transition-all duration-500 ${pct > 100 ? 'bg-rose-500' : ''}" style="width:${Math.min(pct, 100)}%;${pct > 100 ? '' : 'background:' + c.color}"></div>
+            </div>
+          </div>`;
+      }).join('');
 
       // --- Total All ---
       document.getElementById('bdg_all_total').innerText = `฿${Number(currentBudget.totalBudget).toLocaleString()}`;
@@ -8869,6 +8815,17 @@
     }
 
     let budgetMonthlyChart = null;
+
+    /**
+     * หมวดงบ 4 หมวด ตามไฟล์งบของพี่เลี้ยง (15/10/2569) — ต้องตรงกับ BUDGET_CATEGORIES ใน src/modules/budget.js
+     * key = ส่วนท้ายของชื่อช่องที่เซิร์ฟเวอร์ส่งมา (budgetX / expenseX / remainX) · month = ชื่อช่องในรายเดือน
+     */
+    const BUDGET_UI = [
+      { key: 'Cleaning', month: 'cleaning', title: 'งบประมาณล้างแอร์', short: 'ล้างแอร์', icon: 'ph-drop', color: '#1153a1', source: 'ประวัติล้างแอร์' },
+      { key: 'Repair', month: 'repair', title: 'งบประมาณซ่อมบำรุงและอะไหล่', short: 'ซ่อมบำรุง', icon: 'ph-wrench', color: '#f47920', source: 'ประวัติงานซ่อม' },
+      { key: 'Purchase', month: 'purchase', title: 'งบจัดซื้อเครื่องใหม่', short: 'จัดซื้อเครื่อง', icon: 'ph-shopping-cart', color: '#0f766e', source: 'ค่าเปลี่ยนเครื่อง (ประวัติ "เปลี่ยนเครื่อง")' },
+      { key: 'Install', month: 'install', title: 'งบติดตั้ง', short: 'ติดตั้ง', icon: 'ph-hammer', color: '#7c3aed', source: 'ค่าติดตั้งในใบติดตั้ง' }
+    ];
 
     /**
      * วาดกราฟและตารางค่าใช้จ่ายรายเดือน
@@ -8907,10 +8864,7 @@
           type: 'bar',
           data: {
             labels: months.map(m => m.label),
-            datasets: [
-              { label: 'ล้างแอร์', data: months.map(m => m.cleaning), backgroundColor: '#1153a1', borderRadius: 4 },
-              { label: 'ซ่อมบำรุง', data: months.map(m => m.repair), backgroundColor: '#f47920', borderRadius: 4 }
-            ]
+            datasets: BUDGET_UI.map(c => ({ label: c.short, data: months.map(m => m[c.month] || 0), backgroundColor: c.color, borderRadius: 4 }))
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -8930,18 +8884,22 @@
         });
       }
 
+      document.getElementById('bdg_legend').innerHTML = BUDGET_UI.map(c =>
+        `<span class="flex items-center gap-1.5 whitespace-nowrap"><span class="w-3 h-3 rounded-sm" style="background:${c.color}"></span> ${c.short}</span>`).join('');
+      document.getElementById('bdg_monthly_head').innerHTML = '<th class="py-2 pr-4 font-semibold">เดือน</th>' +
+        BUDGET_UI.map(c => `<th class="py-2 px-4 font-semibold text-right">${c.short}</th>`).join('') +
+        '<th class="py-2 pl-4 font-semibold text-right">รวม</th>';
+
       const money = v => (v ? '฿' + v.toLocaleString() : '-');
       tbody.innerHTML = months.map(m => `
         <tr class="${m.total ? '' : 'text-gray-300'}">
           <td class="py-2 pr-4">${m.label}</td>
-          <td class="py-2 px-4 text-right">${money(m.cleaning)}</td>
-          <td class="py-2 px-4 text-right">${money(m.repair)}</td>
+          ${BUDGET_UI.map(c => `<td class="py-2 px-4 text-right">${money(m[c.month] || 0)}</td>`).join('')}
           <td class="py-2 pl-4 text-right font-semibold ${m.total ? 'text-gray-800' : ''}">${money(m.total)}</td>
         </tr>`).join('') + `
         <tr class="border-t-2 border-gray-300 font-bold text-gray-800">
           <td class="py-2 pr-4">รวมทั้งปี</td>
-          <td class="py-2 px-4 text-right">฿${months.reduce((s, m) => s + m.cleaning, 0).toLocaleString()}</td>
-          <td class="py-2 px-4 text-right">฿${months.reduce((s, m) => s + m.repair, 0).toLocaleString()}</td>
+          ${BUDGET_UI.map(c => `<td class="py-2 px-4 text-right">฿${months.reduce((s, m) => s + (m[c.month] || 0), 0).toLocaleString()}</td>`).join('')}
           <td class="py-2 pl-4 text-right">฿${grand.toLocaleString()}</td>
         </tr>`;
     }
@@ -8959,10 +8917,12 @@
 
     function openBudgetModal() {
       let y = (currentBudget && currentBudget.year) || new Date().getFullYear();
-      let currentClean = currentBudget ? currentBudget.budgetCleaning : 0;
-      let currentRepair = currentBudget ? currentBudget.budgetRepair : 0;
       let currentNote = currentBudget ? currentBudget.note : '';
-      
+      const budgetInputs = BUDGET_UI.map(c => `
+              <div><label class="block text-sm font-medium mb-1" style="color:${c.color}"><i class="ph-fill ${c.icon}"></i> ${c.title} (฿)</label>
+              <input type="number" min="0" id="m_bdg_${c.month}" value="${Number(currentBudget ? currentBudget['budget' + c.key] : 0) || 0}"
+                     class="w-full rounded-lg border text-lg font-bold px-3 py-2 outline-none bg-gray-50 focus:ring-2" style="border-color:${c.color};color:${c.color}"></div>`).join('');
+
       const content = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="fixed inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -8978,12 +8938,8 @@
                      class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none font-bold">
               <p id="m_bdg_hint" class="text-xs text-gray-500 mt-1"></p></div>
               
-              <div><label class="block text-sm font-medium text-[#1153a1] mb-1"><i class="ph-fill ph-drop"></i> งบประมาณล้างแอร์ (฿)</label>
-              <input type="number" id="m_bdg_clean" value="${currentClean}" class="w-full rounded-lg border-[#1153a1] border focus:ring-2 focus:ring-[#1153a1] text-lg font-bold px-3 py-2 outline-none text-[#1153a1] bg-blue-50"></div>
-              
-              <div><label class="block text-sm font-medium text-[#f47920] mb-1"><i class="ph-fill ph-wrench"></i> งบประมาณซ่อมบำรุง (฿)</label>
-              <input type="number" id="m_bdg_repair" value="${currentRepair}" class="w-full rounded-lg border-[#f47920] border focus:ring-2 focus:ring-[#f47920] text-lg font-bold px-3 py-2 outline-none text-[#f47920] bg-orange-50"></div>
-              
+              ${budgetInputs}
+
               <div><label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
               <textarea id="m_bdg_note" rows="2" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#f47920] text-sm px-3 py-2 outline-none resize-none">${esc(currentNote)}</textarea></div>
             </div>
@@ -9039,8 +8995,7 @@
         b = await call('getBudgetSummary', year);
       } catch (e) { return; }
 
-      document.getElementById('m_bdg_clean').value = b.budgetCleaning || 0;
-      document.getElementById('m_bdg_repair').value = b.budgetRepair || 0;
+      for (const c of BUDGET_UI) document.getElementById('m_bdg_' + c.month).value = b['budget' + c.key] || 0;
       document.getElementById('m_bdg_note').value = b.note || '';
 
       // บอกให้ชัดว่ากำลังตั้งงบใหม่ หรือกำลังแก้ของที่ตั้งไว้แล้ว
@@ -9063,11 +9018,11 @@
         yearInput.focus();
         return;
       }
-      const cleanAmt = document.getElementById('m_bdg_clean').value;
-      const repairAmt = document.getElementById('m_bdg_repair').value;
+      const amt = month => document.getElementById('m_bdg_' + month).value;
       const note = document.getElementById('m_bdg_note').value;
       try {
-        currentBudget = await call('saveBudgetRecord', y, cleanAmt, repairAmt, note);
+        // ลำดับพารามิเตอร์ตามเซิร์ฟเวอร์: ล้าง, ซ่อม, หมายเหตุ, จัดซื้อ, ติดตั้ง (สองตัวหลังต่อท้ายทีหลัง)
+        currentBudget = await call('saveBudgetRecord', y, amt('cleaning'), amt('repair'), note, amt('purchase'), amt('install'));
         closeModal();
         showToast(`บันทึกงบประมาณปี ${y} สำเร็จ`);
 

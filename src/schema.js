@@ -88,7 +88,8 @@ export const PLAN_HEADERS = [
   'Rounds'
 ];
 
-export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note', 'UpdatedAt', 'UpdatedBy'];
+// PurchaseBudget/InstallBudget เพิ่มภายหลัง (งบเปลี่ยนเครื่อง = จัดซื้อ + ติดตั้ง ตามไฟล์งบของพี่เลี้ยง 15/10/2569) — ต่อท้ายเท่านั้น
+export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note', 'UpdatedAt', 'UpdatedBy', 'PurchaseBudget', 'InstallBudget'];
 
 export const USERS_HEADERS = [
   'Email', 'Name', 'Role', 'Regions', 'Permissions', 'Active', 'UpdatedAt', 'UpdatedBy',
