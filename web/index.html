@@ -10664,15 +10664,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     } catch (e) {}
   }
 
-  /** หลังลบเอกสาร — ระบบย้อนแผน ประวัติ สถานะเครื่องให้แล้ว ให้หน้าอื่นเห็นผลทันทีโดยไม่ต้องรีเฟรชเอง */
+  /** หลังลบเอกสาร — ระบบย้อนแผน ประวัติ สถานะเครื่องให้แล้ว ให้หน้าอื่นเห็นผลทันที (ตัวเดียวกับหลังบันทึก) */
   async function refreshAfterFormDeleted() {
     await refreshAfterFormSaved();
-    try {
-      if (typeof currentYear !== 'undefined' && currentYear) {
-        currentPlan = (await callQuiet('getCleaningPlan', currentYear)) || currentPlan;
-        if (typeof renderPlanTable === 'function') renderPlanTable(planLastQuery, true);
-      }
-    } catch (e) {}
   }
 
   async function deleteInstallFormRow(row, id) {
@@ -10789,7 +10783,9 @@ const CLEANING_CHECKLIST_ITEMS = [
     // โหลดใหม่ทั้งแท็บ ทั้งตอนสำเร็จและไม่สำเร็จ — อาจมีคนอื่นกดขั้นนี้ไปก่อนแล้ว
     await loadCleaningForm();
     renderApprovalsView();   // กดจากหน้าเอกสารรออนุมัติ ใบที่อนุมัติแล้วต้องหายไปจากตารางนั้นด้วย
-    refreshApprovalBadge();  // ตัวเลขบนเมนูลดทันที
+    // ใบติดตั้งขั้นสุดท้าย = เครื่องใหม่ "รอติดตั้ง" → "ใช้งานปกติ" ที่เซิร์ฟเวอร์ ทะเบียน แผน แดชบอร์ดต้องเห็นทันที
+    if (kind === 'install' && a.next === 4) refreshAfterFormSaved();
+    else refreshApprovalBadge();  // ตัวเลขบนเมนูลดทันที
   }
   window.approveDocRow = approveDocRow;
 
@@ -11804,13 +11800,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       showToast('บันทึกเอกสารซ่อม ' + res.docNo + ' แล้ว · ลงประวัติ "ซ่อมแล้ว" และปิดเคสให้เรียบร้อย');
 
       // สถานะเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที
-      try {
-        const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
-        if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
-        if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
-      } catch (e) {}
-      loadDashboard();
-      loadBudget();
+      refreshAfterFormSaved();
     } catch (e) {
       btn.disabled = false;
       btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร';
@@ -11988,7 +11978,13 @@ const CLEANING_CHECKLIST_ITEMS = [
     btn.innerHTML = on ? '<i class="ph ph-spinner animate-spin"></i> กำลังส่ง...' : '<i class="ph ph-paperclip"></i> แนบไฟล์และปิดงาน';
   }
 
-  /** ทะเบียนเครื่อง ประวัติ และแดชบอร์ดเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที (เหมือนหลังกรอกในระบบ) */
+  /**
+   * โหลดข้อมูลใหม่หลังเอกสารเปลี่ยน (บันทึก · แนบไฟล์ · ลบ · อนุมัติ) — ใช้ตัวนี้ตัวเดียวทุกทาง (16/10/2569)
+   *
+   * เอกสารหนึ่งใบแตะได้หลายหน้า: ทะเบียนเครื่อง (สถานะ) ประวัติ แผน (ปิด/เปิดรอบ) งบ แดชบอร์ด และตัวเลขบนเมนู
+   * เดิมแต่ละทางโหลดใหม่ไม่เหมือนกัน — ใบล้างโหลดงบเฉพาะตอนปิดรอบ ใบติดตั้งไม่โหลดงบ แนบไฟล์โหลดแผนเฉพาะตอนเปิดหน้าแผน
+   * อนุมัติใบติดตั้งขั้นสุดท้าย (เครื่องเปลี่ยนเป็นใช้งานปกติ) ไม่โหลดอะไรเลย หน้าเครื่องค้าง "รอติดตั้ง" จนรีเฟรช
+   */
   async function refreshAfterFormSaved() {
     try {
       const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
@@ -11996,8 +11992,16 @@ const CLEANING_CHECKLIST_ITEMS = [
       if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
       renderRepairView((document.getElementById('repairSearch') || {}).value || '');
     } catch (e) {}
+    try {
+      if (typeof currentYear !== 'undefined' && currentYear) {
+        currentPlan = (await callQuiet('getCleaningPlan', currentYear)) || currentPlan;
+        if (typeof renderPlanTable === 'function') renderPlanTable(planLastQuery, true);
+        renderPlanSummary(currentYear);   // ตัวเลขสรุปหัวตารางแผน (ปิด/เปิดรอบแล้วเปลี่ยน)
+      }
+    } catch (e) {}
     loadDashboard();
     loadBudget();
+    refreshApprovalBadge();   // นับตัวเลขบนเมนูเอกสารรออนุมัติ + งานซ่อมและติดตั้งใหม่ด้วย
   }
 
   async function submitRepairAttach() {
@@ -13310,14 +13314,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       renderCleaningFormTable();
       showToast('บันทึกเอกสารติดตั้ง ' + res.docNo + ' แล้ว · ลงประวัติให้เรียบร้อย');
 
-      // ทะเบียนเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที
-      try {
-        const [air, hist] = await Promise.all([callQuiet('getAirList'), callQuiet('getHistory')]);
-        if (Array.isArray(air)) { currentAirList = air; renderAirTable(currentAirList); }
-        if (Array.isArray(hist)) { currentHistory = hist; renderHistoryTable(); }
-        renderRepairView((document.getElementById('repairSearch') || {}).value || '');
-      } catch (e) {}
-      loadDashboard();
+      // ทะเบียนเครื่องกับประวัติเปลี่ยนไปแล้ว โหลดใหม่ให้เห็นทันที (รวมงบ — ค่าติดตั้งนับในงบหมวดติดตั้ง)
+      refreshAfterFormSaved();
     } catch (e) {
       btn.disabled = false;
       btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> บันทึกและออกเอกสาร';
@@ -13994,17 +13992,9 @@ const CLEANING_CHECKLIST_ITEMS = [
         ? 'รวมเข้ากับเอกสาร ' + res.mergedInto + ' แล้ว' + closedMsg
         : 'บันทึกสำเร็จ' + closedMsg) + photoMsg,
         photoMsg.indexOf('⚠️') !== -1 ? 'error' : undefined);
-      // ถ้าปิดงานในแผนไปด้วย ให้โหลดแผนกับงบประมาณใหม่ จะได้เห็นผลทันทีโดยไม่ต้องรีเฟรชเอง
-      if (res.planClosed) {
-        try {
-          if (typeof currentYear !== 'undefined' && currentYear) {
-            currentPlan = (await call('getCleaningPlan', currentYear)) || currentPlan;
-            if (typeof renderPlanTable === 'function') renderPlanTable(planLastQuery, true);
-          }
-          loadBudget();
-        } catch (e2) {}
-      }
-      loadDashboard();
+      // แผน งบ ประวัติ แดชบอร์ดเปลี่ยนไปแล้ว — โหลดใหม่ทุกครั้ง ไม่ใช่เฉพาะตอนปิดรอบ
+      // (ใบที่ไม่ผูกรอบก็ลงประวัติพร้อมค่าล้าง งบจึงเปลี่ยนเหมือนกัน)
+      refreshAfterFormSaved();
     } catch (e) {
       showToast('บันทึกไม่สำเร็จ: ' + (e.message || 'เกิดข้อผิดพลาด'), 'error');
       btn.disabled = false;
@@ -14947,20 +14937,13 @@ const CLEANING_CHECKLIST_ITEMS = [
 
       closeAttachDocsDialog();
 
-      if (res.planClosed) {
-        // แผนปีนั้นเปลี่ยนไปแล้ว ต้องล้างแคชไม่งั้นเปิดหน้าต่างครั้งหน้าจะเห็นสถานะเก่า
-        adPlanCache = {};
-        if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
-        if (Array.isArray(res.history)) currentHistory = res.history;
-        if (document.getElementById('view-cleaningform').classList.contains('active')) renderCleaningFormTable();
-        if (document.getElementById('view-plan').classList.contains('active')) await loadPlan();
-        loadDashboard();
-        loadBudget();
-      } else {
-        // ไม่ได้ปิดงานในแผน แต่ได้แถวในตารางเอกสารเสมอ ไม่งั้นไฟล์จะไม่มีใครเปิดได้
-        if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
-        if (document.getElementById('view-cleaningform').classList.contains('active')) renderCleaningFormTable();
-      }
+      // แผนปีนั้นอาจเปลี่ยนไปแล้ว ต้องล้างแคชไม่งั้นเปิดหน้าต่างครั้งหน้าจะเห็นสถานะเก่า
+      if (res.planClosed) adPlanCache = {};
+      // ได้แถวในตารางเอกสารเสมอ ไม่งั้นไฟล์จะไม่มีใครเปิดได้
+      if (Array.isArray(res.forms)) currentCleaningForms = res.forms;
+      if (document.getElementById('view-cleaningform').classList.contains('active')) renderCleaningFormTable();
+      // แผน ประวัติ งบ แดชบอร์ด ตัวเลขบนเมนู — ตัวเดียวกับทุกเอกสาร
+      refreshAfterFormSaved();
 
       showToast('แนบไฟล์ ' + res.count + ' ไฟล์เข้าเอกสาร ' + res.docNo + ' แล้ว' +
                 (res.planClosed ? ' และปิดงานในแผนให้ ' + res.planClosed + ' เครื่อง' : '') +
