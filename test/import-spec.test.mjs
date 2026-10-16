@@ -32,7 +32,9 @@ test('ลำดับและชื่อคอลัมน์ต้องไ�
     'Region', 'Province', 'NodeName', 'SiteCode', 'LocationType', 'AirNo',
     'Brand', 'BTU', 'ModelIndoor', 'ModelOutdoor',
     'IndoorAsset', 'IndoorSN', 'OutdoorAsset', 'OutdoorSN',
-    'InstallDate', 'WarrantyExpire', 'CleaningPricePerRound', 'Status', 'Note'
+    'InstallDate', 'WarrantyExpire', 'CleaningPricePerRound', 'Status', 'Note',
+    // ต่อท้ายเท่านั้น (ไฟล์ Data_AIR 15/10/2569) — ไฟล์เดิมที่ไม่มีคอลัมน์เหล่านี้ยังนำเข้าได้ เพราะอ่านตามชื่อ
+    'Area', 'ProvinceCode', 'LocationCode'
   ]);
 });
 

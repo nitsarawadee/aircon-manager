@@ -66,7 +66,13 @@ export const COLUMNS = [
   { name: 'Status', required: false, kind: 'enum', label: 'สถานะ',
     desc: 'เว้นว่างได้ ระบบจะถือว่า "ใช้งานปกติ"', example: 'ใช้งานปกติ' },
 
-  { name: 'Note', required: false, kind: 'text', label: 'หมายเหตุ', example: '' }
+  { name: 'Note', required: false, kind: 'text', label: 'หมายเหตุ', example: '' },
+
+  // จากไฟล์ Data_AIR ของพี่เลี้ยง (15/10/2569)
+  { name: 'Area', required: false, kind: 'text', label: 'Area (พื้นที่)',
+    desc: 'พื้นที่ย่อยในภาค ตามไฟล์ Data_AIR เช่น นครปฐม', example: 'นครปฐม' },
+  { name: 'ProvinceCode', required: false, kind: 'text', label: 'รหัสจังหวัด', example: 'KCB' },
+  { name: 'LocationCode', required: false, kind: 'text', label: 'Location Code', example: 'KCB-01-TAM' }
 ];
 
 /** ชื่อคอลัมน์ทั้งหมด เรียงตามลำดับในไฟล์ */
@@ -166,6 +172,7 @@ export function validateRow(row) {
         add('error', col.name, `"${v}" ต้องเป็นจำนวนเต็ม`);
       }
     }
+
 
     if (col.kind === 'date' && toIsoDate(v) === null) {
       // ใส่เดือนก่อนวัน (4/26/2018 แบบ Excel ภาษาอังกฤษ) หรือปี พ.ศ. เป็นอาการที่เจอบ่อยสุด บอกให้ตรงจุด

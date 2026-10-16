@@ -4170,6 +4170,8 @@
           airInfoField('จังหวัด', u.Province),
           airInfoField('Node', u.NodeName),
           airInfoField('Site Code', u.SiteCode),
+          airInfoField('Location Code', u.LocationCode),
+          airInfoField('Area (พื้นที่)', u.Area),
           airInfoField('ประเภทสถานที่', u.LocationType),
           airInfoField('พิกัด', coords),
           airInfoField('ที่อยู่', u.Address)
@@ -4990,6 +4992,9 @@
                 <datalist id="nodeNameOptions">${Object.keys(nodeLookup).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">Site Code</label><input id="f_SiteCode" value="${esc(data.SiteCode)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
                 <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่รายละเอียด</label><input id="f_Address" value="${esc(data.Address)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Area (พื้นที่)</label><input id="f_Area" value="${esc(data.Area)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">รหัสจังหวัด</label><input id="f_ProvinceCode" value="${esc(data.ProvinceCode)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Location Code</label><input id="f_LocationCode" value="${esc(data.LocationCode)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
 
                 <div class="md:col-span-3 pt-2 pb-2 border-b border-gray-100 mt-2"><h4 class="text-sm font-semibold text-[#1153a1] uppercase tracking-wider">ข้อมูลเชิงเทคนิค</h4></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">รุ่น Indoor</label><input id="f_ModelIndoor" value="${esc(data.ModelIndoor)}" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none"></div>
@@ -5032,7 +5037,7 @@
      * กับปุ่มลัดเปลี่ยนสถานะในหน้างานซ่อม ทั้งสองทางต้องส่งชุดเดียวกันเป๊ะ
      * ถ้าแยกกันเขียน วันหนึ่งจะมีช่องหลุดไปทางใดทางหนึ่งแล้วข้อมูลหายเงียบๆ
      */
-    const AIR_FIELDS = ['AirCode','Region','Province','NodeName','SiteCode','LocationType','BTU','Brand','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN','OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire','CleaningPricePerRound','Status','Address','Note'];
+    const AIR_FIELDS = ['AirCode','Region','Province','NodeName','SiteCode','LocationType','BTU','Brand','ModelIndoor','ModelOutdoor','IndoorAsset','IndoorSN','OutdoorAsset','OutdoorSN','InstallDate','WarrantyExpire','CleaningPricePerRound','Status','Address','Note','Area','ProvinceCode','LocationCode'];
 
     /**
      * ตัวเลือกสถานะที่ผู้ใช้คนนี้ตั้งได้ในฟอร์มแก้ไขเครื่อง

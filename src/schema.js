@@ -65,7 +65,9 @@ export const AIRLIST_HEADERS = [
   'BTU', 'Brand', 'ModelIndoor', 'ModelOutdoor',
   'IndoorAsset', 'IndoorSN', 'OutdoorAsset', 'OutdoorSN',
   'InstallDate', 'WarrantyExpire', 'CleaningPricePerRound',
-  'Status', 'Lat', 'Long', 'Address', 'Note', 'UpdatedAt', 'UpdatedBy'
+  'Status', 'Lat', 'Long', 'Address', 'Note', 'UpdatedAt', 'UpdatedBy',
+  // เพิ่มภายหลัง (ไฟล์ Data_AIR 15/10/2569) — ต่อท้ายเท่านั้น
+  'Area', 'ProvinceCode', 'LocationCode'
 ];
 
 export const HISTORY_HEADERS = [

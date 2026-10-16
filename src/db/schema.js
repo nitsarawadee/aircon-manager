@@ -50,7 +50,9 @@ export const TABLES = {
       IndoorAsset: S, IndoorSN: S, OutdoorAsset: S, OutdoorSN: S,
       InstallDate: D, WarrantyExpire: D, CleaningPricePerRound: N,
       Status: S, Lat: S, Long: S, Address: S, Note: S,
-      UpdatedAt: DT, UpdatedBy: S
+      UpdatedAt: DT, UpdatedBy: S,
+      // จากไฟล์ Data_AIR ของพี่เลี้ยง (15/10/2569): พื้นที่ย่อยในภาค · รหัสจังหวัด · Location Code
+      Area: S, ProvinceCode: S, LocationCode: S
     },
     // ค้นหาด้วยรหัสเครื่องและกรองตามภูมิภาคบ่อยที่สุด
     indexes: [['AirCode'], ['Region'], ['NodeName']],
