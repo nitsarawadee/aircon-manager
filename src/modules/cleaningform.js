@@ -1462,24 +1462,46 @@ export async function uploadNodeDocuments(ctx, payload) {
       throw new Error('เครื่องที่รันระบบอยู่เก็บไฟล์แนบไม่ได้ (ไม่มีที่เก็บไฟล์)');
     }
 
+    // ---------- จัดเครื่องลงช่องตามเลขเครื่องจริง — กติกาเดียวกับกรอกฟอร์ม (unitsBySlot) ----------
+    // เดิมวางตามลำดับที่เลือก แนบ AIR-2 ตัวเดียวได้ AIR-2 ในช่องที่ 1 และแนบ AIR-1 คู่กับ AIR-3 ได้ในใบเดียว (16/10/2569)
+    const slot = { 1: null, 2: null };
+    if (units.length) {
+      if (new Set(units.map(u => unitBaseOf(u.airCode))).size > 1) {
+        throw new Error('เอกสารล้าง 1 ใบมีเครื่องได้ 2 ตัวตามลำดับ (1–2, 3–4, …) — เครื่องที่เลือกอยู่คนละใบ กรุณาแนบทีละใบ');
+      }
+      for (const u of units) {
+        const s = unitSlotOf(u.airCode);
+        if (slot[s]) {
+          throw new Error('เครื่อง ' + u.airCode + ' กับ ' + slot[s].airCode + ' เป็นเครื่องลำดับเดียวกันของไซต์ บันทึกในใบเดียวกันไม่ได้');
+        }
+        slot[s] = u;
+      }
+    }
+
     // ---------- ออกเลขที่เอกสารก่อน เพราะใช้เป็นชื่อโฟลเดอร์ของไฟล์ ----------
     // ออกเลขในล็อกเสมอ เหมือนตอนบันทึกฟอร์ม เพื่อไม่ให้สองคนได้เลขเดียวกัน
     const docDate = plainText(closeout && closeout.date) || ymd(new Date());
 
-    // เครื่องละเลข เหมือนใบที่กรอกในระบบ — เลขของเครื่องตัวแรกใช้เป็นชื่อโฟลเดอร์ไฟล์ด้วย
+    // เครื่องละเลข ตามช่อง — ช่อง 1 = DocNo · ช่อง 2 = DocNo2 (เหมือนใบที่กรอกในระบบ)
     const docNumbers = {
-      AirCode1: units[0] ? units[0].airCode : '',
-      AirCode2: units[1] ? units[1].airCode : ''
+      AirCode1: slot[1] ? slot[1].airCode : '',
+      AirCode2: slot[2] ? slot[2].airCode : ''
     };
     assignDocNumbers(ctx, docNumbers, docDate);
 
     // ไม่ได้ติ๊กปิดงานในแผน = ไม่มีรายการเครื่อง แต่ยังต้องมีเลขให้ใบนี้
     // ไม่งั้นไฟล์ที่แนบมาจะไม่มีชื่อโฟลเดอร์ให้เก็บ
-    if (!docNumbers.DocNo) docNumbers.DocNo = nextDocNo(ctx, 'ล้างแอร์', docDate);
-    const docNo = docNumbers.DocNo;
+    if (!units.length) docNumbers.DocNo = nextDocNo(ctx, 'ล้างแอร์', docDate);
+
+    // ID แบบเดียวกับใบที่กรอกในระบบ — ไม่ซ้ำกับใบที่มีอยู่ (ขั้นอนุมัติผูกกับ ID ถ้าซ้ำจะผูกผิดใบ)
+    const formId = freshFormId(ctx, SHEETS.CLEANFORM, 'CF');
+    // ชื่อโฟลเดอร์ไฟล์ = ชื่อที่ตัวเปิดไฟล์ใช้หา (DocNo ถ้ามี ไม่มีใช้ ID — ดู fileKeyOf / docNoOfRow)
+    // แนบเฉพาะเครื่องช่องที่ 2 ใบนั้นไม่มี DocNo จึงเก็บด้วย ID
+    const fileKey = fileKeyOf({ DocNo: docNumbers.DocNo, ID: formId });
+    const docNo = docNoShown({ DocNo: docNumbers.DocNo, DocNo2: docNumbers.DocNo2, ID: formId });
 
     // ---------- เก็บไฟล์ลงดิสก์ ----------
-    const stored = ctx.attachments.save(docNo, docDate, files);
+    const stored = ctx.attachments.save(fileKey, docDate, files);
 
     // ไม่มีลิงก์ให้ผูกในแผนอีกแล้ว ไฟล์เปิดได้จากหน้าแบบฟอร์มเอกสารทุกเมื่อ
     // (เหมือนกับใบที่กรอกในระบบ ซึ่งเลิกเก็บลิงก์ไปตั้งแต่เลิกใช้ Drive)
@@ -1511,31 +1533,31 @@ export async function uploadNodeDocuments(ctx, payload) {
     // เพื่อให้ดูประวัติการล้างทั้งหมดได้จากที่เดียว ไม่ต้องแยกจำว่าใบไหนกรอกในระบบ
     // ใบไหนเขียนมือ — คอลัมน์ Source บอกที่มา และ PdfUrl ชี้ไปที่ไฟล์ที่แนบมา
     // ไม่ได้ติ๊กปิดงาน = ไม่มีรายการเครื่อง ให้ยึดเครื่องตัวแรกของ Node ไว้เป็นข้อมูลอ้างอิง
-    const first = (units[0] && nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(units[0].airCode)))
-      || nodeUnits[0];
-    const second = units[1]
-      ? nodeUnits.find(a => normalizeCode(a.AirCode) === normalizeCode(units[1].airCode))
-      : null;
+    // ข้อมูลเครื่องตามช่อง · ไม่มีรายการเครื่องเลย = ยึดเครื่องตัวแรกของ Node ไว้เป็นข้อมูลอ้างอิงในช่อง 1 (แบบเดิม)
+    const first = slot[1] ? slot[1].unit : (units.length ? null : nodeUnits[0]);
+    const second = slot[2] ? slot[2].unit : null;
+    const node = (units[0] && units[0].unit) || nodeUnits[0];
 
     const record = {
-      ID: 'CF' + Date.now(),
+      ID: formId,
       DocType: 'cleaning',
-      DocNo: docNo,
+      DocNo: docNumbers.DocNo || '',
       DocNo2: docNumbers.DocNo2 || '',
+      SlotBase: units.length ? unitBaseOf(units[0].airCode) : 0,
       Date: docDate,
       NodeName: nodeName,
-      SiteCode: plainText(first.SiteCode),
-      Region: plainText(first.Region),
-      Province: plainText(first.Province),
-      LocationType: plainText(first.LocationType),
-      AirCode1: units[0] ? units[0].airCode : '',
-      AirCode2: units[1] ? units[1].airCode : '',
-      Unit1_Brand: plainText(first.Brand),
-      Unit1_BTU: plainText(first.BTU),
-      Unit1_IndoorSerial: plainText(first.IndoorSN),
-      Unit1_IndoorAsset: plainText(first.IndoorAsset),
-      Unit1_OutdoorSerial: plainText(first.OutdoorSN),
-      Unit1_OutdoorAsset: plainText(first.OutdoorAsset),
+      SiteCode: plainText(node.SiteCode),
+      Region: plainText(node.Region),
+      Province: plainText(node.Province),
+      LocationType: plainText(node.LocationType),
+      AirCode1: slot[1] ? slot[1].airCode : '',
+      AirCode2: slot[2] ? slot[2].airCode : '',
+      Unit1_Brand: first ? plainText(first.Brand) : '',
+      Unit1_BTU: first ? plainText(first.BTU) : '',
+      Unit1_IndoorSerial: first ? plainText(first.IndoorSN) : '',
+      Unit1_IndoorAsset: first ? plainText(first.IndoorAsset) : '',
+      Unit1_OutdoorSerial: first ? plainText(first.OutdoorSN) : '',
+      Unit1_OutdoorAsset: first ? plainText(first.OutdoorAsset) : '',
       Unit2_Brand: second ? plainText(second.Brand) : '',
       Unit2_BTU: second ? plainText(second.BTU) : '',
       Unit2_IndoorSerial: second ? plainText(second.IndoorSN) : '',
@@ -1543,8 +1565,8 @@ export async function uploadNodeDocuments(ctx, payload) {
       Unit2_OutdoorSerial: second ? plainText(second.OutdoorSN) : '',
       Unit2_OutdoorAsset: second ? plainText(second.OutdoorAsset) : '',
       ChecklistJSON: '[]',
-      EquipmentCondition: units[0] ? units[0].cond : '',
-      EquipmentCondition2: units[1] ? units[1].cond : '',
+      EquipmentCondition: slot[1] ? slot[1].cond : '',
+      EquipmentCondition2: slot[2] ? slot[2].cond : '',
       AdditionalNote: (closeout && closeout.note) || '',
       CompanyName: isContractor
         ? (await ctx.userInfo()).contractorName
@@ -1556,8 +1578,8 @@ export async function uploadNodeDocuments(ctx, payload) {
       RecordedBy: await ctx.currentUser(),
       PlanYear: (closeout && closeout.year) || '',
       PlanRound: (closeout && closeout.round) || '',
-      Price1: units[0] ? units[0].price : '',
-      Price2: units[1] ? units[1].price : '',
+      Price1: slot[1] ? slot[1].price : '',
+      Price2: slot[2] ? slot[2].price : '',
       Source: 'attach'
     };
     record.Price = units.reduce((sum, u) => sum + (hasPrice(u.price) ? Number(u.price) : 0), 0) || '';
