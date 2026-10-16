@@ -39,7 +39,7 @@
  */
 
 import { COLUMNS, HEADERS, makeAirCode, validateRow, canonicalize } from './import-spec.js';
-import { isAwaitingInstall, normalizeCode } from './values.js';
+import { isAwaitingInstall, normalizeCode, ymdhms } from './values.js';
 
 /** ชื่อชีต/ตารางของข้อมูลเครื่อง */
 const AIRLIST = 'AirList';
@@ -208,7 +208,9 @@ export async function applyImport(ss, plan, opts = {}) {
   }
 
   const user = opts.user || 'import';
-  const now = opts.now || stamp(new Date());
+  // เวลาไทยเสมอ (ymdhms) เหมือนทุกจุดที่เขียน UpdatedAt — เดิมใช้เวลาของเครื่องเซิร์ฟเวอร์
+  // ถ้าเครื่องตั้งเป็น UTC (เช่นบนคลาวด์) เวลาที่นำเข้าจะช้าไป 7 ชั่วโมง ไม่ตรงกับการแก้ทีละเครื่อง
+  const now = opts.now || ymdhms(new Date());
   const headers = ss.headers(AIRLIST);
 
   for (const u of plan.updates) {
@@ -232,13 +234,6 @@ export async function applyImport(ss, plan, opts = {}) {
     added: plan.adds.length, updated: plan.updates.length,
     unchanged: plan.unchanged.length, removed: removes.length
   };
-}
-
-/** เวลาในรูปแบบที่ระบบใช้บันทึกลงคอลัมน์ UpdatedAt */
-function stamp(d) {
-  const p = n => String(n).padStart(2, '0');
-  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-         ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
 
 /**
