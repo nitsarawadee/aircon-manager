@@ -57,7 +57,10 @@ export const SHEETS = {
   REPAIRLINK: 'RepairLink',
   APPROVAL: 'DocApproval',
   WAREHOUSE: 'Warehouse',
-  ASSIGN: 'JobAssign'
+  ASSIGN: 'JobAssign',
+  // แผนเปลี่ยนเครื่อง — ดู modules/replacement.js
+  REPLACE_PRICE: 'ReplacePrice',
+  REPLACE_PICK: 'ReplacePick'
 };
 
 export const AIRLIST_HEADERS = [
@@ -91,6 +94,8 @@ export const PLAN_HEADERS = [
 ];
 
 // PurchaseBudget/InstallBudget เพิ่มภายหลัง (งบเปลี่ยนเครื่อง = จัดซื้อ + ติดตั้ง ตามไฟล์งบของพี่เลี้ยง 15/10/2569) — ต่อท้ายเท่านั้น
+export const REPLACE_PRICE_HEADERS = ['Year', 'Band', 'UnitPrice', 'InstallPrice', 'UpdatedAt', 'UpdatedBy'];
+export const REPLACE_PICK_HEADERS = ['Year', 'AirCode', 'Selected', 'UpdatedAt', 'UpdatedBy'];
 export const BUDGET_HEADERS = ['Year', 'CleaningBudget', 'RepairBudget', 'Note', 'UpdatedAt', 'UpdatedBy', 'PurchaseBudget', 'InstallBudget'];
 
 export const USERS_HEADERS = [

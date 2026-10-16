@@ -41,7 +41,9 @@ const SHEET_TO_TABLE = {
   DocApproval: 'doc_approvals',
   Warehouse: 'warehouse_units',
   JobAssign: 'job_assignments',
-  Config: 'config_values'
+  Config: 'config_values',
+  ReplacePrice: 'replacement_prices',
+  ReplacePick: 'replacement_picks'
 };
 
 /** แผนล้างแอร์รายปี — ชีต Plan_2569 คือแถวใน plans ที่ Year = 2569 */

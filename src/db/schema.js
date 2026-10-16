@@ -305,6 +305,18 @@ export const TABLES = {
     unique: ['Year']
   },
 
+  /** แผนเปลี่ยนเครื่อง: ราคาเครื่อง/ค่าติดตั้งรายปีตามช่วง BTU · เครื่องที่ติ๊กเลือกเปลี่ยน */
+  replacement_prices: {
+    sheet: 'ReplacePrice',
+    columns: { Year: N, Band: N, UnitPrice: N, InstallPrice: N, UpdatedAt: DT, UpdatedBy: S },
+    indexes: [['Year']]
+  },
+  replacement_picks: {
+    sheet: 'ReplacePick',
+    columns: { Year: N, AirCode: S, Selected: B, UpdatedAt: DT, UpdatedBy: S },
+    indexes: [['Year'], ['AirCode']]
+  },
+
   /**
    * ค่าตัวเลือกใน dropdown ต่างๆ
    * ชีตเดิมเก็บเป็น 1 คอลัมน์ต่อ 1 ประเภท ซึ่งอ่านยากและเพิ่มประเภทใหม่ลำบาก

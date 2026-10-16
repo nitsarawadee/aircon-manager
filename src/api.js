@@ -11,6 +11,7 @@ import {
 } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
 import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
+import { getReplacementPlan, setReplacementPicks, saveReplacementPrices, applyReplacementToBudget } from './modules/replacement.js';
 import {
   getSystemStatus, setupFirstAdmin, login, logout, changeOwnPassword,
   getUsers, saveUser, deleteUser
@@ -110,6 +111,10 @@ const API_FUNCTIONS = {
   getDashboardSummary,
   getBudgetSummary,
   saveBudgetRecord,
+  getReplacementPlan,
+  setReplacementPicks,
+  saveReplacementPrices,
+  applyReplacementToBudget,
 
   getUsers,
   saveUser,

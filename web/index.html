@@ -338,6 +338,9 @@
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="budget">
         <i class="ph ph-wallet text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>งบประมาณ</span>
       </button>
+      <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="replace">
+        <i class="ph ph-arrows-clockwise text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>แผนเปลี่ยนเครื่อง</span>
+      </button>
       <button class="tab-btn flex items-center justify-center md:justify-start gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 w-auto md:w-full rounded-xl text-sm font-medium transition-all hover:bg-slate-50 text-slate-500 whitespace-nowrap group" data-tab="users">
         <i class="ph ph-users-three text-xl flex-shrink-0 group-hover:text-[#f47920] transition-colors"></i><span>จัดการผู้ใช้</span>
       </button>
@@ -1146,6 +1149,22 @@
             </table>
           </div>
         </div>
+      </section>
+
+      <!-- ============================ VIEW: แผนเปลี่ยนเครื่อง ============================ -->
+      <section id="view-replace" class="view">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">แผนเปลี่ยนเครื่อง</h2>
+            <p class="text-sm text-gray-500">เครื่องอายุเกิน 8 ปี ณ สิ้นปีงบ (31 ธ.ค.) ครบเกณฑ์เปลี่ยน — ติ๊กเครื่องที่จะเปลี่ยนจริง แล้วใช้ยอดตั้งงบจัดซื้อ/ติดตั้ง</p>
+          </div>
+          <div class="flex items-center gap-2 bg-white border rounded-lg px-3 py-1.5 shadow-sm" style="border-color:var(--p-card-border)">
+            <i class="ph ph-calendar-blank" style="color:var(--p-brand-fg)"></i>
+            <span class="text-sm text-gray-500">ปีงบ</span>
+            <select id="rplYear" onchange="loadReplacement()" class="bg-transparent text-sm font-semibold outline-none cursor-pointer" style="color:var(--p-brand-fg)"></select>
+          </div>
+        </div>
+        <div id="rplBody"><div class="text-center text-gray-400 py-10">กำลังโหลด…</div></div>
       </section>
 
       <!-- ============================ USER MANAGEMENT (Admin only) ============================ -->
@@ -2159,6 +2178,7 @@
         document.getElementById('view-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'users') loadUsers();
         else if (btn.dataset.tab === 'budget') loadBudget();
+        else if (btn.dataset.tab === 'replace') loadReplacement();
         else if (btn.dataset.tab === 'history') loadHistory();
         else if (btn.dataset.tab === 'dashboard') loadDashboard();
         else if (btn.dataset.tab === 'airlist') loadAirList();
@@ -2516,6 +2536,12 @@
           if (section) section.remove();
         }
       });
+
+      // แผนเปลี่ยนเครื่องดูตามสิทธิ์งบประมาณ · แก้ได้เฉพาะ Infrastructure (เซิร์ฟเวอร์กันไว้ ดู replacement.js)
+      if (moduleLevel('budget') === 'none') {
+        document.querySelector('[data-tab="replace"]')?.remove();
+        document.getElementById('view-replace')?.remove();
+      }
 
       // คลังแอร์เห็นเฉพาะ Infrastructure (เซิร์ฟเวอร์ก็กันไว้ ดู warehouse.js)
       if (currentUserInfo.role !== 'Admin') {
@@ -8759,6 +8785,172 @@
       } catch (e) {}
     }
     window.submitReportRepair = submitReportRepair;
+
+    /* ============== แผนเปลี่ยนเครื่อง ============== */
+    let rplPlan = null;
+    const rplFilter = { region: '', q: '', only: '' };
+    const rplMoney = n => Math.round(Number(n) || 0).toLocaleString();
+
+    async function loadReplacement() {
+      if (!document.getElementById('view-replace')) return;
+      const sel = document.getElementById('rplYear');
+      if (!sel.options.length) {
+        // ปีหน้าเป็นค่าเริ่มต้น — แผนเปลี่ยนเครื่องทำล่วงหน้าเพื่อตั้งงบปีถัดไป
+        const y = new Date().getFullYear();
+        sel.innerHTML = [y - 1, y, y + 1, y + 2].map(v => `<option value="${v}" ${v === y + 1 ? 'selected' : ''}>${v}</option>`).join('');
+      }
+      try {
+        rplPlan = await call('getReplacementPlan', Number(sel.value));
+        renderReplacement();
+      } catch (e) {
+        document.getElementById('rplBody').innerHTML = '<div class="text-center text-red-500 py-10">โหลดแผนเปลี่ยนเครื่องไม่สำเร็จ</div>';
+      }
+    }
+    window.loadReplacement = loadReplacement;
+
+    function renderReplacement() {
+      const p = rplPlan, el = document.getElementById('rplBody');
+      if (!p || !el) return;
+      const s = p.summary, ag = p.ageGroups, edit = p.canEdit;
+      const card = (label, value, sub, tone) => `
+        <div class="rounded-xl border p-4 ${tone}"><div class="text-xs font-medium opacity-80">${label}</div>
+          <div class="text-2xl font-bold mt-1">${value}</div>${sub ? `<div class="text-xs mt-1 opacity-80">${sub}</div>` : ''}</div>`;
+      const budgetTotal = p.budget.purchase + p.budget.install;
+      const match = p.budget.exists && Math.round(budgetTotal) === Math.round(s.total);
+      const budgetLine = !p.budget.exists ? 'ยังไม่ได้ตั้งงบปีนี้'
+        : match ? '<span class="text-green-700">ตรงกับงบจัดซื้อ + ติดตั้งที่ตั้งไว้</span>'
+        : `<span class="text-amber-700">งบที่ตั้งไว้ ${rplMoney(budgetTotal)} (ต่าง ${rplMoney(s.total - budgetTotal)})</span>`;
+
+      const regions = p.byRegion.map(r => r.region);
+      const list = p.units.filter(u => (!rplFilter.region || u.region === rplFilter.region)
+        && (!rplFilter.only || (rplFilter.only === 'yes' ? u.selected : rplFilter.only === 'no' ? !u.selected : u.status === rplFilter.only))
+        && (!rplFilter.q || (u.airCode + ' ' + u.nodeName + ' ' + u.province).toLowerCase().includes(rplFilter.q.toLowerCase())));
+
+      el.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          ${card('ปกติ (0–6 ปี)', ag.normal, '', 'bg-green-50 border-green-200 text-green-800')}
+          ${card('เฝ้าระวัง (7–8 ปี)', ag.watch, '', 'bg-amber-50 border-amber-200 text-amber-800')}
+          ${card('ครบเกณฑ์เปลี่ยน (เกิน ' + p.ageLimit + ' ปี)', ag.due, ag.unknown ? 'ไม่มีวันติดตั้ง ' + ag.unknown + ' เครื่อง (ไม่นับ)' : '', 'bg-red-50 border-red-200 text-red-800')}
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          ${card('ตามแผน (เลือกเปลี่ยน)', s.selected + ' <span class="text-sm font-normal text-gray-500">เครื่อง · ครบเกณฑ์ ' + s.due + '</span>', 'จัดซื้อ ' + rplMoney(s.purchase) + ' · ติดตั้ง ' + rplMoney(s.install), 'bg-white border-gray-200 text-gray-800')}
+          ${card('เปลี่ยนแล้ว', s.done + ' <span class="text-sm font-normal">/ ' + s.selected + '</span>', 'ใช้จริง ' + rplMoney(s.doneActual) + ' บาท', 'bg-green-50 border-green-200 text-green-800')}
+          ${card('คงเหลือ', s.remaining + ' <span class="text-sm font-normal text-gray-500">เครื่อง</span>', 'ประมาณ ' + rplMoney(s.remainingTotal) + ' บาท', 'bg-white border-gray-200 text-gray-800')}
+          ${card('รวมตามแผน (บาท)', rplMoney(s.total), budgetLine, 'bg-white border-gray-200 text-gray-800')}
+        </div>
+        ${edit && !match ? `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+          <i class="ph ph-info"></i><span>ยอดที่เลือกยังไม่ตรงกับงบปี ${p.year}</span>
+          <button onclick="applyReplacementBudget()" class="ml-auto bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium">ใช้ยอดนี้เป็นงบจัดซื้อ/ติดตั้ง</button></div>` : ''}
+        ${p.staleSelected.length ? `<div class="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800">
+          <i class="ph ph-warning"></i> ติ๊กไว้แต่ไม่ครบเกณฑ์แล้ว (ไม่นับในยอด): ${p.staleSelected.map(x => esc(x.airCode) + (x.replacedOn ? ' (เปลี่ยนแล้วเมื่อ ' + esc(fmtDate(x.replacedOn)) + ')' : '')).join(', ')}</div>` : ''}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800">ราคาต่อเครื่องตามขนาด</h3>
+              ${edit ? '<button onclick="saveReplacementPricesUI()" class="text-sm text-[#1153a1] hover:underline font-medium">บันทึกราคา</button>' : ''}</div>
+            <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b"><th class="text-left py-1.5 font-medium">ขนาด</th>
+              <th class="text-right font-medium">ราคาเครื่อง</th><th class="text-right font-medium">ค่าติดตั้ง</th><th class="text-right font-medium">ครบเกณฑ์</th><th class="text-right font-medium">เลือก</th></tr></thead>
+              <tbody>${p.byBand.map(b => `<tr class="border-b border-gray-50"><td class="py-1.5">${esc(b.label)}</td>
+                <td class="text-right">${edit ? `<input type="number" min="0" id="rplUP${b.band}" value="${b.unitPrice}" class="w-24 text-right border rounded px-1 py-0.5">` : rplMoney(b.unitPrice)}</td>
+                <td class="text-right">${edit ? `<input type="number" min="0" id="rplIP${b.band}" value="${b.installPrice}" class="w-20 text-right border rounded px-1 py-0.5">` : rplMoney(b.installPrice)}</td>
+                <td class="text-right">${b.due}</td><td class="text-right">${b.selected}</td></tr>`).join('')}</tbody></table>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 class="font-bold text-gray-800 mb-2">แยกตามภาค</h3>
+            <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b"><th class="text-left py-1.5 font-medium">ภาค</th>
+              <th class="text-right font-medium">ครบเกณฑ์</th><th class="text-right font-medium">เลือก</th><th class="text-right font-medium">ไซต์</th><th class="text-right font-medium">รวม (บาท)</th></tr></thead>
+              <tbody>${p.byRegion.map(r => `<tr class="border-b border-gray-50"><td class="py-1.5">ภาค ${esc(r.region)}</td><td class="text-right">${r.due}</td>
+                <td class="text-right">${r.selected}</td><td class="text-right">${r.sites}</td><td class="text-right">${rplMoney(r.total)}</td></tr>`).join('')}
+                <tr class="font-semibold"><td class="py-1.5">รวม</td><td class="text-right">${s.due}</td><td class="text-right">${s.selected}</td>
+                <td class="text-right">${p.byRegion.reduce((n, r) => n + r.sites, 0)}</td><td class="text-right">${rplMoney(s.total)}</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <div class="flex flex-wrap items-center gap-2 mb-3">
+            <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${p.units.length})</span></h3>
+            <input id="rplQ" value="${esc(rplFilter.q)}" oninput="rplSetFilter('q', this.value)" placeholder="ค้นหา รหัส / Node / จังหวัด" class="border rounded-lg px-3 py-1.5 text-sm w-52">
+            <select onchange="rplSetFilter('region', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
+              <option value="">ทุกภาค</option>${regions.map(r => `<option value="${esc(r)}" ${rplFilter.region === r ? 'selected' : ''}>ภาค ${esc(r)}</option>`).join('')}</select>
+            <select onchange="rplSetFilter('only', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
+              <option value="">ทั้งหมด</option><option value="yes" ${rplFilter.only === 'yes' ? 'selected' : ''}>เฉพาะที่เลือก</option><option value="no" ${rplFilter.only === 'no' ? 'selected' : ''}>เฉพาะที่ไม่เลือก</option>
+              <option value="done" ${rplFilter.only === 'done' ? 'selected' : ''}>เปลี่ยนแล้ว</option><option value="pending" ${rplFilter.only === 'pending' ? 'selected' : ''}>ยังไม่เปลี่ยน (ตามแผน)</option></select>
+            <button onclick="exportReplacementXlsx()" class="border rounded-lg px-3 py-1.5 text-sm hover:bg-gray-50"><i class="ph ph-download-simple"></i> Excel</button>
+          </div>
+          <div class="overflow-x-auto"><table class="w-full text-sm">
+            <thead><tr class="text-gray-500 border-b text-left"><th class="py-2 pr-2 font-medium">เปลี่ยน</th><th class="font-medium">เครื่อง</th><th class="font-medium">ภาค</th>
+              <th class="font-medium">ยี่ห้อ / รุ่น</th><th class="text-right font-medium">BTU</th><th class="font-medium pl-3">ติดตั้ง</th><th class="text-right font-medium">อายุ</th><th class="text-right font-medium">ตามแผน (บาท)</th><th class="font-medium pl-3">สถานะ</th></tr></thead>
+            <tbody>${list.map(u => `<tr class="border-b border-gray-50 ${u.status === 'done' ? 'bg-green-50' : u.selected ? '' : 'text-gray-400'}">
+              <td class="py-1.5 pr-2"><input type="checkbox" ${u.selected ? 'checked' : ''} ${edit ? '' : 'disabled'} onchange="rplToggle('${jsStr(u.airCode)}', this.checked)" class="w-4 h-4 accent-[#1153a1]"></td>
+              <td><div class="font-medium ${u.selected ? 'text-gray-800' : ''}">${esc(u.airCode)}</div><div class="text-xs text-gray-400">${esc(u.nodeName)} · ${esc(u.province)}</div></td>
+              <td>${esc(u.region)}</td><td>${esc(u.brand)}<div class="text-xs text-gray-400">${esc(u.model)}</div></td>
+              <td class="text-right">${u.btu ? u.btu.toLocaleString() : ''}</td><td class="pl-3">${esc(fmtDate(u.installDate))}</td>
+              <td class="text-right">${u.age === null ? '' : u.age + ' ปี'}</td><td class="text-right">${rplMoney(u.total)}</td>
+              <td class="pl-3">${rplStatus(u)}</td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-gray-400 py-6">ไม่มีเครื่องตามตัวกรอง</td></tr>'}</tbody>
+          </table></div>
+          ${edit ? '' : '<p class="text-xs text-gray-400 mt-2">ติ๊กเลือกและแก้ราคาได้เฉพาะ Infrastructure</p>'}
+        </div>
+        ${rplSideTable('เปลี่ยนนอกแผน', 'เปลี่ยนในปี ' + p.year + ' แต่ไม่ได้อยู่ในแผน (เช่น เสียแล้วต้องเปลี่ยน)', p.unplanned, s.unplannedActual)}
+        ${rplSideTable('ติดตั้งเพิ่ม', 'ติดตั้งที่ตำแหน่งใหม่ในปี ' + p.year + ' — ไม่ใช่การเปลี่ยนเครื่อง', p.added, s.addedActual)}`;
+      // ช่องค้นหาถูกวาดใหม่ทุกครั้ง — คืนเคอร์เซอร์ให้พิมพ์ต่อได้
+      if (rplFilter.focusQ) { const q = document.getElementById('rplQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); rplFilter.focusQ = false; }
+    }
+
+    function rplStatus(u) {
+      if (u.status === 'done') return `<span class="text-green-700 font-medium">${u.doneKind === 'movein' ? 'ย้ายเครื่องมาแทน' : 'เปลี่ยนแล้ว'}</span>
+        <div class="text-xs text-green-700">${esc(fmtDate(u.doneDate))}${u.actualCost ? ' · ' + rplMoney(u.actualCost) + ' บาท' : ''}</div>`;
+      return u.selected ? '<span class="text-gray-600">รอเปลี่ยน</span>' : '<span>ไม่เลือก</span>';
+    }
+
+    function rplSideTable(title, hint, rows, total) {
+      if (!rows.length) return '';
+      return `<div class="bg-white rounded-xl border border-gray-200 p-4 mt-4">
+        <h3 class="font-bold text-gray-800">${title} <span class="text-sm font-normal text-gray-500">${rows.length} เครื่อง · ${rplMoney(total)} บาท</span></h3>
+        <p class="text-xs text-gray-400 mb-2">${hint}</p>
+        <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b text-left"><th class="py-1.5 font-medium">เครื่อง</th><th class="font-medium">ภาค</th>
+          <th class="font-medium">ยี่ห้อ / BTU</th><th class="font-medium">วันที่</th><th class="text-right font-medium">ค่าใช้จ่ายจริง (บาท)</th></tr></thead>
+          <tbody>${rows.map(u => `<tr class="border-b border-gray-50"><td class="py-1.5">${esc(u.airCode)}<div class="text-xs text-gray-400">${esc(u.nodeName)}</div></td>
+            <td>${esc(u.region)}</td><td>${esc(u.brand)} ${u.btu ? u.btu.toLocaleString() : ''}</td><td>${esc(fmtDate(u.doneDate))}</td>
+            <td class="text-right">${rplMoney(u.actualCost)}</td></tr>`).join('')}</tbody></table></div>`;
+    }
+
+    function rplSetFilter(k, v) { rplFilter[k] = v; if (k === 'q') rplFilter.focusQ = true; renderReplacement(); }
+    window.rplSetFilter = rplSetFilter;
+
+    async function rplToggle(code, on) {
+      try { rplPlan = await call('setReplacementPicks', rplPlan.year, [code], on); }
+      catch (e) { /* แจ้งแล้วใน call — วาดใหม่ให้ติ๊กกลับเป็นค่าจริง */ }
+      renderReplacement();
+    }
+    window.rplToggle = rplToggle;
+
+    async function saveReplacementPricesUI() {
+      const prices = rplPlan.bands.map(b => ({ band: b.band,
+        unitPrice: document.getElementById('rplUP' + b.band).value, installPrice: document.getElementById('rplIP' + b.band).value }));
+      try { rplPlan = await call('saveReplacementPrices', rplPlan.year, prices); showToast('บันทึกราคาแล้ว'); renderReplacement(); }
+      catch (e) { /* แจ้งแล้วใน call */ }
+    }
+    window.saveReplacementPricesUI = saveReplacementPricesUI;
+
+    async function applyReplacementBudget() {
+      const s = rplPlan.summary;
+      const ok = await showConfirm(`ตั้งงบปี ${rplPlan.year}: จัดซื้อเครื่อง ${rplMoney(s.purchase)} บาท · ติดตั้ง ${rplMoney(s.install)} บาท ตามเครื่องที่เลือก ${s.selected} เครื่อง?\nงบล้างและงบซ่อมไม่เปลี่ยน`);
+      if (!ok) return;
+      try { rplPlan = await call('applyReplacementToBudget', rplPlan.year); showToast('ตั้งงบจัดซื้อ/ติดตั้งแล้ว'); renderReplacement(); }
+      catch (e) { /* แจ้งแล้วใน call */ }
+    }
+    window.applyReplacementBudget = applyReplacementBudget;
+
+    function exportReplacementXlsx() {
+      const rows = rplPlan.units.map((u, i) => ({ 'ลำดับ': i + 1, 'เปลี่ยนปีนี้': u.selected ? 'ใช่' : '', 'ภาค': u.region, 'จังหวัด': u.province,
+        'Site Code': u.siteCode, 'Node': u.nodeName, 'รหัสเครื่อง': u.airCode, 'ยี่ห้อ': u.brand, 'รุ่น': u.model, 'BTU': u.btu,
+        'วันติดตั้ง': fmtDate(u.installDate), 'อายุ ณ สิ้นปี (ปี)': u.age, 'ราคาเครื่อง': u.unitPrice, 'ค่าติดตั้ง': u.installPrice, 'รวม': u.total,
+        'สถานะ': u.status === 'done' ? 'เปลี่ยนแล้ว' : u.selected ? 'รอเปลี่ยน' : 'ไม่เลือก', 'วันที่เปลี่ยน': fmtDate(u.doneDate), 'ค่าใช้จ่ายจริง': u.actualCost || '' }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'แผนเปลี่ยนเครื่อง ' + rplPlan.year);
+      XLSX.writeFile(wb, 'แผนเปลี่ยนเครื่อง_' + rplPlan.year + '.xlsx');
+    }
+    window.exportReplacementXlsx = exportReplacementXlsx;
 
     /* ============== 5. BUDGET (งบประมาณ) ============== */
     async function loadBudget() {
