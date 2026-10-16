@@ -691,6 +691,8 @@ export async function deleteAirUnit(ctx, row, expectCode) {
       Technician: ''
     });
 
+    // แผนล้างของเครื่องนี้ลบตามไปด้วย ประวัติและเอกสารยังอยู่ — กติกาเดียวกับลบตอนนำเข้า
+    await removePlanRowsOf(ctx, [unit.AirCode]);
     await ctx.ss.deleteRow(SHEETS.AIRLIST, row);
     await ctx.ss.flush();
     return { air: await getAirList(ctx), history: await getHistory(ctx) };
@@ -872,7 +874,17 @@ async function prepareImportRemovals(ctx, removes) {
     });
   }
 
-  const gone = new Set(removes.map(u => normalizeCode(u.AirCode)));
+  await removePlanRowsOf(ctx, removes.map(u => u.AirCode));
+}
+
+/**
+ * เอาแถวในแผนล้างทุกปีของเครื่องที่กำลังจะถูกลบออก (ไม่ flush — ผู้เรียกถือล็อกแล้ว)
+ *
+ * ใช้ทั้งปุ่มลบทีละเครื่อง (deleteAirUnit) และติ๊กลบตอนนำเข้า (prepareImportRemovals) — กติกาเดียวกัน
+ * เดิมปุ่มลบทีละเครื่องไม่ลบแถวแผน แถวค้างขึ้นป้าย "ถูกลบแล้ว" ทั้งที่ลบผ่านการนำเข้าแล้วหายไปเลย
+ */
+async function removePlanRowsOf(ctx, codes) {
+  const gone = new Set(codes.map(normalizeCode));
   await ctx.connect();
   for (const name of (await ctx.ss.sheetNames()).filter(n => /^Plan_\d{4}$/.test(n))) {
     await ctx.ss.load(name);

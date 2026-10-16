@@ -5278,8 +5278,8 @@
      * กล่องยืนยันแบบกดปุ่มเดียวจึงไม่พอ เพราะการกดพลาดสองครั้งติดกันเกิดขึ้นได้จริง
      * ต้องพิมพ์รหัสเอง ซึ่งทำโดยบังเอิญไม่ได้
      *
-     * กล่องนี้บอกด้วยว่าจะกระทบอะไรบ้าง — ประวัติกี่ใบ และอยู่ในแผนล้างปีไหน
-     * เพราะข้อมูลพวกนั้นไม่ได้ถูกลบตามไปด้วย แต่จะกลายเป็นรายการลอยที่ไม่มีเครื่องรองรับ
+     * กล่องนี้บอกด้วยว่าจะกระทบอะไรบ้าง — ประวัติกี่ใบ (ยังอยู่ แต่ไม่มีเครื่องรองรับ)
+     * และแถวในแผนล้าง (ลบตามไปด้วย กติกาเดียวกับลบตอนนำเข้า — ดู removePlanRowsOf)
      */
     function confirmDeleteAir(unit) {
       return new Promise(resolve => {
@@ -5289,7 +5289,7 @@
 
         const impact = [
           histCount ? `ประวัติ ${histCount} รายการจะยังอยู่ แต่จะไม่มีเครื่องรองรับ` : '',
-          inPlan ? 'แถวในแผนล้างแอร์จะค้างอยู่และถูกทำเครื่องหมายว่าถูกลบแล้ว' : ''
+          inPlan ? 'แถวในแผนล้างแอร์ของเครื่องนี้ (ทุกปี) จะถูกลบด้วย' : ''
         ].filter(Boolean);
 
         document.getElementById('modalRoot').innerHTML = `
@@ -5371,6 +5371,10 @@
         if (document.getElementById('view-history').classList.contains('active')) renderHistoryTable();
         showToast('ลบข้อมูลสำเร็จ', 'success');
         loadDashboard();
+        // แถวแผนของเครื่องนี้ถูกลบตามไปด้วย — โหลดแผนใหม่ ไม่งั้นตารางแผนยังโชว์แถวเดิม
+        if (typeof currentYear !== 'undefined' && currentYear) {
+          try { currentPlan = (await callQuiet('getCleaningPlan', currentYear)) || currentPlan; renderPlanTable(planLastQuery, true); } catch (e2) {}
+        }
       } catch(e) {}
     }
 
