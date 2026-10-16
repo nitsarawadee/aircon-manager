@@ -39,7 +39,7 @@
  */
 
 import { COLUMNS, HEADERS, makeAirCode, validateRow, canonicalize } from './import-spec.js';
-import { isAwaitingInstall } from './values.js';
+import { isAwaitingInstall, normalizeCode } from './values.js';
 
 /** ชื่อชีต/ตารางของข้อมูลเครื่อง */
 const AIRLIST = 'AirList';
@@ -86,7 +86,7 @@ function identityValue(v) {
  */
 export function planImport(existing, rows) {
   const byCode = new Map();
-  for (const u of existing) if (u.AirCode) byCode.set(String(u.AirCode).trim(), u);
+  for (const u of existing) if (u.AirCode) byCode.set(normalizeCode(u.AirCode), u);
 
   const adds = [];
   const updates = [];
@@ -187,7 +187,7 @@ export function planImport(existing, rows) {
   // นับรหัสที่ไฟล์พูดถึงทั้งหมด รวมแถวที่มีข้อผิดพลาดด้วย — แถวผิดยังตั้งใจหมายถึงเครื่องนั้นอยู่
   // เครื่องที่รอใบติดตั้งอนุมัติไม่อยู่ในไฟล์สำหรับแก้อยู่แล้ว (ยังไม่ขึ้นรายการ) — ไม่นับว่าหายจากไฟล์
   const missing = existing.filter(u => u.AirCode && !isAwaitingInstall(u.Status) &&
-                                       !seenInFile.has(String(u.AirCode).trim()));
+                                       !seenInFile.has(normalizeCode(u.AirCode)));
 
   return { adds, updates, unchanged, errors, warnings, suspects, missing };
 }

@@ -92,6 +92,9 @@ export const HEADERS = COLUMNS.map(c => c.name);
  */
 export function canonicalize(column, value) {
   const v = String(value ?? '').trim();
+  // รหัสไซต์เป็นตัวพิมพ์ใหญ่เสมอ (ข้อมูลจริงทั้งหมดเป็นแบบนั้น) — พิมพ์ "atg-pmk" มา ต้องได้เครื่องเดิม
+  // ไม่ใช่ "atg-pmk-AIR-1" ตัวใหม่ซ้อนกับ ATG-PMK-AIR-1 (ที่อื่นทั้งระบบเทียบรหัสแบบไม่สนตัวพิมพ์)
+  if (column === 'SiteCode') return v.toUpperCase();
   // วันที่: รับ 26/04/2018 (วว/ดด/ปปปป ตาม Template) แล้วเก็บเป็นรูปแบบของระบบ 2018-04-26
   if (DATE_COLUMNS.has(column)) {
     const iso = toIsoDate(v);
@@ -131,7 +134,7 @@ export function toIsoDate(value) {
 
 /** สร้างรหัสเครื่องจากรหัสไซต์กับเลขเครื่อง — รูปแบบเดียวกับที่ใช้อยู่จริงทั้ง 457 เครื่อง */
 export function makeAirCode(siteCode, airNo) {
-  return String(siteCode).trim() + '-AIR-' + String(airNo).trim();
+  return canonicalize('SiteCode', siteCode) + '-AIR-' + String(airNo).trim();
 }
 
 /**

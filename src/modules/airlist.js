@@ -837,7 +837,7 @@ async function buildImportPlan(ctx, rows, removeMissing = false) {
   // ไม่งั้นเครื่องของภูมิภาคอื่นจะถูกมองว่า "ยังไม่มีในระบบ" แล้วสร้างซ้ำขึ้นมาอีกตัว
   const existing = ctx.ss.objects(SHEETS.AIRLIST);
   const byCode = new Map(
-    existing.filter(u => u.AirCode).map(u => [String(u.AirCode).trim(), u])
+    existing.filter(u => u.AirCode).map(u => [normalizeCode(u.AirCode), u])
   );
 
   const info = await ctx.userInfo();
