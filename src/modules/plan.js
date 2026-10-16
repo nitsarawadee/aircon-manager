@@ -698,16 +698,63 @@ export async function deleteCleaningPlan(ctx, year, confirmYear) {
  * "ครั้งนั้น" = เครื่องตัวนี้ ปีนี้ รอบนี้ ซึ่งตรงกับที่ฟอร์มบันทึกผลการล้าง
  * และการแนบเอกสารเขียนมือเก็บไว้ทั้งคู่
  */
-function hasCleaningDoc(ctx, airCode, year, round) {
+export function cleaningDocOf(ctx, airCode, year, round) {
   const want = normalizeCode(airCode);
   const y = String(year == null ? '' : year).trim();
   const r = String(round == null ? '' : round).trim();
 
-  return ctx.ss.objects(SHEETS.CLEANFORM).some(f =>
+  return ctx.ss.objects(SHEETS.CLEANFORM).find(f =>
     String(f.PlanYear == null ? '' : f.PlanYear).trim() === y &&
     String(f.PlanRound == null ? '' : f.PlanRound).trim() === r &&
     [f.AirCode1, f.AirCode2].some(c => c && normalizeCode(c) === want)
-  );
+  ) || null;
+}
+
+const hasCleaningDoc = (ctx, airCode, year, round) => !!cleaningDocOf(ctx, airCode, year, round);
+
+/** เลขเอกสารของเครื่องนั้นในใบ — ช่อง 1 = DocNo · ช่อง 2 = DocNo2 (ใบเก่าที่ยังไม่มี DocNo2 ใช้เลขของใบ) */
+export function docNoOfUnit(form, airCode) {
+  const want = normalizeCode(airCode);
+  const own = normalizeCode(form.AirCode2) === want ? form.DocNo2 : form.DocNo;
+  return String(own || form.DocNo || form.DocNo2 || form.ID || '').trim();
+}
+
+/**
+ * รอบนั้นของเครื่องต้องยังไม่ได้ล้าง — ล้างรอบเดิมซ้ำไม่ได้ (เจ้าของงานกำหนด 16/10/2569)
+ *
+ * เดิมกรอกใบล้าง/แนบเอกสารของรอบที่ปิดไปแล้วได้อีก ถ้าคนละวันก็ได้ใบใหม่ ปิดรอบทับวันเดิม
+ * และลงประวัติค่าล้างอีกแถว — งบนับค่าล้างครั้งเดียวกันซ้ำสองเท่าโดยไม่มีอะไรฟ้อง
+ *
+ *   มีใบล้างของเครื่อง-ปี-รอบนี้อยู่แล้ว  ปฏิเสธพร้อมบอกเลขใบเดิม (ต้องการแก้ = ลบใบเดิมก่อน)
+ *   ไม่มีใบแต่รอบปิดแล้ว                 รอบที่ปิดมาจากระบบเดิม (นำเข้า) ล้างไปแล้วเหมือนกัน
+ *
+ * ตรวจก่อนเขียนอะไรทั้งสิ้น · ไม่ส่งปี/รอบ = ไม่ผูกกับแผน ไม่มีอะไรต้องตรวจ
+ * @param {Object} opts { year, round, airCodes: [รหัสเครื่อง] }
+ */
+export async function assertRoundNotCleaned(ctx, opts) {
+  const year = String((opts && opts.year) ?? '').trim();
+  const round = String((opts && opts.round) ?? '').trim();
+  if (!year || !round) return;
+
+  for (const code of opts.airCodes || []) {
+    const form = cleaningDocOf(ctx, code, year, round);
+    if (form) {
+      throw new Error('เครื่อง ' + code + ' รอบที่ ' + round + '/' + year + ' มีใบล้างเลขที่ ' +
+        docNoOfUnit(form, code) + ' อยู่แล้ว — ล้างรอบเดิมซ้ำไม่ได้ ถ้าต้องการแก้ ให้ Infrastructure ลบใบเดิมก่อน');
+    }
+  }
+
+  const name = planSheet(year);
+  if (!(await ctx.ss.hasSheet(name))) return;
+  await ctx.ss.load(name);
+  for (const code of opts.airCodes || []) {
+    const row = ctx.ss.objects(name).find(p => normalizeCode(p.AirCode) === normalizeCode(code));
+    if (row && roundState(row, round, false) === 'done') {
+      const at = formatDate(row['R' + round + '_ActualDate']);
+      throw new Error('เครื่อง ' + code + ' รอบที่ ' + round + '/' + year + ' ปิดงานไปแล้ว' +
+        (at ? ' (ล้างเมื่อ ' + at + ')' : '') + ' — ล้างรอบเดิมซ้ำไม่ได้');
+    }
+  }
 }
 
 export async function updateCleaningRound(ctx, year, row, round, data) {

@@ -107,6 +107,8 @@ test('ถูกปฏิเสธแล้วต้องไม่มีอะ�
 
 test('มีเอกสารของคนละรอบ ก็ยังปิดรอบนี้ไม่ได้', async () => {
   const db = freshDb();
+  // รอบ 1 ต้องยังไม่ปิด ถึงจะกรอกใบของรอบ 1 ได้ (ล้างรอบเดิมซ้ำไม่ได้)
+  db.prepare("UPDATE plans SET R1_Status = 'รอดำเนินการ'").run();
   await saveForm(db, { PlanRound: 1 });
 
   await assert.rejects(

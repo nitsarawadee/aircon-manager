@@ -12,7 +12,7 @@ import { assertMoney, cleanFormValue, isAwaitingInstall, isRetiredStatus, normal
 import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope } from './airlist.js';
 import { jobKey } from '../context.js';
-import { assertRoundsInOrder, closePlanRound, reopenPlanRoundRaw } from './plan.js';
+import { assertRoundNotCleaned, assertRoundsInOrder, closePlanRound, reopenPlanRoundRaw } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
 import {
   startApproval, resetApproval, removeApproval, signOptsOf, attachApprovals, approvalRowOf, isPending, freshFormId
@@ -781,6 +781,7 @@ export async function saveCleaningForm(ctx, record) {
   const saved = await ctx.withLock(async () => {
     await ctx.ensureBase();
     await assertRoundsInOrder(ctx, { year: record.PlanYear, round: record.PlanRound, airCodes: units.map(u => u.airCode) });
+    await assertRoundNotCleaned(ctx, { year: record.PlanYear, round: record.PlanRound, airCodes: units.map(u => u.airCode) });
 
     // ---------- ใบเดิมของไซต์นี้ รอบนี้ วันเดียวกัน มีอยู่แล้วหรือยัง ----------
     //
@@ -1427,6 +1428,7 @@ export async function uploadNodeDocuments(ctx, payload) {
         }
       }
       await assertRoundsInOrder(ctx, { year: closeout.year, round: closeout.round, airCodes: units.map(u => u.airCode) });
+      await assertRoundNotCleaned(ctx, { year: closeout.year, round: closeout.round, airCodes: units.map(u => u.airCode) });
     } else if (isContractor) {
       // แนบเก็บไว้เฉยๆ โดยไม่ผูกกับงานไหน = ไม่มีอะไรบอกว่าเป็นงานของใคร
       throw new Error('บัญชี Subcontract (ผู้รับเหมา) ต้องแนบเอกสารจากหน้าแผนล้างแอร์ (กดที่ช่องรอบที่ได้รับมอบหมาย)');

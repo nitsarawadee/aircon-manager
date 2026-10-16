@@ -224,7 +224,8 @@ test('เลขที่ออกให้เครื่อง ต้องไ�
     AirCode2: 'AYA-WNI-AIR-2', Price2: 500, Unit2_Brand: 'Carrier'
   });
   // ใบถัดไป (คนละวัน = คนละใบ) ต้องได้เลขใหม่ ไม่ซ้ำกับเลขของเครื่องที่ 2 ในใบแรก
-  await saveCleaningForm(ctxOf(db), oneUnit(1, { Date: '2026-09-20' }));
+  // ไม่ผูกรอบ — รอบ 2 ของเครื่องนี้ล้างไปแล้วในใบแรก ล้างรอบเดิมซ้ำไม่ได้ (ดู cleaning-round-once.test.mjs)
+  await saveCleaningForm(ctxOf(db), oneUnit(1, { Date: '2026-09-20', PlanYear: '', PlanRound: '' }));
 
   const forms = await getCleaningForms(ctxOf(db));
   const hist = await getHistory(ctxOf(db));
