@@ -2883,11 +2883,39 @@
         .join('');
       const hint = contractorList.length ? ''
         : '<p class="text-xs text-gray-400 mt-1">ยังไม่มีรายชื่อ — สร้างบัญชีผู้รับเหมาที่เมนูจัดการผู้ใช้ก่อน</p>';
-      return `<select id="${id}" class="${cls}">
+      // ช่องพิมพ์ค้นหา (ผู้ใช้ขอ 16/10/2569 — รายชื่อยาว เลื่อนหายาก) กรองตัวเลือกในรายการด้านล่าง
+      // ค่าที่บันทึกยังอ่านจาก select ตัวเดิม ทุกที่ที่เรียกใช้จึงไม่ต้องแก้
+      const search = contractorList.length
+        ? `<input type="search" autocomplete="off" placeholder="พิมพ์ชื่อเพื่อค้นหา…" oninput="filterContractorOptions('${jsStr(id)}', this.value)"
+                  class="w-full rounded-lg border-gray-300 border text-sm px-3 py-1.5 mb-1.5 outline-none focus:ring-2 focus:ring-[#1153a1]">`
+        : '';
+      return `${search}<select id="${id}" class="${cls}">
           ${keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>'
                  : `<option value="" ${!cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>`}${opts}
         </select>${hint}`;
     }
+
+    /**
+     * กรองรายชื่อผู้รับเหมาตามที่พิมพ์ (ไม่สนช่องว่าง/ตัวพิมพ์) — เหลือชื่อเดียวเลือกให้เลย
+     * ตัวเลือกแรก (ยังไม่ระบุ / ไม่เปลี่ยน) ไม่ถูกซ่อน จะได้ล้างค่ากลับได้เสมอ
+     */
+    function filterContractorOptions(id, text) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const norm = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+      const q = norm(text);
+      const shown = [];
+      [...sel.options].forEach((o, i) => {
+        if (i === 0) return;
+        o.hidden = !!q && !norm(o.textContent).includes(q) && !norm(o.value).includes(q);
+        if (!o.hidden) shown.push(o);
+      });
+      if (q && shown.length === 1 && sel.value !== shown[0].value) {
+        sel.value = shown[0].value;
+        sel.dispatchEvent(new Event('change'));
+      }
+    }
+    window.filterContractorOptions = filterContractorOptions;
 
     /** โหลดรายชื่อผู้รับเหมาไว้ใช้ในแผนล้าง — เฉพาะเจ้าหน้าที่ (ผู้รับเหมาไม่ต้องเห็นรายชื่อคู่แข่ง) */
     async function loadContractorList() {
