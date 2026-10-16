@@ -816,7 +816,12 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
     }
 
     // ลงวันตามแผนแล้ว = นัดหมายแล้ว ทุกแผน (เจ้าของงานกำหนด 15/10/2569) — ล้างแล้ว/ยกเลิก คงตามที่เลือก
-    const status = data.planDate && (!data.status || data.status === 'รอดำเนินการ') ? ROUND_SCHEDULED : (data.status || 'รอดำเนินการ');
+    // ไม่มีวันตามแผน = รอดำเนินการ (กติกาเดียวกับตั้งวันทั้ง Node และลบใบล้าง — 16/10/2569)
+    // เดิมลบวันออกแล้วสถานะค้าง "นัดหมายแล้ว" ทั้งที่ไม่มีวันนัด
+    const asked = data.status || 'รอดำเนินการ';
+    const status = data.planDate && asked === 'รอดำเนินการ' ? ROUND_SCHEDULED
+      : !data.planDate && asked === ROUND_SCHEDULED ? 'รอดำเนินการ'
+      : asked;
 
     // ============================================================================
     // รอบที่ปิดแล้ว เปลี่ยนสถานะกลับไม่ได้ (เจ้าของงานกำหนด 16/10/2569)

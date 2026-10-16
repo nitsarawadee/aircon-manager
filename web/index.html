@@ -1753,7 +1753,14 @@
       const hidden = wrap.querySelector('input[type="hidden"]');
       const text = el.value.trim();
 
-      if (!text) { hidden.value = ''; el.classList.remove('border-rose-400'); return; }
+      if (!text) {
+        const had = hidden.value;
+        hidden.value = '';
+        el.classList.remove('border-rose-400');
+        // ลบวันออกก็แจ้งด้วย (เช่น ตั้งแผนรอบ: ไม่มีวัน → รอดำเนินการ) — แจ้งเฉพาะตอนเดิมมีวัน ไม่ยิงซ้ำทุกครั้งที่ออกจากช่องว่าง
+        if (had) hidden.dispatchEvent(new Event('change'));
+        return;
+      }
 
       const iso = thaiToIso(text);
       if (iso) {
@@ -6897,10 +6904,12 @@
           </div>
         </div>`;
       document.getElementById('modalRoot').innerHTML = content;
-      // ลงวันแล้ว = นัดหมายแล้ว (เซิร์ฟเวอร์ก็ทำแบบเดียวกัน) — เปลี่ยนให้เห็นทันที ไม่ต้องรอบันทึก
+      // ลงวันแล้ว = นัดหมายแล้ว · ลบวันออก = รอดำเนินการ (เซิร์ฟเวอร์ก็ทำแบบเดียวกัน) — เปลี่ยนให้เห็นทันที ไม่ต้องรอบันทึก
       document.getElementById('rp_plan').addEventListener('change', e => {
         const st = document.getElementById('rp_status');
-        if (e.target.value && st && st.value === 'รอดำเนินการ') st.value = 'นัดหมายแล้ว';
+        if (!st || st.disabled) return;
+        if (e.target.value && st.value === 'รอดำเนินการ') st.value = 'นัดหมายแล้ว';
+        if (!e.target.value && st.value === 'นัดหมายแล้ว') st.value = 'รอดำเนินการ';
       });
     }
 
