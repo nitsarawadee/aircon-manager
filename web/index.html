@@ -6830,10 +6830,20 @@
       // ถ้าปล่อยช่องไว้ คนกรอกจะแก้แล้วกดบันทึก ได้ข้อความว่าไม่มีสิทธิ์ ซึ่งงงกว่าไม่มีช่อง
       if (moduleLevel('plan') !== 'edit') { openRoundReadonly(i, r); return; }
 
+      // รอบที่ปิดแล้วเปลี่ยนสถานะกลับไม่ได้ (เซิร์ฟเวอร์กันอยู่แล้ว ดู updateCleaningRound — ปิดช่องไว้ไม่ให้กดแล้วได้ error)
+      //   ปิดด้วยใบล้าง  ล็อกเสมอ เปิดรอบกลับได้ทางเดียวคือลบใบล้าง
+      //   ปิดจากระบบเดิม (ไม่มีใบ)  Infrastructure แก้ได้ ไว้แก้ข้อมูลผิด — วันล้างจริงจะถูกล้างออก
+      const doneDocNo = p['R' + r + '_DocNo'] || '';
+      const statusLocked = roundWasDone && (!!doneDocNo || !isAdmin());
       const doneNote = roundWasDone ? `
         <div class="flex items-start gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
           <i class="ph-fill ph-check-circle text-base flex-shrink-0 mt-0.5"></i>
-          <span>รอบนี้ปิดงานแล้วเมื่อ <b>${esc(fmtDate(actual)) || '-'}</b> — แก้ราคาและผู้รับเหมาได้ตามปกติ</span>
+          <span>รอบนี้ปิดงานแล้วเมื่อ <b>${esc(fmtDate(actual)) || '-'}</b> — แก้ราคาและผู้รับเหมาได้ตามปกติ
+            ${doneDocNo
+              ? `<br>ปิดด้วยใบล้างเลขที่ <b>${esc(doneDocNo)}</b> เปลี่ยนสถานะไม่ได้ — ถ้าต้องการเปิดรอบกลับ ให้ Infrastructure ลบใบล้างนั้น`
+              : isAdmin()
+                ? '<br>ไม่มีใบล้างในระบบ (ปิดจากระบบเดิม) — เปลี่ยนสถานะได้ถ้าข้อมูลผิด วันล้างจริงจะถูกล้างออก'
+                : '<br>ไม่มีใบล้างในระบบ (ปิดจากระบบเดิม) — เปลี่ยนสถานะได้เฉพาะ Infrastructure'}</span>
         </div>` : '';
 
       const content = `
@@ -6852,7 +6862,7 @@
               <div class="grid grid-cols-2 gap-4">
                 <div><label class="block text-xs font-medium text-gray-500 mb-1">วันที่ตามแผน</label>${dateField('rp_plan', p['R'+r+'_PlanDate'], 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none')}</div>
                 <div><label class="block text-xs font-medium text-gray-500 mb-1">สถานะ</label>
-                  <select id="rp_status" class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium">${statusOptions}</select>
+                  <select id="rp_status" ${statusLocked ? 'disabled' : ''} class="w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none bg-white font-medium disabled:bg-gray-100 disabled:text-gray-500">${statusOptions}</select>
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-4">
@@ -7506,7 +7516,7 @@
                 <p class="text-gray-500 text-xs mt-1">ส่วนอื่นของไฟล์ (R1–R3) นำเข้าตามปกติแล้ว</p>
               </div>` : ''}
               ${result.skippedDoneRounds ? `
-              <p class="text-gray-500"><i class="ph ph-info"></i> ${result.skippedDoneRounds} รอบล้างเสร็จไปแล้ว จึงไม่ได้เปลี่ยนผู้รับเหมาตามไฟล์</p>` : ''}
+              <p class="text-gray-500"><i class="ph ph-info"></i> ${result.skippedDoneRounds} รอบล้างเสร็จไปแล้ว จึงไม่ได้เปลี่ยนวันนัดหรือผู้รับเหมาตามไฟล์</p>` : ''}
             </div>
             <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
               <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">${unknown.length ? 'ปิด' : 'ตกลง'}</button>

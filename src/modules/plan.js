@@ -56,6 +56,14 @@ export async function getCleaningPlan(ctx, year) {
     regionOf.set(code, String(u.Region || '').trim());
     if (isRetiredStatus(u.Status)) retiredSet.add(code);
   }
+  const docOf = new Map();
+  for (const f of ctx.ss.objects(SHEETS.CLEANFORM)) {
+    const y = String(f.PlanYear ?? '').trim(), r = String(f.PlanRound ?? '').trim();
+    if (!y || !r) continue;
+    for (const c of [f.AirCode1, f.AirCode2]) {
+      if (c && String(c).trim()) docOf.set(y + '|' + r + '|' + normalizeCode(c), docNoOfUnit(f, c));
+    }
+  }
 
   let list = ctx.ss.objects(name).map(o => {
     const out = { ...o };
@@ -70,6 +78,9 @@ export async function getCleaningPlan(ctx, year) {
     // เครื่องที่ถูกลบออกจากทะเบียนไปเลย ก็ไม่ต้องไปล้างเหมือนกัน
     // แถวแผนไม่ได้ถูกลบตามไปด้วย ถ้าไม่ทำเครื่องหมายไว้ มันจะค้างเป็นงานที่ต้องทำตลอดไป
     out.Removed = !regionOf.has(normalizeCode(o.AirCode));
+
+    // เลขใบล้างของแต่ละรอบ — หน้าต่างรอบใช้ล็อกช่องสถานะของรอบที่ปิดด้วยใบล้าง (ดู updateCleaningRound)
+    for (const r of [1, 2, 3]) out['R' + r + '_DocNo'] = docOf.get(year + '|' + r + '|' + normalizeCode(o.AirCode)) || '';
     return out;
   });
 
@@ -102,7 +113,7 @@ export async function getCleaningPlan(ctx, year) {
         const mine = jobs.has(jobKey(year, r, normalizeCode(o.AirCode)));
         o['R' + r + '_Mine'] = mine;
         if (mine) continue;
-        for (const k of ['Price', 'Technician', 'Note', 'FormUrl', 'ContractorID', 'ContractorName']) {
+        for (const k of ['Price', 'Technician', 'Note', 'FormUrl', 'ContractorID', 'ContractorName', 'DocNo']) {
           o['R' + r + '_' + k] = '';
         }
       }
@@ -806,8 +817,37 @@ export async function updateCleaningRound(ctx, year, row, round, data) {
 
     // ลงวันตามแผนแล้ว = นัดหมายแล้ว ทุกแผน (เจ้าของงานกำหนด 15/10/2569) — ล้างแล้ว/ยกเลิก คงตามที่เลือก
     const status = data.planDate && (!data.status || data.status === 'รอดำเนินการ') ? ROUND_SCHEDULED : (data.status || 'รอดำเนินการ');
+
+    // ============================================================================
+    // รอบที่ปิดแล้ว เปลี่ยนสถานะกลับไม่ได้ (เจ้าของงานกำหนด 16/10/2569)
+    // ============================================================================
+    // เดิมเลือกสถานะอื่นได้ แต่วันที่ล้างจริงยังค้าง — สรุปแผนนับเสร็จ การ์ดนัดโชว์เป็นนัด
+    // รอบถัดไปบันทึกไม่ได้ เลือก "ยกเลิก" ค่าล้างหายจากสรุปแผนแต่ยังอยู่ในงบ ปิดใหม่ประวัติซ้อน
+    //
+    //   มีใบล้าง      ห้ามเปลี่ยน — เปิดรอบกลับได้ทางเดียวคือลบใบล้าง (ซึ่งย้อนประวัติให้ด้วย)
+    //   ไม่มีใบ        (ปิดมาจากระบบเดิม) Infrastructure แก้ได้ ไว้แก้ข้อมูลผิด — ล้างวันล้างจริงทิ้งด้วย
+    //   ยังปิดอยู่    วันล้างจริงคงค่าเดิมเสมอ ไม่รับจากหน้าเว็บ (มาจากใบล้างเท่านั้น)
+    let actualDate = data.actualDate || '';
+    if (wasDone) {
+      const stored = dateOut(ctx.ss.cell(name, row, startCol + 1));
+      if (status === ROUND_DONE) {
+        actualDate = stored;
+      } else {
+        const doc = cleaningDocOf(ctx, airCode, year, round);
+        if (doc) {
+          throw new Error('รอบที่ ' + round + '/' + year + ' ของเครื่อง ' + airCode + ' ปิดงานด้วยใบล้างเลขที่ ' +
+            docNoOfUnit(doc, airCode) + ' แล้ว เปลี่ยนสถานะไม่ได้ — ถ้าต้องการเปิดรอบกลับ ให้ Infrastructure ลบใบล้างนั้น');
+        }
+        if ((await ctx.userInfo()).role !== 'Admin') {
+          throw new Error('รอบที่ ' + round + '/' + year + ' ของเครื่อง ' + airCode + ' ปิดงานแล้ว (จากระบบเดิม ไม่มีใบล้างในระบบ) ' +
+            '— เปลี่ยนสถานะได้เฉพาะ Infrastructure');
+        }
+        actualDate = '';
+      }
+    }
+
     ctx.ss.setValues(name, row, startCol, [[
-      data.planDate || '', data.actualDate || '', data.price || '',
+      data.planDate || '', actualDate, data.price || '',
       data.technician || '', status, data.note || ''
     ]]);
     ctx.ss.setValue(name, row, headers.indexOf('UpdatedBy') + 1, await ctx.currentUser());
@@ -911,6 +951,9 @@ export async function updatePlanDatesByNode(ctx, year, nodeName, dates, contract
       for (const r of [1, 2, 3]) {
         if (r > n) continue;   // รอบที่ปีนี้ไม่มี — ไม่ลงวัน/ผู้รับเหมา/สถานะ
         const status = String(row[idx['s' + r]] || '').trim();
+        // รอบที่ล้างแล้วไม่แตะเลย — วันนัด ผู้รับเหมา สถานะ คือข้อเท็จจริงของงานที่ทำไปแล้ว
+        // (เดิมเครื่องที่ติ๊กไว้ถูกเปลี่ยนวันนัดและผู้รับเหมาของรอบที่ล้างเสร็จแล้วด้วย)
+        if (status === ROUND_DONE || String(row[idx['a' + r]] || '').trim()) continue;
         if (picked[r] && !picked[r].has(code)) {
           // ไม่ล้างรอบนี้ = รอดำเนินการ (เจ้าของงานไม่ให้เป็นยกเลิก) — รอบที่ล้างไปแล้วหรือยกเลิกไว้คงไว้ตามจริง
           // วันนัดเดิมล้างออกด้วย (เจ้าของงานกำหนด 15/10/2569) ไม่งั้นยังขึ้นเป็นนัดในแดชบอร์ด
@@ -1053,7 +1096,8 @@ export async function updatePlanBulk(ctx, year, importedData) {
         badDates.slice(0, 5).join(', ') + (badDates.length > 5 ? ' …' : '') + ')');
     }
     const isoOf = v => toIsoDate(String(v ?? '').trim());
-    let skippedDone = 0;
+    // รอบที่ล้างเสร็จแล้วที่ไฟล์พยายามเปลี่ยน (วันนัดหรือผู้รับเหมา) — นับรอบละครั้ง
+    const skippedDone = new Set();
 
     const matchedCodes = new Set();
     for (let i = 1; i < values.length; i++) {
@@ -1065,9 +1109,12 @@ export async function updatePlanBulk(ctx, year, importedData) {
 
       // รอบที่ปีนี้ไม่มี ไม่รับวัน/ผู้รับเหมาจากไฟล์
       const n = roundsInRow(headers, c => row[c]);
+      // รอบที่ล้างเสร็จแล้วไม่รับอะไรจากไฟล์ — คนที่ล้างไปแล้วและวันที่ล้างคือข้อเท็จจริง ไฟล์ทับไม่ได้
+      const doneRound = r => String(row[idx['s' + r]] || '').trim() === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
       for (const r of [1, 2, 3]) {
         const iso = isoOf(imp['R' + r + '_PlanDate']);
         if (!iso || r > n) continue;
+        if (doneRound(r)) { skippedDone.add(code + '|' + r); continue; }
         row[idx['r' + r]] = iso;
         // ลงวันแล้ว = นัดหมายแล้ว (เจ้าของงานกำหนด) — ล้างแล้ว/ยกเลิก ไม่แตะ
         const st = String(row[idx['s' + r]] || '').trim();
@@ -1076,8 +1123,7 @@ export async function updatePlanBulk(ctx, year, importedData) {
       for (const r of [1, 2, 3]) {
         const cname = String(imp['R' + r + '_Contractor'] || '').trim();
         if (!cname || r > n || idx['c' + r] < 0) continue;
-        const done = String(row[idx['s' + r]] || '').trim() === ROUND_DONE || String(row[idx['a' + r]] || '').trim();
-        if (done) { skippedDone++; continue; }
+        if (doneRound(r)) { skippedDone.add(code + '|' + r); continue; }
         row[idx['c' + r]] = idByName.get(nameKey(cname));
       }
       if (idx.by > -1) row[idx.by] = me;
@@ -1099,7 +1145,7 @@ export async function updatePlanBulk(ctx, year, importedData) {
       plan: await getCleaningPlan(ctx, year),
       matchedCount: matchedCodes.size,
       notFoundCodes: notFound,
-      skippedDoneRounds: skippedDone,
+      skippedDoneRounds: skippedDone.size,
       ignoredColumns
     };
   });
