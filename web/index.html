@@ -8946,18 +8946,18 @@
           <div class="bg-white rounded-xl border border-gray-200 p-4">
             <div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800">ราคาต่อเครื่องตามขนาด</h3>
               ${edit ? '<button onclick="saveReplacementPricesUI()" class="text-sm text-[#1153a1] hover:underline font-medium">บันทึกราคา</button>' : ''}</div>
-            <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b"><th class="text-left py-1.5 font-medium">ขนาด</th>
-              <th class="text-right font-medium">ราคาเครื่อง</th><th class="text-right font-medium">ค่าติดตั้ง</th><th class="text-right font-medium">ครบเกณฑ์</th><th class="text-right font-medium">เลือก</th></tr></thead>
-              <tbody>${p.byBand.map(b => `<tr class="border-b border-gray-50"><td class="py-1.5">${esc(b.label)}</td>
+            <table class="w-full text-sm"><thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50"><th class="text-left py-1.5 font-semibold">ขนาด</th>
+              <th class="text-right font-semibold">ราคาเครื่อง</th><th class="text-right font-semibold">ค่าติดตั้ง</th><th class="text-right font-semibold">ครบเกณฑ์</th><th class="text-right font-semibold">เลือก</th></tr></thead>
+              <tbody class="divide-y divide-gray-100 text-gray-700">${p.byBand.map(b => `<tr><td class="py-1.5">${esc(b.label)}</td>
                 <td class="text-right">${edit ? `<input type="number" min="0" id="rplUP${b.band}" value="${b.unitPrice}" class="w-24 text-right border rounded px-1 py-0.5">` : rplMoney(b.unitPrice)}</td>
                 <td class="text-right">${edit ? `<input type="number" min="0" id="rplIP${b.band}" value="${b.installPrice}" class="w-20 text-right border rounded px-1 py-0.5">` : rplMoney(b.installPrice)}</td>
                 <td class="text-right">${b.due}</td><td class="text-right">${b.selected}</td></tr>`).join('')}</tbody></table>
           </div>
           <div class="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 class="font-bold text-gray-800 mb-2">แยกตามภาค</h3>
-            <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b"><th class="text-left py-1.5 font-medium">ภาค</th>
-              <th class="text-right font-medium">ครบเกณฑ์</th><th class="text-right font-medium">เลือก</th><th class="text-right font-medium">ไซต์</th><th class="text-right font-medium">รวม (บาท)</th></tr></thead>
-              <tbody>${p.byRegion.map(r => `<tr class="border-b border-gray-50"><td class="py-1.5">ภาค ${esc(r.region)}</td><td class="text-right">${r.due}</td>
+            <h3 class="font-bold text-gray-800 mb-2">แยกตาม Region</h3>
+            <table class="w-full text-sm"><thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50"><th class="text-left py-1.5 font-semibold">Region</th>
+              <th class="text-right font-semibold">ครบเกณฑ์</th><th class="text-right font-semibold">เลือก</th><th class="text-right font-semibold">ไซต์</th><th class="text-right font-semibold">รวม (บาท)</th></tr></thead>
+              <tbody class="divide-y divide-gray-100 text-gray-700">${p.byRegion.map(r => `<tr><td class="py-1.5">${esc(regionLabel(r.region))}</td><td class="text-right">${r.due}</td>
                 <td class="text-right">${r.selected}</td><td class="text-right">${r.sites}</td><td class="text-right">${rplMoney(r.total)}</td></tr>`).join('')}
                 <tr class="font-semibold"><td class="py-1.5">รวม</td><td class="text-right">${s.due}</td><td class="text-right">${s.selected}</td>
                 <td class="text-right">${p.byRegion.reduce((n, r) => n + r.sites, 0)}</td><td class="text-right">${rplMoney(s.total)}</td></tr></tbody></table>
@@ -8969,16 +8969,16 @@
             <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${p.units.length})</span></h3>
             <input id="rplQ" value="${esc(rplFilter.q)}" oninput="rplSetFilter('q', this.value)" placeholder="ค้นหา รหัส / Node / จังหวัด" class="border rounded-lg px-3 py-1.5 text-sm w-52">
             <select onchange="rplSetFilter('region', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
-              <option value="">ทุกภาค</option>${regions.map(r => `<option value="${esc(r)}" ${rplFilter.region === r ? 'selected' : ''}>ภาค ${esc(r)}</option>`).join('')}</select>
+              <option value="">ทุก Region</option>${regions.map(r => `<option value="${esc(r)}" ${rplFilter.region === r ? 'selected' : ''}>${esc(regionLabel(r))}</option>`).join('')}</select>
             <select onchange="rplSetFilter('only', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
               <option value="">ทั้งหมด</option><option value="yes" ${rplFilter.only === 'yes' ? 'selected' : ''}>เฉพาะที่เลือก</option><option value="no" ${rplFilter.only === 'no' ? 'selected' : ''}>เฉพาะที่ไม่เลือก</option>
               <option value="done" ${rplFilter.only === 'done' ? 'selected' : ''}>เปลี่ยนแล้ว</option><option value="pending" ${rplFilter.only === 'pending' ? 'selected' : ''}>ยังไม่เปลี่ยน (ตามแผน)</option></select>
             <button onclick="exportReplacementXlsx()" class="border rounded-lg px-3 py-1.5 text-sm hover:bg-gray-50"><i class="ph ph-download-simple"></i> Excel</button>
           </div>
           <div class="overflow-x-auto"><table class="w-full text-sm">
-            <thead><tr class="text-gray-500 border-b text-left"><th class="py-2 pr-2 font-medium">เปลี่ยน</th><th class="font-medium">เครื่อง</th><th class="font-medium">ภาค</th>
-              <th class="font-medium">ยี่ห้อ / รุ่น</th><th class="text-right font-medium">BTU</th><th class="font-medium pl-3">ติดตั้ง</th><th class="text-right font-medium">อายุ</th><th class="text-right font-medium">ตามแผน (บาท)</th><th class="font-medium pl-3">สถานะ</th></tr></thead>
-            <tbody>${list.map(u => `<tr class="border-b border-gray-50 ${u.status === 'done' ? 'bg-green-50' : u.selected ? '' : 'text-gray-400'}">
+            <thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 text-left"><th class="py-2 pr-2 font-semibold">เปลี่ยน</th><th class="font-semibold">เครื่อง</th><th class="font-semibold">Region</th>
+              <th class="font-semibold">ยี่ห้อ / รุ่น</th><th class="text-right font-semibold">BTU</th><th class="font-semibold pl-3">ติดตั้ง</th><th class="text-right font-semibold">อายุ</th><th class="text-right font-semibold">ตามแผน (บาท)</th><th class="font-semibold pl-3">สถานะ</th></tr></thead>
+            <tbody class="divide-y divide-gray-100 text-gray-700">${list.map(u => `<tr class="${u.status === 'done' ? 'bg-green-50' : u.selected ? '' : 'text-gray-400'}">
               <td class="py-1.5 pr-2"><input type="checkbox" ${u.selected ? 'checked' : ''} ${edit ? '' : 'disabled'} onchange="rplToggle('${jsStr(u.airCode)}', this.checked)" class="w-4 h-4 accent-[#1153a1]"></td>
               <td><div class="font-medium ${u.selected ? 'text-gray-800' : ''}">${esc(u.airCode)}</div><div class="text-xs text-gray-400">${esc(u.nodeName)} · ${esc(u.province)}</div></td>
               <td>${esc(u.region)}</td><td>${esc(u.brand)}<div class="text-xs text-gray-400">${esc(u.model)}</div></td>
@@ -9005,9 +9005,9 @@
       return `<div class="bg-white rounded-xl border border-gray-200 p-4 mt-4">
         <h3 class="font-bold text-gray-800">${title} <span class="text-sm font-normal text-gray-500">${rows.length} เครื่อง · ${rplMoney(total)} บาท</span></h3>
         <p class="text-xs text-gray-400 mb-2">${hint}</p>
-        <table class="w-full text-sm"><thead><tr class="text-gray-500 border-b text-left"><th class="py-1.5 font-medium">เครื่อง</th><th class="font-medium">ภาค</th>
-          <th class="font-medium">ยี่ห้อ / BTU</th><th class="font-medium">วันที่</th><th class="text-right font-medium">ค่าใช้จ่ายจริง (บาท)</th></tr></thead>
-          <tbody>${rows.map(u => `<tr class="border-b border-gray-50"><td class="py-1.5">${esc(u.airCode)}<div class="text-xs text-gray-400">${esc(u.nodeName)}</div></td>
+        <table class="w-full text-sm"><thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 text-left"><th class="py-2 font-semibold">เครื่อง</th><th class="font-semibold">Region</th>
+          <th class="font-semibold">ยี่ห้อ / BTU</th><th class="font-semibold">วันที่</th><th class="text-right font-semibold">ค่าใช้จ่ายจริง (บาท)</th></tr></thead>
+          <tbody class="divide-y divide-gray-100 text-gray-700">${rows.map(u => `<tr><td class="py-1.5">${esc(u.airCode)}<div class="text-xs text-gray-400">${esc(u.nodeName)}</div></td>
             <td>${esc(u.region)}</td><td>${esc(u.brand)} ${u.btu ? u.btu.toLocaleString() : ''}</td><td>${esc(fmtDate(u.doneDate))}</td>
             <td class="text-right">${rplMoney(u.actualCost)}</td></tr>`).join('')}</tbody></table></div>`;
     }
@@ -9040,7 +9040,7 @@
     window.applyReplacementBudget = applyReplacementBudget;
 
     function exportReplacementXlsx() {
-      const rows = rplPlan.units.map((u, i) => ({ 'ลำดับ': i + 1, 'เปลี่ยนปีนี้': u.selected ? 'ใช่' : '', 'ภาค': u.region, 'จังหวัด': u.province,
+      const rows = rplPlan.units.map((u, i) => ({ 'ลำดับ': i + 1, 'เปลี่ยนปีนี้': u.selected ? 'ใช่' : '', 'Region': u.region, 'จังหวัด': u.province,
         'Site Code': u.siteCode, 'Node': u.nodeName, 'รหัสเครื่อง': u.airCode, 'ยี่ห้อ': u.brand, 'รุ่น': u.model, 'BTU': u.btu,
         'วันติดตั้ง': fmtDate(u.installDate), 'อายุ ณ สิ้นปี (ปี)': u.age, 'ราคาเครื่อง': u.unitPrice, 'ค่าติดตั้ง': u.installPrice, 'รวม': u.total,
         'สถานะ': u.status === 'done' ? 'เปลี่ยนแล้ว' : u.selected ? 'รอเปลี่ยน' : 'ไม่เลือก', 'วันที่เปลี่ยน': fmtDate(u.doneDate), 'ค่าใช้จ่ายจริง': u.actualCost || '' }));
