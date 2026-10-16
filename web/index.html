@@ -2891,12 +2891,11 @@
       // ค่าที่บันทึกยังอยู่ใน select ตัวเดิม (ซ่อนไว้) ทุกที่ที่อ่าน .value จึงไม่ต้องแก้
       const curOpt = !keep && cur ? contractorList.find(c => c.ID === cur) : null;
       const shown = curOpt ? curOpt.Name + (curOpt.Active ? '' : ' (ปิดใช้งาน)') : '';
-      const sid = jsStr(id);
       return `<div class="relative">
           <input type="text" id="${id}__q" autocomplete="off" value="${esc(shown)}"
                  placeholder="${keep ? '— ไม่เปลี่ยน — (พิมพ์ชื่อเพื่อค้นหา)' : '— ยังไม่ระบุ — (พิมพ์ชื่อเพื่อค้นหา)'}"
-                 onfocus="ccOpen('${sid}')" onclick="ccOpen('${sid}')" oninput="ccOpen('${sid}', true)"
-                 onkeydown="ccKey(event, '${sid}')" onblur="ccBlur('${sid}')" class="${cls} pr-8">
+                 onfocus="ccOpen('${jsStr(id)}')" onclick="ccOpen('${jsStr(id)}')" oninput="ccOpen('${jsStr(id)}', true)"
+                 onkeydown="ccKey(event, '${jsStr(id)}')" onblur="ccBlur('${jsStr(id)}')" class="${cls} pr-8">
           <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
           <select id="${id}" class="hidden" tabindex="-1">${first}${opts}</select>
         </div>`;
