@@ -4169,8 +4169,7 @@
               <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-right align-top">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
               <td class="px-4 py-3 text-gray-600 text-sm align-top">${esc(h.Technician) || '-'}</td>
               ${canEdit ? `<td class="px-4 py-3 text-right align-top">
-                <button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" title="ลบรายการนี้"
-                        class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+                ${historyDeleteBtn(h)}
               </td>` : ''}
             </tr>` + tail;
           }).join('');
@@ -7667,7 +7666,7 @@
           <td class="px-4 py-3 text-gray-600">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
           <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
           <td class="px-4 py-3 text-right">
-            <button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>
+            ${historyDeleteBtn(h)}
           </td>
         </tr>`).join('');
       renderTablePager('historyPaginationBar', groups.length, historyPage, 'goToHistoryPage');
@@ -7784,6 +7783,18 @@
         loadDashboard(); 
         loadBudget();
       } catch (e) {}
+    }
+
+    /**
+     * ปุ่มลบของแถวประวัติ — แถวที่เอกสารสร้างไว้ (h.DocLink) ลบที่นี่ไม่ได้ ต้องลบที่ตัวเอกสาร
+     * (เซิร์ฟเวอร์กันอยู่แล้ว ดู deleteHistoryRecord — โชว์กุญแจแทน จะได้ไม่กดแล้วได้ error)
+     */
+    function historyDeleteBtn(h) {
+      if (h.DocLink) {
+        return `<span class="inline-block p-1.5 text-gray-300" title="ประวัติของเอกสาร ${esc(h.DocLink)} — ลบได้ที่ตัวเอกสาร (Infrastructure)"><i class="ph ph-lock-simple text-lg"></i></span>`;
+      }
+      return `<button onclick="deleteHistory(${h._row}, '${jsStr(h.ID)}')" title="ลบรายการนี้"
+                class="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="ph ph-trash text-lg"></i></button>`;
     }
 
     async function deleteHistory(row, id) {

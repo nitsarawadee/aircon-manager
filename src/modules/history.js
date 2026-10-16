@@ -22,8 +22,11 @@ export async function getHistory(ctx, airCode) {
     if (u.AirCode) regionOf.set(normalizeCode(u.AirCode), String(u.Region || '').trim());
   }
 
+  const live = liveDocNumbers(ctx);
   let list = ctx.ss.objects(SHEETS.HISTORY).map(o => ({
     ...o,
+    // แถวของเอกสาร — หน้าเว็บซ่อนปุ่มลบ (ลบไม่ได้ ดู deleteHistoryRecord)
+    DocLink: docLinkOf(o, live),
     Region: regionOf.get(normalizeCode(o.AirCode)) || '',
     Date: formatDate(o.Date),
     CreatedAt: formatDate(o.CreatedAt)
@@ -252,6 +255,32 @@ export async function deleteHistoryWhereRaw(ctx, match) {
   return rows.length;
 }
 
+/**
+ * เลขเอกสารที่ยังมีอยู่ แยกตามชนิด — ใช้ดูว่าแถวประวัติไหนเป็นของเอกสาร (ดู docLinkOf)
+ * ต้องเรียกหลัง ensureBase (ตารางเอกสารโหลดมาแล้ว)
+ */
+function liveDocNumbers(ctx) {
+  const nos = sheet => new Set(ctx.ss.objects(sheet)
+    .flatMap(f => [f.DocNo, f.DocNo2]).map(v => String(v ?? '').trim()).filter(Boolean));
+  const repairInstall = new Set([...nos(SHEETS.REPAIRFORM), ...nos(SHEETS.INSTALLFORM)]);
+  return { cleaning: nos(SHEETS.CLEANFORM), repairInstall };
+}
+
+/**
+ * แถวประวัตินี้เป็นของเอกสารใบไหน — '' = ไม่ใช่ หรือเอกสารถูกลบไปแล้ว
+ *
+ *   ใบล้าง           แถว "ล้างแอร์" ที่ใช้เลขเดียวกับเลขของเครื่องในใบ (writeCleaningHistory)
+ *   ใบซ่อม/ใบติดตั้ง  แถวที่หมายเหตุ "เอกสาร <เลขที่>" (writeRepairForm / writeInstallForm)
+ *
+ * เทียบตามชนิด ไม่ใช่เลขตรงกันเฉยๆ — แถว "แจ้งซ่อม" ใช้เลขเดียวกับใบซ่อม (เลขเคส) แต่ไม่ใช่แถวที่ใบซ่อมสร้าง
+ */
+function docLinkOf(h, live) {
+  const id = String(h.ID ?? '').trim();
+  if (String(h.EventType ?? '').trim() === 'ล้างแอร์' && live.cleaning.has(id)) return id;
+  const m = /^เอกสาร\s+(\S+)$/.exec(String(h.Note ?? '').trim());
+  return m && live.repairInstall.has(m[1]) ? m[1] : '';
+}
+
 export async function deleteHistoryRecord(ctx, row, expectId) {
   return ctx.withLock(async () => {
     await ctx.assertModuleEdit('history');
@@ -261,6 +290,16 @@ export async function deleteHistoryRecord(ctx, row, expectId) {
     const headers = ctx.ss.headers(SHEETS.HISTORY);
     const airCode = ctx.ss.cell(SHEETS.HISTORY, row, headers.indexOf('AirCode') + 1);
     await ctx.assertAirCodeAccess(airCode);
+
+    // แถวที่เอกสารสร้างไว้ ลบที่นี่ไม่ได้ (เจ้าของงานกำหนด 16/10/2569)
+    // เดิมลบได้ แต่เอกสารยังอยู่ — ลบแถว "ล้างแอร์" งบลดทั้งที่รอบในแผนยังเสร็จ
+    // ลบแถว "ซ่อมแล้ว" เคสกลับมาเปิด (เคสอ่านจากประวัติ) ทั้งที่เครื่องใช้งานปกติและใบซ่อมยังอยู่
+    // ทางที่ถูกคือลบเอกสาร ซึ่งย้อนแผน ประวัติ และสถานะเครื่องให้ครบในทีเดียว
+    const linked = docLinkOf(ctx.ss.objects(SHEETS.HISTORY).find(h => h._row === Number(row)) || {}, liveDocNumbers(ctx));
+    if (linked) {
+      throw new Error('รายการนี้เป็นประวัติของเอกสารเลขที่ ' + linked + ' ลบที่หน้าประวัติไม่ได้ — ' +
+        'ถ้าต้องการยกเลิก ให้ Infrastructure ลบเอกสารนั้นที่หน้าแบบฟอร์มเอกสาร (ระบบจะย้อนแผน ประวัติ และสถานะเครื่องให้)');
+    }
 
     await ctx.ss.deleteRow(SHEETS.HISTORY, row);
     await ctx.ss.flush();
