@@ -4169,7 +4169,7 @@
 
             return head + `
             <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : child ? ' bg-slate-50/60' : ''}">
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'} align-top" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : ''}${esc(displayDocId(h)) || '-'}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'} align-top" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : ''}${historyDocLink(h, child ? 'text-slate-400 hover:text-[#1153a1] underline decoration-dotted underline-offset-2' : DOC_LINK_CLS)}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 align-top">${esc(fmtDate(h.Date))}</td>
               <td class="px-4 py-3 align-top">${eventTypeBadge(h.EventType)}</td>
               ${detailCell}
@@ -7639,7 +7639,7 @@
                   title="${selfCases.has(String(h.CaseID || '').trim()) ? 'ดูสรุปเคสนี้ (ซ่อมเอง — ไม่มีใบซ่อม)'
                     : !hasDocsMenu ? 'ดูสรุปเคสนี้'
                     : isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์'
-                    : 'ดูเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ที่หน้าแบบฟอร์มเอกสาร'}"
+                    : 'เปิดเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้'}"
                   class="${child ? 'text-slate-400 hover:text-[#1153a1]' : 'text-[#1153a1] hover:text-[#0e4485]'} underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
               : esc(displayDocId(h))
           }</td>
@@ -7989,7 +7989,7 @@
       const repairRows = docs.map(f => apvItem(f.CreatedAt || f.Date, f.Region,
         [f.DocNo, f.ID, f.CaseID, f.AirCode, f.NodeName, f.Symptom, fmtDate(f.Date)], `
         <tr class="hover:bg-rose-50/40 align-top">
-          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(f.DocNo || f.ID)}</td>
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${formDocLink('repair', f, f.DocNo || f.ID)}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
           <td class="px-4 py-3">${apvCodeBtn(f.AirCode)}</td>
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
@@ -8014,7 +8014,7 @@
         return apvItem(f.CreatedAt || f.Date, f.Region,
           [displayDocNo(f), f.DocNo2, ...codes, f.NodeName, f.SiteCode, f.TechnicianName, fmtDate(f.Date)], `
         <tr class="hover:bg-blue-50/40 align-top">
-          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(displayDocNo(f))}</td>
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${formDocLink('cleaning', f, displayDocNo(f))}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
           <td class="px-4 py-3">${codes.map(apvCodeBtn).join('<br>') || '-'}</td>
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
@@ -8041,7 +8041,7 @@
         return apvItem(f.CreatedAt || f.Date, f.Region,
           [docNo, f.DocNo2, ...codes, f.NodeName, f.SiteCode, f.CompanyName, f.TechnicianName, fmtDate(f.Date)], `
         <tr class="hover:bg-teal-50/40 align-top">
-          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${esc(docNo)}</td>
+          <td class="px-4 py-3 font-mono text-[12px] text-slate-600">${formDocLink('install', f, docNo)}</td>
           <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
           <td class="px-4 py-3">${codes.map(apvCodeBtn).join('<br>') || '-'}</td>
           <td class="px-4 py-3">${esc(f.NodeName)}</td>
@@ -8170,6 +8170,17 @@
         return;
       }
       const inNote = (/^เอกสาร\s+(\S+)/.exec(String(note || '').trim()) || [])[1] || '';
+      // กดเลขอ้างอิงแล้วเปิดหน้าเอกสารเลย (เจ้าของงานขอ 17/10/2569) — เดิมพาไปหน้าแบบฟอร์มเอกสารแล้วต้องกดเปิดอีกที
+      // เปิดแท็บไว้ก่อนตอนกด (ก่อนรอเซิร์ฟเวอร์) ไม่งั้นเบราว์เซอร์บล็อกป๊อปอัป · บล็อกอยู่ดี = พาไปหน้าแบบฟอร์มเอกสารแบบเดิม
+      const win = openLoadingTab();
+      const giveUp = () => { try { if (win) win.close(); } catch (e) {} };
+      const openFound = (f, term) => {
+        if (!win) { pendingDocOpen = { kind: f.kind, term }; document.querySelector('[data-tab="cleaningform"]').click(); return; }
+        // ใบแนบไฟล์ — ตัวเอกสารคือไฟล์ที่แนบ เปิดรายการไฟล์แทนหน้าเอกสาร
+        if (String(f.Source || '').trim() === 'attach') { giveUp(); openAttachmentList(f._row, f.kind); return; }
+        const open = f.kind === 'repair' ? openRepairDoc : f.kind === 'install' ? openInstallDoc : openCleaningDoc;
+        open(f._row, f.ID, win);
+      };
       try {
         const [forms, repairs, installs] = await Promise.all([
           call('getCleaningForms'), call('getRepairForms'), call('getInstallForms')
@@ -8177,7 +8188,7 @@
         if (Array.isArray(forms)) currentCleaningForms = forms;
         if (Array.isArray(repairs)) currentRepairForms = repairs;
         if (Array.isArray(installs)) currentInstallForms = installs;
-      } catch (e) { return; }
+      } catch (e) { giveUp(); return; }
 
       const same = (a, b) => !!a && String(a).trim() === String(b || '').trim();
       const docs = allDocForms();
@@ -8204,6 +8215,7 @@
           || docs.find(f => f.kind === 'install' && same(fmtDate(date), fmtDate(f.Date)) &&
                             [f.AirCode1, f.AirCode2].some(c => sameCode(c, airCode)));
         if (!inst) {
+          giveUp();
           // ยังไม่ได้กรอก → พาไปหน้างานซ่อมและติดตั้งของเครื่องนั้น ซึ่งมีปุ่มกรอกเอกสารติดตั้งในตาราง
           // "งานติดตั้งที่รอเอกสาร" (เจ้าของงานสั่ง) · เฉพาะแถวที่รอเอกสารจริง — ต้นทางของการย้ายเครื่อง
           // หรือประวัติเก่าก่อนมีป้ายนี้ ไม่มีอะไรให้กรอกที่หน้านั้น
@@ -8214,27 +8226,53 @@
           showToast('ยังไม่ได้กรอกเอกสารติดตั้งของเครื่องใหม่ (' + (caseId || id) + ')', 'error');
           return;
         }
-        pendingDocOpen = { kind: 'install', term: numOf(inst) };
-        document.querySelector('[data-tab="cleaningform"]').click();
+        openFound(inst, numOf(inst));
         return;
       }
       const match = (caseId && docs.find(f => same(caseId, f.CaseID)))
         || docs.find(f => [id, inNote].some(t => same(t, f.DocNo) || same(t, f.DocNo2)))
         || cleanOf();
       if (!match) {
+        giveUp();
         // เคสที่ไม่มีเอกสาร (ยังไม่ปิด · เคสเก่า · ปิดทางอื่น) → สรุปเคสจากประวัติ (เจ้าของงานขอ)
         if (caseId) { openCaseSummary(caseId, { noDoc: true }); return; }
         showToast('ยังไม่มีเอกสารของ ' + (caseId || id) + ' ในแบบฟอร์มเอกสาร', 'error');
         return;
       }
-      // ค้นด้วยเลขเคส = เห็นใบซ่อมทุกใบของเคสนั้น · ไม่มีเคส = ค้นด้วยเลขที่ของใบที่เจอ
-      pendingDocOpen = {
-        kind: match.kind,
-        term: (caseId && same(caseId, match.CaseID)) ? caseId : numOf(match)
-      };
-      document.querySelector('[data-tab="cleaningform"]').click();
+      // เปิดใบที่เจอ (เคสที่มีใบซ่อมหลายใบ = ใบล่าสุด) · ถ้าเปิดแท็บไม่ได้ ค้นด้วยเลขเคสให้เห็นทุกใบของเคส
+      openFound(match, (caseId && same(caseId, match.CaseID)) ? caseId : numOf(match));
     }
     window.openDocOfHistory = openDocOfHistory;
+
+    /*
+     * เลขอ้างอิงทุกที่กดแล้วเปิดเอกสารเลย (เจ้าของงานขอ 17/10/2569) — ตัวช่วยสองแบบ ใช้ทุกหน้าให้หน้าตาเหมือนกัน
+     *   historyDocLink  แถวประวัติ (หน้าประวัติ · ไทม์ไลน์หน้าเครื่อง · สรุปเคส) → หาเอกสารของแถวนั้น (openDocOfHistory)
+     *   formDocLink     แถวเอกสาร (แบบฟอร์มเอกสาร · เอกสารรออนุมัติ) → เปิดใบนั้นตรงๆ
+     */
+    const DOC_LINK_CLS = 'text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2';
+
+    function historyDocLink(h, cls = DOC_LINK_CLS) {
+      const text = displayDocId(h);
+      if (!text) return '-';
+      // ไม่มีเมนูแบบฟอร์มเอกสาร เปิดได้แค่สรุปเคส (เฉพาะแถวที่มีเลขเคส) — กติกาเดียวกับหน้าประวัติ
+      const canOpen = !!document.querySelector('[data-tab="cleaningform"]') || !!String(h.CaseID || '').trim();
+      if (!canOpen) return esc(text);
+      return `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
+        title="เปิดเอกสารของ ${esc(text)}" class="${cls}">${esc(text)}</button>`;
+    }
+
+    function openFormDoc(kind, row, id, attach) {
+      if (attach) return openAttachmentList(row, kind);
+      const open = kind === 'repair' ? openRepairDoc : kind === 'install' ? openInstallDoc : openCleaningDoc;
+      return open(row, id);
+    }
+    window.openFormDoc = openFormDoc;
+
+    function formDocLink(kind, f, text) {
+      if (!text) return '-';
+      return `<button type="button" onclick="openFormDoc('${jsStr(kind)}', ${Number(f._row)}, '${jsStr(f.ID)}', ${String(f.Source || '').trim() === 'attach'})"
+        title="เปิดเอกสาร ${esc(text)}" class="${DOC_LINK_CLS}">${esc(text)}</button>`;
+    }
 
     /** ป้ายที่เซิร์ฟเวอร์ใส่ในรายละเอียดประวัติของงานที่ปิดแบบซ่อมเอง (SELF_REPAIR_TAG ใน src/modules/assign.js) */
     const SELF_REPAIR_TAG = 'ซ่อมเอง (ไม่มีเอกสาร)';
@@ -8283,7 +8321,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-medium text-gray-800">${esc(fmtDate(h.Date))}</span>
             ${eventTypeBadge(h.EventType)}
-            <span class="text-xs text-gray-400 font-mono">${esc(displayDocId(h))}</span>
+            <span class="text-xs text-gray-400 font-mono">${historyDocLink(h)}</span>
           </div>
           <p class="text-sm text-gray-700 mt-1 whitespace-pre-line">${esc(h.Detail) || '-'}</p>
           <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -8667,7 +8705,9 @@
 
             return `
             <tr class="hover:bg-amber-50/50 transition-colors group align-top">
-              <td class="px-4 py-3 font-mono text-[12px] text-slate-600 whitespace-nowrap">${esc(caseId) || '-'}</td>
+              <td class="px-4 py-3 font-mono text-[12px] text-slate-600 whitespace-nowrap">${
+                // ตัวเดียวกับเลขในหน้าประวัติ — หาเอกสารของเคสนั้นแล้วเปิด · ยังไม่มีเอกสาร (เคสที่ยังไม่ปิด) = สรุปเคส
+                caseId ? historyDocLink({ CaseID: caseId, ID: caseId, AirCode: a.AirCode }) : '-'}</td>
               <td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">${airCodeBtn(a.AirCode)}</td>
               <td class="px-4 py-3 text-gray-600">
                 <div class="text-[13px] font-medium text-gray-800">${esc(a.NodeName)}</div>
@@ -9730,7 +9770,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
         <td class="px-4 py-3 font-mono text-[12px] text-slate-600">
-          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${esc(r.docNo) || '-'}
+          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${formDocLink(r.kind, f, r.docNo)}
         </td>
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">
@@ -9815,11 +9855,19 @@ const CLEANING_CHECKLIST_ITEMS = [
    * เปิดแท็บ "ก่อน" เรียกเซิร์ฟเวอร์เสมอ เพราะถ้าเปิดหลังจาก await
    * เบราว์เซอร์จะถือว่าไม่ได้เกิดจากการกดปุ่ม แล้วบล็อกป๊อปอัปทิ้ง
    */
-  async function openDocWindow(fn, args) {
+  /** แท็บใหม่ที่ขึ้น "กำลังเปิดเอกสาร…" — ต้องเรียกตรงจังหวะที่กด (ก่อน await ใดๆ) ไม่งั้นโดนบล็อกป๊อปอัป */
+  function openLoadingTab() {
     const win = window.open('', '_blank');
-    if (!win) { showToast('เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กรุณาอนุญาตป๊อปอัปของเว็บนี้', 'error'); return false; }
+    if (!win) return null;
     win.document.write('<!doctype html><meta charset="utf-8"><title>กำลังเปิดเอกสาร…</title>' +
                        '<p style="font-family:sans-serif;padding:24px">กำลังเปิดเอกสาร…</p>');
+    return win;
+  }
+
+  /** @param {Window} [preWin] แท็บที่เปิดไว้แล้วตอนกด (เลขอ้างอิงหน้าประวัติต้องค้นเอกสารก่อน — ดู openDocOfHistory) */
+  async function openDocWindow(fn, args, preWin) {
+    const win = preWin || openLoadingTab();
+    if (!win) { showToast('เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กรุณาอนุญาตป๊อปอัปของเว็บนี้', 'error'); return false; }
 
     try {
       const html = await call(fn, args);
@@ -10447,8 +10495,8 @@ const CLEANING_CHECKLIST_ITEMS = [
    * ไฟล์ถูกบันทึกลงเครื่องผ่านหน้าเว็บหลัก ไม่ใช่หน้าที่เปิดดู เพราะ Blob URL
    * ที่สร้างไว้ผูกกับหน้าที่สร้างมัน ถ้าคนปิดแท็บเอกสารระหว่างดาวน์โหลดจะพัง
    */
-  async function openCleaningDoc(row, id) {
-    const win = await openDocWindow('getCleaningDocHtml', row);
+  async function openCleaningDoc(row, id, preWin) {
+    const win = await openDocWindow('getCleaningDocHtml', row, preWin);
     if (!win) return false;
 
     try {
@@ -10665,8 +10713,8 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.deleteInstallFormRow = deleteInstallFormRow;
 
   /** เปิดเอกสารติดตั้งในแท็บใหม่ พร้อมต่อสายปุ่มดาวน์โหลดบนแถบลอยของหน้านั้น */
-  async function openInstallDoc(row, id) {
-    const win = await openDocWindow('getInstallDocHtml', row);
+  async function openInstallDoc(row, id, preWin) {
+    const win = await openDocWindow('getInstallDocHtml', row, preWin);
     if (!win) return false;
 
     try {
@@ -10785,8 +10833,8 @@ const CLEANING_CHECKLIST_ITEMS = [
   window.deleteRepairFormRow = deleteRepairFormRow;
 
   /** เปิดเอกสารซ่อมในแท็บใหม่ พร้อมต่อสายปุ่มดาวน์โหลดบนแถบลอยของหน้านั้น */
-  async function openRepairDoc(row, id) {
-    const win = await openDocWindow('getRepairDocHtml', row);
+  async function openRepairDoc(row, id, preWin) {
+    const win = await openDocWindow('getRepairDocHtml', row, preWin);
     if (!win) return false;
 
     try {
