@@ -763,6 +763,42 @@ function guardImportRegions(info, byCode, plan) {
   return { ...plan, adds, updates, errors };
 }
 
+/**
+ * กติกาสถานะเดียวกับการแก้เครื่องทีละตัว (saveAirUnit) — เจ้าของงานกำหนด 16/10/2569
+ *
+ * เดิมไฟล์นำเข้าเปลี่ยนสถานะได้ทุกอย่าง จึงเป็นทางลัดข้ามสองด่าน:
+ *   "รอซ่อม" = อนุมัติค่าซ่อมแล้ว ตั้งได้เฉพาะ Infrastructure (ดู ADMIN_ONLY_STATUS)
+ *   "รอซ่อม" → "ใช้งานปกติ" = ปิดงานซ่อม ต้องปิดด้วยใบซ่อม (ลงประวัติ ค่าซ่อม ปิดเคส) ไม่ใช่แก้ไฟล์
+ *     — ห้ามทุกบทบาท เพราะผ่านไฟล์แล้วไม่มีใบซ่อม ไม่มีประวัติ และเคสค้างเปิดไว้
+ *
+ * แถวที่ผิดเป็น "ข้อผิดพลาด" ระบุบรรทัดและเหตุผล ไม่ใช่ถูกข้ามเงียบๆ (applyImport ปฏิเสธทั้งไฟล์อยู่แล้ว)
+ */
+function guardImportStatus(info, byCode, plan) {
+  const errors = plan.errors.slice();
+  const isAdmin = info.role === 'Admin';
+  const reject = (item, message) => { errors.push({ line: item.line, column: 'Status', message }); return false; };
+
+  const allowed = (item, from, to) => {
+    if (to === undefined || String(to).trim() === String(from || '').trim()) return true;
+    const next = String(to).trim();
+    if (ADMIN_ONLY_STATUS.has(next) && !isAdmin) {
+      return reject(item, 'เครื่อง ' + item.airCode + ': ตั้งสถานะ "' + next + '" ได้เฉพาะ Infrastructure (เป็นการอนุมัติค่าซ่อม)');
+    }
+    if (String(from || '').trim() === 'รอซ่อม' && next === 'ใช้งานปกติ') {
+      return reject(item, 'เครื่อง ' + item.airCode + ' อยู่ระหว่าง "รอซ่อม" — เปลี่ยนเป็น "ใช้งานปกติ" ผ่านไฟล์ไม่ได้ ' +
+        'ต้องปิดงานซ่อมด้วยใบซ่อมในหน้างานซ่อมและติดตั้ง');
+    }
+    return true;
+  };
+
+  const adds = plan.adds.filter(a => allowed(a, '', a.values.Status));
+  const updates = plan.updates.filter(u => {
+    const current = byCode.get(u.airCode);
+    return allowed(u, current ? current.Status : '', u.values.Status);
+  });
+  return { ...plan, adds, updates, errors };
+}
+
 /** ย่อแผนให้เหลือเท่าที่หน้าเว็บต้องใช้แสดง */
 function summarizeImport(plan) {
   return {
@@ -804,7 +840,8 @@ async function buildImportPlan(ctx, rows, removeMissing = false) {
     existing.filter(u => u.AirCode).map(u => [String(u.AirCode).trim(), u])
   );
 
-  const plan = guardImportRegions(await ctx.userInfo(), byCode, planImport(existing, withLineNumbers(rows)));
+  const info = await ctx.userInfo();
+  const plan = guardImportStatus(info, byCode, guardImportRegions(info, byCode, planImport(existing, withLineNumbers(rows))));
   // ไฟล์ว่างทั้งไฟล์ ห้ามแปลว่า "ลบทุกเครื่อง" (หน้าเว็บกันไว้แล้ว แต่คำสั่งนี้เรียกตรงได้)
   const fileHasRows = Array.isArray(rows) && rows.length > 0;
   return { ...plan, removes: removeMissing && fileHasRows ? plan.missing : [] };
@@ -912,6 +949,11 @@ export async function applyAirUnitImport(ctx, payload) {
     await ctx.assertModuleEdit('airlist');
 
     const { rows, expect, removeMissing } = payload || {};
+    // ลบเครื่องเป็นของ Infrastructure เท่านั้น — กติกาเดียวกับปุ่มลบทีละเครื่อง (deleteAirUnit)
+    // เดิมติ๊กลบในหน้านำเข้าได้ทุกคนที่แก้รายการเครื่องได้ จึงเป็นทางอ้อมด่านของปุ่มลบ
+    if (removeMissing && (await ctx.userInfo()).role !== 'Admin') {
+      throw new Error('ลบเครื่องที่ไม่มีในไฟล์ได้เฉพาะ Infrastructure — เอาเครื่องหมายติ๊ก "ลบเครื่องที่ไม่มีในไฟล์" ออกแล้วนำเข้าใหม่');
+    }
     const plan = await buildImportPlan(ctx, rows, !!removeMissing);
 
     if (plan.errors.length) {

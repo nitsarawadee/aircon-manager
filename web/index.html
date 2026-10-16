@@ -4840,12 +4840,14 @@
                     <summary class="px-3 py-2 text-sm font-medium text-gray-700 cursor-pointer">เครื่องในระบบที่ไม่มีในไฟล์ (${nMissing.toLocaleString()})</summary>
                     <div class="px-3 pb-2 max-h-48 overflow-y-auto">${missingRows}</div>
                   </details>
+                  ${isAdmin() ? `
                   <label class="flex items-start gap-2 px-3 py-2 border-t border-gray-200 bg-rose-50/50 cursor-pointer rounded-b-lg">
                     <input type="checkbox" id="airImportRemove" class="mt-0.5 accent-rose-600"
                       onchange="document.getElementById('airImportConfirm').disabled = ${blocked} || (!${c.adds} && !${c.updates} && !this.checked)">
                     <span class="text-xs text-gray-700"><b class="text-rose-700">ลบ ${nMissing.toLocaleString()} เครื่องนี้ออกจากระบบด้วย</b>
                       — ใช้เมื่อไฟล์นี้คือรายการเครื่องทั้งหมด · ลบแผนล้างของเครื่องนั้นด้วย แต่ประวัติและเอกสารยังอยู่</span>
-                  </label>
+                  </label>` : `
+                  <p class="px-3 py-2 border-t border-gray-200 text-xs text-gray-500">ลบเครื่องออกจากระบบได้เฉพาะ Infrastructure — เครื่องเหล่านี้จะไม่ถูกแตะ</p>`}
                 </div>` : ''}
 
               <div class="bg-blue-50 text-[#1153a1] text-xs p-3 rounded-lg space-y-1">
