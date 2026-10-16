@@ -293,8 +293,8 @@ test('กรอกใบล้างของรอบที่เป็นข�
   const db = freshDb();
 
   await assert.rejects(() => saveCleaningForm(as(db, 'ctA'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3 })), /ไม่ได้มอบหมายให้คุณ/);
-  await assert.rejects(() => saveCleaningForm(as(db, 'ctA'), cleaning('AYA-WNI-AIR-1')), /ไม่พบเครื่อง/);
-  await assert.rejects(() => saveCleaningForm(as(db, 'ctA'), cleaning('ATG-SWH-AIR-1')), /ไม่พบเครื่อง/);
+  await assert.rejects(() => saveCleaningForm(as(db, 'ctA'), cleaning('AYA-WNI-AIR-1')), /ไม่ได้มอบหมายงานล้างให้คุณ/);
+  await assert.rejects(() => saveCleaningForm(as(db, 'ctA'), cleaning('ATG-SWH-AIR-1')), /ไม่ได้มอบหมายงานล้างให้คุณ/);
 
   assert.equal(planRow(db, 'ATG-PMK-AIR-1').R3_Status, 'รอดำเนินการ', 'งานของเจ้า B ต้องไม่ถูกปิด');
   assert.equal(planRow(db, 'AYA-WNI-AIR-1').R2_Status, 'รอดำเนินการ');

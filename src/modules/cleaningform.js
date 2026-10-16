@@ -10,7 +10,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
 const KIND = 'cleaning';
 import { assertMoney, cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
-import { unitsInScope } from './airlist.js';
+import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { jobKey } from '../context.js';
 import { assertRoundNotCleaned, assertRoundsInOrder, closePlanRound, reopenPlanRoundRaw } from './plan.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
@@ -435,7 +435,8 @@ async function bindToRegistry(ctx, record, bySlot) {
     const unit = scope.find(u => normalizeCode(u.AirCode) === normalizeCode(code));
     if (!unit) {
       if (info.role === 'Admin') continue;
-      throw new Error('ไม่พบเครื่องรหัส ' + code + ' ในทะเบียนเครื่อง หรือไม่มีสิทธิ์เข้าถึง');
+      // บอกสาเหตุให้ตรง (ไม่มีในทะเบียน · ไม่ได้มอบหมาย · นอกภูมิภาค) — ตัวเดียวกับใบซ่อม/ใบติดตั้ง
+      throw new Error(await unitNotInScopeMessage(ctx, code, 'งานล้าง'));
     }
     assertCleanable(unit);
     found.push({ slot, unit });
