@@ -493,13 +493,20 @@ const sameText = (a, b) =>
  *
  * ไม่รวมกับใบที่มาจากการแนบเอกสาร เพราะใบพวกนั้นไม่มีข้อมูลเช็คลิสต์ให้รวม
  */
-function findOpenForm(ctx, record) {
+async function findOpenForm(ctx, record, airCodes) {
   const year = plainText(record.PlanYear).trim();
   const round = plainText(record.PlanRound).trim();
   const base = Number(record.SlotBase) || 0;
 
   // ใบที่ไม่ได้ผูกกับรอบไหน รวมกันไม่ได้ เพราะไม่มีอะไรบอกว่าเป็นครั้งเดียวกัน
   if (!year || !round) return null;
+
+  // ผู้รับเหมาของรอบนี้ต้องเป็นเจ้าเดียวกัน (เจ้าของงานกำหนด 16/10/2569) — เครื่องใน Node เดียวกัน
+  // มอบให้คนละเจ้าได้ ถ้ารวมใบ งานของเจ้า B จะไปอยู่ในใบที่ขึ้นชื่อบริษัท A และทั้งสองเจ้าเห็นราคาของกันและกัน
+  const contractorOf = await roundContractors(ctx, year, round);
+  const mine = new Set(airCodes.map(c => contractorOf(c)));
+  if (mine.size > 1) return null;   // เครื่องที่กรอกมาด้วยกันเองยังคนละเจ้า — ไม่รวมกับใคร
+  const want = [...mine][0] ?? '';
 
   return ctx.ss.objects(SHEETS.CLEANFORM).find(f =>
     plainText(f.Source) !== 'attach' &&
@@ -508,8 +515,25 @@ function findOpenForm(ctx, record) {
     sameText(f.PlanRound, round) &&
     sameText(f.Date, record.Date) &&
     // คนละคู่เครื่อง = คนละใบ (AIR-1 กับ AIR-3 วันเดียวกันก็ยังเป็นสองใบ)
-    (Number(f.SlotBase) || 0) === base
+    (Number(f.SlotBase) || 0) === base &&
+    [f.AirCode1, f.AirCode2].filter(c => plainText(c).trim()).every(c => contractorOf(c) === want)
   ) || null;
+}
+
+/**
+ * รหัสเครื่อง → รหัสผู้รับเหมาของรอบนั้นในแผน (ตัวพิมพ์ใหญ่ · ไม่ได้มอบหมาย = '')
+ * ไม่มีแผนปีนั้น = ทุกเครื่องเป็น '' (ถือว่าเจ้าเดียวกัน เหมือนก่อนมีกติกานี้)
+ */
+async function roundContractors(ctx, year, round) {
+  const map = new Map();
+  const name = 'Plan_' + year;
+  if (await ctx.ss.hasSheet(name)) {
+    await ctx.ss.load(name);
+    for (const p of ctx.ss.objects(name)) {
+      map.set(normalizeCode(p.AirCode), plainText(p['R' + round + '_ContractorID']).trim().toUpperCase());
+    }
+  }
+  return code => map.get(normalizeCode(code)) || '';
 }
 
 /**
@@ -791,7 +815,7 @@ export async function saveCleaningForm(ctx, record) {
     //
     // ยึด "วันเดียวกัน" เป็นเงื่อนไขด้วย เพราะถ้าไปล้างคนละวันคือไปคนละครั้ง
     // ซึ่งตามแบบฟอร์มกระดาษคือคนละใบ (ใบหนึ่งมีช่องวันที่และเวลาเข้า-ออกชุดเดียว)
-    const existing = findOpenForm(ctx, record);
+    const existing = await findOpenForm(ctx, record, units.map(u => u.airCode));
     let savedForm = record;
     let movedFrom = '';
 
