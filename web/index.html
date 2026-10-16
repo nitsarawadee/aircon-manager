@@ -6657,9 +6657,7 @@
       }
 
       const totalRows = displayPlan.length;
-      const totalPages = Math.max(1, Math.ceil(totalRows / PLAN_PAGE_SIZE));
-      if (planPage > totalPages) planPage = totalPages;
-      if (planPage < 1) planPage = 1;
+      planPage = clampPage(planPage, totalRows, PLAN_PAGE_SIZE);
 
       if (totalRows === 0) {
         const noPlan = currentYear && !planYearsWithPlan.includes(String(currentYear));
@@ -6670,7 +6668,7 @@
               ${canCreate ? `<div class="mt-3"><button onclick="openCreatePlanModal('${jsStr(currentYear)}')" class="bg-[#f47920] hover:bg-[#d96615] text-white px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1"><i class="ph ph-plus"></i> สร้างแผนปี ${esc(currentYear)}</button></div>` : ''}
             </td></tr>`
           : `<tr><td colspan="16" class="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td></tr>`;
-        renderPlanPagination(0, 0);
+        renderTablePager('planPaginationBar', 0, 1, 'goToPlanPage', PLAN_PAGE_SIZE);
         lockViewOnlySection('plan');
         return;
       }
@@ -6707,44 +6705,9 @@
         </tr>`;
       }).join('');
 
-      renderPlanPagination(totalRows, totalPages, startIdx);
+      // แถบเปลี่ยนหน้าตัวเดียวกับทุกตาราง (เดิมหน้าแผนมีก๊อปปี้ของตัวเอง — 16/10/2569)
+      renderTablePager('planPaginationBar', totalRows, planPage, 'goToPlanPage', PLAN_PAGE_SIZE);
       lockViewOnlySection('plan');
-    }
-
-    /** เรนเดอร์แถบเปลี่ยนหน้าของตารางแผนล้างแอร์ (แบ่งหน้าละ 20 แถว) */
-    function renderPlanPagination(totalRows, totalPages, startIdx) {
-      const bar = document.getElementById('planPaginationBar');
-      if (!bar) return;
-      if (totalRows === 0) {
-        bar.innerHTML = `<span class="text-gray-400">0 รายการ</span>`;
-        return;
-      }
-      const from = startIdx + 1;
-      const to = Math.min(startIdx + PLAN_PAGE_SIZE, totalRows);
-
-      let pageButtons = '';
-      for (let i = 1; i <= totalPages; i++) {
-        // แสดงเฉพาะหน้าแรก หน้าสุดท้าย และหน้ารอบๆ หน้าปัจจุบัน กันแถบยาวเกินไปเมื่อมีหลายสิบหน้า
-        const isEdge = i === 1 || i === totalPages;
-        const isNear = Math.abs(i - planPage) <= 1;
-        if (isEdge || isNear) {
-          pageButtons += `<button onclick="goToPlanPage(${i})" class="min-w-[32px] h-8 px-2 rounded-lg text-sm font-medium transition-colors ${i === planPage ? 'bg-[#1153a1] text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}">${i}</button>`;
-        } else if (i === 2 || i === totalPages - 1) {
-          pageButtons += `<span class="px-1 text-gray-300">…</span>`;
-        }
-      }
-
-      bar.innerHTML = `
-        <div>แสดง ${from}-${to} จาก ${totalRows} รายการ</div>
-        <div class="flex items-center gap-1">
-          <button onclick="goToPlanPage(${planPage - 1})" ${planPage <= 1 ? 'disabled' : ''} class="h-8 px-3 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
-            <i class="ph ph-caret-left"></i> ก่อนหน้า
-          </button>
-          <div class="flex items-center gap-1">${pageButtons}</div>
-          <button onclick="goToPlanPage(${planPage + 1})" ${planPage >= totalPages ? 'disabled' : ''} class="h-8 px-3 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
-            ถัดไป <i class="ph ph-caret-right"></i>
-          </button>
-        </div>`;
     }
 
     function goToPlanPage(p) {
