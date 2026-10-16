@@ -2883,39 +2883,110 @@
         .join('');
       const hint = contractorList.length ? ''
         : '<p class="text-xs text-gray-400 mt-1">ยังไม่มีรายชื่อ — สร้างบัญชีผู้รับเหมาที่เมนูจัดการผู้ใช้ก่อน</p>';
-      // ช่องพิมพ์ค้นหา (ผู้ใช้ขอ 16/10/2569 — รายชื่อยาว เลื่อนหายาก) กรองตัวเลือกในรายการด้านล่าง
-      // ค่าที่บันทึกยังอ่านจาก select ตัวเดิม ทุกที่ที่เรียกใช้จึงไม่ต้องแก้
-      const search = contractorList.length
-        ? `<input type="search" autocomplete="off" placeholder="พิมพ์ชื่อเพื่อค้นหา…" oninput="filterContractorOptions('${jsStr(id)}', this.value)"
-                  class="w-full rounded-lg border-gray-300 border text-sm px-3 py-1.5 mb-1.5 outline-none focus:ring-2 focus:ring-[#1153a1]">`
-        : '';
-      return `${search}<select id="${id}" class="${cls}">
-          ${keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>'
-                 : `<option value="" ${!cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>`}${opts}
-        </select>${hint}`;
+      const first = keep ? '<option value="__keep" selected>— ไม่เปลี่ยน —</option>'
+                         : `<option value="" ${!cur ? 'selected' : ''}>— ยังไม่ระบุ —</option>`;
+      if (!contractorList.length) return `<select id="${id}" class="${cls}">${first}</select>${hint}`;
+
+      // ช่องเดียว พิมพ์ค้นหาแล้วรายการขึ้นใต้ช่องให้เลือก (ผู้ใช้ขอ 16/10/2569 — รายชื่อยาว เลื่อนหายาก)
+      // ค่าที่บันทึกยังอยู่ใน select ตัวเดิม (ซ่อนไว้) ทุกที่ที่อ่าน .value จึงไม่ต้องแก้
+      const curOpt = !keep && cur ? contractorList.find(c => c.ID === cur) : null;
+      const shown = curOpt ? curOpt.Name + (curOpt.Active ? '' : ' (ปิดใช้งาน)') : '';
+      const sid = jsStr(id);
+      return `<div class="relative">
+          <input type="text" id="${id}__q" autocomplete="off" value="${esc(shown)}"
+                 placeholder="${keep ? '— ไม่เปลี่ยน — (พิมพ์ชื่อเพื่อค้นหา)' : '— ยังไม่ระบุ — (พิมพ์ชื่อเพื่อค้นหา)'}"
+                 onfocus="ccOpen('${sid}')" onclick="ccOpen('${sid}')" oninput="ccOpen('${sid}', true)"
+                 onkeydown="ccKey(event, '${sid}')" onblur="ccBlur('${sid}')" class="${cls} pr-8">
+          <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+          <select id="${id}" class="hidden" tabindex="-1">${first}${opts}</select>
+        </div>`;
     }
 
-    /**
-     * กรองรายชื่อผู้รับเหมาตามที่พิมพ์ (ไม่สนช่องว่าง/ตัวพิมพ์) — เหลือชื่อเดียวเลือกให้เลย
-     * ตัวเลือกแรก (ยังไม่ระบุ / ไม่เปลี่ยน) ไม่ถูกซ่อน จะได้ล้างค่ากลับได้เสมอ
-     */
-    function filterContractorOptions(id, text) {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      const norm = s => String(s || '').toLowerCase().replace(/\s+/g, '');
-      const q = norm(text);
-      const shown = [];
-      [...sel.options].forEach((o, i) => {
-        if (i === 0) return;
-        o.hidden = !!q && !norm(o.textContent).includes(q) && !norm(o.value).includes(q);
-        if (!o.hidden) shown.push(o);
-      });
-      if (q && shown.length === 1 && sel.value !== shown[0].value) {
-        sel.value = shown[0].value;
-        sel.dispatchEvent(new Event('change'));
+    /* ---- ช่องเลือกผู้รับเหมาแบบพิมพ์ค้นหา (contractorSelect) ----
+       รายการลอยวางที่ body แบบ fixed ไม่ให้ถูกกล่องหน้าต่างที่เลื่อนได้ตัดขอบ — ปิดเองเมื่อเลื่อนหน้า/ย่อขยายจอ */
+    let ccState = null;   // { id, items, active }
+    const ccNorm = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+
+    function ccMenu() {
+      let m = document.getElementById('ccMenu');
+      if (!m) {
+        m = document.createElement('div');
+        m.id = 'ccMenu';
+        m.className = 'hidden fixed z-[90] bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto text-sm py-1';
+        document.body.appendChild(m);
       }
+      return m;
     }
-    window.filterContractorOptions = filterContractorOptions;
+
+    /** เปิด/กรองรายการ — typed = มาจากการพิมพ์ (กรองตามข้อความ) ไม่งั้นโชว์ทั้งหมด */
+    function ccOpen(id, typed) {
+      const sel = document.getElementById(id), input = document.getElementById(id + '__q');
+      if (!sel || !input) return;
+      // เปิดค้างอยู่แล้ว (เช่น กลับมาที่หน้าต่างแล้วช่องได้โฟกัสใหม่) — แค่จัดตำแหน่ง ไม่รีเซ็ตรายการใต้เมาส์
+      if (!typed && ccState && ccState.id === id) { ccRender(); return; }
+      // กรองตามข้อความในช่องเสมอ ยกเว้นข้อความคือชื่อที่เลือกอยู่แล้ว (เพิ่งคลิกเข้ามา = อยากเห็นทั้งหมด)
+      const selText = sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].textContent : '';
+      const q = (typed || input.value !== selText) ? ccNorm(input.value) : '';
+      const items = [...sel.options].filter((o, i) => i === 0 || !q || ccNorm(o.textContent).includes(q));
+      const at = items.findIndex(o => o.value === sel.value);
+      ccState = { id, items, active: q ? (items.length > 1 ? 1 : 0) : Math.max(at, 0) };
+      ccRender();
+    }
+
+    function ccRender() {
+      const m = ccMenu();
+      if (!ccState) { m.classList.add('hidden'); return; }
+      const { id, items, active } = ccState;
+      const input = document.getElementById(id + '__q');
+      if (!input) { ccClose(); return; }
+      const cur = document.getElementById(id).value;
+      m.innerHTML = items.map((o, i) => `
+        <div data-i="${i}" onmousedown="event.preventDefault(); ccPick(${i})"
+             class="px-3 py-1.5 cursor-pointer ${i === active ? 'bg-blue-50 text-[#1153a1]' : 'hover:bg-gray-50'} ${i === 0 ? 'text-gray-400' : ''} ${o.value === cur && i ? 'font-semibold' : ''}">${esc(o.textContent)}</div>`).join('')
+        + (items.length === 1 ? '<div class="px-3 py-1.5 text-gray-400">ไม่พบชื่อที่ค้นหา</div>' : '');
+      const r = input.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      m.style.left = r.left + 'px';
+      m.style.width = r.width + 'px';
+      m.style.top = below < 220 && r.top > below ? '' : (r.bottom + 4) + 'px';
+      m.style.bottom = below < 220 && r.top > below ? (window.innerHeight - r.top + 4) + 'px' : '';
+      m.classList.remove('hidden');
+      const act = m.querySelector(`[data-i="${active}"]`);
+      if (act) act.scrollIntoView({ block: 'nearest' });
+    }
+
+    function ccPick(i) {
+      if (!ccState) return;
+      const { id, items } = ccState;
+      const sel = document.getElementById(id), input = document.getElementById(id + '__q');
+      const o = items[i];
+      if (!o || !sel) return;
+      sel.value = o.value;
+      if (input) input.value = sel.selectedIndex > 0 ? o.textContent : '';
+      sel.dispatchEvent(new Event('change'));
+      ccClose();
+    }
+
+    function ccKey(e, id) {
+      if (!ccState || ccState.id !== id) { if (e.key === 'ArrowDown') { ccOpen(id); e.preventDefault(); } return; }
+      const n = ccState.items.length;
+      if (e.key === 'ArrowDown') { ccState.active = (ccState.active + 1) % n; ccRender(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { ccState.active = (ccState.active - 1 + n) % n; ccRender(); e.preventDefault(); }
+      else if (e.key === 'Enter') { ccPick(ccState.active); e.preventDefault(); }
+      else if (e.key === 'Escape') { ccBlur(id); e.preventDefault(); e.stopPropagation(); }
+    }
+
+    /** ออกจากช่องโดยไม่ได้เลือก — ข้อความกลับเป็นชื่อที่เลือกอยู่ (พิมพ์ค้างไว้ไม่ถือว่าเลือก) */
+    function ccBlur(id) {
+      const sel = document.getElementById(id), input = document.getElementById(id + '__q');
+      if (sel && input) input.value = sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].textContent : '';
+      if (ccState && ccState.id === id) ccClose();
+    }
+
+    function ccClose() { ccState = null; ccMenu().classList.add('hidden'); }
+    window.addEventListener('resize', () => ccState && ccClose());
+    document.addEventListener('scroll', e => { if (ccState && !(e.target.id === 'ccMenu')) ccClose(); }, true);
+    Object.assign(window, { ccOpen, ccKey, ccBlur, ccPick });
 
     /** โหลดรายชื่อผู้รับเหมาไว้ใช้ในแผนล้าง — เฉพาะเจ้าหน้าที่ (ผู้รับเหมาไม่ต้องเห็นรายชื่อคู่แข่ง) */
     async function loadContractorList() {
