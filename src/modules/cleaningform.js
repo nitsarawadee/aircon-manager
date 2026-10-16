@@ -448,6 +448,15 @@ async function bindToRegistry(ctx, record, bySlot) {
     throw new Error('เครื่องที่เลือกอยู่คนละ Node บันทึกในใบเดียวกันไม่ได้');
   }
 
+  // ไม่ใส่ราคา + ผูกรอบในแผน = ใช้ราคาของรอบนั้น (ไม่ได้ตั้ง = ราคาต่อรอบในทะเบียน) — 16/10/2569
+  // เดิมราคาว่างลงประวัติเป็น 0 แต่แผนคงราคาเดิมไว้ สรุปแผนนับ 480 บาท งบนับ 0 บาท สองหน้าไม่ตรงกัน
+  // กติกาเดียวกับราคาของผู้รับเหมา (contractorPrice) — ผู้รับเหมาถูกบังคับราคาด้านล่างอยู่แล้ว
+  if (info.role !== 'Contractor' && plainText(record.PlanYear).trim() && plainText(record.PlanRound).trim()) {
+    for (const { slot, unit } of found) {
+      if (!hasPrice(bySlot[slot].price)) bySlot[slot].price = await contractorPrice(ctx, record.PlanYear, record.PlanRound, unit);
+    }
+  }
+
   const node = found[0].unit;
   record.NodeName = plainText(node.NodeName);
   record.SiteCode = plainText(node.SiteCode);
@@ -1450,6 +1459,11 @@ export async function uploadNodeDocuments(ctx, payload) {
         for (const u of units) {
           await assertOwnJob(ctx, closeout.year, closeout.round, u.airCode);
           u.price = await contractorPrice(ctx, closeout.year, closeout.round, u.unit);
+        }
+      } else if (plainText(closeout.year).trim() && plainText(closeout.round).trim()) {
+        // ไม่ใส่ราคา = ราคาของรอบในแผน (กติกาเดียวกับกรอกฟอร์ม ดู bindToRegistry)
+        for (const u of units) {
+          if (!hasPrice(u.price)) u.price = await contractorPrice(ctx, closeout.year, closeout.round, u.unit);
         }
       }
       await assertRoundsInOrder(ctx, { year: closeout.year, round: closeout.round, airCodes: units.map(u => u.airCode) });
