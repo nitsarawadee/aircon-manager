@@ -7507,16 +7507,26 @@
      */
     function showPlanImportNotice(result) {
       const unknown = result.unknownContractors || [];
+      // วันที่อ่านไม่ได้ — คืนมาเป็นรายการแบบเดียวกับชื่อผู้รับเหมา (เดิมเป็นข้อความ error ยาวที่ตัดเหลือ 5 ช่องแรก)
+      const badDates = result.badDates || [];
+      const why = unknown.length && badDates.length ? 'ไฟล์มีข้อผิดพลาด'
+        : badDates.length ? 'วันที่ในไฟล์อ่านไม่ได้' : 'ชื่อผู้รับเหมาไม่ตรงกับ User ในระบบ';
       document.getElementById('modalRoot').innerHTML = `
         <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">${result.rejected
-                ? '<i class="ph-fill ph-x-circle text-rose-500"></i> ไม่ได้นำเข้า — ชื่อผู้รับเหมาไม่ตรงกับ User ในระบบ'
+                ? '<i class="ph-fill ph-x-circle text-rose-500"></i> ไม่ได้นำเข้า — ' + why
                 : '<i class="ph-fill ph-warning text-amber-500"></i> นำเข้าแล้ว — มีข้อควรรู้'}</h3>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="ph ph-x text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-4 text-sm text-gray-700">
+            <div class="p-6 space-y-4 text-sm text-gray-700 max-h-[70vh] overflow-y-auto">
+              ${badDates.length ? `
+              <div>
+                <p class="text-gray-600">วันที่ ${badDates.length} ช่องอ่านไม่ได้ — ใช้รูปแบบ วว/ดด/ปปปป ค.ศ. เช่น 15/10/2026 · ยังไม่ได้บันทึกอะไรจากไฟล์นี้</p>
+                <ul class="mt-2 space-y-1 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">${badDates.map(b =>
+                  `<li class="flex items-center gap-2 text-rose-700"><i class="ph ph-calendar-x"></i> ${esc(b.airCode)} รอบ ${esc(b.round)}: "${esc(b.value)}"</li>`).join('')}</ul>
+              </div>` : ''}
               ${unknown.length ? `
               <div>
                 <p class="text-gray-600">ชื่อต่อไปนี้ยังไม่มี User ผู้รับเหมาที่เปิดใช้งาน หรือสะกดไม่ตรงกับในระบบ — ยังไม่ได้บันทึกอะไรจากไฟล์นี้</p>

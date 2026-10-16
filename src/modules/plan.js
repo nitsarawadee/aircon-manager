@@ -1089,8 +1089,6 @@ export async function updatePlanBulk(ctx, year, importedData) {
       .filter(v => v && !idByName.has(nameKey(v)))))];
     // คืนรายชื่อแทนการโยน error — หน้าเว็บแสดงเป็นรายการให้อ่านง่าย (ข้อความ error ยาวๆ อ่านในป้ายแจ้งเตือนไม่ทัน)
     // ยังไม่ได้เขียนอะไรลงแผนเลย ณ จุดนี้
-    if (unknown.length) return { rejected: true, unknownContractors: unknown, matchedCount: 0 };
-
     // วันที่ในไฟล์ใช้ วว/ดด/ปปปป ค.ศ. (เจ้าของงานกำหนด 15/10/2569) — แปลงเป็น ปปปป-ดด-วว แบบที่หน้าเว็บบันทึก
     // เดิมเก็บข้อความตามที่พิมพ์มา ช่องวันที่ในหน้าต่างแก้แผนจึงอ่านไม่ออก (ว่าง)
     // อ่านไม่ได้แม้ช่องเดียวก็ไม่นำเข้าทั้งไฟล์ เหมือนชื่อผู้รับเหมา — ยังไม่ได้เขียนอะไร ณ จุดนี้
@@ -1098,12 +1096,13 @@ export async function updatePlanBulk(ctx, year, importedData) {
     for (const item of importedData || []) {
       for (const r of [1, 2, 3]) {
         const v = String(item['R' + r + '_PlanDate'] ?? '').trim();
-        if (v && toIsoDate(v) === null) badDates.push((item.AirCode || '?') + ' รอบ ' + r + ': "' + v + '"');
+        if (v && toIsoDate(v) === null) badDates.push({ airCode: String(item.AirCode || '?'), round: r, value: v });
       }
     }
-    if (badDates.length) {
-      throw new Error('วันที่ในไฟล์อ่านไม่ได้ ' + badDates.length + ' ช่อง — ใช้รูปแบบ วว/ดด/ปปปป ค.ศ. เช่น 15/10/2026 (' +
-        badDates.slice(0, 5).join(', ') + (badDates.length > 5 ? ' …' : '') + ')');
+    // คืนเป็นรายการทั้งสองอย่าง ไม่โยน error — หน้าเว็บแสดงเป็นรายการให้อ่านครบ (16/10/2569)
+    // เดิมวันที่ผิดโยนข้อความยาวที่ตัดเหลือ 5 ช่องแรก ขณะที่ชื่อผู้รับเหมาผิดคืนเป็นรายการ — สองแบบในไฟล์เดียว
+    if (unknown.length || badDates.length) {
+      return { rejected: true, unknownContractors: unknown, badDates, matchedCount: 0 };
     }
     const isoOf = v => toIsoDate(String(v ?? '').trim());
     // รอบที่ล้างเสร็จแล้วที่ไฟล์พยายามเปลี่ยน (วันนัดหรือผู้รับเหมา) — นับรอบละครั้ง

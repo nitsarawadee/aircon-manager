@@ -123,10 +123,13 @@ test('วันที่ในไฟล์เป็น วว/ดด/ปปป�
 test('วันที่อ่านไม่ได้ (เดือนก่อนวัน · ปี พ.ศ. · ไม่มีวันจริง) — ไม่นำเข้าทั้งไฟล์ และบอกเครื่อง/รอบ', async () => {
   const db = freshDb();
   for (const bad of ['10/15/2026', '15/10/2569', '31/02/2026', 'พรุ่งนี้']) {
-    await assert.rejects(() => updatePlanBulk(boss(db), 2026, [
+    // คืนเป็นรายการ (ไม่โยน error) แบบเดียวกับชื่อผู้รับเหมาที่ไม่ตรง — ดู plan-import-errors.test.mjs
+    const res = await updatePlanBulk(boss(db), 2026, [
       { AirCode: 'ATG-PMK-AIR-2', R2_PlanDate: '01/11/2026' },
       { AirCode: 'ATG-PMK-AIR-3', R2_PlanDate: bad }
-    ]), err => err.message.includes('ATG-PMK-AIR-3 รอบ 2') && err.message.includes('วว/ดด/ปปปป'));
+    ]);
+    assert.equal(res.rejected, true);
+    assert.deepEqual(res.badDates, [{ airCode: 'ATG-PMK-AIR-3', round: 2, value: bad }]);
   }
   assert.equal(row(db, 'ATG-PMK-AIR-2').R2_PlanDate || '', '', 'แถวที่ถูกต้องในไฟล์เดียวกันก็ไม่ถูกเขียน');
 });
