@@ -68,7 +68,7 @@ test('กฎตรวจแถว: รหัสผ่านสั้น · บ�
   assert.match(msg('p.role'), /ไม่รู้จักบทบาท/);
   assert.match(msg('p.noregion'), /ต้องระบุ Region/);
   assert.match(msg('p.badregion'), /ไม่มี Region 9/);
-  assert.match(msg('p.sub'), /ต้องระบุบริษัทผู้รับเหมา/);
+  assert.match(msg('p.sub'), /ต้องระบุผู้รับเหมา/);
   assert.match(msg('DUP.u'), /ซ้ำกับแถว/);
   assert.equal(plan.adds.map(a => a.username).sort().join(), 'dup.u,p.admin');
 });

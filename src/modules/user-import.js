@@ -25,7 +25,8 @@ export const USER_IMPORT_COLUMNS = [
   { name: 'บทบาท', required: true, desc: 'Infrastructure / Regional / Staff / Supervisor / Subcontract', example: 'Staff' },
   { name: 'Region', required: false, desc: 'จำเป็นสำหรับ Regional / Staff / Supervisor — หลาย Region คั่นด้วย , เช่น 1,2', example: '1' },
   { name: 'รหัสผ่าน', required: true, desc: 'อย่างน้อย 6 ตัวอักษร (ผู้ใช้เปลี่ยนเองได้หลังเข้าระบบ)', example: '' },
-  { name: 'บริษัทผู้รับเหมา', required: false, desc: 'จำเป็นสำหรับ Subcontract — ไม่มีในรายชื่อจะเพิ่มให้', example: 'บริษัท เอ แอร์ จำกัด' }
+  // ชื่อหัวคอลัมน์ "ผู้รับเหมา" ตามคำที่ใช้ทั้งเว็บ (d82eca8 — ช่างรายคนก็เป็นผู้รับเหมาได้) · ไฟล์เก่าที่ใช้หัว "บริษัทผู้รับเหมา" ยังอ่านได้ (ดู companyOf)
+  { name: 'ผู้รับเหมา', required: false, desc: 'จำเป็นสำหรับ Subcontract — ชื่อบริษัทหรือชื่อช่าง ไม่มีในรายชื่อจะเพิ่มให้', example: 'บริษัท เอ แอร์ จำกัด' }
 ];
 
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,50}$/;
@@ -40,6 +41,8 @@ const ROLE_ALIASES = {
 
 const key = v => plainText(v).trim().toLowerCase().replace(/\s+/g, '');
 const cell = (row, name) => plainText(row[name] == null ? '' : row[name]).trim();
+/** ชื่อผู้รับเหมาในแถว — หัวคอลัมน์ใหม่ก่อน ไม่มีค่อยดูหัวเดิม (Template ที่โหลดไปก่อน 16/10/2569) */
+const companyOf = row => cell(row, 'ผู้รับเหมา') || cell(row, 'บริษัทผู้รับเหมา');
 
 async function buildPlan(ctx, rows) {
   await ctx.assertAdmin();
@@ -89,8 +92,8 @@ async function buildPlan(ctx, rows) {
 
     let company = '';
     if (role === 'Contractor') {
-      company = cell(row, 'บริษัทผู้รับเหมา');
-      if (!company) return fail('Subcontract ต้องระบุบริษัทผู้รับเหมา');
+      company = companyOf(row);
+      if (!company) return fail('Subcontract ต้องระบุผู้รับเหมา');
       if (!contractors.has(key(company)) && !newCompanies.has(key(company))) newCompanies.add(key(company));
     }
 
