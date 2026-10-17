@@ -9029,7 +9029,7 @@
               <th class="font-semibold">ยี่ห้อ / รุ่น</th><th class="text-right font-semibold">BTU</th><th class="font-semibold pl-3">ติดตั้ง</th><th class="text-right font-semibold">อายุ</th><th class="text-right font-semibold">ตามแผน (บาท)</th><th class="font-semibold pl-3">สถานะ</th></tr></thead>
             <tbody class="divide-y divide-gray-100 text-gray-700">${list.map(u => `<tr class="${u.status === 'done' ? 'bg-green-50' : u.selected ? '' : 'text-gray-400'}">
               <td class="py-1.5 pr-2"><input type="checkbox" ${u.selected ? 'checked' : ''} ${edit ? '' : 'disabled'} onchange="rplToggle('${jsStr(u.airCode)}', this.checked)" class="w-4 h-4 accent-[#1153a1]"></td>
-              <td><div class="font-medium ${u.selected ? 'text-gray-800' : ''}">${esc(u.airCode)}</div><div class="text-xs text-gray-400">${esc(u.nodeName)} · ${esc(u.province)}</div></td>
+              <td><div>${airCodeBtn(u.airCode)}</div><div class="text-xs text-gray-400">${esc(u.nodeName)} · ${esc(u.province)}</div></td>
               <td>${esc(u.region)}</td><td>${esc(u.brand)}<div class="text-xs text-gray-400">${esc(u.model)}</div></td>
               <td class="text-right">${u.btu ? u.btu.toLocaleString() : ''}</td><td class="pl-3">${esc(fmtDate(u.installDate))}</td>
               <td class="text-right">${u.age === null ? '' : u.age + ' ปี'}</td><td class="text-right">${rplMoney(u.total)}</td>
@@ -9056,7 +9056,7 @@
         <p class="text-xs text-gray-400 mb-2">${hint}</p>
         <table class="w-full text-sm"><thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 text-left"><th class="py-2 font-semibold">เครื่อง</th><th class="font-semibold">Region</th>
           <th class="font-semibold">ยี่ห้อ / BTU</th><th class="font-semibold">วันที่</th><th class="text-right font-semibold">ค่าใช้จ่ายจริง (บาท)</th></tr></thead>
-          <tbody class="divide-y divide-gray-100 text-gray-700">${rows.map(u => `<tr><td class="py-1.5">${esc(u.airCode)}<div class="text-xs text-gray-400">${esc(u.nodeName)}</div></td>
+          <tbody class="divide-y divide-gray-100 text-gray-700">${rows.map(u => `<tr><td class="py-1.5">${airCodeBtn(u.airCode)}<div class="text-xs text-gray-400">${esc(u.nodeName)}</div></td>
             <td>${esc(u.region)}</td><td>${esc(u.brand)} ${u.btu ? u.btu.toLocaleString() : ''}</td><td>${esc(fmtDate(u.doneDate))}</td>
             <td class="text-right">${rplMoney(u.actualCost)}</td></tr>`).join('')}</tbody></table></div>`;
     }
