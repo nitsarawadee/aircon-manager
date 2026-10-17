@@ -1,7 +1,7 @@
 import { REPAIR_CHECKLIST_ITEMS, REPAIR_PART_ROWS } from '../schema.js';
 import { plainText } from '../values.js';
 import {
-  COL_WIDTHS, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
+  colgroup, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
   sectionSign, photoPage, docShell
 } from './doc-common.js';
 
@@ -82,8 +82,8 @@ function sectionNode(form) {
     ['Indoor Asset', form.IndoorAsset, 'Outdoor Asset', form.OutdoorAsset]
   ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
-    `<th colspan="2">${esc(l1)}</th><td colspan="3">${val(v1)}</td>` +
-    `<th class="tight">${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
+    `<th colspan="2">${esc(l1)}</th><td>${val(v1)}</td>` +
+    `<th colspan="2">${esc(l2)}</th><td colspan="3">${val(v2)}</td>` +
     '</tr>'
   ).join('');
 }
@@ -100,24 +100,24 @@ function sectionDetail(form) {
     ['สาเหตุ :', form.Cause],
     ['การแก้ไข :', form.Fix]
   ].map(([label, value]) =>
-    `<tr class="note"><td colspan="8"><b>${esc(label)}</b> ${val(value)}</td></tr>`
+    `<tr class="note n2"><td colspan="8"><b>${esc(label)}</b> ${val(value)}</td></tr>`
   ).join('');
 }
 
 /** ส่วนที่ 3 : รายการบันทึกผล — [1 ข้อ] [2-4 รายการ] [5 หน่วย] [6-7 บันทึกผล] [8 หมายเหตุ] */
 function sectionChecklist(form) {
   const head = '<tr>' +
-    '<th class="ctr">ข้อ</th><th colspan="3" class="ctr">รายการตรวจสอบ</th>' +
-    '<th class="ctr">หน่วย/เกณฑ์</th><th colspan="2" class="ctr">บันทึกผล</th>' +
-    '<th class="ctr">หมายเหตุ</th></tr>';
+    '<th class="ctr">ข้อ</th><th colspan="2" class="ctr">รายการตรวจสอบ</th>' +
+    '<th class="ctr">หน่วย/เกณฑ์</th><th class="ctr">บันทึกผล</th>' +
+    '<th colspan="3" class="ctr">หมายเหตุ</th></tr>';
 
   const body = checklistOf(form).map(item =>
     '<tr>' +
     `<td class="ctr">${item.no}</td>` +
-    `<td colspan="3" class="lbl">${esc(item.label)}</td>` +
+    `<td colspan="2" class="lbl">${esc(item.label)}</td>` +
     `<td class="ctr unit">${esc(item.unit)}</td>` +
-    `<td colspan="2" class="ctr">${val(item.value)}</td>` +
-    `<td>${val(item.note)}</td>` +
+    `<td class="ctr">${val(item.value)}</td>` +
+    `<td colspan="3">${val(item.note)}</td>` +
     '</tr>'
   ).join('');
 
@@ -128,15 +128,15 @@ function sectionChecklist(form) {
 function sectionParts(form) {
   // คอลัมน์แรกแคบมาก (ตามกริดของแบบฟอร์ม) คำว่า "ลำดับ" จึงตกบรรทัดถ้าไม่ย่อ
   const head = '<tr>' +
-    '<th class="ctr tight">ลำดับ</th><th colspan="3" class="ctr">รายการอะไหล่</th>' +
-    '<th class="ctr">จำนวน</th><th colspan="3" class="ctr">หมายเหตุ</th></tr>';
+    '<th class="ctr tight">ลำดับ</th><th colspan="2" class="ctr">รายการอะไหล่</th>' +
+    '<th class="ctr">จำนวน</th><th colspan="4" class="ctr">หมายเหตุ</th></tr>';
 
   const body = partsOf(form).map(p =>
     '<tr>' +
     `<td class="ctr">${p.no}</td>` +
-    `<td colspan="3" class="lbl">${val(p.name)}</td>` +
+    `<td colspan="2" class="lbl">${val(p.name)}</td>` +
     `<td class="ctr">${val(p.qty)}</td>` +
-    `<td colspan="3">${val(p.note)}</td>` +
+    `<td colspan="4">${val(p.note)}</td>` +
     '</tr>'
   ).join('');
 
@@ -162,8 +162,8 @@ export function buildRepairDocHtml(form, opts = {}) {
   }
 
   const photos = opts.photos || {};
-  const total = COL_WIDTHS.reduce((a, b) => a + b, 0);
-  const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
+  // A–E ตามไฟล์ repair-form-template.xlsx · F (28.13) แบ่งเป็น 3 ช่องให้ครบกริด 8 คอลัมน์
+  const cols = colgroup([3.75, 11.5, 26.13, 8.5, 8.5, 9.377, 9.377, 9.376]);
 
   const body = `<div class="sheet"><div class="frame">
   ${pageHeader('บันทึกผลการซ่อมเครื่องปรับอากาศ', opts)}
@@ -185,7 +185,7 @@ export function buildRepairDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.Suggestion)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers)}
+    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers, [3, 5])}
   </tbody></table>
 
   ${REF_LINE}
@@ -202,6 +202,7 @@ ${photoPage(photos, opts, {
 
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการซ่อมเครื่องปรับอากาศ',
-    body
+    body,
+    scale: 1       // แบบฟอร์ม Excel พิมพ์ 100%
   }, opts);
 }

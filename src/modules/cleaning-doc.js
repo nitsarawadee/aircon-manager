@@ -248,6 +248,7 @@ ${units.map(u => photoPage(photos, opts, {
 
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการล้างเครื่องปรับอากาศ',
-    body
+    body,
+    scale: 0.8     // แบบฟอร์ม Excel ตั้งพิมพ์ 80%
   }, opts);
 }

@@ -23,6 +23,12 @@ import { formatDate, plainText } from '../values.js';
  */
 export const COL_WIDTHS = [50, 180, 190, 95, 130, 176, 176, 301];
 
+/** <col> ของกริด 8 คอลัมน์ตามความกว้างที่ให้ (หน่วยใดก็ได้ — คิดเป็นสัดส่วน) */
+export function colgroup(widths = COL_WIDTHS) {
+  const total = widths.reduce((a, b) => a + b, 0);
+  return widths.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
+}
+
 /** บรรทัดอ้างอิงท้ายหน้าแรก เหมือนกันทุกแบบฟอร์ม */
 export const REF_LINE =
   '<div class="ref">อ้างอิงแรงดันน้ำยา <i>(Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI /' +
@@ -114,7 +120,7 @@ const signCell = (company, signer, date) =>
  * @param {Object|null} [signers] ชื่อผู้อนุมัติจาก signOptsOf (approval.js) — null = ใบเก่า
  */
 export function sectionSign(form, operatorLabel,
-  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', signers = null) {
+  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', signers = null, split = [5, 3]) {
   const date = thaiDate(form.Date);
 
   if (signers) {
@@ -124,7 +130,7 @@ export function sectionSign(form, operatorLabel,
        ['ผู้ควบคุมงาน (Interlink)', '', ...at(signers.s2)]],
       [[checkerLabel, '', ...at(signers.s3)],
        ['Approve (Infra)', '', ...at(signers.s4)]]
-    ]);
+    ], split);
   }
 
   // ⚠️ ช่องในหน้าเว็บชื่อ "ผู้ควบคุมงาน Interlink" เก็บลงคอลัมน์ SupervisorName
@@ -135,17 +141,20 @@ export function sectionSign(form, operatorLabel,
      ['ผู้ควบคุมงาน (Interlink)', '', form.SupervisorName, date]],
     [[checkerLabel, '', '', ''],
      ['Approve (Infra)', '', '', '']]
-  ]);
+  ], split);
 }
 
-/** สองแถวของช่องลงนาม — แต่ละช่องคือ [ป้าย, บริษัท, ชื่อ, วันที่] */
-function signRows(rows) {
+/**
+ * สองแถวของช่องลงนาม — แต่ละช่องคือ [ป้าย, บริษัท, ชื่อ, วันที่]
+ * [l, r] = ซ้าย/ขวากี่คอลัมน์ของกริด — แบ่งครึ่งหน้าตามแบบฟอร์มแต่ละแบบ (ใบซ่อมใช้ 3 | 5)
+ */
+function signRows(rows, [l, r] = [5, 3]) {
   return rows.map(([left, right]) =>
     '<tr>' +
-    `<th colspan="5" class="ctr">${esc(left[0])}</th><th colspan="3" class="ctr">${esc(right[0])}</th>` +
+    `<th colspan="${l}" class="ctr">${esc(left[0])}</th><th colspan="${r}" class="ctr">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
-    `<td colspan="5" class="ctr">${signCell(left[1], left[2], left[3])}</td>` +
-    `<td colspan="3" class="ctr">${signCell(right[1], right[2], right[3])}</td>` +
+    `<td colspan="${l}" class="ctr">${signCell(left[1], left[2], left[3])}</td>` +
+    `<td colspan="${r}" class="ctr">${signCell(right[1], right[2], right[3])}</td>` +
     '</tr>'
   ).join('');
 }
@@ -245,7 +254,7 @@ export function docShell(o, opts) {
 <title>${esc(o.title)}</title>
 ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
-</head><body>
+</head><body style="--k:${Number(o.scale) || 1}">
 ${opts.toolbar ? toolbar() : ''}
 ${opts.draft ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
 ${o.body}
@@ -255,37 +264,42 @@ ${o.body}
 export const STYLE = `
 @page { size: A4 portrait; margin: 8mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: 'Sarabun', 'Tahoma', sans-serif; color: #000; }
+/* ฟอนต์ตามแบบฟอร์ม Excel ต้นฉบับ (Angsana New) — เครื่องที่ไม่มี (เช่นเซิร์ฟเวอร์ Linux) ใช้ TH Sarabun New / Sarabun แทน
+   ขนาดทุกอย่างคูณ --k = สเกลพิมพ์ของไฟล์ Excel แบบนั้น (ตั้งที่ <body> ดู docShell) จึงเท่ากับตอนพิมพ์จาก Excel */
+body { margin: 0; font-family: 'Angsana New', 'TH Sarabun New', 'Sarabun', 'Tahoma', sans-serif; color: #000; --k: 1; }
 
 .sheet { page-break-after: always; }
 .sheet:last-child { page-break-after: auto; }
 .frame { border: 1pt solid #000; }
-.code { text-align: right; font-size: 7.5pt; margin-top: 1.5mm; }
+.code { text-align: right; font-size: calc(11pt * var(--k)); margin-top: 1.5mm; }
 
 /* ---------- หัวกระดาษ ---------- */
 table.hdr { width: 100%; border-collapse: collapse; }
 table.hdr td { border: none; border-bottom: 1pt solid #000; padding: 1.5mm 3mm; vertical-align: middle; }
-table.hdr td.logo { width: 52mm; }
-table.hdr td.logo img { display: block; width: 44mm; height: 11.5mm;
+table.hdr td.logo { width: calc(62mm * var(--k)); height: calc(56pt * var(--k)); }
+table.hdr td.logo img { display: block; width: calc(52mm * var(--k)); height: calc(13.6mm * var(--k));
                         object-fit: cover; object-position: center; }
-table.hdr td.name { text-align: center; font-size: 12.5pt; font-weight: 700;
+table.hdr td.name { text-align: left; font-size: calc(20pt * var(--k)); font-weight: 700;
                     padding-right: 14mm; white-space: nowrap; }
 
 /* ---------- ตารางหลัก ---------- */
 table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
-table.main td, table.main th { border: 0.5pt solid #000; padding: 0.5mm 1.2mm;
-                               font-size: 7.3pt; line-height: 1.25; vertical-align: middle;
+table.main td, table.main th { border: 0.5pt solid #000; padding: 0 1.2mm;
+                               height: calc(17.7pt * var(--k));
+                               font-size: calc(12pt * var(--k)); line-height: 1.1; vertical-align: middle;
                                text-align: left; word-wrap: break-word; font-weight: 400; }
-table.main th { font-weight: 400; }
+/* ช่องป้ายชื่อ หัวตาราง และหัวช่องลงนาม เป็นพื้นเทาอ่อนตามแบบฟอร์ม */
+table.main th { font-weight: 400; background: #F2F2F2; }
 table.main th.hd { font-weight: 700; }
 .ctr { text-align: center !important; }
 .lbl { padding-left: 2.5mm !important; }
 .v { color: #000; }
-td.unit { color: #7F7F7F; }
-.tight { font-size: 6.6pt !important; white-space: nowrap; }
+td.unit { color: #7F7F7F; background: #F2F2F2; }
+.tight { font-size: calc(11pt * var(--k)) !important; white-space: nowrap; }
 
-tr.sec td { background: #ECECEC; font-weight: 700; font-size: 8pt;
-            padding: 0.9mm 2mm !important; border-left: none; border-right: none; }
+tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(18.35pt * var(--k));
+            padding: 0 1.2mm !important; border-left: none; border-right: none;
+            border-top: 1pt solid #000; border-bottom: 1pt solid #000; }
 
 /* เส้นขอบนอกเป็นของกรอบ (.frame) เส้นเดียวทั้งหน้าเหมือนแบบฟอร์ม Excel
    ช่องที่ชิดขอบซ้าย/ขวา และแถวแรกที่ชิดเส้นใต้หัวกระดาษ จึงไม่วาดเส้นซ้ำ
@@ -294,12 +308,18 @@ table.main tr > :first-child, table.info tr > :first-child { border-left: none; 
 table.main tr > :last-child, table.info tr > :last-child { border-right: none; }
 table.main tr:first-child > *, table.info tr:first-child > * { border-top: none; }
 
-td.choices .box { font-size: 10pt; line-height: 1; }
+td.choices .box { font-size: calc(13pt * var(--k)); line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
 
-tr.note td { height: 15mm; vertical-align: top; white-space: pre-wrap; }
-tr.sign td { height: 11mm; vertical-align: bottom; padding-bottom: 2mm !important; }
-tr.sign .who { margin-bottom: 2mm; }
+/* ส่วนบันทึกมีเส้นบรรทัดให้เขียนเหมือนแบบฟอร์ม — 4 บรรทัด (บันทึกเพิ่มเติม) · ใบซ่อมส่วนที่ 2 ข้อละ 2 บรรทัด (.n2)
+   ตัวหนังสือวางบนบรรทัดเดียวกับเส้น (line-height = ความสูงแถว) */
+tr.note td { --row: calc(17.7pt * var(--k)); height: calc(var(--row) * 4); vertical-align: top; white-space: pre-wrap;
+             line-height: var(--row); padding-top: 0 !important;
+             background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--row) - 0.5pt),
+                               #BFBFBF calc(var(--row) - 0.5pt), #BFBFBF var(--row)); }
+tr.note.n2 td { height: calc(var(--row) * 2); }
+tr.sign td { height: calc(25pt * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
+tr.sign .who { margin-bottom: 1mm; }
 /* ค่าที่พิมพ์ลงในช่องว่าง — คงเส้นใต้ไว้ให้ดูเป็นช่องที่ถูกกรอกแล้ว ไม่ใช่ข้อความลอยๆ
    ความกว้างขั้นต่ำเท่ากับความยาวเส้นประเดิม ช่องจึงไม่ขยับตามความยาวของชื่อ */
 .fill { display: inline-block; text-align: center; border-bottom: 1px dotted #000;
@@ -307,7 +327,8 @@ tr.sign .who { margin-bottom: 2mm; }
 .fill.nm { min-width: 38mm; }
 .fill.dt { min-width: 22mm; }
 
-.ref { text-align: center; font-size: 6.6pt; padding: 1.5mm 4mm; }
+.ref { text-align: center; font-size: calc(11pt * var(--k)); font-style: italic; line-height: 1.5;
+        padding: calc(2.5mm * var(--k)) 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
 /* ---------- ลายน้ำฉบับร่าง (ยังอนุมัติไม่ครบ ดู approval.js) ----------
    position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */
@@ -319,7 +340,7 @@ tr.sign .who { margin-bottom: 2mm; }
 
 /* ---------- หน้ารูปภาพ ---------- */
 table.info { width: 100%; border-collapse: collapse; }
-table.info th, table.info td { border: 0.5pt solid #000; padding: 1.5mm 3mm; font-size: 9pt; }
+table.info th, table.info td { border: 0.5pt solid #000; padding: 1.5mm 3mm; font-size: calc(16pt * var(--k)); }
 table.info th { background: #ECECEC; font-weight: 700; text-align: center; width: 18%; }
 table.info td { width: 32%; text-align: center; }
 
@@ -328,9 +349,9 @@ table.pics td.pic { width: 33.33%; border: none; padding: 0; vertical-align: top
 table.pics .box { border: 0.75pt solid #000; }
 table.pics img { display: block; width: 100%; height: 62mm; object-fit: cover; }
 table.pics .ph { height: 62mm; display: flex; align-items: center; justify-content: center;
-                 color: #7F7F7F; font-size: 8pt; text-align: center; padding: 2mm; }
+                 color: #7F7F7F; font-size: calc(12pt * var(--k)); text-align: center; padding: 2mm; }
 table.pics .cap { border-top: 0.75pt solid #000; background: #ECECEC; text-align: center;
-                  font-size: 8pt; padding: 1mm 1mm; min-height: 7mm; }
+                  font-size: calc(12pt * var(--k)); padding: 1mm 1mm; min-height: 7mm; }
 
 @media screen {
   body { background: #e9edf2; padding: 6mm 0; }
