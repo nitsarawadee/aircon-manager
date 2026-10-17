@@ -30,6 +30,10 @@ export function colgroup(widths = COL_WIDTHS) {
 }
 
 /** บรรทัดอ้างอิงท้ายหน้าแรก เหมือนกันทุกแบบฟอร์ม */
+export const REF_LINE_2 =
+  '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
+  '<br>ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
+
 export const REF_LINE =
   '<div class="ref">อ้างอิงแรงดันน้ำยา <i>(Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI /' +
   '\n    R410A ≈ 120–140 PSI</i> | ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์' +
@@ -120,7 +124,7 @@ const signCell = (company, signer, date) =>
  * @param {Object|null} [signers] ชื่อผู้อนุมัติจาก signOptsOf (approval.js) — null = ใบเก่า
  */
 export function sectionSign(form, operatorLabel,
-  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', signers = null, split = [5, 3]) {
+  checkerLabel = 'ผู้ตรวจสอบ (Supervisor / Area / Region Manager)', signers = null, split = [5, 3], bold = false) {
   const date = thaiDate(form.Date);
 
   if (signers) {
@@ -130,7 +134,7 @@ export function sectionSign(form, operatorLabel,
        ['ผู้ควบคุมงาน (Interlink)', '', ...at(signers.s2)]],
       [[checkerLabel, '', ...at(signers.s3)],
        ['Approve (Infra)', '', ...at(signers.s4)]]
-    ], split);
+    ], split, bold);
   }
 
   // ⚠️ ช่องในหน้าเว็บชื่อ "ผู้ควบคุมงาน Interlink" เก็บลงคอลัมน์ SupervisorName
@@ -141,17 +145,18 @@ export function sectionSign(form, operatorLabel,
      ['ผู้ควบคุมงาน (Interlink)', '', form.SupervisorName, date]],
     [[checkerLabel, '', '', ''],
      ['Approve (Infra)', '', '', '']]
-  ], split);
+  ], split, bold);
 }
 
 /**
  * สองแถวของช่องลงนาม — แต่ละช่องคือ [ป้าย, บริษัท, ชื่อ, วันที่]
  * [l, r] = ซ้าย/ขวากี่คอลัมน์ของกริด — แบ่งครึ่งหน้าตามแบบฟอร์มแต่ละแบบ (ใบซ่อมใช้ 3 | 5)
  */
-function signRows(rows, [l, r] = [5, 3]) {
+function signRows(rows, [l, r] = [5, 3], bold = false) {
+  const hc = bold ? 'ctr b' : 'ctr';
   return rows.map(([left, right]) =>
     '<tr>' +
-    `<th colspan="${l}" class="ctr">${esc(left[0])}</th><th colspan="${r}" class="ctr">${esc(right[0])}</th>` +
+    `<th colspan="${l}" class="${hc}">${esc(left[0])}</th><th colspan="${r}" class="${hc}">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
     `<td colspan="${l}" class="ctr">${signCell(left[1], left[2], left[3])}</td>` +
     `<td colspan="${r}" class="ctr">${signCell(right[1], right[2], right[3])}</td>` +
@@ -270,7 +275,7 @@ body { margin: 0; font-family: 'Angsana New', 'TH Sarabun New', 'Sarabun', 'Taho
 
 .sheet { page-break-after: always; }
 .sheet:last-child { page-break-after: auto; }
-.frame { border: 1pt solid #000; }
+.frame { border: 1.5pt solid #000; }
 .code { text-align: right; font-size: calc(11pt * var(--k)); margin-top: 1.5mm; }
 
 /* ---------- หัวกระดาษ ---------- */
@@ -290,12 +295,13 @@ table.main td, table.main th { border: 0.5pt solid #000; padding: 0 1.2mm;
                                text-align: left; word-wrap: break-word; font-weight: 400; }
 /* ช่องป้ายชื่อ หัวตาราง และหัวช่องลงนาม เป็นพื้นเทาอ่อนตามแบบฟอร์ม */
 table.main th { font-weight: 400; background: #F2F2F2; }
-table.main th.hd { font-weight: 700; }
+/* ตัวหนาเฉพาะช่องที่ไฟล์ต้นฉบับเป็นตัวหนา (ใบล้างหนากว่าใบซ่อม/ใบติดตั้ง) */
+table.main .hd, table.main .b { font-weight: 700 !important; }
 .ctr { text-align: center !important; }
-.lbl { padding-left: 2.5mm !important; }
+.lbl { }   /* ไฟล์ต้นฉบับไม่เยื้องข้อความ — คงชื่อคลาสไว้ให้ชี้ช่องป้ายชื่อ */
 .v { color: #000; }
 td.unit { color: #7F7F7F; background: #F2F2F2; }
-.tight { font-size: calc(11pt * var(--k)) !important; white-space: nowrap; }
+.tight { white-space: nowrap; }   /* ขนาดเท่าช่องอื่นตามไฟล์ แค่ไม่ให้ตัดบรรทัด */
 
 tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(18.35pt * var(--k));
             padding: 0 1.2mm !important; border-left: none; border-right: none;

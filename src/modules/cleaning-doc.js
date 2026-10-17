@@ -127,15 +127,15 @@ function sectionNode(form, units) {
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
   ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
-    `<th colspan="2">${esc(l1)}</th><td colspan="3">${val(v1)}</td>` +
-    `<th class="tight">${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
+    `<th colspan="2" class="b">${esc(l1)}</th><td colspan="3">${val(v1)}</td>` +
+    `<th class="b tight">${esc(l2)}</th><td colspan="2">${val(v2)}</td>` +
     '</tr>'
   ).join('');
 }
 
 /** ส่วนที่ 2 : ข้อมูลเครื่อง — [1-5 ป้าย] [6 เครื่อง 1] [7 เครื่อง 2] [8 ว่าง] */
 function sectionUnits(units) {
-  const head = '<tr><th colspan="5">รายการ / Item</th>' +
+  const head = '<tr><th colspan="5" class="b">รายการ / Item</th>' +
     unitCells(units, u => `เครื่องที่ ${u.no} (Unit ${u.no})`, 'ctr hd') +
     '<td></td></tr>';
 
@@ -154,9 +154,9 @@ function sectionUnits(units) {
 /** ส่วนที่ 3 : รายการบำรุงรักษา — [1 ข้อ] [2-4 รายการ] [5 หน่วย] [6-7 เครื่อง] [8 หมายเหตุ] */
 function sectionChecklist(form, units) {
   const head = '<tr>' +
-    '<th class="ctr">ข้อ</th><th colspan="3" class="ctr">รายการตรวจสอบ</th><th class="ctr">หน่วย/เกณฑ์</th>' +
-    bySlot(units).map(u => `<th class="ctr">${u ? 'เครื่องที่ ' + u.no : ''}</th>`).join('') +
-    '<th class="ctr">หมายเหตุ</th></tr>';
+    '<th class="ctr b">ข้อ</th><th colspan="3" class="ctr b">รายการตรวจสอบ</th><th class="ctr b">หน่วย/เกณฑ์</th>' +
+    bySlot(units).map(u => `<th class="ctr b">${u ? 'เครื่องที่ ' + u.no : ''}</th>`).join('') +
+    '<th class="ctr b">หมายเหตุ</th></tr>';
 
   const body = checklistOf(form).map(item =>
     '<tr>' +
@@ -181,13 +181,12 @@ function sectionChecklist(form, units) {
 function sectionSummary(form, units) {
   return units.map(u =>
     '<tr>' +
-    '<th colspan="3" class="lbl">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
-    `<td class="ctr tight">เครื่องที่ ${u.no}</td>` +
-    '<td colspan="4" class="choices">' +
+    '<th colspan="3" class="lbl b">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
+    `<td class="ctr b tight">เครื่องที่ ${u.no}</td>` +
     CONDITIONS.map(c =>
-      `<span class="box">${plainText(u.cond).trim() === c ? '☑' : '☐'}</span> ${esc(c)}`
-    ).join('<span class="gap"></span>') +
-    '</td></tr>'
+      `<td colspan="2" class="choices"><span class="box">${plainText(u.cond).trim() === c ? '☑' : '☐'}</span> ${esc(c)}</td>`
+    ).join('') +
+    '</tr>'
   ).join('');
 }
 
@@ -231,7 +230,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ดำเนินการล้างแอร์ (บ./หจก.)', undefined, opts.signers)}
+    ${sectionSign(form, 'ผู้ดำเนินการล้างแอร์ (บ./หจก.)', undefined, opts.signers, [5, 3], true)}
   </tbody></table>
 
   ${REF_LINE}

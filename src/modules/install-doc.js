@@ -103,7 +103,7 @@ function sectionNode(form, units) {
   const timeRange = [formatTime(form.TimeStart), formatTime(form.TimeEnd)].filter(Boolean).join(' – ');
 
   return [
-    ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
+    ['Node Nane', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
     ['วันที่ (DD/MM/YYYY)', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
@@ -117,8 +117,8 @@ function sectionNode(form, units) {
 
 /** ส่วนที่ 2 : ข้อมูลเครื่อง — [1-5 ป้าย] [6 เครื่อง 1] [7 เครื่อง 2] [8 ว่าง] */
 function sectionUnits(units) {
-  const head = '<tr><th colspan="5">รายการ / Item</th>' +
-    unitCells(units, u => `เครื่องที่ ${u.no} (AIR ${u.no})`, 'ctr hd') +
+  const head = '<tr><th colspan="5" class="ctr">รายการ /</th>' +
+    unitCells(units, u => `เครื่องที่ ${u.no} (AIR ${u.no})`, 'ctr') +
     '<td></td></tr>';
 
   const lines = [

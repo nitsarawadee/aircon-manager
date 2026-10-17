@@ -1,7 +1,7 @@
 import { REPAIR_CHECKLIST_ITEMS, REPAIR_PART_ROWS } from '../schema.js';
 import { plainText } from '../values.js';
 import {
-  colgroup, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
+  colgroup, REF_LINE_2, esc, thaiDate, val, sectionRow, pageHeader,
   sectionSign, photoPage, docShell
 } from './doc-common.js';
 
@@ -75,7 +75,7 @@ function partsOf(form) {
 /** ส่วนที่ 1 : ข้อมูล Node และเครื่อง — [1-2 ป้าย] [3-5 ค่า] [6 ป้าย] [7-8 ค่า] */
 function sectionNode(form) {
   return [
-    ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
+    ['Node Nane', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด', form.Province, 'Brand / ยี่ห้อ', form.Brand],
     ['วันที่', thaiDate(form.Date), 'BTU / ขนาด', form.BTU],
     ['Indoor Serial', form.IndoorSerial, 'Outdoor Serial', form.OutdoorSerial],
@@ -100,7 +100,7 @@ function sectionDetail(form) {
     ['สาเหตุ :', form.Cause],
     ['การแก้ไข :', form.Fix]
   ].map(([label, value]) =>
-    `<tr class="note n2"><td colspan="8"><b>${esc(label)}</b> ${val(value)}</td></tr>`
+    `<tr class="note n2"><td colspan="8">${esc(label)} ${val(value)}</td></tr>`
   ).join('');
 }
 
@@ -185,14 +185,15 @@ export function buildRepairDocHtml(form, opts = {}) {
     <tr class="note"><td colspan="8">${val(form.Suggestion)}</td></tr>
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
-    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers, [3, 5])}
+    ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers, [3, 5], true)}
   </tbody></table>
 
-  ${REF_LINE}
+  ${REF_LINE_2}
 </div><div class="code">${FORM_CODE}</div></div>
 
 ${photoPage(photos, opts, {
   title: 'รูปถ่ายประกอบการซ่อมเครื่องปรับอากาศ',
+  nodeLabel: 'Node Nane',
   captions: PHOTO_CAPTIONS,
   slot: 1,
   nodeName: form.NodeName,
