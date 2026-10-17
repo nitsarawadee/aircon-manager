@@ -3980,6 +3980,10 @@
         if (!currentHistory || currentHistory.length === 0) {
           if (moduleLevel('history') !== 'none') currentHistory = (await call('getHistory', null)) || [];
         }
+        // ค่าติดตั้งอยู่ที่ใบติดตั้ง ไม่ได้ลงประวัติ — การ์ด "ค่าติดตั้ง" ต้องใช้ใบด้วย (โหลดไม่ได้ = การ์ดนับแค่ประวัติ)
+        if ((!currentInstallForms || currentInstallForms.length === 0) && docLevel('install') !== 'none') {
+          try { currentInstallForms = (await callQuiet('getInstallForms')) || []; } catch (e) { /* ไม่มีสิทธิ์/โหลดไม่ได้ */ }
+        }
       } catch (err) {
         view.innerHTML = '<div class="py-20 text-center text-rose-500">โหลดข้อมูลไม่สำเร็จ: ' + esc(err.message || err) + '</div>';
         return;
@@ -4092,10 +4096,22 @@
       // สรุปจากรายการเดียวกับที่แสดงในตาราง ตัวเลขกับตารางจึงตรงกันเสมอ
       const cleans = rows.filter(h => String(h.EventType || '').includes('ล้าง'));
       const others = rows.length - cleans.length;
-      // ค่าใช้จ่ายแยกเป็นค่าล้าง กับค่าซ่อม/อื่นๆ (ผู้ใช้ขอ 17/10/2569) — แบ่งแบบเดียวกับการ์ดนับครั้ง
+      // ค่าใช้จ่าย: ค่าล้าง · ค่าซ่อม · ค่าติดตั้ง (ผู้ใช้ขอ 17/10/2569) — หมวดเดียวกับหน้างบประมาณ (costCategory ใน budget.js)
+      // ค่าเปลี่ยนเครื่อง (ซื้อเครื่องใหม่) ไม่โชว์ที่นี่ — ดูในหน้าแผนเปลี่ยนเครื่อง
+      // ค่าติดตั้ง = ประวัติ "ติดตั้ง" ที่มีค่าใช้จ่าย (เช่นนำเข้าจากระบบเดิม) + ใบติดตั้งของเครื่องนี้ (ใบละสองเครื่องแบ่งครึ่ง)
       const sumCost = list => list.reduce((sum, h) => sum + (Number(h.Cost) || 0), 0);
+      const kindOf = h => {
+        const t = String(h.EventType || '').trim();
+        return t.includes('ล้าง') ? 'clean' : t === 'เปลี่ยนเครื่อง' ? 'purchase' : t === 'ติดตั้ง' ? 'install' : 'repair';
+      };
       const cleanCost = sumCost(cleans);
-      const otherCost = sumCost(rows) - cleanCost;
+      const repairCost = sumCost(rows.filter(h => kindOf(h) === 'repair'));
+      const installCost = sumCost(rows.filter(h => kindOf(h) === 'install')) +
+        (currentInstallForms || []).reduce((sum, f) => {
+          const codes = [f.AirCode1, f.AirCode2].filter(c => String(c || '').trim());
+          return codes.some(c => sameCode(c, u.AirCode)) ? sum + (Number(f.Cost) || 0) / codes.length : sum;
+        }, 0);
+      const baht = n => '฿' + (Math.round(n * 100) / 100).toLocaleString();
       const lastClean = cleans.length ? fmtDate(cleans[0].Date) : null;
 
       const stat = (label, value, tone) => `
@@ -4196,11 +4212,12 @@
           </div>
 
           ${rows.length ? `
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 px-5 pb-4">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 px-5 pb-4">
               ${stat('ล้างแอร์', cleans.length + ' ครั้ง', 'brand')}
               ${stat('งานซ่อม/อื่นๆ', others + ' ครั้ง', 'rose')}
-              ${stat('ค่าล้าง', '฿' + cleanCost.toLocaleString(), 'mint')}
-              ${stat('ค่าซ่อม/อื่นๆ', '฿' + otherCost.toLocaleString(), 'peach')}
+              ${stat('ค่าล้าง', baht(cleanCost), 'mint')}
+              ${stat('ค่าซ่อม', baht(repairCost), 'peach')}
+              ${stat('ค่าติดตั้ง', baht(installCost), 'aqua')}
               ${stat('ล้างล่าสุด', lastClean || '—', 'lilac')}
             </div>` : ''}
 
