@@ -193,8 +193,8 @@ export function photoPage(photos, opts, o) {
   return `<div class="sheet"><div class="frame">
   ${pageHeader(o.title, opts)}
   <table class="info"><tbody><tr>
-    <th>Node Name</th><td>${val(plainText(o.nodeName))}</td>
-    <th>วันที่</th><td>${val(o.date)}</td>
+    <th>${esc(o.nodeLabel || 'Node Name')}</th><td>${val(plainText(o.nodeName))}</td>
+    <th>${esc(o.dateLabel || 'วันที่')}</th><td>${val(o.date)}</td>
   </tr></tbody></table>
   <table class="pics"><tbody>${rows.join('')}</tbody></table>
 </div><div class="code">${esc(o.formCode)}</div></div>`;

@@ -76,7 +76,7 @@ function partsOf(form) {
 function sectionNode(form) {
   return [
     ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
-    ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อ', form.Brand],
+    ['จังหวัด', form.Province, 'Brand / ยี่ห้อ', form.Brand],
     ['วันที่', thaiDate(form.Date), 'BTU / ขนาด', form.BTU],
     ['Indoor Serial', form.IndoorSerial, 'Outdoor Serial', form.OutdoorSerial],
     ['Indoor Asset', form.IndoorAsset, 'Outdoor Asset', form.OutdoorAsset]

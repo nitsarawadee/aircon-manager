@@ -105,7 +105,7 @@ function sectionNode(form, units) {
   return [
     ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
-    ['วันที่', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
+    ['วันที่ (DD/MM/YYYY)', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
   ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
@@ -222,6 +222,7 @@ export function buildInstallDocHtml(form, opts = {}) {
 
 ${units.map(u => photoPage(photos, opts, {
   title: 'ภาพถ่ายประกอบการติดตั้งเครื่องปรับอากาศ — เครื่องที่ ' + u.no + ' (AIR ' + u.no + ')',
+  nodeLabel: 'Node / รหัส Node', dateLabel: 'วันที่ (DD/MM/YYYY)',
   captions: PHOTO_CAPTIONS,
   slot: u.slot,
   nodeName: form.NodeName,

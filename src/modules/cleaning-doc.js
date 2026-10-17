@@ -121,9 +121,9 @@ function sectionNode(form, units) {
   const timeRange = [formatTime(form.TimeStart), formatTime(form.TimeEnd)].filter(Boolean).join(' – ');
 
   return [
-    ['Node Name', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
+    ['Node / รหัส Node', plainText(form.NodeName), 'ประเภท Node', form.LocationType],
     ['จังหวัด / Province', form.Province, 'Brand / ยี่ห้อแอร์', first.brand],
-    ['วันที่', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
+    ['วันที่ (DD/MM/YYYY)', thaiDate(form.Date), 'BTU / ขนาดทำความเย็น', first.btu],
     ['เวลาเริ่ม–สิ้นสุด', timeRange, 'รวมเวลา (ชม.)', formatTime(form.TotalTime)]
   ].map(([l1, v1, l2, v2]) =>
     '<tr>' +
@@ -136,7 +136,7 @@ function sectionNode(form, units) {
 /** ส่วนที่ 2 : ข้อมูลเครื่อง — [1-5 ป้าย] [6 เครื่อง 1] [7 เครื่อง 2] [8 ว่าง] */
 function sectionUnits(units) {
   const head = '<tr><th colspan="5">รายการ / Item</th>' +
-    unitCells(units, u => `เครื่องที่ ${u.no} (AIR ${u.no})`, 'ctr hd') +
+    unitCells(units, u => `เครื่องที่ ${u.no} (Unit ${u.no})`, 'ctr hd') +
     '<td></td></tr>';
 
   const lines = [
@@ -181,7 +181,7 @@ function sectionChecklist(form, units) {
 function sectionSummary(form, units) {
   return units.map(u =>
     '<tr>' +
-    '<th colspan="3" class="lbl">ผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
+    '<th colspan="3" class="lbl">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
     `<td class="ctr tight">เครื่องที่ ${u.no}</td>` +
     '<td colspan="4" class="choices">' +
     CONDITIONS.map(c =>
@@ -212,7 +212,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
   const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
 
   const body = `<div class="sheet"><div class="frame">
-  ${pageHeader('บันทึกผลการล้างเครื่องปรับอากาศ', opts)}
+  ${pageHeader('บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)', opts)}
 
   <table class="main"><colgroup>${cols}</colgroup><tbody>
     ${sectionRow('ส่วนที่ 1 : ข้อมูล Node')}
@@ -239,6 +239,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
 
 ${units.map(u => photoPage(photos, opts, {
   title: 'ภาพถ่ายประกอบการล้างเครื่องปรับอากาศ — เครื่องที่ ' + u.no + ' (AIR ' + u.no + ')',
+  nodeLabel: 'Node / รหัส Node', dateLabel: 'วันที่ (DD/MM/YYYY)',
   captions: PHOTO_CAPTIONS,
   slot: u.slot,
   nodeName: form.NodeName,
