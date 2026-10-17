@@ -1,7 +1,7 @@
 import { INSTALL_CHECKLIST_ITEMS } from '../schema.js';
 import { formatTime, plainText } from '../values.js';
 import {
-  colgroup, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
+  xlCols, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
   sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
@@ -192,7 +192,7 @@ export function buildInstallDocHtml(form, opts = {}) {
 
   const photos = opts.photos || {};
   // คอลัมน์ A–H ตามไฟล์ install-form-template.xlsx (ต่างจากใบล้างเล็กน้อย)
-  const cols = colgroup([4, 16, 15.25, 9.25, 9.25, 16, 16, 23.13]);
+  const cols = xlCols([4.18, 16.18, 15.45, 9.45, 9.45, 16.18, 16.18, 23.27]);
 
   const body = `<div class="sheet"><div class="frame">
   ${pageHeader('บันทึกผลการติดตั้งเครื่องปรับอากาศ', opts)}
@@ -233,6 +233,7 @@ ${units.map(u => photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการติดตั้งเครื่องปรับอากาศ',
     body,
+    headerPt: 60, refPt: 11, refGray: true,   // ความสูงแถว 1 · ข้อความอ้างอิงท้ายใบตามไฟล์
     scale: 0.85    // แบบฟอร์ม Excel ตั้งพิมพ์ 85%
   }, opts);
 }

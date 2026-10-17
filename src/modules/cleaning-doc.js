@@ -1,7 +1,7 @@
 import { CLEANING_CHECKLIST_ITEMS } from '../schema.js';
 import { formatTime, plainText } from '../values.js';
 import {
-  COL_WIDTHS, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
+  xlCols, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
   sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
@@ -207,8 +207,8 @@ export function buildCleaningDocHtml(form, opts = {}) {
   if (!units.length) throw new Error('เอกสารใบนี้ยังไม่มีข้อมูลเครื่องปรับอากาศ');
 
   const photos = opts.photos || {};
-  const total = COL_WIDTHS.reduce((a, b) => a + b, 0);
-  const cols = COL_WIDTHS.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
+  // คอลัมน์ A–H ตามไฟล์ cleaning-form-template.xlsx
+  const cols = xlCols([4.18, 16.18, 17.18, 9.55, 10.55, 16.18, 16.18, 27.64]);
 
   const body = `<div class="sheet"><div class="frame">
   ${pageHeader('บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)', opts)}
@@ -249,6 +249,7 @@ ${units.map(u => photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการล้างเครื่องปรับอากาศ',
     body,
+    headerPt: 59.15, signHeadPt: 16.25,   // ความสูงแถว 1 และหัวช่องลงนามในไฟล์
     scale: 0.8     // แบบฟอร์ม Excel ตั้งพิมพ์ 80%
   }, opts);
 }

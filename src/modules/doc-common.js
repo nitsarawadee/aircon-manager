@@ -23,21 +23,32 @@ import { formatDate, plainText } from '../values.js';
  */
 export const COL_WIDTHS = [50, 180, 190, 95, 130, 176, 176, 301];
 
+/**
+ * <col> ตามความกว้างคอลัมน์ในไฟล์ Excel (หน่วยตัวอักษร ตามที่ Excel แสดง)
+ * Excel วาดแต่ละคอลัมน์กว้างกว่าค่าในไฟล์ราว 0.42 ตัวอักษร (วัดจาก PDF ที่ Excel พิมพ์ทั้งใบล้างและใบติดตั้ง)
+ * splitLast = แบ่งคอลัมน์สุดท้ายเป็นกี่ช่อง (ใบซ่อมมี 6 คอลัมน์ แบ่งคอลัมน์ F ให้ครบกริด 8 ช่อง)
+ */
+export function xlCols(widths, splitLast = 1) {
+  const w = widths.map(x => x + 0.42);
+  const last = w.pop();
+  return colgroup([...w, ...Array(splitLast).fill(last / splitLast)]);
+}
+
 /** <col> ของกริด 8 คอลัมน์ตามความกว้างที่ให้ (หน่วยใดก็ได้ — คิดเป็นสัดส่วน) */
 export function colgroup(widths = COL_WIDTHS) {
   const total = widths.reduce((a, b) => a + b, 0);
   return widths.map(w => `<col style="width:${(w / total * 100).toFixed(2)}%">`).join('');
 }
 
-/** บรรทัดอ้างอิงท้ายหน้าแรก เหมือนกันทุกแบบฟอร์ม */
+/** บรรทัดอ้างอิงท้ายหน้าแรก — ใบซ่อมแบ่ง 2 บรรทัดตามไฟล์ */
 export const REF_LINE_2 =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '<br>ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
 
+// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ทั้งช่องตัวเอียง ขนาด/สีตามไฟล์ของแต่ละแบบ (--rs / --rc ดู docShell)
 export const REF_LINE =
-  '<div class="ref">อ้างอิงแรงดันน้ำยา <i>(Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI /' +
-  '\n    R410A ≈ 120–140 PSI</i> | ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์' +
-  '\n    ความยาวท่อ และอุณหภูมิห้อง</div>';
+  '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
+  '&nbsp;&nbsp;|&nbsp;&nbsp;ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
 
 export const esc = v => plainText(v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -170,7 +181,7 @@ function signRows(rows, [l, r] = [5, 3], bold = false) {
   const hc = bold ? 'ctr b' : 'ctr';
   return rows.map(([left, right]) =>
     '<tr>' +
-    `<th colspan="${l}" class="${hc}">${esc(left[0])}</th><th colspan="${r}" class="${hc}">${esc(right[0])}</th>` +
+    `<th colspan="${l}" class="${hc} sh">${esc(left[0])}</th><th colspan="${r}" class="${hc} sh">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
     `<td colspan="${l}" class="ctr">${signCell(left[1], left[2], left[3])}</td>` +
     `<td colspan="${r}" class="ctr">${signCell(right[1], right[2], right[3])}</td>` +
@@ -273,7 +284,7 @@ export function docShell(o, opts) {
 <title>${esc(o.title)}</title>
 ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
-</head><body style="--k:${Number(o.scale) || 1}">
+</head><body style="--k:${Number(o.scale) || 1};--hh:${Number(o.headerPt) || 56}pt;--sh:${Number(o.signHeadPt) || 17.7}pt;--rs:${Number(o.refPt) || 12}pt;--rc:${o.refGray ? '#808080' : '#000'}">
 ${opts.toolbar ? toolbar() : ''}
 ${opts.draft ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
 ${o.body}
@@ -289,13 +300,16 @@ body { margin: 0; font-family: 'Angsana New', 'TH Sarabun New', 'Sarabun', 'Taho
 
 .sheet { page-break-after: always; }
 .sheet:last-child { page-break-after: auto; }
-.frame { border: 1.5pt solid #000; }
+/* กรอบนอกวาดทับเนื้อหา และหดเข้าจากขอบพิมพ์ 1pt — ถ้าชิดขอบพอดี Chrome ตัดขอบขวาทิ้งตอนพิมพ์ (เส้นเหลือแต่เทาของตาราง)
+   overflow ซ่อนเศษเส้นตารางที่ปัดพิกเซลแล้วล้นออกนอกกรอบ */
+.frame { position: relative; margin: 0 1pt; overflow: hidden; }
+.frame::after { content: ""; position: absolute; inset: 0; border: 1pt solid #000; pointer-events: none; }
 .code { text-align: right; font-size: calc(11pt * var(--k)); margin-top: 1.5mm; }
 
 /* ---------- หัวกระดาษ ---------- */
 table.hdr { width: 100%; border-collapse: collapse; }
 table.hdr td { border: none; border-bottom: 1pt solid #000; padding: 1.5mm 3mm; vertical-align: middle; }
-table.hdr td.logo { width: calc(62mm * var(--k)); height: calc(56pt * var(--k)); }
+table.hdr td.logo { width: calc(62mm * var(--k)); height: calc(var(--hh) * var(--k)); }   /* --hh = ความสูงแถว 1 ในไฟล์ */
 table.hdr td.logo img { display: block; width: calc(52mm * var(--k)); height: calc(13.6mm * var(--k));
                         object-fit: cover; object-position: center; }
 table.hdr td.name { text-align: left; font-size: calc(20pt * var(--k)); font-weight: 700;
@@ -303,7 +317,9 @@ table.hdr td.name { text-align: left; font-size: calc(20pt * var(--k)); font-wei
 
 /* ---------- ตารางหลัก ---------- */
 table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
-table.main td, table.main th { border: 0.5pt solid #000; padding: 0 1.2mm;
+/* เส้นในตารางสีเทา (BFBFBF) ตามไฟล์ — เส้นดำมีแค่กรอบนอก แถบหัวข้อส่วน และเส้นบนช่องอ้างอิง
+   ข้อความชิดเส้นซ้ายเหมือน Excel (เว้นราว 2px) */
+table.main td, table.main th { border: 0.5pt solid #BFBFBF; padding: 0 0.6mm;
                                height: calc(17.7pt * var(--k));
                                font-size: calc(12pt * var(--k)); line-height: 1.1; vertical-align: middle;
                                text-align: left; word-wrap: break-word; font-weight: 400; }
@@ -333,6 +349,8 @@ td.choices .gap { display: inline-block; width: 14mm; }
 
 /* แถวบรรทัดของส่วนบันทึก (noteRows) — บรรทัดที่เกินจำนวนแถวขึ้นบรรทัดใหม่ในแถวสุดท้าย */
 tr.note td { white-space: pre-wrap; }
+/* หัวช่องลงนาม สูงตามไฟล์ของแต่ละแบบ (--sh) */
+table.main th.sh { height: calc(var(--sh) * var(--k)); }
 tr.sign td { height: calc(25pt * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
 tr.sign .who { margin-bottom: 1mm; }
 /* ค่าที่พิมพ์ลงในช่องว่าง — คงเส้นใต้ไว้ให้ดูเป็นช่องที่ถูกกรอกแล้ว ไม่ใช่ข้อความลอยๆ
@@ -342,8 +360,10 @@ tr.sign .who { margin-bottom: 1mm; }
 .fill.nm { min-width: 38mm; }
 .fill.dt { min-width: 22mm; }
 
-.ref { text-align: center; font-size: calc(11pt * var(--k)); font-style: italic; line-height: 1.5;
-        padding: calc(2.5mm * var(--k)) 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
+/* ช่องอ้างอิงท้ายใบ สูง 36pt ตามไฟล์ทั้งสามแบบ */
+.ref { display: flex; flex-direction: column; justify-content: center; text-align: center;
+       min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k)); color: var(--rc);
+       font-style: italic; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
 /* ---------- ลายน้ำฉบับร่าง (ยังอนุมัติไม่ครบ ดู approval.js) ----------
    position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */

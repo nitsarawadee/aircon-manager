@@ -1,7 +1,7 @@
 import { REPAIR_CHECKLIST_ITEMS, REPAIR_PART_ROWS } from '../schema.js';
 import { plainText } from '../values.js';
 import {
-  colgroup, REF_LINE_2, esc, thaiDate, val, sectionRow, pageHeader,
+  xlCols, REF_LINE_2, esc, thaiDate, val, sectionRow, pageHeader,
   sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
@@ -160,8 +160,8 @@ export function buildRepairDocHtml(form, opts = {}) {
   }
 
   const photos = opts.photos || {};
-  // A–E ตามไฟล์ repair-form-template.xlsx · F (28.13) แบ่งเป็น 3 ช่องให้ครบกริด 8 คอลัมน์
-  const cols = colgroup([3.75, 11.5, 26.13, 8.5, 8.5, 9.377, 9.377, 9.376]);
+  // คอลัมน์ A–F ตามไฟล์ repair-form-template.xlsx · F แบ่งเป็น 3 ช่องให้ครบกริด 8 คอลัมน์
+  const cols = xlCols([3.91, 11.64, 26.27, 8.64, 8.64, 28.27], 3);
 
   const body = `<div class="sheet"><div class="frame">
   ${pageHeader('บันทึกผลการซ่อมเครื่องปรับอากาศ', opts)}
@@ -202,6 +202,7 @@ ${photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการซ่อมเครื่องปรับอากาศ',
     body,
+    headerPt: 56.4, signHeadPt: 18.4, refGray: true,   // ความสูงแถว 1 · หัวช่องลงนาม · สีข้อความอ้างอิงตามไฟล์
     scale: 1       // แบบฟอร์ม Excel พิมพ์ 100%
   }, opts);
 }
