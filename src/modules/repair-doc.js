@@ -2,7 +2,7 @@ import { REPAIR_CHECKLIST_ITEMS, REPAIR_PART_ROWS } from '../schema.js';
 import { plainText } from '../values.js';
 import {
   colgroup, REF_LINE_2, esc, thaiDate, val, sectionRow, pageHeader,
-  sectionSign, photoPage, docShell
+  sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
 /**
@@ -99,9 +99,7 @@ function sectionDetail(form) {
     ['อาการเสีย :', form.Symptom],
     ['สาเหตุ :', form.Cause],
     ['การแก้ไข :', form.Fix]
-  ].map(([label, value]) =>
-    `<tr class="note n2"><td colspan="8">${esc(label)} ${val(value)}</td></tr>`
-  ).join('');
+  ].map(([label, value]) => noteRows(value, 2, label)).join('');
 }
 
 /** ส่วนที่ 3 : รายการบันทึกผล — [1 ข้อ] [2-4 รายการ] [5 หน่วย] [6-7 บันทึกผล] [8 หมายเหตุ] */
@@ -182,7 +180,7 @@ export function buildRepairDocHtml(form, opts = {}) {
     ${sectionParts(form)}
 
     ${sectionRow('ส่วนที่ 5 : แนวทางป้องกันและข้อเสนอแนะ')}
-    <tr class="note"><td colspan="8">${val(form.Suggestion)}</td></tr>
+    ${noteRows(form.Suggestion, 4)}
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
     ${sectionSign(form, 'ผู้ดำเนินการซ่อม (บ./หจก.)', undefined, opts.signers, [3, 5], true)}

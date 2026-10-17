@@ -2,7 +2,7 @@ import { INSTALL_CHECKLIST_ITEMS } from '../schema.js';
 import { formatTime, plainText } from '../values.js';
 import {
   colgroup, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
-  sectionSign, photoPage, docShell
+  sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
 /**
@@ -211,7 +211,7 @@ export function buildInstallDocHtml(form, opts = {}) {
     ${sectionSummary(units)}
 
     ${sectionRow('ส่วนที่ 5 : บันทึกเพิ่มเติม')}
-    <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
+    ${noteRows(form.AdditionalNote, 4)}
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
     ${sectionSign(form, 'ผู้ติดตั้ง (บ./หจก.)', 'ผู้ตรวจรับ (Supervisor / Area / Region Manager)', opts.signers)}

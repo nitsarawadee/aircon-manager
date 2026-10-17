@@ -2,7 +2,7 @@ import { CLEANING_CHECKLIST_ITEMS } from '../schema.js';
 import { formatTime, plainText } from '../values.js';
 import {
   COL_WIDTHS, REF_LINE, esc, thaiDate, val, sectionRow, pageHeader,
-  sectionSign, photoPage, docShell
+  sectionSign, photoPage, docShell, noteRows
 } from './doc-common.js';
 
 /**
@@ -227,7 +227,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
     ${sectionSummary(form, units)}
 
     ${sectionRow('ส่วนที่ 5 : บันทึกเพิ่มเติม')}
-    <tr class="note"><td colspan="8">${val(form.AdditionalNote)}</td></tr>
+    ${noteRows(form.AdditionalNote, 4)}
 
     ${sectionRow('ส่วนที่ 6 : การลงนาม')}
     ${sectionSign(form, 'ผู้ดำเนินการล้างแอร์ (บ./หจก.)', undefined, opts.signers, [5, 3], true)}

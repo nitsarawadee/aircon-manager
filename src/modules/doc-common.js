@@ -65,6 +65,20 @@ export const val = v => {
   return t ? `<span class="v">${t}</span>` : '';
 };
 
+/**
+ * ส่วนบันทึกที่เว้นบรรทัดไว้ให้เขียน — n แถวจริงของตาราง เส้นเหมือนช่องอื่นตามแบบฟอร์ม
+ * (เดิมวาดเส้นด้วยพื้นไล่สี พอแปลงเป็น PDF เส้นจางและห่างไม่เท่ากัน)
+ * ข้อความลงทีละแถวตามบรรทัดที่พิมพ์ บรรทัดที่เกินจำนวนแถวต่อท้ายแถวสุดท้าย
+ */
+export function noteRows(text, n = 4, label = '') {
+  const lines = String(text ?? '').replace(/\s+$/, '').split(/\r?\n/);
+  const rows = Array.from({ length: n }, (_, i) =>
+    i < n - 1 ? (lines[i] ?? '') : lines.slice(n - 1).join('\n'));
+  return rows.map((t, i) =>
+    `<tr class="note"><td colspan="8">${i === 0 && label ? esc(label) + ' ' : ''}${val(t)}</td></tr>`
+  ).join('');
+}
+
 /** แถบหัวข้อส่วน กินทั้งแถว */
 export const sectionRow = title => `<tr class="sec"><td colspan="8">${esc(title)}</td></tr>`;
 
@@ -317,13 +331,8 @@ table.main tr:first-child > *, table.info tr:first-child > * { border-top: none;
 td.choices .box { font-size: calc(13pt * var(--k)); line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
 
-/* ส่วนบันทึกมีเส้นบรรทัดให้เขียนเหมือนแบบฟอร์ม — 4 บรรทัด (บันทึกเพิ่มเติม) · ใบซ่อมส่วนที่ 2 ข้อละ 2 บรรทัด (.n2)
-   ตัวหนังสือวางบนบรรทัดเดียวกับเส้น (line-height = ความสูงแถว) */
-tr.note td { --row: calc(17.7pt * var(--k)); height: calc(var(--row) * 4); vertical-align: top; white-space: pre-wrap;
-             line-height: var(--row); padding-top: 0 !important;
-             background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--row) - 0.5pt),
-                               #BFBFBF calc(var(--row) - 0.5pt), #BFBFBF var(--row)); }
-tr.note.n2 td { height: calc(var(--row) * 2); }
+/* แถวบรรทัดของส่วนบันทึก (noteRows) — บรรทัดที่เกินจำนวนแถวขึ้นบรรทัดใหม่ในแถวสุดท้าย */
+tr.note td { white-space: pre-wrap; }
 tr.sign td { height: calc(25pt * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
 tr.sign .who { margin-bottom: 1mm; }
 /* ค่าที่พิมพ์ลงในช่องว่าง — คงเส้นใต้ไว้ให้ดูเป็นช่องที่ถูกกรอกแล้ว ไม่ใช่ข้อความลอยๆ
