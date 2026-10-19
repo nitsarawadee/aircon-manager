@@ -11431,6 +11431,8 @@ const CLEANING_CHECKLIST_ITEMS = [
         <main class="flex-1 overflow-y-auto">
           <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
 
+            ${link ? '' : formAttachCard('repair')}
+
             ${card(`
               <div class="flex items-start justify-between gap-2 flex-wrap mb-2">
                 <div>
@@ -11443,8 +11445,6 @@ const CLEANING_CHECKLIST_ITEMS = [
                 ยี่ห้อ ${esc(found.Brand || '-')} · BTU ${esc(found.BTU || '-')} ·
                 SN ${esc(found.IndoorSN || '-')} / ${esc(found.OutdoorSN || '-')}
               </div>`)}
-
-            ${link ? '' : formAttachCard('repair')}
 
             ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
 
@@ -12910,6 +12910,8 @@ const CLEANING_CHECKLIST_ITEMS = [
         <main class="flex-1 overflow-y-auto">
           <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
 
+            ${link ? '' : formAttachCard('install')}
+
             ${link && link.apptDate ? linkApptBanner(link.apptDate) : ''}
 
             ${card(`
@@ -12920,8 +12922,6 @@ const CLEANING_CHECKLIST_ITEMS = [
                 </div>
                 <span class="px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 text-xs font-medium">ITEL-FM-NE-006</span>
               </div>`)}
-
-            ${link ? '' : formAttachCard('install')}
 
             ${card(`
               <div class="space-y-3">
