@@ -994,6 +994,12 @@
                 title="ปริ้นฟอร์มซ่อมเปล่า (ITEL-FM-NE-005) ของเครื่องที่แจ้งซ่อมไว้ ไปเขียนด้วยมือหน้างาน">
                 <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
               </button>
+              <!-- ปุ่มกรอกฟอร์มของแต่ละแท็บหน้าตาเดียวกัน: พื้นขาว ขอบสีประจำแท็บ (ผู้ใช้ขอ — เดิมฟอร์มล้างเป็นลิงก์ตัวหนังสือ) -->
+              <button id="docBtn_cleanForm" onclick="openCleaningFormModal()"
+                class="bg-white border border-[#1153a1] text-[#1153a1] hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
+                title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
+                <i class="ph ph-note-pencil"></i> กรอกฟอร์มล้าง
+              </button>
               <button id="docBtn_attach" onclick="openAttachDocsDialog(true)"
                 class="bg-white border border-teal-500 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
                 title="ถ่ายรูปฟอร์มล้างที่เขียนมือมาแล้ว — แนบไฟล์ เลือกเครื่องที่ล้าง แล้วปิดงานในแผนได้ในขั้นตอนเดียว">
@@ -1015,11 +1021,6 @@
                 <i class="ph ph-plus-circle"></i> กรอกฟอร์มติดตั้ง
               </button>
             </div>
-            <button id="docBtn_cleanForm" onclick="openCleaningFormModal()"
-              class="text-xs text-gray-500 hover:text-[#1153a1] hover:underline self-end"
-              title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
-              หรือกรอกฟอร์มล้างในระบบทีละข้อ &rarr;
-            </button>
           </div>
         </div>
 
