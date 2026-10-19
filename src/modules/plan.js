@@ -423,7 +423,37 @@ export async function getPlanCalendar(ctx, year, month) {
     for (const row of await getCleaningPlan(ctx, py)) rows.push({ ...row, PlanYear: py });
   }
 
-  return planCalendar(rows, year, month);
+  // ประกาศบนปฏิทิน: นับจากทุกแผน ไม่ใช่แค่เดือนที่เปิดดู (ผู้ใช้ขอ 19/10/2569)
+  return { ...planCalendar(rows, year, month), due: planDueCounts(rows, todayStart()) };
+}
+
+/** เตือนล่วงหน้ากี่วัน — ชุดเดียวกับป้าย "ใกล้ถึงกำหนด" ในหน้าแผนล้าง (PLAN_WARN_DAYS ฝั่งหน้าเว็บ) */
+export const DUE_WARN_DAYS = 30;
+
+/**
+ * นับรอบที่ยังไม่ล้าง: เลยวันนัดแล้ว (late) · อีกไม่เกิน 30 วันถึงวันนัด (soon)
+ * กติกาเดียวกับนัด 30 วันในแดชบอร์ด (upcomingFromPlan): ข้ามเครื่องที่เลิกใช้ · ข้ามรอบของผู้รับเหมาเจ้าอื่น
+ * · ข้ามรอบที่ล้างแล้วหรือยกเลิก · ข้ามรอบที่ยังไม่ลงวันนัด
+ * @param {Array} rows แถวแผน (กรองตามสิทธิ์มาแล้ว)
+ * @param {Date} today เที่ยงคืนของวันนี้ตามเวลาไทย
+ * @returns {{late: number, soon: number}}
+ */
+export function planDueCounts(rows, today) {
+  const limit = new Date(today.getTime() + DUE_WARN_DAYS * 86400000 + 86399999);
+  let late = 0, soon = 0;
+  for (const p of rows || []) {
+    if (p.Retired || p.Removed) continue;
+    for (const r of roundsOf(p)) {
+      if (p['R' + r + '_Mine'] === false) continue;
+      const status = p['R' + r + '_Status'];
+      if (status === 'ล้างเสร็จสิ้น' || status === 'ยกเลิก') continue;
+      const d = safeParseDate(p['R' + r + '_PlanDate']);
+      if (!d) continue;
+      if (d < today) late++;
+      else if (d <= limit) soon++;
+    }
+  }
+  return { late, soon };
 }
 
 /* ==================== นัดหมาย 30 วันข้างหน้า ==================== */
