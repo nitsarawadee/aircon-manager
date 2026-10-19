@@ -3951,8 +3951,9 @@
         type: 'bar',
         data: {
           labels,
-          // 4 หมวด สีเดียวกับกราฟหน้างบประมาณ (ผู้ใช้ขอให้เหมือนกัน)
-          datasets: BUDGET_UI.map(c => ({ label: c.short, data: monthlyTrend.map(m => m[c.month] || 0), backgroundColor: c.color, borderRadius: 4 }))
+          // 4 หมวดแบบหน้างบประมาณ แต่ใช้สีพาสเทลของหน้าแรก — ล้าง/ซ่อมสีเดียวกับการ์ดค่าใช้จ่ายด้านบน
+          datasets: BUDGET_UI.map(c => ({ label: c.short, data: monthlyTrend.map(m => m[c.month] || 0),
+            backgroundColor: pastel({ cleaning: 'aqua', repair: 'lilac', purchase: 'mint', install: 'peach' }[c.month]), borderRadius: 4 }))
         },
         options: {
           responsive: true, maintainAspectRatio: false,
