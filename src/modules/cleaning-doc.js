@@ -210,7 +210,7 @@ export function buildCleaningDocHtml(form, opts = {}) {
   // คอลัมน์ A–H ตามไฟล์ cleaning-form-template.xlsx
   const cols = xlCols([4.18, 16.18, 17.18, 9.55, 10.55, 16.18, 16.18, 27.64]);
 
-  const body = `<div class="sheet"><div class="frame">
+  const body = `<div class="sheet form"><div class="frame">
   ${pageHeader('บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ (Node)', opts)}
 
   <table class="main"><colgroup>${cols}</colgroup><tbody>
@@ -249,7 +249,9 @@ ${units.map(u => photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการล้างเครื่องปรับอากาศ',
     body,
-    headerPt: 59.15, signHeadPt: 16.25,   // ความสูงแถว 1 และหัวช่องลงนามในไฟล์
+    // ความสูงแถว 1 และหัวช่องลงนามตามไฟล์ (ปัดเป็นพิกเซลแบบ Excel) · ตำแหน่งกรอบตามที่ Excel พิมพ์
+    headerPt: 59.25, signHeadPt: 16.5, rowPt: 17.25, signRowPt: 24.75, page: { top: 12.89, left: 9.69, width: 190.24 },
+    logo: { x: 4.75, y: 7.47, w: 153.51, h: 43.13 },   // ตำแหน่ง/ขนาดรูปโลโก้ในไฟล์ (pt)
     scale: 0.8     // แบบฟอร์ม Excel ตั้งพิมพ์ 80%
   }, opts);
 }

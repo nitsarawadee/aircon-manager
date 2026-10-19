@@ -154,7 +154,7 @@ test('ChecklistJSON เสีย ต้องไม่ทำเอกสาร�
 
 test('ผลตรวจรับติ๊กแยกรายเครื่อง เครื่องหนึ่งผ่าน อีกเครื่องไม่ผ่านได้', () => {
   const html = buildInstallDocHtml(baseForm());
-  const rows = [...html.matchAll(/<tr>\s*<th colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง[\s\S]*?<\/tr>/g)];
+  const rows = [...html.matchAll(/<tr>\s*<t[hd] colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง[\s\S]*?<\/tr>/g)];
 
   assert.equal(rows.length, 2, 'ต้องมีแถวผลตรวจรับสองเครื่อง');
 
@@ -168,7 +168,7 @@ test('ผลตรวจรับติ๊กแยกรายเครื่�
 
 test('ยังไม่ได้เลือกผลตรวจรับ ต้องไม่ติ๊กช่องไหนเลย', () => {
   const html = buildInstallDocHtml(baseForm({ AcceptResult1: '', AcceptResult2: '' }));
-  const rows = [...html.matchAll(/<tr>\s*<th colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง[\s\S]*?<\/tr>/g)];
+  const rows = [...html.matchAll(/<tr>\s*<t[hd] colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง[\s\S]*?<\/tr>/g)];
 
   for (const row of rows) {
     assert.ok(!row[0].includes('☑'), 'ห้ามติ๊กให้เองเมื่อยังไม่ได้เลือก');

@@ -58,7 +58,7 @@ test('ต้องมีครบ 6 ส่วนตามแบบฟอร์�
 test('ต้องมี 2 หน้า — ใบแจ้งซ่อม กับ หน้ารูป', () => {
   const html = buildRepairDocHtml(baseForm(), {});
 
-  assert.equal((html.match(/class="sheet"/g) || []).length, 2);
+  assert.equal((html.match(/class="sheet[ "]/g) || []).length, 2);
   assert.ok(html.includes('บันทึกผลการซ่อมเครื่องปรับอากาศ'));
   assert.ok(html.includes('รูปถ่ายประกอบการซ่อมเครื่องปรับอากาศ'));
 });

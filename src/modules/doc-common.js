@@ -26,10 +26,11 @@ export const COL_WIDTHS = [50, 180, 190, 95, 130, 176, 176, 301];
 /**
  * <col> ตามความกว้างคอลัมน์ในไฟล์ Excel (หน่วยตัวอักษร ตามที่ Excel แสดง)
  * Excel วาดแต่ละคอลัมน์กว้างกว่าค่าในไฟล์ราว 0.42 ตัวอักษร (วัดจาก PDF ที่ Excel พิมพ์ทั้งใบล้างและใบติดตั้ง)
+ * pad = ส่วนเพิ่มต่อคอลัมน์ (ชีตรูปพิมพ์ 107% วัดได้ราว 0.5)
  * splitLast = แบ่งคอลัมน์สุดท้ายเป็นกี่ช่อง (ใบซ่อมมี 6 คอลัมน์ แบ่งคอลัมน์ F ให้ครบกริด 8 ช่อง)
  */
-export function xlCols(widths, splitLast = 1) {
-  const w = widths.map(x => x + 0.42);
+export function xlCols(widths, splitLast = 1, pad = 0.42) {
+  const w = widths.map(x => x + pad);
   const last = w.pop();
   return colgroup([...w, ...Array(splitLast).fill(last / splitLast)]);
 }
@@ -45,7 +46,7 @@ export const REF_LINE_2 =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '<br>ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
 
-// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ทั้งช่องตัวเอียง ขนาด/สีตามไฟล์ของแต่ละแบบ (--rs / --rc ดู docShell)
+// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ทั้งช่องตัวเอียง ขนาดตามไฟล์ของแต่ละแบบ (--rs ดู docShell) · สีดำตามที่ Excel พิมพ์จริง
 export const REF_LINE =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '&nbsp;&nbsp;|&nbsp;&nbsp;ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
@@ -86,7 +87,7 @@ export function noteRows(text, n = 4, label = '') {
   const rows = Array.from({ length: n }, (_, i) =>
     i < n - 1 ? (lines[i] ?? '') : lines.slice(n - 1).join('\n'));
   return rows.map((t, i) =>
-    `<tr class="note"><td colspan="8">${i === 0 && label ? esc(label) + ' ' : ''}${val(t)}</td></tr>`
+    `<tr class="note${i === 0 && label ? ' lead' : ''}"><td colspan="8">${i === 0 && label ? esc(label) + ' ' : ''}${val(t)}</td></tr>`
   ).join('');
 }
 
@@ -95,11 +96,10 @@ export const sectionRow = title => `<tr class="sec"><td colspan="8">${esc(title)
 
 /** แถบหัวกระดาษ — โลโก้ซ้าย ชื่อเอกสารกึ่งกลาง อยู่ในกรอบเดียวกัน */
 export const pageHeader = (title, opts) =>
-  '<table class="hdr"><tbody><tr>' +
-  '<td class="logo">' +
-  (opts.logoHref ? `<img src="${esc(opts.logoHref)}" alt="INTERLINK Telecom">` : '') +
-  `</td><td class="name">${esc(title)}</td>` +
-  '</tr></tbody></table>';
+  '<div class="hdr">' +
+  (opts.logoHref ? `<div class="logo"><img src="${esc(opts.logoHref)}" alt="INTERLINK Telecom"></div>` : '') +
+  `<div class="name">${esc(title)}</div>` +
+  '</div>';
 
 /* ==================== ส่วนลงนาม ==================== */
 
@@ -192,10 +192,11 @@ function signRows(rows, [l, r] = [5, 3], bold = false) {
 /* ==================== หน้ารูปภาพ ==================== */
 
 /**
- * หน้ารูปของเครื่องหนึ่งตัว — ตาราง 3x3 คำบรรยายอยู่ในกรอบใต้รูป
+ * หน้ารูปของเครื่องหนึ่งตัว — วางตามชีตรูปในไฟล์ Excel ทั้งสามแบบ (โครงเดียวกัน)
  *
- * ช่องที่ยังไม่มีรูปพิมพ์เป็นกรอบเปล่าพร้อมข้อความ "วางรูปในกรอบด้านล่าง (Picture)"
- * เหมือนแบบฟอร์มกระดาษ เพื่อให้ปริ้นไปติดรูปด้วยมือได้
+ * กริด 10 คอลัมน์ A–J: A D G J เป็นช่องเว้นระยะ · กรอบรูป B–C E–F H–I รวมช่อง 9 แถว + แถวคำบรรยายใต้รูป
+ * พิมพ์ 107% ความสูงแถวตามไฟล์คูณ PHOTO_ROW_FIT (Excel ปัดเป็นพิกเซลตอนพิมพ์ — วัดจาก PDF ที่ Excel พิมพ์)
+ * ช่องที่ยังไม่มีรูปพิมพ์เป็นกรอบเปล่าพร้อมข้อความ "วางรูปในกรอบด้านล่าง (Picture)" เพื่อปริ้นไปติดรูปด้วยมือได้
  *
  * @param {Object} o
  * @param {string}   o.title    ชื่อหน้า
@@ -204,29 +205,42 @@ function signRows(rows, [l, r] = [5, 3], bold = false) {
  * @param {string}   o.nodeName ชื่อ Node ที่หัวหน้า
  * @param {string}   o.date     วันที่ที่หัวหน้า (แปลงรูปแบบมาแล้ว)
  * @param {string}   o.formCode รหัสแบบฟอร์มมุมขวาล่าง
+ * @param {boolean}  [o.dateCenter] ป้ายวันที่กึ่งกลาง (ใบซ่อม) — ใบล้าง/ใบติดตั้งชิดซ้ายตามไฟล์
  */
-export function photoPage(photos, opts, o) {
-  const cell = i => {
-    const src = photos[o.slot + '-' + i];
-    return '<td class="pic"><div class="box">' +
-      (src
-        ? `<img src="${src}" alt="">`
-        : '<div class="ph">วางรูปในกรอบด้านล่าง&nbsp;<i>(Picture)</i></div>') +
-      `<div class="cap">${esc(o.captions[i - 1])}</div></div></td>`;
-  };
+const PHOTO_COLS = [2.18, 12.18, 12.18, 2.18, 12.18, 12.18, 2.18, 12.18, 12.18, 2.18];
+// แถวในไฟล์ (pt): กรอบรูป 3 แถวของหน้า = แถว 4–12, 15–23, 26–34 · คำบรรยาย 13, 24, 35 · เว้นระยะ 3, 14, 25, 36
+const PHOTO_BOX_PT = [162.5, 160.95, 158.65];
+const PHOTO_CAP_PT = [17.5, 18.4, 17.5];
+const PHOTO_ROW_FIT = 0.982;
 
-  const rows = [];
+export function photoPage(photos, opts, o) {
+  const h = pt => `height:calc(${(pt * PHOTO_ROW_FIT).toFixed(2)}pt * var(--k))`;
+  const pic = i => {
+    const src = photos[o.slot + '-' + i];
+    return '<td colspan="2" class="pic">' +
+      (src ? `<img src="${src}" alt="">` : '<span class="ph">วางรูปในกรอบด้านล่าง (Picture)</span>') + '</td>';
+  };
+  const gap = '<td class="gap"></td>';
+  const spacer = `<tr><td colspan="10" class="gap" style="${h(17.5)}"></td></tr>`;
+
+  let grid = '';
   for (let r = 0; r < 3; r++) {
-    rows.push('<tr>' + [1, 2, 3].map(c => cell(r * 3 + c)).join('') + '</tr>');
+    const n = [1, 2, 3].map(c => r * 3 + c);
+    grid += `<tr style="${h(PHOTO_BOX_PT[r])}">${gap}${n.map(pic).join(gap)}${gap}</tr>` +
+      `<tr style="${h(PHOTO_CAP_PT[r])}">${gap}${n.map(i => `<td colspan="2" class="cap">${esc(o.captions[i - 1])}</td>`).join(gap)}${gap}</tr>` +
+      spacer;
   }
 
-  return `<div class="sheet"><div class="frame">
+  return `<div class="sheet photo" style="--k:1.07;--hh:${(56.4 * PHOTO_ROW_FIT).toFixed(2)}pt;${logoVars({ x: 2.95, y: 12.14, w: 106.6, h: 29.89 })}"><div class="frame">
   ${pageHeader(o.title, opts)}
-  <table class="info"><tbody><tr>
-    <th>${esc(o.nodeLabel || 'Node Name')}</th><td>${val(plainText(o.nodeName))}</td>
-    <th>${esc(o.dateLabel || 'วันที่')}</th><td>${val(o.date)}</td>
-  </tr></tbody></table>
-  <table class="pics"><tbody>${rows.join('')}</tbody></table>
+  <table class="photo"><colgroup>${xlCols(PHOTO_COLS, 1, 0.5)}</colgroup><tbody>
+    <tr class="info" style="${h(21.15)}">
+      <th colspan="2">${esc(o.nodeLabel || 'Node Name')}</th><td colspan="3">${val(plainText(o.nodeName))}</td>
+      <th colspan="2" class="${o.dateCenter ? 'dt ctr' : 'dt'}">${esc(o.dateLabel || 'วันที่')}</th><td colspan="3">${val(o.date)}</td>
+    </tr>
+    ${spacer}
+    ${grid}
+  </tbody></table>
 </div><div class="code">${esc(o.formCode)}</div></div>`;
 }
 
@@ -284,11 +298,28 @@ export function docShell(o, opts) {
 <title>${esc(o.title)}</title>
 ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 <style>${STYLE}</style>
-</head><body style="--k:${Number(o.scale) || 1};--hh:${Number(o.headerPt) || 56}pt;--sh:${Number(o.signHeadPt) || 17.7}pt;--rs:${Number(o.refPt) || 12}pt;--rc:${o.refGray ? '#808080' : '#000'}">
+${o.page ? formPage(o.page) : ''}
+</head><body style="--k:${Number(o.scale) || 1};--hh:${Number(o.headerPt) || 56}pt;${logoVars(o.logo)};--rh:${Number(o.rowPt) || 17.5}pt;--sr:${Number(o.signRowPt) || 25}pt;--sh:${Number(o.signHeadPt) || Number(o.rowPt) || 17.5}pt;--rs:${Number(o.refPt) || 12}pt">
 ${opts.toolbar ? toolbar() : ''}
 ${opts.draft ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
 ${o.body}
 </body></html>`;
+}
+
+/**
+ * หน้าแบบฟอร์ม (หน้าแรก) วางที่ตำแหน่งเดียวกับที่ Excel พิมพ์ — ขอบบน/ซ้ายและความกว้างกรอบ (มม.) วัดจาก PDF ของไฟล์ต้นฉบับ
+ * ใช้หน้ากระดาษชื่อ form แยกจากหน้ารูป จึงไม่กระทบระยะขอบหน้ารูป
+ */
+function logoVars(l = {}) {
+  // ค่าเริ่มต้น = โลโก้ของใบล้าง
+  const { x = 4.75, y = 7.47, w = 153.5, h = 43.13 } = l;
+  return `--lx:${x}pt;--ly:${y}pt;--lw:${w}pt;--lh:${h}pt`;
+}
+
+function formPage(p) {
+  return `<style>@page form { margin: ${p.top}mm 8mm 8mm 8mm; }
+.sheet.form { page: form; }
+.sheet.form .frame { width: ${p.width}mm; margin-left: ${p.left - 8}mm; }</style>`;
 }
 
 export const STYLE = `
@@ -307,20 +338,23 @@ body { margin: 0; font-family: 'Angsana New', 'TH Sarabun New', 'Sarabun', 'Taho
 .code { text-align: right; font-size: calc(11pt * var(--k)); margin-top: 1.5mm; }
 
 /* ---------- หัวกระดาษ ---------- */
-table.hdr { width: 100%; border-collapse: collapse; }
-table.hdr td { border: none; border-bottom: 1pt solid #000; padding: 1.5mm 3mm; vertical-align: middle; }
-table.hdr td.logo { width: calc(62mm * var(--k)); height: calc(var(--hh) * var(--k)); }   /* --hh = ความสูงแถว 1 ในไฟล์ */
-table.hdr td.logo img { display: block; width: calc(52mm * var(--k)); height: calc(13.6mm * var(--k));
-                        object-fit: cover; object-position: center; }
-table.hdr td.name { text-align: left; font-size: calc(20pt * var(--k)); font-weight: 700;
-                    padding-right: 14mm; white-space: nowrap; }
+/* แถว 1 ของไฟล์ (สูง --hh) — ชื่อเอกสารกึ่งกลางทั้งแถวเพราะไฟล์รวมช่อง A1:H1
+   โลโก้: ตำแหน่ง/ขนาดตามรูปในไฟล์ (--lx --ly --lw --lh หน่วย pt ดู docShell) ครอปบน 24.634% ล่าง 20.301% ยืดเต็มกรอบเหมือน Excel */
+.hdr { position: relative; height: calc(var(--hh) * var(--k)); border-bottom: 1pt solid #000;
+       display: flex; align-items: center; justify-content: center; }
+.hdr .logo { position: absolute; overflow: hidden;
+             left: calc(var(--lx) * var(--k)); top: calc(var(--ly) * var(--k));
+             width: calc(var(--lw) * var(--k)); height: calc(var(--lh) * var(--k)); }
+.hdr .logo img { display: block; width: 100%; height: calc(var(--lh) * var(--k) / 0.55065);
+                 margin-top: calc(var(--lh) * var(--k) * -0.24634 / 0.55065); }
+.hdr .name { font-size: calc(20pt * var(--k)); font-weight: 700; white-space: nowrap; }
 
 /* ---------- ตารางหลัก ---------- */
 table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
 /* เส้นในตารางสีเทา (BFBFBF) ตามไฟล์ — เส้นดำมีแค่กรอบนอก แถบหัวข้อส่วน และเส้นบนช่องอ้างอิง
    ข้อความชิดเส้นซ้ายเหมือน Excel (เว้นราว 2px) */
 table.main td, table.main th { border: 0.5pt solid #BFBFBF; padding: 0 0.6mm;
-                               height: calc(17.7pt * var(--k));
+                               height: calc(var(--rh) * var(--k));   /* แถวปกติ 17.5pt ในไฟล์ — ตอนพิมพ์ย่อ Excel ปัดเป็นพิกเซล ความสูงจริงต่างกันตามสเกล (--rh ดู docShell) */
                                font-size: calc(12pt * var(--k)); line-height: 1.1; vertical-align: middle;
                                text-align: left; word-wrap: break-word; font-weight: 400; }
 /* ช่องป้ายชื่อ หัวตาราง และหัวช่องลงนาม เป็นพื้นเทาอ่อนตามแบบฟอร์ม */
@@ -333,7 +367,7 @@ table.main .hd, table.main .b { font-weight: 700 !important; }
 td.unit { color: #7F7F7F; background: #F2F2F2; }
 .tight { white-space: nowrap; }   /* ขนาดเท่าช่องอื่นตามไฟล์ แค่ไม่ให้ตัดบรรทัด */
 
-tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(18.35pt * var(--k));
+tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(var(--rh) * var(--k));
             padding: 0 1.2mm !important; border-left: none; border-right: none;
             border-top: 1pt solid #000; border-bottom: 1pt solid #000; }
 
@@ -346,12 +380,19 @@ table.main tr:first-child > *, table.info tr:first-child > * { border-top: none;
 
 td.choices .box { font-size: calc(13pt * var(--k)); line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
+/* กล่องติ๊กแบบตัวควบคุมของ Excel (ใบติดตั้ง) — กล่องเล็ก ตัวหนังสือเล็กกว่าช่องอื่น ช่อง E กับ F–H ไม่มีเส้นคั่นเพราะไฟล์รวมช่อง */
+td.choices.xc { font-size: calc(11pt * var(--k)); }
+td.choices.xc .box { font-size: calc(9.5pt * var(--k)); margin-right: calc(3pt * var(--k)); }
+td.choices.xc.e { padding-left: calc(5pt * var(--k)) !important; border-right: none; }
+td.choices.xc.f { padding-left: calc(3pt * var(--k)) !important; border-left: none; }
 
 /* แถวบรรทัดของส่วนบันทึก (noteRows) — บรรทัดที่เกินจำนวนแถวขึ้นบรรทัดใหม่ในแถวสุดท้าย */
 tr.note td { white-space: pre-wrap; }
+/* แถวที่มีป้าย (ใบซ่อมส่วนที่ 2) สูง 17.75pt ตามไฟล์ */
+tr.note.lead td { height: calc(17.75pt * var(--k)); }
 /* หัวช่องลงนาม สูงตามไฟล์ของแต่ละแบบ (--sh) */
 table.main th.sh { height: calc(var(--sh) * var(--k)); }
-tr.sign td { height: calc(25pt * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
+tr.sign td { height: calc(var(--sr) * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
 tr.sign .who { margin-bottom: 1mm; }
 /* ค่าที่พิมพ์ลงในช่องว่าง — คงเส้นใต้ไว้ให้ดูเป็นช่องที่ถูกกรอกแล้ว ไม่ใช่ข้อความลอยๆ
    ความกว้างขั้นต่ำเท่ากับความยาวเส้นประเดิม ช่องจึงไม่ขยับตามความยาวของชื่อ */
@@ -362,7 +403,7 @@ tr.sign .who { margin-bottom: 1mm; }
 
 /* ช่องอ้างอิงท้ายใบ สูง 36pt ตามไฟล์ทั้งสามแบบ */
 .ref { display: flex; flex-direction: column; justify-content: center; text-align: center;
-       min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k)); color: var(--rc);
+       min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k));
        font-style: italic; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
 /* ---------- ลายน้ำฉบับร่าง (ยังอนุมัติไม่ครบ ดู approval.js) ----------
@@ -374,6 +415,33 @@ tr.sign .who { margin-bottom: 1mm; }
               padding: 2mm 10mm; border-radius: 4mm; }
 
 /* ---------- หน้ารูปภาพ ---------- */
+/* หน้ารูป: ตำแหน่งกรอบบนกระดาษตามที่ Excel พิมพ์ (เหมือนกันทั้งสามแบบ) */
+@page photo { margin: 12.97mm 8mm 8mm 8mm; }
+.sheet.photo { page: photo; }
+.sheet.photo .frame { width: 183.18mm; margin-left: 5.22mm; }
+.sheet.photo .frame::after { border-width: 1.5pt; }
+.sheet.photo .hdr .name { font-size: calc(14pt * var(--k)); }
+table.photo { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.photo td, table.photo th { padding: 0 0.6mm; font-size: calc(12pt * var(--k)); line-height: 1.1;
+                                 text-align: center; vertical-align: middle; font-weight: 400; }
+/* แถวข้อมูล: ป้ายตัวหนาพื้นเทา · ค่าตัวเอียงสีเทา 11pt (ในไฟล์เป็นสูตรดึงจากหน้าเอกสาร) */
+table.photo tr.info > * { border: 1pt solid #000; border-top: none; }
+table.photo tr.info > :first-child { border-left: none; }
+table.photo tr.info > :last-child { border-right: none; }
+table.photo tr.info th { background: #F2F2F2; font-weight: 700; }
+table.photo tr.info th.dt { text-align: left; }
+table.photo tr.info th.dt.ctr { text-align: center; }
+table.photo tr.info td { font-style: italic; font-size: calc(11pt * var(--k)); color: #808080; }
+table.photo tr.info td .v { color: inherit; }
+/* เส้น thin ของ Excel ที่สเกล 107% หนาราว 1.3pt (วัดจาก PDF ของไฟล์) — Chrome ปัดความหนาเส้นเป็นพิกเซลเต็ม: กรอบนอก 1.5pt ใกล้สุด ส่วนกรอบรูป 1pt ใกล้กว่า 1.5pt (1.5pt ซ้อนกันแล้วหนาเกิน) */
+table.photo td.pic { border: 1pt solid #000; border-bottom: none; padding: 0; overflow: hidden;
+                     font-style: italic; color: #808080; }
+table.photo td.pic { position: relative; }
+/* รูปเต็มกรอบ ตัดส่วนเกินให้พอดี (ความสูงแถวกำหนดจากไฟล์ จึงวางรูปลอยทับทั้งช่อง) */
+table.photo td.pic img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+table.photo td.cap { border: 1pt solid #000; background: #F2F2F2; }
+table.photo td.gap { border: none; padding: 0; }
+
 table.info { width: 100%; border-collapse: collapse; }
 table.info th, table.info td { border: 0.5pt solid #000; padding: 1.5mm 3mm; font-size: calc(16pt * var(--k)); }
 table.info th { background: #ECECEC; font-weight: 700; text-align: center; width: 18%; }

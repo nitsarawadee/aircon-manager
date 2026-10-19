@@ -274,7 +274,9 @@ test('มีโลโก้เมื่อระบุที่อยู่ร�
 test('ความกว้างคอลัมน์ตรงตามสัดส่วนในไฟล์ Excel', () => {
   // A 4.6 / B 16.6 / C 17.6 / D 10 / E 11 / F 16.6 / G 16.6 / H 28.1
   const html = buildCleaningDocHtml(baseForm());
-  const widths = [...html.matchAll(/<col style="width:([\d.]+)%">/g)].map(m => Number(m[1]));
+  // คอลัมน์ของตารางหน้าแรก (หน้ารูปมีกริดของตัวเองต่อท้าย)
+  const first = html.match(/<colgroup>([\s\S]*?)<\/colgroup>/)[1];
+  const widths = [...first.matchAll(/<col style="width:([\d.]+)%">/g)].map(m => Number(m[1]));
   assert.equal(widths.length, 8, 'ต้องมี 8 คอลัมน์เท่าแบบฟอร์ม');
   assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - 100) < 0.5, 'รวมกันต้องได้ 100%');
   assert.ok(widths[0] < widths[1], 'คอลัมน์เลขข้อต้องแคบที่สุด');
@@ -360,7 +362,7 @@ test('แถบปุ่มต้องถูกซ่อนตอนสั่�
 test('แถบปุ่มต้องไม่ไปแทรกกลางเนื้อเอกสาร', () => {
   // ต้องอยู่ก่อนกระดาษแผ่นแรก ไม่งั้นการจัดหน้าจะเพี้ยน
   const html = buildCleaningDocHtml(baseForm(), { toolbar: true });
-  assert.ok(html.indexOf('class="bar"') < html.indexOf('<div class="sheet">'));
+  assert.ok(html.indexOf('class="bar"') < html.indexOf('<div class="sheet'));
 });
 
 /* ==================== ส่วนที่ 6 : การลงนาม ==================== */

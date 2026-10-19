@@ -126,7 +126,7 @@ function sectionChecklist(form) {
 function sectionParts(form) {
   // คอลัมน์แรกแคบมาก (ตามกริดของแบบฟอร์ม) คำว่า "ลำดับ" จึงตกบรรทัดถ้าไม่ย่อ
   const head = '<tr>' +
-    '<th class="ctr tight">ลำดับ</th><th colspan="2" class="ctr">รายการอะไหล่</th>' +
+    '<th class="ctr tight" style="height:calc(18.4pt * var(--k))">ลำดับ</th><th colspan="2" class="ctr">รายการอะไหล่</th>' +
     '<th class="ctr">จำนวน</th><th colspan="4" class="ctr">หมายเหตุ</th></tr>';
 
   const body = partsOf(form).map(p =>
@@ -163,7 +163,7 @@ export function buildRepairDocHtml(form, opts = {}) {
   // คอลัมน์ A–F ตามไฟล์ repair-form-template.xlsx · F แบ่งเป็น 3 ช่องให้ครบกริด 8 คอลัมน์
   const cols = xlCols([3.91, 11.64, 26.27, 8.64, 8.64, 28.27], 3);
 
-  const body = `<div class="sheet"><div class="frame">
+  const body = `<div class="sheet form"><div class="frame">
   ${pageHeader('บันทึกผลการซ่อมเครื่องปรับอากาศ', opts)}
 
   <table class="main"><colgroup>${cols}</colgroup><tbody>
@@ -192,6 +192,7 @@ export function buildRepairDocHtml(form, opts = {}) {
 ${photoPage(photos, opts, {
   title: 'รูปถ่ายประกอบการซ่อมเครื่องปรับอากาศ',
   nodeLabel: 'Node Nane',
+  dateCenter: true,
   captions: PHOTO_CAPTIONS,
   slot: 1,
   nodeName: form.NodeName,
@@ -202,7 +203,9 @@ ${photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการซ่อมเครื่องปรับอากาศ',
     body,
-    headerPt: 56.4, signHeadPt: 18.4, refGray: true,   // ความสูงแถว 1 · หัวช่องลงนาม · สีข้อความอ้างอิงตามไฟล์
+    // พิมพ์ 100% ความสูงแถวตามไฟล์ตรงตัว · ตำแหน่งกรอบตามที่ Excel พิมพ์
+    headerPt: 56.4, signHeadPt: 18.4, rowPt: 17.5, signRowPt: 25, page: { top: 10, left: 14.94, width: 179.65 },
+    logo: { x: 2.72, y: 7.47, w: 143.32, h: 40.27 },   // ตำแหน่ง/ขนาดรูปโลโก้ในไฟล์ (pt)
     scale: 1       // แบบฟอร์ม Excel พิมพ์ 100%
   }, opts);
 }

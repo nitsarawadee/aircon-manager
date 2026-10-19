@@ -161,15 +161,15 @@ function sectionChecklist(form, units) {
  * ห้ามเอาผลของเครื่องหนึ่งไปติ๊กแทนอีกเครื่อง — เอกสารนี้เอาไปเซ็นตรวจรับกัน
  */
 function sectionSummary(units) {
+  // ตามไฟล์: ป้าย A–C และ "เครื่องที่" D พื้นขาว · ช่อง E–H รวมกัน มีกล่องติ๊ก "ผ่าน" ต้นคอลัมน์ E และ "ไม่ผ่าน" ต้นคอลัมน์ F
+  const pick = (u, c) => `<span class="box">${plainText(u.accept).trim() === c ? '☑' : '☐'}</span>${esc(c)}`;
   return units.map(u =>
     '<tr>' +
-    '<th colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง</th>' +
+    '<td colspan="3" class="lbl">ผลการตรวจรับงานติดตั้ง</td>' +
     `<td class="ctr tight">เครื่องที่ ${u.no}</td>` +
-    '<td colspan="4" class="choices">' +
-    ACCEPT_RESULTS.map(c =>
-      `<span class="box">${plainText(u.accept).trim() === c ? '☑' : '☐'}</span> ${esc(c)}`
-    ).join('<span class="gap"></span>') +
-    '</td></tr>'
+    `<td class="choices xc e">${pick(u, ACCEPT_RESULTS[0])}</td>` +
+    `<td colspan="3" class="choices xc f">${pick(u, ACCEPT_RESULTS[1])}</td>` +
+    '</tr>'
   ).join('');
 }
 
@@ -194,7 +194,7 @@ export function buildInstallDocHtml(form, opts = {}) {
   // คอลัมน์ A–H ตามไฟล์ install-form-template.xlsx (ต่างจากใบล้างเล็กน้อย)
   const cols = xlCols([4.18, 16.18, 15.45, 9.45, 9.45, 16.18, 16.18, 23.27]);
 
-  const body = `<div class="sheet"><div class="frame">
+  const body = `<div class="sheet form"><div class="frame">
   ${pageHeader('บันทึกผลการติดตั้งเครื่องปรับอากาศ', opts)}
 
   <table class="main"><colgroup>${cols}</colgroup><tbody>
@@ -233,7 +233,9 @@ ${units.map(u => photoPage(photos, opts, {
   return docShell({
     title: (plainText(form.DocNo) || plainText(form.ID)) + ' — บันทึกผลการติดตั้งเครื่องปรับอากาศ',
     body,
-    headerPt: 60, refPt: 11, refGray: true,   // ความสูงแถว 1 · ข้อความอ้างอิงท้ายใบตามไฟล์
+    // ความสูงแถวตามที่ Excel พิมพ์ที่สเกล 85% · ขนาดข้อความอ้างอิงท้ายใบตามไฟล์ · ตำแหน่งกรอบตามที่ Excel พิมพ์
+    headerPt: 60, rowPt: 17.36, signRowPt: 24.8, refPt: 11, page: { top: 10.9, left: 8.2, width: 193.3 },
+    logo: { x: 4.75, y: 4.08, w: 183.34, h: 51.52 },   // ตำแหน่ง/ขนาดรูปโลโก้ในไฟล์ (pt)
     scale: 0.85    // แบบฟอร์ม Excel ตั้งพิมพ์ 85%
   }, opts);
 }
