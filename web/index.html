@@ -757,6 +757,18 @@
                 </select>
               </div>
 
+              <!-- เดือนนัดหมาย (พี่เลี้ยงขอ 19/10/2569) — เครื่องที่มีวันนัดล้างตามแผนของรอบไหนก็ได้ในเดือนนั้น -->
+              <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                <i class="ph ph-calendar-dots text-gray-500"></i>
+                <select id="planMonthFilter" onchange="renderPlanTable()" class="bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
+                  <option value="">ทุกเดือนนัด</option>
+                  <option value="01">มกราคม</option><option value="02">กุมภาพันธ์</option><option value="03">มีนาคม</option>
+                  <option value="04">เมษายน</option><option value="05">พฤษภาคม</option><option value="06">มิถุนายน</option>
+                  <option value="07">กรกฎาคม</option><option value="08">สิงหาคม</option><option value="09">กันยายน</option>
+                  <option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+                </select>
+              </div>
+
               <div class="relative flex-1 sm:w-48">
                 <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 <input type="text" id="planSearch" placeholder="ค้นหารหัส, Node..." class="w-full pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none text-sm">
@@ -6661,6 +6673,12 @@
       const region = syncRegionFilter('planRegionFilter', (currentPlan || []).map(p => p.Region));
       let displayPlan = visiblePlanRows();
       if (region) displayPlan = displayPlan.filter(p => sameRegion(p.Region, region));
+      // เดือนนัดหมาย — วันตามแผนของรอบไหนก็ได้ (เฉพาะรอบที่ปีนี้มี) ตกในเดือนที่เลือก
+      const month = (document.getElementById('planMonthFilter') || {}).value || '';
+      if (month) {
+        displayPlan = displayPlan.filter(p => [1, 2, 3].slice(0, nRounds)
+          .some(r => (/^\d{4}-(\d{2})/.exec(String(p['R' + r + '_PlanDate'] || '')) || [])[1] === month));
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         displayPlan = displayPlan.filter(p => searchText(p).includes(q));
@@ -6729,6 +6747,23 @@
       renderPlanTable(e.target.value.trim());
     });
 
+    /**
+     * เตือนตามวันนัดของรอบหนึ่ง — null = ไม่ต้องเตือน (ล้างแล้ว · ยกเลิก · ไม่มีวันนัด · เกิน 30 วัน)
+     * วันนัด = วันตามแผน (R{n}_PlanDate รูปแบบ YYYY-MM-DD) เทียบกับวันนี้ตามเวลาเครื่อง
+     */
+    const PLAN_WARN_DAYS = 30;
+    function planDueInfo(planDate, status) {
+      if (status === 'ล้างเสร็จสิ้น' || status === 'ยกเลิก') return null;
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(planDate || ''));
+      if (!m) return null;
+      const now = new Date();
+      const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      const days = Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - today) / 86400000);
+      if (days < 0) return { late: true, label: 'เลยกำหนด ' + (-days) + ' วัน' };
+      if (days <= PLAN_WARN_DAYS) return { late: false, label: days === 0 ? 'ถึงกำหนดวันนี้' : 'ใกล้ถึงกำหนด (อีก ' + days + ' วัน)' };
+      return null;
+    }
+
     function renderRoundCols(p, r, origIdx, borderClass) {
       const plan = p['R'+r+'_PlanDate'] || '-';
       const actual = p['R'+r+'_ActualDate'] || '-';
@@ -6747,9 +6782,21 @@
       } else if (status === 'นัดหมายแล้ว') { 
         statusStyle = 'text-[#1153a1] font-medium'; 
         dot = '<div class="w-1.5 h-1.5 rounded-full bg-[#1153a1] mr-1"></div>'; 
-      } else if (status === 'ยกเลิก') { 
-        statusStyle = 'text-rose-600 font-medium'; 
-        dot = '<div class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1"></div>'; 
+      } else if (status === 'ยกเลิก') {
+        statusStyle = 'text-rose-600 font-medium';
+        dot = '<div class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1"></div>';
+      }
+
+      // เตือนตามวันนัด (พี่เลี้ยงขอ 19/10/2569) — รอบที่ยังไม่ล้าง/ไม่ยกเลิก ทุกบัญชีเห็นเหมือนกัน
+      //   เลยวันนัดแล้ว → "เลยกำหนด" สีแดง · อีกไม่เกิน 30 วันถึงวันนัด → "ใกล้ถึงกำหนด" สีส้ม
+      // สถานะที่บันทึกไว้ไม่เปลี่ยน (คำนวณตอนแสดง) — นัดหมายแล้วยังบอกไว้บรรทัดล่าง
+      let statusLabel = esc(status);
+      const due = planDueInfo(p['R' + r + '_PlanDate'], status);
+      if (due) {
+        statusStyle = due.late ? 'text-red-600 font-medium' : 'text-amber-600 font-medium';
+        dot = `<div class="w-1.5 h-1.5 rounded-full ${due.late ? 'bg-red-500' : 'bg-amber-500'} mr-1"></div>`;
+        statusLabel = `<span class="${due.late ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'}">${due.label}</span>` +
+          (status === 'นัดหมายแล้ว' ? '<span class="text-gray-400 ml-1">· นัดหมายแล้ว</span>' : '');
       }
 
       // บัญชีผู้รับเหมา: รอบที่ไม่ได้มอบหมายให้ตัวเอง เซิร์ฟเวอร์ล้างราคา/ชื่อทิ้งมาแล้ว
@@ -6768,7 +6815,7 @@
           <div class="flex flex-col items-center justify-center">
             <span class="text-xs text-gray-400">แผน ${esc(fmtDate(plan))}</span>
             <span class="${statusStyle}">${esc(fmtDate(actual))}</span>
-            <div class="flex items-center text-xs mt-0.5 text-gray-500">${dot}${esc(status)}</div>
+            <div class="flex items-center text-xs mt-0.5 text-gray-500 whitespace-nowrap">${dot}${statusLabel}</div>
             ${p['R'+r+'_FormUrl'] ? `<a href="${esc(p['R'+r+'_FormUrl'])}" target="_blank" onclick="event.stopPropagation()" title="เปิดฟอร์ม PDF" class="text-[#1153a1] hover:text-[#f47920] text-sm mt-0.5"><i class="ph ph-file-pdf"></i></a>` : ''}
           </div>
         </td>
