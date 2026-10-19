@@ -361,8 +361,8 @@ table.main .hd, table.main .b { font-weight: 700 !important; }
 .ctr { text-align: center !important; }
 .lbl { }   /* ไฟล์ต้นฉบับไม่เยื้องข้อความ — คงชื่อคลาสไว้ให้ชี้ช่องป้ายชื่อ */
 .v { color: #000; }
-/* ตัวหนังสือในเอกสารเป็นตัวปกติสีดำทั้งหมด (ผู้ใช้ขอ 19/10/2569) — พื้นเทาของช่องคงไว้ตามไฟล์ */
-td.unit { color: #000; background: #F2F2F2; }
+/* ตัวหนังสือในเอกสารเป็นตัวปกติสีดำทั้งหมด (ผู้ใช้ขอ 19/10/2569) ยกเว้นช่องหน่วย/เกณฑ์ที่เป็นสีเทาตามแบบฟอร์ม (ผู้ใช้ยืนยัน) */
+td.unit { color: #7F7F7F; background: #F2F2F2; }
 .tight { white-space: nowrap; }   /* ขนาดเท่าช่องอื่นตามไฟล์ แค่ไม่ให้ตัดบรรทัด */
 
 tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(var(--rh) * var(--k));
