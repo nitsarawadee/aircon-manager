@@ -46,7 +46,7 @@ export const REF_LINE_2 =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '<br>ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
 
-// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ทั้งช่องตัวเอียง ขนาดตามไฟล์ของแต่ละแบบ (--rs ดู docShell) · สีดำตามที่ Excel พิมพ์จริง
+// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ขนาดตามไฟล์ของแต่ละแบบ (--rs ดู docShell) · ตัวปกติสีดำ (ผู้ใช้ขอ ไม่เอาตัวเอียง)
 export const REF_LINE =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '&nbsp;&nbsp;|&nbsp;&nbsp;ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
@@ -361,7 +361,8 @@ table.main .hd, table.main .b { font-weight: 700 !important; }
 .ctr { text-align: center !important; }
 .lbl { }   /* ไฟล์ต้นฉบับไม่เยื้องข้อความ — คงชื่อคลาสไว้ให้ชี้ช่องป้ายชื่อ */
 .v { color: #000; }
-td.unit { color: #7F7F7F; background: #F2F2F2; }
+/* ตัวหนังสือในเอกสารเป็นตัวปกติสีดำทั้งหมด (ผู้ใช้ขอ 19/10/2569) — พื้นเทาของช่องคงไว้ตามไฟล์ */
+td.unit { color: #000; background: #F2F2F2; }
 .tight { white-space: nowrap; }   /* ขนาดเท่าช่องอื่นตามไฟล์ แค่ไม่ให้ตัดบรรทัด */
 
 tr.sec td { background: #D9D9D9; font-weight: 700; font-size: calc(12pt * var(--k)); height: calc(var(--rh) * var(--k));
@@ -378,7 +379,7 @@ table.main tr:first-child > *, table.info tr:first-child > * { border-top: none;
 td.choices .box { font-size: calc(13pt * var(--k)); line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
 /* ช่องพิมพ์ผลสรุปของใบล้าง ตัวหนาสีน้ำเงินเข้มตามไฟล์ */
-table.main td.res { font-weight: 700; color: #1F3864; }
+table.main td.res { font-weight: 700; color: #000; }
 /* กล่องติ๊กแบบตัวควบคุมของ Excel (ใบติดตั้ง) — กล่องเล็ก ตัวหนังสือเล็กกว่าช่องอื่น ช่อง E กับ F–H ไม่มีเส้นคั่นเพราะไฟล์รวมช่อง */
 td.choices.xc { font-size: calc(11pt * var(--k)); }
 td.choices.xc .box { font-size: calc(9.5pt * var(--k)); margin-right: calc(3pt * var(--k)); }
@@ -404,7 +405,7 @@ tr.sign .who { margin-bottom: 1mm; }
 /* ช่องอ้างอิงท้ายใบ สูง 36pt ตามไฟล์ทั้งสามแบบ */
 .ref { display: flex; flex-direction: column; justify-content: center; text-align: center;
        min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k));
-       font-style: italic; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
+       font-style: normal; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
 /* ---------- ลายน้ำฉบับร่าง (ขั้น 3 ยังไม่อนุมัติ ดู approval.js) ----------
    position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */
@@ -435,7 +436,7 @@ table.photo tr.info td { font-style: normal; color: #000; }
 table.photo tr.info td .v { color: inherit; }
 /* เส้น thin ของ Excel ที่สเกล 107% หนาราว 1.3pt (วัดจาก PDF ของไฟล์) — Chrome ปัดความหนาเส้นเป็นพิกเซลเต็ม: กรอบนอก 1.5pt ใกล้สุด ส่วนกรอบรูป 1pt ใกล้กว่า 1.5pt (1.5pt ซ้อนกันแล้วหนาเกิน) */
 table.photo td.pic { border: 1pt solid #000; border-bottom: none; padding: 0; overflow: hidden;
-                     font-style: italic; color: #808080; }
+                     font-style: normal; color: #000; }
 table.photo td.pic { position: relative; }
 /* รูปเต็มกรอบ ตัดส่วนเกินให้พอดี (ความสูงแถวกำหนดจากไฟล์ จึงวางรูปลอยทับทั้งช่อง) */
 table.photo td.pic img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -452,7 +453,7 @@ table.pics td.pic { width: 33.33%; border: none; padding: 0; vertical-align: top
 table.pics .box { border: 0.75pt solid #000; }
 table.pics img { display: block; width: 100%; height: 62mm; object-fit: cover; }
 table.pics .ph { height: 62mm; display: flex; align-items: center; justify-content: center;
-                 color: #7F7F7F; font-size: calc(12pt * var(--k)); text-align: center; padding: 2mm; }
+                 color: #000; font-size: calc(12pt * var(--k)); text-align: center; padding: 2mm; }
 table.pics .cap { border-top: 0.75pt solid #000; background: #ECECEC; text-align: center;
                   font-size: calc(12pt * var(--k)); padding: 1mm 1mm; min-height: 7mm; }
 
