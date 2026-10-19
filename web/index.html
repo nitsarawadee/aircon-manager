@@ -2590,6 +2590,8 @@
               <h2 class="text-2xl font-bold text-gray-800">ตารางงาน</h2>
               <p class="text-sm text-gray-500">งานล้างเครื่องปรับอากาศที่ได้รับมอบหมายของ ${esc(currentUserInfo.contractorName || '')}</p>
             </div>
+            <!-- เตือนงานที่ต้องทำภายใน 30 วัน / เลยกำหนด (ดู paintMyJobAlert) -->
+            <div id="mjAlert" class="hidden mb-4"></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
               <!-- รายการงานเป็นแท็บ (งานล้าง | ซ่อมและติดตั้ง) สูงเท่าปฏิทิน เลื่อนอยู่ในกล่อง หน้าไม่ยาวลง
                    มือถือ: รายการขึ้นก่อนปฏิทิน เพราะเป็นสิ่งที่ช่างเปิดมาดูบ่อยที่สุด -->
@@ -5889,12 +5891,47 @@
       const wDone = mjWork.filter(w => w.state === 'done' && workHit(w)).sort((a, b) =>
         String((b.doc && b.doc.date) || '').localeCompare(String((a.doc && a.doc.date) || '')) || byWorkNode(a, b));
       renderJobBox('work', 'mjWorkList', wTodo, wDone, w => w.apptDate, myWorkRow, 'เสร็จแล้ว', 'ไม่มีงานซ่อมหรือติดตั้งที่ต้องทำ');
+      paintMyJobAlert();
 
       // จำนวนงานที่ยังต้องทำบนหัวแท็บ (ตามคำค้น) · วาดใหม่ทุกครั้งเพื่อให้แท็บที่เลือกไว้ไม่หลุด
       const cc = document.getElementById('mjTabCnt_clean'), cw = document.getElementById('mjTabCnt_work');
       if (cc) cc.textContent = todo.length ? '· ' + todo.length : '';
       if (cw) cw.textContent = wTodo.length ? '· ' + wTodo.length : '';
       mjSetTab(mjTabSel);
+    }
+
+    /**
+     * แถบเตือนบนตารางงานผู้รับเหมา (ผู้ใช้ขอ 19/10/2569) — นับจากงานที่ยังไม่เสร็จทั้งหมด ไม่ขึ้นกับคำค้น
+     * ภายใน 30 วัน (PLAN_WARN_DAYS) = สีส้ม · เลยวันนัดแล้ว = สีแดง · ไม่มีทั้งสองอย่างก็ไม่แสดง
+     * ใช้เกณฑ์เดียวกับป้ายในหน้าแผนล้าง (planDueInfo)
+     */
+    function paintMyJobAlert() {
+      const box = document.getElementById('mjAlert');
+      if (!box) return;
+      const count = (list, dateOf) => {
+        const c = { soon: 0, late: 0 };
+        for (const x of list) { const d = planDueInfo(dateOf(x), ''); if (d) c[d.late ? 'late' : 'soon']++; }
+        return c;
+      };
+      const cl = count(mjJobs.filter(j => j.pending), j => j.planDate);
+      const wk = count(mjWork.filter(w => w.state === 'open'), w => w.apptDate);
+      const part = (n, m, unitClean, unitWork) => [n ? 'งานล้าง ' + n + ' ' + unitClean : '', m ? 'ซ่อม/ติดตั้ง ' + m + ' ' + unitWork : ''].filter(Boolean).join(' · ');
+      const lines = [];
+      if (cl.late || wk.late) lines.push(`<div class="flex items-start gap-2 text-red-700"><i class="ph-fill ph-warning-circle text-lg flex-shrink-0"></i>
+        <span><b>เลยกำหนดแล้ว:</b> ${part(cl.late, wk.late, 'นัด', 'งาน')} — รีบดำเนินการหรือแจ้งเจ้าหน้าที่</span></div>`);
+      if (cl.soon || wk.soon) lines.push(`<div class="flex items-start gap-2 text-amber-700"><i class="ph-fill ph-bell-ringing text-lg flex-shrink-0"></i>
+        <span><b>ต้องทำภายใน ${PLAN_WARN_DAYS} วัน:</b> ${part(cl.soon, wk.soon, 'นัด', 'งาน')}</span></div>`);
+      box.classList.toggle('hidden', !lines.length);
+      box.innerHTML = lines.length
+        ? `<div class="rounded-xl border ${cl.late || wk.late ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'} px-4 py-3 text-sm space-y-1.5">${lines.join('')}</div>`
+        : '';
+    }
+
+    /** ป้ายเตือนในแถวงานที่ยังไม่เสร็จ — "อีก n วัน" / "เลยกำหนด n วัน" (เกณฑ์เดียวกับหน้าแผนล้าง) */
+    function jobDueBadge(date) {
+      const d = planDueInfo(date, '');
+      if (!d) return '';
+      return `<span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold align-middle ${d.late ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${esc(d.label.replace(/^ใกล้ถึงกำหนด ((.*))$/, '$1'))}</span>`;
     }
 
     /**
@@ -5918,7 +5955,9 @@
       }
       const t = new Date();
       const thisMonth = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
-      st.defaultOpen = new Set(groups.filter(g => g.key !== 'none' && g.key <= thisMonth).map(g => g.key));
+      // กางเดือนนี้ เดือนที่เลยกำหนด และเดือนที่มีงานภายใน 30 วัน (งานต้นเดือนหน้าต้องไม่ถูกพับซ่อน — ผู้ใช้ขอ 19/10/2569)
+      const soonMonth = g => g.jobs.some(j => { const d = planDueInfo(todoDate(j), ''); return d && !d.late; });
+      st.defaultOpen = new Set(groups.filter(g => g.key !== 'none' && (g.key <= thisMonth || soonMonth(g))).map(g => g.key));
       if (!st.defaultOpen.size && groups.length) st.defaultOpen.add(groups[0].key);
       const isOpen = key => !!q || (st.open || st.defaultOpen).has(key);
 
@@ -5987,7 +6026,7 @@
           <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-gray-800 truncate">${esc(j.node)}</div>
-            <div class="text-xs text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}</div>
+            <div class="text-xs text-gray-500">${esc(j.site)} · รอบ ${j.round}/${esc(j.year)}${j.pending ? jobDueBadge(j.planDate) : ''}</div>
             <div class="flex flex-wrap gap-1 mt-1.5">${chips}</div>
           </div>
         </div>`;
@@ -6021,7 +6060,7 @@
           <div class="w-9 text-center flex-shrink-0 pt-0.5">${jobDateBox(d)}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold text-gray-800 truncate flex items-center gap-1.5">${tag}<span class="truncate">${esc(u.NodeName)}</span></div>
-            <div class="text-xs text-gray-500">${esc(u.SiteCode)} · ${esc(short)}</div>
+            <div class="text-xs text-gray-500">${esc(u.SiteCode)} · ${esc(short)}${w.state === 'open' ? jobDueBadge(w.apptDate) : ''}</div>
             ${w.state === 'open' && w.note ? `<div class="text-xs text-amber-700 mt-0.5">หมายเหตุ: ${esc(w.note)}</div>` : ''}
             <div class="flex flex-wrap gap-1 mt-1.5">${chip}</div>
           </div>
