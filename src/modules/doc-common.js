@@ -380,6 +380,8 @@ table.main tr:first-child > *, table.info tr:first-child > * { border-top: none;
 
 td.choices .box { font-size: calc(13pt * var(--k)); line-height: 1; }
 td.choices .gap { display: inline-block; width: 14mm; }
+/* ช่องพิมพ์ผลสรุปของใบล้าง ตัวหนาสีน้ำเงินเข้มตามไฟล์ */
+table.main td.res { font-weight: 700; color: #1F3864; }
 /* กล่องติ๊กแบบตัวควบคุมของ Excel (ใบติดตั้ง) — กล่องเล็ก ตัวหนังสือเล็กกว่าช่องอื่น ช่อง E กับ F–H ไม่มีเส้นคั่นเพราะไฟล์รวมช่อง */
 td.choices.xc { font-size: calc(11pt * var(--k)); }
 td.choices.xc .box { font-size: calc(9.5pt * var(--k)); margin-right: calc(3pt * var(--k)); }
@@ -388,7 +390,7 @@ td.choices.xc.f { padding-left: calc(3pt * var(--k)) !important; border-left: no
 
 /* แถวบรรทัดของส่วนบันทึก (noteRows) — บรรทัดที่เกินจำนวนแถวขึ้นบรรทัดใหม่ในแถวสุดท้าย */
 tr.note td { white-space: pre-wrap; }
-/* แถวที่มีป้าย (ใบซ่อมส่วนที่ 2) สูง 17.75pt ตามไฟล์ */
+/* แถวที่มีป้าย (อาการเสีย/สาเหตุ/การแก้ไขของใบซ่อม) สูง 17.75pt ตามไฟล์ */
 tr.note.lead td { height: calc(17.75pt * var(--k)); }
 /* หัวช่องลงนาม สูงตามไฟล์ของแต่ละแบบ (--sh) */
 table.main th.sh { height: calc(var(--sh) * var(--k)); }

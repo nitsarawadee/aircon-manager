@@ -46,7 +46,6 @@ import {
 const FORM_CODE = 'ITEL-FM-NE-004';
 
 /** ผลประเมินสองตัวเลือกในส่วนที่ 4 ตามที่พิมพ์ไว้บนแบบฟอร์ม */
-const CONDITIONS = ['สภาพเครื่องสมบูรณ์', 'สภาพเครื่องควรปรับปรุง'];
 
 /** คำบรรยายใต้กรอบรูปทั้ง 9 ช่อง เรียงซ้ายไปขวา บนลงล่าง */
 const PHOTO_CAPTIONS = [
@@ -179,13 +178,14 @@ function sectionChecklist(form, units) {
  * ห้ามเอาผลของเครื่องหนึ่งไปติ๊กแทนอีกเครื่อง — เอกสารนี้เอาไปเซ็นกัน
  */
 function sectionSummary(form, units) {
+  // ตามไฟล์: ช่อง E–F เป็นช่องพิมพ์ผล (ตัวหนาสีน้ำเงินเข้ม ชิดซ้าย) · G–H เว้นว่าง
+  // พิมพ์ผลที่เลือกในฟอร์มตรงตัว ("สภาพเครื่องสมบูรณ์" / "สภาพเครื่องควรปรับปรุง") ยังไม่ได้เลือกก็เว้นว่าง
   return units.map(u =>
     '<tr>' +
-    '<th colspan="3" class="lbl b">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</th>' +
+    '<td colspan="3" class="lbl b">บันทึกผลการล้างและตรวจสอบเครื่องปรับอากาศ</td>' +   // พื้นขาวตามไฟล์
     `<td class="ctr b tight">เครื่องที่ ${u.no}</td>` +
-    CONDITIONS.map(c =>
-      `<td colspan="2" class="choices"><span class="box">${plainText(u.cond).trim() === c ? '☑' : '☐'}</span> ${esc(c)}</td>`
-    ).join('') +
+    `<td colspan="2" class="res">${esc(plainText(u.cond).trim())}</td>` +
+    '<td colspan="2"></td>' +
     '</tr>'
   ).join('');
 }

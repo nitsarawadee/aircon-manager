@@ -142,18 +142,15 @@ test('ค่าที่วัดได้ต้องลงคอลัมน�
 
 /* ==================== ผลประเมินรายเครื่อง ==================== */
 
-/** ช่องที่ถูกติ๊กในแถวสรุปผลของเครื่องที่ระบุ */
+/** ผลที่พิมพ์ในแถวสรุปผลของเครื่องที่ระบุ (ช่อง E–F) — ว่างได้ [] */
 function tickedFor(html, slot) {
   const row = html.split('<tr>')
     .find(r => r.includes('ผลการล้างและตรวจสอบ') && r.includes('เครื่องที่ ' + slot));
   assert.ok(row, 'ไม่พบแถวสรุปผลของเครื่องที่ ' + slot);
 
-  const out = [];
-  for (const part of row.split('<span class="box">')) {
-    if (part[0] !== '☑') continue;
-    out.push(part.split('</span>')[1].split('<')[0].trim());
-  }
-  return out;
+  const m = row.match(/<td colspan="2" class="res">([^<]*)<\/td>/);
+  assert.ok(m, 'ไม่พบช่องผลของเครื่องที่ ' + slot);
+  return m[1].trim() ? [m[1].trim()] : [];
 }
 
 test('สองเครื่องผลประเมินต่างกัน ต้องติ๊กคนละช่อง', () => {
