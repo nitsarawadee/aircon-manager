@@ -3748,17 +3748,15 @@
       if (trendTitle) trendTitle.textContent = 'ค่าใช้จ่ายรายเดือน ปี ' + s.year;
 
       // สรุปยอดทั้งปีไว้มุมขวาของหัวกราฟ
-      // แยกล้าง/ซ่อมให้ตรงกับสองเส้นในกราฟ แล้วปิดท้ายด้วยยอดรวม
+      // ยอดทั้งปีบวกจากข้อมูลกราฟ — หมวดเดียวกับแท่งในกราฟ (แบบหน้างบประมาณ)
       const trendTotals = document.getElementById('trendTotals');
       if (trendTotals) {
-        const clean = Number(s.totalCleaningCost || 0);
-        const repair = Number(s.totalRepairCost || 0);
-        const baht = v => '฿' + v.toLocaleString();
-        trendTotals.innerHTML = clean + repair === 0
+        const sumOf = k => (s.monthlyTrend || []).reduce((n, m) => n + (m[k] || 0), 0);
+        const grand = sumOf('total');
+        const baht = v => '฿' + (Math.round(v * 100) / 100).toLocaleString();
+        trendTotals.innerHTML = grand === 0
           ? '<span class="text-gray-400">ยังไม่มีค่าใช้จ่ายปีนี้</span>'
-          : `ล้าง <b class="text-gray-700">${baht(clean)}</b> ·
-             ซ่อม <b class="text-gray-700">${baht(repair)}</b> ·
-             รวม <b class="text-gray-800">${baht(clean + repair)}</b>`;
+          : `รวมทั้งปี <b class="text-gray-800">${baht(grand)}</b>`;
       }
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
@@ -3946,8 +3944,6 @@
         return;
       }
       const labels = monthlyTrend.map(m => m.label);
-      const cleanData = monthlyTrend.map(m => m.clean);
-      const repairData = monthlyTrend.map(m => m.repair);
 
       if (trendChartObj) trendChartObj.destroy();
       trendChartObj = new Chart(canvas, {
@@ -3955,18 +3951,18 @@
         type: 'bar',
         data: {
           labels,
-          datasets: [
-            // ใช้สีพาสเทลชุดเดียวกับการ์ดค่าใช้จ่ายด้านบน จะได้โยงกันได้ด้วยสายตา
-            { label: 'ค่าล้างแอร์', data: cleanData, backgroundColor: pastel('aqua'), borderRadius: 4 },
-            { label: 'ค่าซ่อมบำรุง', data: repairData, backgroundColor: pastel('lilac'), borderRadius: 4 }
-          ]
+          // 4 หมวด สีเดียวกับกราฟหน้างบประมาณ (ผู้ใช้ขอให้เหมือนกัน)
+          datasets: BUDGET_UI.map(c => ({ label: c.short, data: monthlyTrend.map(m => m[c.month] || 0), backgroundColor: c.color, borderRadius: 4 }))
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: { position: 'top', labels: { boxWidth: 10, font: { size: 12 } } },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ฿${ctx.parsed.y.toLocaleString()}` } }
+            tooltip: { callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ฿${ctx.parsed.y.toLocaleString()}`,
+              footer: items => 'รวม: ฿' + items.reduce((s, i) => s + i.parsed.y, 0).toLocaleString()
+            }}
           },
           scales: {
             y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } },

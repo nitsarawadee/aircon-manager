@@ -1,7 +1,8 @@
 import { SHEETS } from '../schema.js';
-import { isAwaitingInstall, isRetiredStatus, partsOf, safeParseDate, todayStart } from '../values.js';
+import { isAwaitingInstall, isRetiredStatus, normalizeCode, partsOf, safeParseDate, todayStart } from '../values.js';
 import { getPlanYears, getCleaningPlan, summarizeCleaning, upcomingFromPlan, UPCOMING_LIMIT } from './plan.js';
 import { getHistory } from './history.js';
+import { monthlyBreakdown } from './budget.js';
 
 /**
  * ข้อมูลสรุปสำหรับหน้าแดชบอร์ด
@@ -129,23 +130,19 @@ export async function getDashboardSummary(ctx, year) {
     .sort((a, b) => b.SortKey - a.SortKey)
     .slice(0, 8);
 
-  // --- ค่าใช้จ่ายราย ม.ค.–ธ.ค. ของปีที่เลือก แยกล้าง/ซ่อม ---
+  // --- ค่าใช้จ่ายราย ม.ค.–ธ.ค. ของปีที่เลือก ---
   //
   // เดิมเป็นย้อนหลัง 12 เดือนนับจากวันนี้ ซึ่งใช้กับปีที่เลือกเองไม่ได้
   // เลือกปี 2026 แล้วได้กราฟคาบเกี่ยว 2025-2026 จะเทียบกับงบของปีนั้นไม่ได้เลย
   //
   // ใช้ partsOf() หาปี/เดือนตามเวลาไทยเสมอ ไม่ใช้ getMonth() ตรงๆ
   // เพราะ Worker รันด้วยเวลา UTC รายการของวันที่ 1 จะตกไปอยู่เดือนก่อนหน้า
-  const monthlyTrend = THAI_MONTHS.map(label => ({ label: label + ' ' + viewYear, clean: 0, repair: 0 }));
-  hList.forEach(h => {
-    const hd = safeParseDate(h.Date);
-    if (!hd) return;
-    const p = partsOf(hd);
-    if (p.y !== viewYear) return;
-    const cost = Number(h.Cost) || 0;
-    if (String(h.EventType).includes('ล้าง')) monthlyTrend[p.m - 1].clean += cost;
-    else monthlyTrend[p.m - 1].repair += cost;
-  });
+  //
+  // แยก 4 หมวดแบบเดียวกับกราฟหน้างบประมาณ (ล้าง · ซ่อม · จัดซื้อเครื่อง · ติดตั้ง) — ใช้ตัวคำนวณตัวเดียวกัน
+  // ต่างกันแค่หน้านี้กรองตามขอบเขตผู้ใช้ · ใบติดตั้งนับเมื่อมีเครื่องในใบอยู่ในขอบเขต
+  const scopeCodes = new Set(ctx.ss.objects(SHEETS.AIRLIST).filter(await ctx.scopeFilter()).map(a => normalizeCode(a.AirCode)));
+  const scopedForms = ctx.ss.objects(SHEETS.INSTALLFORM).filter(f => [f.AirCode1, f.AirCode2].some(c => c && scopeCodes.has(normalizeCode(c))));
+  const monthlyTrend = monthlyBreakdown(hList, viewYear, scopedForms).map((m, i) => ({ ...m, label: THAI_MONTHS[i] + ' ' + viewYear }));
 
   // ปีที่ให้เลือกได้ = ปีที่มีแผน + ปีที่มีประวัติ + ปีปัจจุบัน
   // สร้างจากข้อมูลจริง จะได้ไม่มีตัวเลือกที่กดแล้วหน้าว่างเปล่า
