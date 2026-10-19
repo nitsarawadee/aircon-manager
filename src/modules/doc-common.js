@@ -424,14 +424,14 @@ tr.sign .who { margin-bottom: 1mm; }
 table.photo { width: 100%; border-collapse: collapse; table-layout: fixed; }
 table.photo td, table.photo th { padding: 0 0.6mm; font-size: calc(12pt * var(--k)); line-height: 1.1;
                                  text-align: center; vertical-align: middle; font-weight: 400; }
-/* แถวข้อมูล: ป้ายตัวหนาพื้นเทา · ค่าตัวเอียงสีเทา 11pt (ในไฟล์เป็นสูตรดึงจากหน้าเอกสาร) */
+/* แถวข้อมูล: ป้ายตัวหนาพื้นเทา · ค่าตัวปกติสีดำ (ผู้ใช้ขอ 19/10/2569 — เดิมตัวเอียงสีเทาแบบเซลล์สูตรในไฟล์) */
 table.photo tr.info > * { border: 1pt solid #000; border-top: none; }
 table.photo tr.info > :first-child { border-left: none; }
 table.photo tr.info > :last-child { border-right: none; }
 table.photo tr.info th { background: #F2F2F2; font-weight: 700; }
 table.photo tr.info th.dt { text-align: left; }
 table.photo tr.info th.dt.ctr { text-align: center; }
-table.photo tr.info td { font-style: italic; font-size: calc(11pt * var(--k)); color: #808080; }
+table.photo tr.info td { font-style: normal; color: #000; }
 table.photo tr.info td .v { color: inherit; }
 /* เส้น thin ของ Excel ที่สเกล 107% หนาราว 1.3pt (วัดจาก PDF ของไฟล์) — Chrome ปัดความหนาเส้นเป็นพิกเซลเต็ม: กรอบนอก 1.5pt ใกล้สุด ส่วนกรอบรูป 1pt ใกล้กว่า 1.5pt (1.5pt ซ้อนกันแล้วหนาเกิน) */
 table.photo td.pic { border: 1pt solid #000; border-bottom: none; padding: 0; overflow: hidden;
