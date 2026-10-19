@@ -10977,6 +10977,8 @@ const CLEANING_CHECKLIST_ITEMS = [
         <main id="cf_scroll" class="flex-1 overflow-y-auto">
           <div class="max-w-3xl mx-auto px-3 py-3 space-y-3">
 
+            ${formAttachCard('cleaning')}
+
             ${singleHeader}
 
             ${single ? '' : card(`
@@ -11859,19 +11861,28 @@ const CLEANING_CHECKLIST_ITEMS = [
   let faKind = '';     // 'repair' | 'install'
   let faFiles = [];    // [{name, size, mimeType, data}]
 
-  /** การ์ดชวนแนบไฟล์ ใส่ไว้บนฟอร์มซ่อม/ติดตั้ง */
+  /**
+   * การ์ดอธิบายว่าเลือกได้สองวิธี — กรอกฟอร์ม หรือแนบไฟล์ (พี่เลี้ยงขอ 19/10/2569)
+   * ใส่ไว้บนสุดของฟอร์มล้าง/ซ่อม/ติดตั้ง ให้เห็นก่อนเริ่มกรอก
+   */
   function formAttachCard(kind) {
-    const open = kind === 'repair' ? 'openRepairAttach()' : 'openInstallAttach()';
+    const open = { repair: 'openRepairAttach()', install: 'openInstallAttach()', cleaning: 'openAttachDocsDialog()' }[kind];
     return `
-      <section class="bg-sky-50 border border-sky-200 rounded-xl p-3 flex items-center gap-3">
-        <i class="ph ph-paperclip text-xl text-[#1153a1] flex-shrink-0"></i>
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium text-gray-800">มีใบที่เขียนมือหรือกรอก Excel มาแล้ว?</div>
-          <div class="text-xs text-gray-500">แนบไฟล์แทนการกรอกได้ · ปิดงานและรออนุมัติเหมือนกรอกในระบบ</div>
+      <section class="bg-sky-50 border border-sky-200 rounded-xl p-3 sm:p-4">
+        <div class="flex items-start gap-3">
+          <i class="ph ph-info text-xl text-[#1153a1] flex-shrink-0 mt-0.5"></i>
+          <div class="flex-1 min-w-0 text-sm text-gray-700 space-y-1.5">
+            <div class="font-medium text-gray-800">เลือกได้ 2 วิธี — กรอกฟอร์ม หรือแนบไฟล์</div>
+            <div><b>1. กรอกฟอร์ม</b> — กรอกข้อมูลด้านล่างให้ครบ แล้วกดบันทึก ระบบสร้างเอกสารให้เอง</div>
+            <div><b>2. แนบไฟล์</b> — ถ้าเขียนใบด้วยมือ (ถ่ายรูป/สแกน) หรือกรอก Excel มาแล้ว กดปุ่ม "แนบไฟล์" ไม่ต้องกรอกซ้ำ</div>
+            <div class="text-xs text-gray-500">ทั้งสองวิธีปิดงานและส่งเข้าคิวอนุมัติเหมือนกัน</div>
+          </div>
         </div>
-        <button type="button" onclick="${open}"
-          class="flex-shrink-0 min-h-[44px] px-3 rounded-lg border border-[#1153a1] text-[#1153a1] bg-white hover:bg-[#1153a1] hover:text-white text-sm font-medium whitespace-nowrap">
-          แนบไฟล์</button>
+        <div class="flex justify-end mt-2">
+          <button type="button" onclick="${open}"
+            class="min-h-[44px] px-4 rounded-lg border border-[#1153a1] text-[#1153a1] bg-white hover:bg-[#1153a1] hover:text-white text-sm font-medium whitespace-nowrap flex items-center gap-2">
+            <i class="ph ph-paperclip"></i> แนบไฟล์</button>
+        </div>
       </section>`;
   }
 
