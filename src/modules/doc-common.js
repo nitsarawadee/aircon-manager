@@ -106,8 +106,9 @@ export const pageHeader = (title, opts) =>
 /** ช่องเส้นจุดใต้ ใส่ค่าลงไปถ้ามี ไม่มีก็เป็นเส้นเปล่าความยาวเท่ากันให้เขียนเอง — ทุกช่องหน้าตาเดียวกัน */
 const blank = (value, cls) => `<span class="fill ${cls}">${esc(plainText(value).trim())}</span>`;
 
+// บรรทัดบริษัทเว้นไว้ทุกช่องแม้ไม่มีชื่อบริษัท — ทั้ง 4 ช่องจึงสูงเท่ากัน มีที่ว่างเหนือเส้นให้เซ็นเท่ากัน
 const signCell = (company, signer, date) =>
-  (company ? `<div class="who">${val(company)}</div>` : '') +
+  `<div class="who">${val(company) || '&nbsp;'}</div>` +
   '<div>ลงชื่อ ' + blank(signer, 'nm') + ' วันที่ ' + blank(date, 'dt') + '</div>';
 
 /**

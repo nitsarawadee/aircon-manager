@@ -370,7 +370,7 @@ function signCells(html) {
   const tail = html.slice(start);
   return [...tail.matchAll(/<tr class="sign">([\s\S]*?)<\/tr>/g)]
     .flatMap(row => [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => c[1]))
-    .map(c => c.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    .map(c => c.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
 test('ชื่อช่างกับวันที่ ต้องถูกพิมพ์ลงช่องผู้ดำเนินการให้เลย', () => {
