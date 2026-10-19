@@ -1000,11 +1000,6 @@
                 title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
                 <i class="ph ph-note-pencil"></i> กรอกฟอร์มล้าง
               </button>
-              <button id="docBtn_attach" onclick="openAttachDocsDialog(true)"
-                class="bg-white border border-teal-500 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
-                title="ถ่ายรูปฟอร์มล้างที่เขียนมือมาแล้ว — แนบไฟล์ เลือกเครื่องที่ล้าง แล้วปิดงานในแผนได้ในขั้นตอนเดียว">
-                <i class="ph ph-paperclip"></i> แนบเอกสาร
-              </button>
               <button id="docBtn_repairForm" onclick="openRepairFormPicker()"
                 class="bg-white border border-[#f47920] text-[#f47920] hover:bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
                 title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
@@ -9608,7 +9603,7 @@
       docBtn_printClean: on('cleaning'),
       // ผู้รับเหมาปิดงานล้างจากหน้าแผนเท่านั้น — ใบที่ไม่ผูกกับรอบไม่มีอะไรบอกว่าเป็นงานของใคร
       // เซิร์ฟเวอร์จึงไม่รับ ถ้าโชว์ปุ่มไว้ ผู้รับเหมาจะกรอกจนจบแล้วค่อยเจอข้อความปฏิเสธ
-      docBtn_attach: canFill('cleaning') && !isContractor(),
+      // ปุ่ม "แนบเอกสาร" เอาออกแล้ว — ในกรอกฟอร์มล้างมีแนบไฟล์อยู่แล้ว (เจ้าของงานขอ)
       docBtn_cleanForm: canFill('cleaning') && !isContractor(),
       docBtn_printRepair: on('repair'),
       docBtn_repairForm: canFill('repair'),
@@ -10810,7 +10805,8 @@ const CLEANING_CHECKLIST_ITEMS = [
     const confirmed = await showConfirm(
       'อนุมัติเอกสาร ' + docNo + ' ขั้น ' + a.next + ' (' + APPROVAL_STAGE_WHO[a.next] + ')?\n' +
       'ชื่อของคุณจะลงในช่องลงนามของเอกสาร พร้อมวันที่วันนี้' +
-      (a.next === 4 ? '\nเป็นขั้นสุดท้าย — หลังจากนี้ PDF จะเป็นฉบับจริง ไม่มีลายน้ำ "รออนุมัติ"' : '')
+      (a.next === 3 ? '\nหลังจากนี้ PDF จะไม่มีลายน้ำ "รออนุมัติ" — ปริ้นไปให้ Infrastructure อนุมัติได้' : '') +
+      (a.next === 4 ? '\nเป็นขั้นสุดท้าย — หลังจากนี้ PDF จะเป็นฉบับจริง' : '')
     );
     if (!confirmed) return;
     try {
@@ -11050,12 +11046,10 @@ const CLEANING_CHECKLIST_ITEMS = [
                   <input id="cf_supervisor" class="${field}"></div>
               </div>`)}
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
+            <!-- ปุ่ม "แนบไฟล์เอกสาร" เอาออกแล้ว — ใช้ปุ่ม "แนบไฟล์" บนการ์ดด้านบนปุ่มเดียว เหมือนฟอร์มซ่อม/ติดตั้ง (เจ้าของงานขอ) -->
+            <div class="grid grid-cols-1 gap-2 pb-2">
               <button onclick="printCleaningFormPreview()" id="cf_printBtn" class="px-4 py-3 text-sm font-medium text-[#1153a1] bg-white border border-[#1153a1] rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2" title="ปริ้นฟอร์มตามข้อมูลที่กรอกไว้ตอนนี้ โดยไม่บันทึกลงระบบ">
                 <i class="ph ph-printer"></i> ปริ้นฟอร์ม (ไม่บันทึก)
-              </button>
-              <button onclick="openAttachDocsDialog()" id="cf_attachBtn" class="px-4 py-3 text-sm font-medium text-[#f47920] bg-white border border-[#f47920] rounded-lg hover:bg-orange-50 flex items-center justify-center gap-2" title="แนบไฟล์เอกสารเข้ากับ Node ที่เลือก">
-                <i class="ph ph-paperclip"></i> แนบไฟล์เอกสาร
               </button>
             </div>
           </div>

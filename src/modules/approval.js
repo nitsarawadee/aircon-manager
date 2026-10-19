@@ -20,7 +20,8 @@ import { isAwaitingInstall, normalizeCode, plainText, ymdhms } from '../values.j
  * PDF ระหว่างรออนุมัติ
  * ============================================================================
  * ยังเปิดดู/โหลดได้ แต่เป็นฉบับร่างที่มีลายน้ำ "รออนุมัติ" และมีชื่อเฉพาะขั้นที่อนุมัติแล้ว
- * (คนอนุมัติต้องเห็นเอกสารก่อนกด) ไฟล์สำเนาบนเซิร์ฟเวอร์เก็บเฉพาะใบที่อนุมัติครบแล้ว
+ * (คนอนุมัติต้องเห็นเอกสารก่อนกด) ลายน้ำหายตั้งแต่ขั้น 3 อนุมัติ เพราะ Supervisor ต้องปริ้น
+ * ใบไปให้ Infrastructure อนุมัติ ไฟล์สำเนาบนเซิร์ฟเวอร์ยังเก็บเฉพาะใบที่อนุมัติครบแล้ว
  *
  * ============================================================================
  * เอกสารเปลี่ยน = ต้องอนุมัติใหม่
@@ -162,11 +163,14 @@ const dateOf = v => plainText(v).slice(0, 10);
  */
 export function signOptsOf(ctx, kind, form) {
   const row = approvalRowOf(ctx, kind, form && form.ID);
-  if (!row) return { signers: null, draft: false };
+  if (!row) return { signers: null, draft: false, mark: false };
   const at = n => ({ name: plainText(row['S' + n + 'Name']), date: dateOf(row['S' + n + 'At']) });
+  const next = nextStage(row);
   return {
     signers: { s1: plainText(row.S1Name), s2: at(2), s3: at(3), s4: at(4) },
-    draft: isPending(row)
+    draft: next > 0,
+    // ลายน้ำหายเมื่อขั้น 3 อนุมัติแล้ว — Supervisor ปริ้นใบไปให้ Infrastructure อนุมัติ (เจ้าของงานขอ)
+    mark: next > 0 && next < FINAL_STAGE
   };
 }
 

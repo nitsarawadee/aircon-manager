@@ -5,7 +5,7 @@
  * - ขั้น 1 ไม่ต้องกด: บัญชี Subcontract ที่กรอก = ชื่อในช่องผู้ดำเนินการ
  * - ขั้น 3 เป็น Supervisor หรือ Regional ก็ได้ ชื่อคนที่กดลงเอกสาร
  * - อนุมัติทีละขั้น ข้ามไม่ได้ ผิดบทบาทไม่ได้ นอกภูมิภาคไม่ได้
- * - ระหว่างรอ PDF เป็นฉบับร่างมีลายน้ำ ครบแล้วลายน้ำหาย
+ * - ระหว่างรอ PDF เป็นฉบับร่างมีลายน้ำ ลายน้ำหายตั้งแต่ขั้น 3 (Supervisor) อนุมัติ
  * - ใบเก่าไม่ต้องอนุมัติ · แก้รูปแล้วต้องอนุมัติใหม่
  */
 
@@ -119,8 +119,15 @@ test('เอกสาร: ระหว่างรอเป็นฉบับร
   html = await getRepairDocHtml(as(db, 'infra'), form._row);
   assert.ok(html.includes('สตาฟ ภาคหนึ่ง') && html.includes(today()));
   assert.ok(!html.includes('ซุป ภาคหนึ่ง'));
+  assert.ok(html.includes('class="draft-mark"'), 'ขั้น 3 ยังไม่อนุมัติ ต้องยังมีลายน้ำ');
 
+  // ขั้น 3 อนุมัติแล้ว ลายน้ำหาย — Supervisor ปริ้นไปให้ Infrastructure อนุมัติ (เจ้าของงานขอ)
   await approveDoc(as(db, 'sup'), 'repair', form.ID);
+  html = await getRepairDocHtml(as(db, 'infra'), form._row);
+  assert.ok(!html.includes('class="draft-mark"'), 'ขั้น 3 อนุมัติแล้วต้องไม่มีลายน้ำ');
+  assert.ok(html.includes('ซุป ภาคหนึ่ง'));
+  assert.ok(!html.includes('อินฟรา ใหญ่'), 'ขั้น 4 ยังไม่อนุมัติ ยังไม่มีชื่อ Infrastructure');
+
   await approveDoc(as(db, 'infra'), 'repair', form.ID);
   html = await getRepairDocHtml(as(db, 'infra'), form._row);
   assert.ok(!html.includes('class="draft-mark"'), 'อนุมัติครบแล้วต้องไม่มีลายน้ำ');

@@ -298,7 +298,7 @@ ${opts.fontHref ? `<link rel="stylesheet" href="${esc(opts.fontHref)}">` : ''}
 ${o.page ? formPage(o.page) : ''}
 </head><body style="--k:${Number(o.scale) || 1};--hh:${Number(o.headerPt) || 56}pt;${logoVars(o.logo)};--rh:${Number(o.rowPt) || 17.5}pt;--sr:${Number(o.signRowPt) || 25}pt;--sh:${Number(o.signHeadPt) || Number(o.rowPt) || 17.5}pt;--rs:${Number(o.refPt) || 12}pt">
 ${opts.toolbar ? toolbar() : ''}
-${opts.draft ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
+${opts.mark ? '<div class="draft-mark">รออนุมัติ</div>' : ''}
 ${o.body}
 </body></html>`;
 }
@@ -406,7 +406,7 @@ tr.sign .who { margin-bottom: 1mm; }
        min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k));
        font-style: italic; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
-/* ---------- ลายน้ำฉบับร่าง (ยังอนุมัติไม่ครบ ดู approval.js) ----------
+/* ---------- ลายน้ำฉบับร่าง (ขั้น 3 ยังไม่อนุมัติ ดู approval.js) ----------
    position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */
 .draft-mark { position: fixed; top: 50%; left: 50%; z-index: 50; pointer-events: none;
               transform: translate(-50%, -50%) rotate(-30deg);
