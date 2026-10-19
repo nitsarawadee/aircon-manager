@@ -103,16 +103,12 @@ export const pageHeader = (title, opts) =>
 
 /* ==================== ส่วนลงนาม ==================== */
 
-/** ช่องว่างแบบเส้นประ ใส่ค่าลงไปถ้ามี ไม่มีก็เป็นเส้นให้เขียนเองเหมือนแบบฟอร์มกระดาษ */
-const blank = (value, dots, cls) => {
-  const t = plainText(value).trim();
-  return t ? `<span class="fill ${cls}">${esc(t)}</span>` : dots;
-};
+/** ช่องเส้นจุดใต้ ใส่ค่าลงไปถ้ามี ไม่มีก็เป็นเส้นเปล่าความยาวเท่ากันให้เขียนเอง — ทุกช่องหน้าตาเดียวกัน */
+const blank = (value, cls) => `<span class="fill ${cls}">${esc(plainText(value).trim())}</span>`;
 
 const signCell = (company, signer, date) =>
   (company ? `<div class="who">${val(company)}</div>` : '') +
-  '<div>ลงชื่อ ' + blank(signer, '………………………………', 'nm') +
-  ' วันที่ ' + blank(date, '…../…../……..', 'dt') + '</div>';
+  '<div>ลงชื่อ ' + blank(signer, 'nm') + ' วันที่ ' + blank(date, 'dt') + '</div>';
 
 /**
  * ส่วนการลงนาม — สองช่องต่อแถว สองแถว เหมือนกันทุกแบบฟอร์ม
@@ -400,6 +396,7 @@ tr.sign .who { margin-bottom: 1mm; }
    ความกว้างขั้นต่ำเท่ากับความยาวเส้นประเดิม ช่องจึงไม่ขยับตามความยาวของชื่อ */
 .fill { display: inline-block; text-align: center; border-bottom: 1px dotted #000;
         padding: 0 1.5mm; line-height: 1.2; }
+.fill:empty::before { content: "\\00a0"; }   /* ช่องว่างยังสูงเท่าบรรทัด เส้นใต้จึงอยู่ระดับเดียวกับช่องที่มีค่า */
 .fill.nm { min-width: 38mm; }
 .fill.dt { min-width: 22mm; }
 

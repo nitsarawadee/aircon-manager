@@ -229,7 +229,7 @@ test('ช่องผู้ตรวจรับกับ Approve ยังเ�
   const html = buildInstallDocHtml(baseForm());
   const block = html.slice(html.indexOf('ผู้ตรวจรับ'));
 
-  assert.ok(block.includes('………………………………'), 'ต้องเหลือเส้นประให้เซ็น');
+  assert.ok(block.includes('<span class="fill nm"></span>'), 'ต้องเหลือเส้นว่างให้เซ็น');
 });
 
 /* ============================== วันที่และการพึ่งพา ============================== */
