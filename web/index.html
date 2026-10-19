@@ -483,7 +483,7 @@
               <i class="ph ph-chart-bar text-[#1153a1]"></i> <span id="trendTitle" class="whitespace-nowrap">ค่าใช้จ่ายรายเดือน</span>
               <!-- ยอดรวมทั้งปีวางไว้บนหัวกราฟ เพราะกราฟตอบได้แค่ว่าเดือนไหนใช้เยอะ
                    แต่คำถามที่ถูกถามคู่กันเสมอคือ "ทั้งปีไปเท่าไหร่แล้ว" ซึ่งกราฟไม่ตอบ -->
-              <span id="trendTotals" class="ml-auto text-xs font-normal text-gray-500 whitespace-nowrap"></span>
+              <span id="trendTotals" class="ml-auto text-xs font-normal text-gray-500"></span>
             </h3>
             <div class="dash-canvas"><canvas id="trendChartCanvas"></canvas></div>
           </div>
@@ -3754,9 +3754,12 @@
         const sumOf = k => (s.monthlyTrend || []).reduce((n, m) => n + (m[k] || 0), 0);
         const grand = sumOf('total');
         const baht = v => '฿' + (Math.round(v * 100) / 100).toLocaleString();
+        // แบบเดิม: ยอดแต่ละหมวดเล็กๆ แล้วปิดท้ายด้วยรวม — ชื่อสั้นตามแบบเดิม (ล้าง · ซ่อม · จัดซื้อ · ติดตั้ง)
+        const parts = [['ล้าง', 'cleaning'], ['ซ่อม', 'repair'], ['จัดซื้อ', 'purchase'], ['ติดตั้ง', 'install']]
+          .map(([name, k]) => `${name} <b class="text-gray-700">${baht(sumOf(k))}</b>`);
         trendTotals.innerHTML = grand === 0
           ? '<span class="text-gray-400">ยังไม่มีค่าใช้จ่ายปีนี้</span>'
-          : `รวมทั้งปี <b class="text-gray-800">${baht(grand)}</b>`;
+          : parts.join(' · ') + ` · รวม <b class="text-gray-800">${baht(grand)}</b>`;
       }
       renderTrendChart(s.monthlyTrend);
       renderWatchlist(s.watchlist);
