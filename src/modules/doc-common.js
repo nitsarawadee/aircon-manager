@@ -46,7 +46,7 @@ export const REF_LINE_2 =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '<br>ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
 
-// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ขนาดตามไฟล์ของแต่ละแบบ (--rs ดู docShell) · ตัวปกติสีดำ (ผู้ใช้ขอ ไม่เอาตัวเอียง)
+// ใบล้าง/ใบติดตั้ง: ข้อความตามไฟล์ทุกตัว (เว้น 2 ช่องรอบ "|") — ขนาดตามไฟล์ของแต่ละแบบ (--rs ดู docShell) · ตัวเอียงสีดำ (ผู้ใช้ยืนยันให้คงตัวเอียง)
 export const REF_LINE =
   '<div class="ref">อ้างอิงแรงดันน้ำยา (Reference): R22 ≈ 60–70 PSI (Low) / R32 ≈ 110–130 PSI / R410A ≈ 120–140 PSI' +
   '&nbsp;&nbsp;|&nbsp;&nbsp;ค่าจริงขึ้นกับปริมาณน้ำยา ประสิทธิภาพคอมเพรสเซอร์ ความยาวท่อ และอุณหภูมิห้อง</div>';
@@ -361,7 +361,7 @@ table.main .hd, table.main .b { font-weight: 700 !important; }
 .ctr { text-align: center !important; }
 .lbl { }   /* ไฟล์ต้นฉบับไม่เยื้องข้อความ — คงชื่อคลาสไว้ให้ชี้ช่องป้ายชื่อ */
 .v { color: #000; }
-/* ตัวหนังสือในเอกสารเป็นตัวปกติสีดำทั้งหมด (ผู้ใช้ขอ 19/10/2569) ยกเว้นช่องหน่วย/เกณฑ์ที่เป็นสีเทาตามแบบฟอร์ม (ผู้ใช้ยืนยัน) */
+/* ตัวหนังสือในเอกสารเป็นตัวปกติสีดำทั้งหมด (ผู้ใช้ขอ 19/10/2569) ยกเว้นช่องหน่วย/เกณฑ์ (เทา) บรรทัดอ้างอิงท้ายใบ (เอียง) และข้อความในกรอบรูปที่ว่าง (เทาเอียง) ที่คงไว้ตามแบบฟอร์ม (ผู้ใช้ยืนยัน) */
 td.unit { color: #7F7F7F; background: #F2F2F2; }
 .tight { white-space: nowrap; }   /* ขนาดเท่าช่องอื่นตามไฟล์ แค่ไม่ให้ตัดบรรทัด */
 
@@ -405,7 +405,7 @@ tr.sign .who { margin-bottom: 1mm; }
 /* ช่องอ้างอิงท้ายใบ สูง 36pt ตามไฟล์ทั้งสามแบบ */
 .ref { display: flex; flex-direction: column; justify-content: center; text-align: center;
        min-height: calc(36pt * var(--k)); font-size: calc(var(--rs) * var(--k));
-       font-style: normal; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
+       font-style: italic; line-height: 1.25; padding: 0 4mm; background: #F2F2F2; border-top: 1pt solid #000; }
 
 /* ---------- ลายน้ำฉบับร่าง (ขั้น 3 ยังไม่อนุมัติ ดู approval.js) ----------
    position: fixed ตอนปริ้นจะซ้ำทุกหน้าเอง ทั้งหน้าลงนามและหน้ารูป */
@@ -436,7 +436,7 @@ table.photo tr.info td { font-style: normal; color: #000; }
 table.photo tr.info td .v { color: inherit; }
 /* เส้น thin ของ Excel ที่สเกล 107% หนาราว 1.3pt (วัดจาก PDF ของไฟล์) — Chrome ปัดความหนาเส้นเป็นพิกเซลเต็ม: กรอบนอก 1.5pt ใกล้สุด ส่วนกรอบรูป 1pt ใกล้กว่า 1.5pt (1.5pt ซ้อนกันแล้วหนาเกิน) */
 table.photo td.pic { border: 1pt solid #000; border-bottom: none; padding: 0; overflow: hidden;
-                     font-style: normal; color: #000; }
+                     font-style: italic; color: #808080; }
 table.photo td.pic { position: relative; }
 /* รูปเต็มกรอบ ตัดส่วนเกินให้พอดี (ความสูงแถวกำหนดจากไฟล์ จึงวางรูปลอยทับทั้งช่อง) */
 table.photo td.pic img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
