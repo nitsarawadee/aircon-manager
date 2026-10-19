@@ -7643,7 +7643,7 @@
                   title="${selfCases.has(String(h.CaseID || '').trim()) ? 'ดูสรุปเคสนี้ (ซ่อมเอง — ไม่มีใบซ่อม)'
                     : !hasDocsMenu ? 'ดูสรุปเคสนี้'
                     : isRetiredStatus(h.EventType) && document.querySelector('[data-tab="warehouse"]') ? 'ดูเครื่องของเคสนี้ในคลังแอร์'
-                    : 'เปิดเอกสารของ' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้'}"
+                    : 'ไปที่' + (h.CaseID ? 'เคส' : 'ใบ') + 'นี้ในหน้าแบบฟอร์มเอกสาร'}"
                   class="${child ? 'text-slate-400 hover:text-[#1153a1]' : 'text-[#1153a1] hover:text-[#0e4485]'} underline decoration-dotted underline-offset-2">${esc(displayDocId(h))}</button>`
               : esc(displayDocId(h))
           }</td>
@@ -8174,16 +8174,13 @@
         return;
       }
       const inNote = (/^เอกสาร\s+(\S+)/.exec(String(note || '').trim()) || [])[1] || '';
-      // กดเลขอ้างอิงแล้วเปิดหน้าเอกสารเลย (เจ้าของงานขอ 17/10/2569) — เดิมพาไปหน้าแบบฟอร์มเอกสารแล้วต้องกดเปิดอีกที
-      // เปิดแท็บไว้ก่อนตอนกด (ก่อนรอเซิร์ฟเวอร์) ไม่งั้นเบราว์เซอร์บล็อกป๊อปอัป · บล็อกอยู่ดี = พาไปหน้าแบบฟอร์มเอกสารแบบเดิม
-      const win = openLoadingTab();
-      const giveUp = () => { try { if (win) win.close(); } catch (e) {} };
+      // กดเลขอ้างอิงแล้วไปที่เลขนั้นในหน้าแบบฟอร์มเอกสาร (ผู้ใช้ขอ 19/10/2569 — แทนการเปิดหน้าเอกสารเลยแบบ 17/10)
+      // เปิดแท็บชนิดเอกสาร ค้นเลขไว้ให้ และไฮไลต์แถวของใบนั้น (ดู loadCleaningForms ตรง pendingDocOpen)
+      const giveUp = () => {};
       const openFound = (f, term) => {
-        if (!win) { pendingDocOpen = { kind: f.kind, term }; document.querySelector('[data-tab="cleaningform"]').click(); return; }
-        // ใบแนบไฟล์ — ตัวเอกสารคือไฟล์ที่แนบ เปิดรายการไฟล์แทนหน้าเอกสาร
-        if (String(f.Source || '').trim() === 'attach') { giveUp(); openAttachmentList(f._row, f.kind); return; }
-        const open = f.kind === 'repair' ? openRepairDoc : f.kind === 'install' ? openInstallDoc : openCleaningDoc;
-        open(f._row, f.ID, win);
+        pendingDocOpen = { kind: f.kind, term, row: f._row };
+        if (document.getElementById('modalRoot')) closeModal();   // กดมาจากหน้าต่างสรุปเคส
+        document.querySelector('[data-tab="cleaningform"]').click();
       };
       try {
         const [forms, repairs, installs] = await Promise.all([
@@ -8249,8 +8246,8 @@
     window.openDocOfHistory = openDocOfHistory;
 
     /*
-     * เลขอ้างอิงทุกที่กดแล้วเปิดเอกสารเลย (เจ้าของงานขอ 17/10/2569) — ตัวช่วยสองแบบ ใช้ทุกหน้าให้หน้าตาเหมือนกัน
-     *   historyDocLink  แถวประวัติ (หน้าประวัติ · ไทม์ไลน์หน้าเครื่อง · สรุปเคส) → หาเอกสารของแถวนั้น (openDocOfHistory)
+     * เลขอ้างอิง — ตัวช่วยสองแบบ ใช้ทุกหน้าให้หน้าตาเหมือนกัน
+     *   historyDocLink  แถวประวัติ (หน้าประวัติ · ไทม์ไลน์หน้าเครื่อง · สรุปเคส) → ไปที่เลขนั้นในหน้าแบบฟอร์มเอกสาร (openDocOfHistory · ผู้ใช้ขอ 19/10/2569)
      *   formDocLink     แถวเอกสาร (แบบฟอร์มเอกสาร · เอกสารรออนุมัติ) → เปิดใบนั้นตรงๆ
      */
     const DOC_LINK_CLS = 'text-[#1153a1] hover:text-[#0e4485] underline decoration-dotted underline-offset-2';
@@ -8262,7 +8259,7 @@
       const canOpen = !!document.querySelector('[data-tab="cleaningform"]') || !!String(h.CaseID || '').trim();
       if (!canOpen) return esc(text);
       return `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
-        title="เปิดเอกสารของ ${esc(text)}" class="${cls}">${esc(text)}</button>`;
+        title="ไปที่ ${esc(text)} ในหน้าแบบฟอร์มเอกสาร" class="${cls}">${esc(text)}</button>`;
     }
 
     function openFormDoc(kind, row, id, attach) {
@@ -9746,6 +9743,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       currentInstallForms = Array.isArray(installs) ? installs : [];
       if (!Array.isArray(forms)) showToast('โหลดรายการฟอร์มไม่สำเร็จ กรุณาลองรีเฟรชหน้าเว็บ', 'error');
       // มาจากการกดเลขที่ในหน้าประวัติ — เปิดแท็บชนิดเอกสารนั้นและค้นหาไว้ให้ (ดู openDocOfHistory)
+      const goTo = pendingDocOpen;
       if (pendingDocOpen) {
         docTypeFilter = pendingDocOpen.kind;
         showAllYears('docYearFilter');   // เอกสารของปีก่อนต้องเจอ
@@ -9755,6 +9753,16 @@ const CLEANING_CHECKLIST_ITEMS = [
       }
       paintDocTabs();
       renderCleaningFormTable();
+      // ไฮไลต์แถวของเลขอ้างอิงที่กดมา ให้เห็นทันทีว่าเป็นใบไหน
+      if (goTo && goTo.row) {
+        const tr = document.querySelector(`#cleaningFormTable tr[data-doc-row="${goTo.kind}-${Number(goTo.row)}"]`);
+        if (tr) {
+          tr.scrollIntoView({ block: 'center' });
+          tr.style.transition = 'background-color 0.6s';
+          tr.style.backgroundColor = '#fef3c7';
+          setTimeout(() => { tr.style.backgroundColor = ''; }, 2500);
+        }
+      }
       // ไม่ใช้ lockViewOnlySection ที่หน้านี้แล้ว เพราะตัวนั้นล็อกทั้งหน้าตามสิทธิ์ใบล้างอย่างเดียว
       // คนที่ดูใบล้างได้อย่างเดียวแต่กรอกใบซ่อมได้ จะโดนล็อกปุ่มใบซ่อมไปด้วย
       // หน้านี้ตัดสินรายแท็บแทน ดู paintDocTabs กับ canEditRow ใน renderCleaningFormTable
@@ -9801,7 +9809,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       const canEditRow = docLevel(r.kind) === 'edit';
 
       return `
-      <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}">
+      <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}" data-doc-row="${esc(r.kind)}-${Number(f._row)}">
         <td class="px-4 py-3 font-mono text-[12px] text-slate-600">
           ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${formDocLink(r.kind, f, r.docNo)}
         </td>

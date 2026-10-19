@@ -22,13 +22,14 @@ function sourceOf(name) {
   return m[0];
 }
 
-test('หน้าประวัติ: เปิดแท็บตอนกด (ก่อน await) แล้วใส่เอกสารลงแท็บนั้น ไม่ใช่พาไปหน้าแบบฟอร์มเอกสาร', () => {
+test('หน้าประวัติ: กดเลขอ้างอิงแล้วไปที่เลขนั้นในหน้าแบบฟอร์มเอกสาร ไม่ใช่เปิดหน้าเอกสาร (ผู้ใช้ขอ 19/10/2569)', () => {
   const src = sourceOf('openDocOfHistory');
-  const opened = src.indexOf('openLoadingTab()');
-  const firstAwait = src.indexOf('await Promise.all(');   // จุดที่รอเซิร์ฟเวอร์หาเอกสาร
-  assert.ok(opened > 0 && opened < firstAwait, 'ต้องเปิดแท็บก่อนรอเซิร์ฟเวอร์');
-  assert.match(src, /open\(f\._row, f\.ID, win\)/, 'ต้องเปิดเอกสารลงแท็บที่เปิดไว้');
-  assert.match(src, /openAttachmentList\(f\._row, f\.kind\)/, 'ใบแนบไฟล์ต้องเปิดรายการไฟล์');
+  assert.ok(!src.includes('openLoadingTab()'), 'ต้องไม่เปิดแท็บเอกสารแล้ว');
+  assert.match(src, /pendingDocOpen = \{ kind: f\.kind, term, row: f\._row \}/, 'ต้องจำชนิด/คำค้น/แถวของใบที่จะไป');
+  assert.match(src, /querySelector\('\[data-tab="cleaningform"\]'\)\.click\(\)/, 'ต้องพาไปหน้าแบบฟอร์มเอกสาร');
+  // หน้าแบบฟอร์มเอกสารไฮไลต์แถวของใบนั้น
+  assert.match(html, /data-doc-row="\$\{esc\(r\.kind\)\}-\$\{Number\(f\._row\)\}"/);
+  assert.match(html, /tr\[data-doc-row="\$\{goTo\.kind\}-\$\{Number\(goTo\.row\)\}"\]/);
 });
 
 test('ตัวเปิดเอกสารทั้งสามแบบรับแท็บที่เปิดไว้แล้วได้', () => {
