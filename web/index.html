@@ -9145,9 +9145,17 @@
       const p = rplPlan, el = document.getElementById('rplBody');
       if (!p || !el) return;
       const s = p.summary, ag = p.ageGroups, edit = p.canEdit;
-      const card = (label, value, sub, tone) => `
-        <div class="rounded-xl border p-4 ${tone}"><div class="text-xs font-medium opacity-80">${label}</div>
-          <div class="text-2xl font-bold mt-1">${value}</div>${sub ? `<div class="text-xs mt-1 opacity-80">${sub}</div>` : ''}</div>`;
+      // การ์ด KPI หน้าตาเดียวกับการ์ดแดชบอร์ด (ไอคอนสี · ตัวเลขใหญ่มีหน่วย · บรรทัดรองล่างสุด) สูงเท่ากันทั้งแถว
+      const card = (tone, icon, label, num, unit, sub) => `
+        <div class="rounded-2xl shadow-sm p-4 flex flex-col gap-2 h-full" style="background:var(--p-${tone}-bg); border:1px solid var(--p-card-border)">
+          <div class="flex items-center gap-2">
+            <span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:var(--p-${tone}); color:#fff"><i class="ph ${icon} text-lg"></i></span>
+            <span class="text-sm font-medium text-slate-600 leading-tight">${label}</span>
+          </div>
+          <div class="text-3xl font-extrabold leading-none" style="color:var(--p-${tone}-fg)">${num}${unit ? ` <span class="text-sm font-semibold">${unit}</span>` : ''}</div>
+          ${sub ? `<div class="text-xs text-slate-600 leading-snug mt-auto">${sub}</div>` : ''}
+        </div>`;
+      const groupTitle = t => `<div class="text-sm font-bold text-gray-700 mb-2">${t}</div>`;
       const budgetTotal = p.budget.purchase + p.budget.install;
       const match = p.budget.exists && Math.round(budgetTotal) === Math.round(s.total);
       const budgetLine = !p.budget.exists ? 'ยังไม่ได้ตั้งงบปีนี้'
@@ -9160,16 +9168,18 @@
         && (!rplFilter.q || (u.airCode + ' ' + u.nodeName + ' ' + u.province).toLowerCase().includes(rplFilter.q.toLowerCase())));
 
       el.innerHTML = `
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-          ${card('ปกติ (0–6 ปี)', ag.normal, '', 'bg-green-50 border-green-200 text-green-800')}
-          ${card('เฝ้าระวัง (7–8 ปี)', ag.watch, '', 'bg-amber-50 border-amber-200 text-amber-800')}
-          ${card('ครบเกณฑ์เปลี่ยน (เกิน ' + p.ageLimit + ' ปี)', ag.due, ag.unknown ? 'ไม่มีวันติดตั้ง ' + ag.unknown + ' เครื่อง (ไม่นับ)' : '', 'bg-red-50 border-red-200 text-red-800')}
+        ${groupTitle('อายุเครื่อง ณ สิ้นปีงบ ' + p.year)}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          ${card('mint', 'ph-check-circle', 'ปกติ (0–6 ปี)', ag.normal, 'เครื่อง', '')}
+          ${card('peach', 'ph-eye', 'เฝ้าระวัง (7–8 ปี)', ag.watch, 'เครื่อง', '')}
+          ${card('rose', 'ph-warning', 'ครบเกณฑ์เปลี่ยน (เกิน ' + p.ageLimit + ' ปี)', ag.due, 'เครื่อง', ag.unknown ? 'ไม่มีวันติดตั้ง ' + ag.unknown + ' เครื่อง (ไม่นับ)' : '')}
         </div>
+        ${groupTitle('แผนเปลี่ยนเครื่อง ปีงบ ' + p.year)}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          ${card('ตามแผน (เลือกเปลี่ยน)', s.selected + ' <span class="text-sm font-normal text-gray-500">เครื่อง · ครบเกณฑ์ ' + s.due + '</span>', 'จัดซื้อ ' + rplMoney(s.purchase) + ' · ติดตั้ง ' + rplMoney(s.install), 'bg-white border-gray-200 text-gray-800')}
-          ${card('เปลี่ยนแล้ว', s.done + ' <span class="text-sm font-normal">/ ' + s.selected + '</span>', 'ใช้จริง ' + rplMoney(s.doneActual) + ' บาท', 'bg-green-50 border-green-200 text-green-800')}
-          ${card('คงเหลือ', s.remaining + ' <span class="text-sm font-normal text-gray-500">เครื่อง</span>', 'ประมาณ ' + rplMoney(s.remainingTotal) + ' บาท', 'bg-white border-gray-200 text-gray-800')}
-          ${card('รวมตามแผน (บาท)', rplMoney(s.total), budgetLine, 'bg-white border-gray-200 text-gray-800')}
+          ${card('brand', 'ph-list-checks', 'ตามแผน (เลือกเปลี่ยน)', s.selected, 'เครื่อง', 'จากที่ครบเกณฑ์ ' + s.due + ' เครื่อง')}
+          ${card('mint', 'ph-check-square', 'เปลี่ยนแล้ว', s.done, '/ ' + s.selected + ' เครื่อง', 'ใช้จริง ' + rplMoney(s.doneActual) + ' บาท')}
+          ${card('aqua', 'ph-hourglass-medium', 'คงเหลือ', s.remaining, 'เครื่อง', 'ประมาณ ' + rplMoney(s.remainingTotal) + ' บาท')}
+          ${card('lilac', 'ph-coins', 'รวมตามแผน', rplMoney(s.total), 'บาท', 'จัดซื้อ ' + rplMoney(s.purchase) + ' · ติดตั้ง ' + rplMoney(s.install) + '<br>' + budgetLine)}
         </div>
         ${edit && !match ? `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
           <i class="ph ph-info"></i><span>ยอดที่เลือกยังไม่ตรงกับงบปี ${p.year}</span>
