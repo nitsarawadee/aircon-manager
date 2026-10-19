@@ -9207,6 +9207,7 @@
 
     /* ============== แผนเปลี่ยนเครื่อง ============== */
     let rplPlan = null;
+    let rplTab = 'due';   // แท็บตารางล่าง: due ครบเกณฑ์ · unplanned เปลี่ยนนอกแผน · added ติดตั้งเพิ่ม
     const rplFilter = { region: '', q: '', only: '', ages: null };   // ages: Set ของอายุที่เลือก (ดรอปดาวฟิลเตอร์) · null = ทุกอายุ
     function rplSetAges(sel) { rplFilter.ages = sel; renderReplacement(); }
     window.rplSetAges = rplSetAges;
@@ -9296,7 +9297,15 @@
           </div>
         </div>
 
-        <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <!-- แท็บตารางล่าง — ตารางครบเกณฑ์ยาว ต้องเลื่อนไกลกว่าจะเจอนอกแผน/ติดตั้งเพิ่ม -->
+        <div class="flex gap-1 mb-3 bg-white rounded-xl border border-gray-200 p-1">
+          ${[['due', 'ph-list-checks', 'เครื่องที่ครบเกณฑ์', allRows.length], ['unplanned', 'ph-warning', 'เปลี่ยนนอกแผน', p.unplanned.length], ['added', 'ph-plus', 'ติดตั้งเพิ่ม', p.added.length]]
+            .map(([k, icon, label, n]) => `<button onclick="rplSetTab('${jsStr(k)}')" class="flex-1 px-2 py-1.5 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${rplTab === k ? 'bg-blue-50 text-[#1153a1]' : 'text-gray-500 hover:bg-gray-50'}">
+              <i class="ph ${icon}"></i> ${label} <span class="font-semibold">(${n})</span></button>`).join('')}
+        </div>
+        ${rplTab === 'unplanned' ? rplSideTable('เปลี่ยนนอกแผน', 'เปลี่ยนในปี ' + p.year + ' แต่ไม่ได้อยู่ในแผน (เช่น เสียแล้วต้องเปลี่ยน)', p.unplanned, s.unplannedActual)
+          : rplTab === 'added' ? rplSideTable('ติดตั้งเพิ่ม', 'ติดตั้งที่ตำแหน่งใหม่ในปี ' + p.year + ' — ไม่ใช่การเปลี่ยนเครื่อง', p.added, s.addedActual)
+          : `<div class="bg-white rounded-xl border border-gray-200 p-4">
           <div class="flex flex-wrap items-center gap-2 mb-3">
             <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${allRows.length})</span></h3>
             <input id="rplQ" value="${esc(rplFilter.q)}" oninput="rplSetFilter('q', this.value)" placeholder="ค้นหา รหัส / Node / จังหวัด" class="border rounded-lg px-3 py-1.5 text-sm w-52">
@@ -9320,11 +9329,9 @@
               <td class="pl-3">${rplStatus(u)}</td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-gray-400 py-6">ไม่มีเครื่องตามตัวกรอง</td></tr>'}</tbody>
           </table></div>
           ${edit ? '' : '<p class="text-xs text-gray-400 mt-2">ติ๊กเลือกและแก้ราคาได้เฉพาะ Infrastructure</p>'}
-        </div>
-        ${rplSideTable('เปลี่ยนนอกแผน', 'เปลี่ยนในปี ' + p.year + ' แต่ไม่ได้อยู่ในแผน (เช่น เสียแล้วต้องเปลี่ยน)', p.unplanned, s.unplannedActual)}
-        ${rplSideTable('ติดตั้งเพิ่ม', 'ติดตั้งที่ตำแหน่งใหม่ในปี ' + p.year + ' — ไม่ใช่การเปลี่ยนเครื่อง', p.added, s.addedActual)}`;
+        </div>`}`;
       // ช่องค้นหาถูกวาดใหม่ทุกครั้ง — คืนเคอร์เซอร์ให้พิมพ์ต่อได้
-      if (rplFilter.focusQ) { const q = document.getElementById('rplQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); rplFilter.focusQ = false; }
+      if (rplFilter.focusQ && rplTab === 'due') { const q = document.getElementById('rplQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); rplFilter.focusQ = false; }
     }
 
     function rplStatus(u) {
@@ -9335,9 +9342,12 @@
       return u.selected ? '<span class="text-gray-600">รอเปลี่ยน</span>' : '<span>ไม่เลือก</span>';
     }
 
+    function rplSetTab(k) { rplTab = k; renderReplacement(); }
+    window.rplSetTab = rplSetTab;
+
     function rplSideTable(title, hint, rows, total) {
-      if (!rows.length) return '';
-      return `<div class="bg-white rounded-xl border border-gray-200 p-4 mt-4">
+      if (!rows.length) return `<div class="bg-white rounded-xl border border-gray-200 p-4 text-center text-gray-400 py-10">ไม่มี${title}ในปีนี้</div>`;
+      return `<div class="bg-white rounded-xl border border-gray-200 p-4">
         <h3 class="font-bold text-gray-800">${title} <span class="text-sm font-normal text-gray-500">${rows.length} เครื่อง · ${rplMoney(total)} บาท</span></h3>
         <p class="text-xs text-gray-400 mb-2">${hint}</p>
         <table class="w-full text-sm"><thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 text-left"><th class="py-2 font-semibold">เครื่อง</th><th class="font-semibold">Region</th>
