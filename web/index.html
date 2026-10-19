@@ -9470,12 +9470,11 @@
     /**
      * วาดกราฟและตารางค่าใช้จ่ายรายเดือน
      *
-     * ใช้กราฟแท่ง (ไม่ใช่เส้น) เพราะค่าใช้จ่ายเป็นยอดที่เกิดขึ้นแยกกันในแต่ละเดือน
+     * ใช้กราฟแท่งซ้อนกัน (ไม่ใช่เส้น) เพราะค่าใช้จ่ายเป็นยอดที่เกิดขึ้นแยกกันในแต่ละเดือน
      * ไม่ใช่ค่าที่ไหลต่อเนื่อง กราฟเส้นจะสื่อผิดว่าเดือนที่ไม่มีรายจ่ายคือค่าที่ลดลงมา
      * ทั้งที่จริงคือไม่มีรายการเลย
      *
-     * แท่งแยกหมวดวางเรียงกันในเดือนเดียว ไม่ซ้อนเป็นแท่งเดียวหลายสี (เจ้าของงานขอ 16/10/2569)
-     * แท่งซ้อนเทียบหมวดเล็กๆ ไม่ออก เพราะแต่ละหมวดไม่ได้เริ่มจากศูนย์ · ยอดรวมของเดือนดูที่ตารางหรือป้ายเมื่อชี้
+     * เดือนละแท่งเดียว ซ้อนสีตามหมวด (ผู้ใช้ขอกลับเป็นแบบเดิม 19/10/2569 — เคยแยกแท่งเรียงกันเมื่อ 16/10)
      *
      * มีตารางกำกับใต้กราฟด้วย เพราะกราฟอ่านค่าที่แน่นอนไม่ได้
      * และคนที่ต้องเอาตัวเลขไปทำเอกสารต่อจำเป็นต้องได้เลขจริง
@@ -9507,11 +9506,7 @@
           type: 'bar',
           data: {
             labels: months.map(m => m.label),
-            datasets: BUDGET_UI.map(c => ({
-              label: c.short, data: months.map(m => m[c.month] || 0), backgroundColor: c.color, borderRadius: 3,
-              // 4 หมวดต่อเดือน — แท่งชิดกันในกลุ่ม เว้นช่องระหว่างเดือน
-              categoryPercentage: 0.8, barPercentage: 0.9, maxBarThickness: 22
-            }))
+            datasets: BUDGET_UI.map(c => ({ label: c.short, data: months.map(m => m[c.month] || 0), backgroundColor: c.color, borderRadius: 4 }))
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -9524,8 +9519,8 @@
               }}
             },
             scales: {
-              x: { grid: { display: false } },
-              y: { beginAtZero: true, ticks: { callback: v => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } }
+              x: { stacked: true, grid: { display: false } },
+              y: { stacked: true, beginAtZero: true, ticks: { callback: v => '฿' + v.toLocaleString() }, grid: { color: '#f1f5f9' } }
             }
           }
         });
