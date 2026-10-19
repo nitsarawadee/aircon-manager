@@ -131,5 +131,7 @@ test('ช่วงที่สอง: เปลี่ยนแล้วอยู
   assert.deepEqual(p.unplanned.map(u => [u.airCode, u.actualCost]), [['B-AIR-1', 14000]]);
   assert.deepEqual(p.added.map(u => [u.airCode, u.actualCost]), [['N-AIR-1', 4000]]);
   assert.deepEqual(p.staleSelected, [{ airCode: 'P-AIR-1', replacedOn: '2026-10-01' }]);
+  assert.deepEqual(p.staleUnits.map(u => [u.airCode, u.status, u.replacedOn, u.selected]), [['P-AIR-1', 'stale', '2026-10-01', true]],
+    'ติ๊กไว้แต่เปลี่ยนไปปีก่อน — ยังแสดงเป็นแถว (แดง) ติ๊กคงอยู่ ไม่นับในยอด');
   assert.equal(p.summary.due, 1, 'ครบเกณฑ์นับตามอายุตอนนี้ — เครื่องที่เปลี่ยนแล้วไม่นับ');
 });

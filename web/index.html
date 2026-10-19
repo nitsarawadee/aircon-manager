@@ -9251,7 +9251,9 @@
         : `<span class="text-amber-700">งบที่ตั้งไว้ ${rplMoney(budgetTotal)} (ต่าง ${rplMoney(s.total - budgetTotal)})</span>`;
 
       const regions = p.byRegion.map(r => r.region);
-      const beforeAge = p.units.filter(u => (!rplFilter.region || u.region === rplFilter.region)
+      // ติ๊กไว้แต่ไม่ครบเกณฑ์แล้ว ต่อท้ายตาราง (แถวแดง ไม่นับในยอด)
+      const allRows = p.units.concat(p.staleUnits || []);
+      const beforeAge = allRows.filter(u => (!rplFilter.region || u.region === rplFilter.region)
         && (!rplFilter.only || (rplFilter.only === 'yes' ? u.selected : rplFilter.only === 'no' ? !u.selected : u.status === rplFilter.only))
         && (!rplFilter.q || (u.airCode + ' ' + u.nodeName + ' ' + u.province).toLowerCase().includes(rplFilter.q.toLowerCase())));
       // อายุ ณ สิ้นปีงบ แบบฟิลเตอร์ Excel — ตัวเลือกจากรายการที่ผ่านตัวกรองอื่นแล้ว
@@ -9271,8 +9273,6 @@
         ${edit && !match ? `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
           <i class="ph ph-info"></i><span>ยอดที่เลือกยังไม่ตรงกับงบปี ${p.year}</span>
           <button onclick="applyReplacementBudget()" class="ml-auto bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium">ใช้ยอดนี้เป็นงบจัดซื้อ/ติดตั้ง</button></div>` : ''}
-        ${p.staleSelected.length ? `<div class="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800">
-          <i class="ph ph-warning"></i> ติ๊กไว้แต่ไม่ครบเกณฑ์แล้ว (ไม่นับในยอด): ${p.staleSelected.map(x => esc(x.airCode) + (x.replacedOn ? ' (เปลี่ยนแล้วเมื่อ ' + esc(fmtDate(x.replacedOn)) + ')' : '')).join(', ')}</div>` : ''}
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <div class="bg-white rounded-xl border border-gray-200 p-4">
@@ -9298,7 +9298,7 @@
 
         <div class="bg-white rounded-xl border border-gray-200 p-4">
           <div class="flex flex-wrap items-center gap-2 mb-3">
-            <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${p.units.length})</span></h3>
+            <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${allRows.length})</span></h3>
             <input id="rplQ" value="${esc(rplFilter.q)}" oninput="rplSetFilter('q', this.value)" placeholder="ค้นหา รหัส / Node / จังหวัด" class="border rounded-lg px-3 py-1.5 text-sm w-52">
             ${xlFilterButton('rplAge', 'อายุ', ageOptions(beforeAge, u => u.age), rplFilter.ages, 'rplSetAges')}
             <select onchange="rplSetFilter('region', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
@@ -9311,7 +9311,7 @@
           <div class="overflow-x-auto"><table class="w-full text-sm">
             <thead><tr class="text-slate-600 border-b border-gray-200 text-xs bg-slate-50 text-left"><th class="py-2 pr-2 font-semibold">เปลี่ยน</th><th class="font-semibold">เครื่อง</th><th class="font-semibold">Region</th>
               <th class="font-semibold">ยี่ห้อ / รุ่น</th><th class="text-right font-semibold">BTU</th><th class="font-semibold pl-3">ติดตั้ง</th><th class="text-right font-semibold">อายุ</th><th class="text-right font-semibold">ตามแผน (บาท)</th><th class="font-semibold pl-3">สถานะ</th></tr></thead>
-            <tbody class="divide-y divide-gray-100 text-gray-700">${list.map(u => `<tr class="${u.status === 'done' ? 'bg-green-50' : u.selected ? '' : 'text-gray-400'}">
+            <tbody class="divide-y divide-gray-100 text-gray-700">${list.map(u => `<tr class="${u.status === 'done' ? 'bg-green-50' : u.status === 'stale' ? 'bg-red-50' : u.selected ? '' : 'text-gray-400'}">
               <td class="py-1.5 pr-2"><input type="checkbox" ${u.selected ? 'checked' : ''} ${edit ? '' : 'disabled'} onchange="rplToggle('${jsStr(u.airCode)}', this.checked)" class="w-4 h-4 accent-[#1153a1]"></td>
               <td><div>${airCodeBtn(u.airCode)}</div><div class="text-xs text-gray-400">${esc(u.nodeName)} · ${esc(u.province)}</div></td>
               <td>${esc(u.region)}</td><td>${esc(u.brand)}<div class="text-xs text-gray-400">${esc(u.model)}</div></td>
@@ -9330,6 +9330,8 @@
     function rplStatus(u) {
       if (u.status === 'done') return `<span class="text-green-700 font-medium">${u.doneKind === 'movein' ? 'ย้ายเครื่องมาแทน' : 'เปลี่ยนแล้ว'}</span>
         <div class="text-xs text-green-700">${esc(fmtDate(u.doneDate))}${u.actualCost ? ' · ' + rplMoney(u.actualCost) + ' บาท' : ''}</div>`;
+      if (u.status === 'stale') return `<span class="text-red-600 font-medium">ไม่ต้องเปลี่ยน</span>
+        <div class="text-xs text-red-600">${u.replacedOn ? 'เปลี่ยนไปแล้วเมื่อ ' + esc(fmtDate(u.replacedOn)) : 'ยังไม่ครบเกณฑ์'} · ไม่นับในยอด</div>`;
       return u.selected ? '<span class="text-gray-600">รอเปลี่ยน</span>' : '<span>ไม่เลือก</span>';
     }
 

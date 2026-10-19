@@ -108,7 +108,7 @@ export function buildReplacementPlan(units, picks, prices, year, history = [], i
   }
 
   const ageGroups = { normal: 0, watch: 0, due: 0, unknown: 0 };
-  const list = [], unplanned = [], added = [];
+  const list = [], unplanned = [], added = [], staleUnits = [];
   for (const u of units) {
     if (isRetiredStatus(u.Status)) continue;
     const code = normalizeCode(u.AirCode);
@@ -127,7 +127,11 @@ export function buildReplacementPlan(units, picks, prices, year, history = [], i
     };
     // อยู่ในรายการ: ครบเกณฑ์ตามอายุตอนนี้ หรือ ติ๊กไว้แล้วเปลี่ยนไปแล้วในปีนี้ (อายุกลับเป็น 0 แต่ยังเป็นงานของแผน)
     if (ageGroup(age) === 'due' || (isPicked && done)) list.push(row);
-    else if (done) unplanned.push(row);
+    else {
+      if (done) unplanned.push(row);
+      // ติ๊กไว้แต่ไม่ครบเกณฑ์แล้ว — ไม่นับในยอด แต่ยังแสดงในตาราง (สีแดง พร้อมเหตุ) ไม่ต้องให้ Infrastructure ไปเอาติ๊กออกเอง
+      if (isPicked) staleUnits.push({ ...row, status: 'stale', replacedOn: lastReplace.get(code) || '' });
+    }
     if (job && job.kind === 'add') added.push({ ...row, doneDate: job.date, actualCost: Math.round(job.cost * 100) / 100 });
   }
   // เครื่องครบเกณฑ์ที่เปลี่ยนนอกแผนก็อยู่ในรายการหลักแล้ว (ไม่ได้ติ๊ก) — นับรวมในนอกแผนด้วย
@@ -157,7 +161,7 @@ export function buildReplacementPlan(units, picks, prices, year, history = [], i
     .map(p => ({ airCode: p.AirCode, replacedOn: lastReplace.get(normalizeCode(p.AirCode)) || '' }));
 
   return {
-    year: Y, ageLimit: AGE_LIMIT, ageGroups, bands, units: list, byRegion, byBand, staleSelected, unplanned, added,
+    year: Y, ageLimit: AGE_LIMIT, ageGroups, bands, units: list, byRegion, byBand, staleSelected, staleUnits, unplanned, added,
     summary: {
       due: list.filter(x => ageGroup(x.age) === 'due').length, selected: sel.length, purchase: t.purchase, install: t.install, total: t.purchase + t.install,
       done: doneSel.length, doneActual: actual(doneSel), remaining: left.length, remainingTotal: tl.purchase + tl.install,
