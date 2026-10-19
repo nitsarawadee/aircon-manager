@@ -677,7 +677,9 @@
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
             <input type="text" id="airSearch" placeholder="ค้นหารหัส, Node, ยี่ห้อ..." class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1153a1] outline-none transition-shadow text-sm shadow-sm">
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 md:flex">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 md:flex">
+            <!-- อายุแบบดรอปดาวฟิลเตอร์ Excel (ดู xlFilterButton) — วาดใหม่ทุกครั้งที่ตารางเปลี่ยน -->
+            <div id="airAgePick" class="flex [&>button]:w-full [&>button]:justify-center [&>button]:py-2 [&>button]:shadow-sm"></div>
             <div class="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
               <i class="ph ph-map-pin text-gray-500"></i>
               <select id="airRegionFilter" onchange="refreshAirTable()" class="w-full bg-transparent border-none text-sm focus:ring-0 outline-none cursor-pointer font-medium text-gray-700">
@@ -1671,6 +1673,81 @@
      *
      * รับวันอ้างอิงได้เหมือน unitAge เพื่อให้เทสต์ตรึงวันได้ ปกติไม่ต้องส่ง
      */
+    /**
+     * ตัวกรองแบบดรอปดาวฟิลเตอร์ของ Excel (ผู้ใช้ขอ 19/10/2569)
+     * ปุ่ม "ชื่อ ▾" เปิดรายการค่าที่มีจริงพร้อมจำนวน · ติ๊กได้หลายค่า · มี "เลือกทั้งหมด" · กดตกลงแล้วค่อยกรอง
+     * ค่าที่เลือกเก็บเป็น Set (null = ทั้งหมด ไม่กรอง) · ตัวเลือกมาจากรายการที่ผ่านตัวกรองอื่นแล้ว (แบบ Excel)
+     *   xlFilterButton(id, label, options, selected, applyFn) — options [{ value, text, count }]
+     *   กดตกลง → window[applyFn](Set|null)
+     */
+    const xlFilterReg = {};
+    function xlFilterButton(id, label, options, selected, applyFn) {
+      xlFilterReg[id] = { options, selected, applyFn, label };
+      const on = selected && selected.size;
+      return `<button type="button" id="xf_${id}" onclick="xlFilterOpen('${jsStr(id)}')"
+        class="inline-flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-sm whitespace-nowrap ${on ? 'border-[#1153a1] bg-blue-50 text-[#1153a1] font-medium' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}">
+        <i class="ph ${on ? 'ph-funnel-simple' : 'ph-caret-down'}"></i>${esc(label)}${on ? ' (' + selected.size + ')' : ''}</button>`;
+    }
+    function xlFilterClose() { document.getElementById('xlFilterPop')?.remove(); document.removeEventListener('mousedown', xlFilterOutside, true); }
+    function xlFilterOutside(e) { const pop = document.getElementById('xlFilterPop'); if (pop && !pop.contains(e.target) && !e.target.closest('[id^="xf_"]')) xlFilterClose(); }
+    function xlFilterOpen(id) {
+      const st = xlFilterReg[id], btn = document.getElementById('xf_' + id);
+      if (!st || !btn) return;
+      const wasOpen = document.getElementById('xlFilterPop')?.dataset.id === id;
+      xlFilterClose();
+      if (wasOpen) return;
+      const rect = btn.getBoundingClientRect();
+      const pop = document.createElement('div');
+      pop.id = 'xlFilterPop'; pop.dataset.id = id;
+      pop.className = 'fixed z-[70] bg-white border border-gray-200 rounded-xl shadow-xl w-60 text-sm';
+      pop.style.top = Math.min(rect.bottom + 4, innerHeight - 340) + 'px';
+      pop.style.left = Math.max(8, Math.min(rect.left, innerWidth - 248)) + 'px';
+      const isOn = v => !st.selected || st.selected.has(v);
+      pop.innerHTML = `
+        <label class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 font-medium cursor-pointer">
+          <input type="checkbox" id="xfAll" class="w-4 h-4 accent-[#1153a1]" ${st.options.every(o => isOn(o.value)) ? 'checked' : ''}
+            onchange="document.querySelectorAll('#xlFilterPop .xf-opt').forEach(c => c.checked = this.checked); xlFilterSync()"> (เลือกทั้งหมด)</label>
+        <div class="max-h-60 overflow-y-auto py-1">
+          ${st.options.map((o, i) => `<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+            <input type="checkbox" class="xf-opt w-4 h-4 accent-[#1153a1]" data-i="${i}" ${isOn(o.value) ? 'checked' : ''} onchange="xlFilterSync()">
+            <span class="flex-1">${esc(o.text)}</span><span class="text-xs text-gray-400">${o.count}</span></label>`).join('')
+            || '<div class="px-3 py-3 text-gray-400">ไม่มีข้อมูล</div>'}
+        </div>
+        <div class="flex justify-end gap-2 px-3 py-2 border-t border-gray-100">
+          <button type="button" onclick="xlFilterClose()" class="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50">ยกเลิก</button>
+          <button type="button" id="xfOk" onclick="xlFilterApply('${jsStr(id)}')" class="px-3 py-1.5 rounded-lg bg-[#1153a1] text-white hover:bg-[#0e4485] disabled:opacity-40">ตกลง</button>
+        </div>`;
+      document.body.appendChild(pop);
+      document.addEventListener('mousedown', xlFilterOutside, true);
+      xlFilterSync();
+    }
+    /** ติ๊ก "เลือกทั้งหมด" ตามรายการ · ไม่เลือกสักค่ากดตกลงไม่ได้ (แบบ Excel) */
+    function xlFilterSync() {
+      const opts = [...document.querySelectorAll('#xlFilterPop .xf-opt')];
+      const n = opts.filter(c => c.checked).length;
+      const all = document.getElementById('xfAll');
+      if (all) { all.checked = n === opts.length; all.indeterminate = n > 0 && n < opts.length; }
+      const ok = document.getElementById('xfOk'); if (ok) ok.disabled = n === 0;
+    }
+    function xlFilterApply(id) {
+      const st = xlFilterReg[id];
+      const opts = [...document.querySelectorAll('#xlFilterPop .xf-opt')];
+      const picked = opts.filter(c => c.checked).map(c => st.options[Number(c.dataset.i)].value);
+      xlFilterClose();
+      const sel = picked.length === st.options.length ? null : new Set(picked);
+      if (typeof window[st.applyFn] === 'function') window[st.applyFn](sel);
+    }
+    Object.assign(window, { xlFilterOpen, xlFilterClose, xlFilterSync, xlFilterApply });
+
+    /** ตัวเลือกอายุ (ปีเต็ม) จากรายการ พร้อมจำนวน — เรียงอายุน้อยไปมาก ไม่มีวันติดตั้งไว้ท้าย */
+    function ageOptions(list, ageOf) {
+      const cnt = new Map();
+      for (const x of list) { const k = ageKey(ageOf(x)); cnt.set(k, (cnt.get(k) || 0) + 1); }
+      return [...cnt.entries()].sort((a, b) => (a[0] === 'none') - (b[0] === 'none') || Number(a[0]) - Number(b[0]))
+        .map(([v, n]) => ({ value: v, text: v === 'none' ? 'ไม่มีวันติดตั้ง' : v + ' ปี', count: n }));
+    }
+    function ageKey(a) { return a === null || a === undefined ? 'none' : String(a); }
+
     function isOldUnit(a, now) {
       const age = unitAge(a && a.InstallDate, now);
       return !!(age && age.isOld);
@@ -4466,6 +4543,10 @@
      * ใช้ unitAge() ตัวเดียวกับที่วาดคอลัมน์อายุ ตัวเลขสองที่จึงตรงกันเสมอ
      */
     let airAgeFilter = false;
+    /** อายุที่เลือกจากดรอปดาวฟิลเตอร์ (Set ของ "ปี" / "none") · null = ทุกอายุ */
+    let airAgePick = null;
+    function setAirAgePick(sel) { airAgePick = sel; refreshAirTable(); }
+    window.setAirAgePick = setAirAgePick;
 
     /** วาดตารางเครื่องใหม่ตามตัวกรองที่ตั้งไว้ตอนนี้ ใช้ร่วมกันทุกที่ที่ตัวกรองเปลี่ยน */
     function refreshAirTable() {
@@ -5004,6 +5085,11 @@
       else if (life === 'retired') rows = rows.filter(a => isRetiredStatus(a.Status));
 
       if (airAgeFilter) rows = rows.filter(isOldUnit);
+      // อายุ (ปีเต็ม) แบบฟิลเตอร์ Excel — ตัวเลือกจากรายการที่ผ่านตัวกรองอื่นแล้ว
+      const yearsOf = a => { const g = unitAge(a.InstallDate); return g ? g.years : null; };
+      const agePick = document.getElementById('airAgePick');
+      if (agePick) agePick.innerHTML = xlFilterButton('airAge', 'อายุ', ageOptions(rows, yearsOf), airAgePick, 'setAirAgePick');
+      if (airAgePick) rows = rows.filter(a => airAgePick.has(ageKey(yearsOf(a))));
       renderAirAgeFilterBar();
       airLastList = sortAirRows(rows, document.getElementById('airSort')?.value);
       // เปลี่ยนคำค้นหาหรือโหลดข้อมูลใหม่ ให้กลับไปหน้าแรกเสมอ
@@ -9121,7 +9207,9 @@
 
     /* ============== แผนเปลี่ยนเครื่อง ============== */
     let rplPlan = null;
-    const rplFilter = { region: '', q: '', only: '' };
+    const rplFilter = { region: '', q: '', only: '', ages: null };   // ages: Set ของอายุที่เลือก (ดรอปดาวฟิลเตอร์) · null = ทุกอายุ
+    function rplSetAges(sel) { rplFilter.ages = sel; renderReplacement(); }
+    window.rplSetAges = rplSetAges;
     const rplMoney = n => Math.round(Number(n) || 0).toLocaleString();
 
     async function loadReplacement() {
@@ -9163,9 +9251,11 @@
         : `<span class="text-amber-700">งบที่ตั้งไว้ ${rplMoney(budgetTotal)} (ต่าง ${rplMoney(s.total - budgetTotal)})</span>`;
 
       const regions = p.byRegion.map(r => r.region);
-      const list = p.units.filter(u => (!rplFilter.region || u.region === rplFilter.region)
+      const beforeAge = p.units.filter(u => (!rplFilter.region || u.region === rplFilter.region)
         && (!rplFilter.only || (rplFilter.only === 'yes' ? u.selected : rplFilter.only === 'no' ? !u.selected : u.status === rplFilter.only))
         && (!rplFilter.q || (u.airCode + ' ' + u.nodeName + ' ' + u.province).toLowerCase().includes(rplFilter.q.toLowerCase())));
+      // อายุ ณ สิ้นปีงบ แบบฟิลเตอร์ Excel — ตัวเลือกจากรายการที่ผ่านตัวกรองอื่นแล้ว
+      const list = rplFilter.ages ? beforeAge.filter(u => rplFilter.ages.has(ageKey(u.age))) : beforeAge;
 
       el.innerHTML = `
         <!-- แถวเดียว: อายุเครื่อง ณ สิ้นปีงบ (3) | แผนเปลี่ยนปีงบนี้ (4) — จอแคบตัดลงเป็นหลายแถวเอง -->
@@ -9210,6 +9300,7 @@
           <div class="flex flex-wrap items-center gap-2 mb-3">
             <h3 class="font-bold text-gray-800 mr-auto">เครื่องที่ครบเกณฑ์ <span class="text-sm font-normal text-gray-500">(อายุมากก่อน · แสดง ${list.length} จาก ${p.units.length})</span></h3>
             <input id="rplQ" value="${esc(rplFilter.q)}" oninput="rplSetFilter('q', this.value)" placeholder="ค้นหา รหัส / Node / จังหวัด" class="border rounded-lg px-3 py-1.5 text-sm w-52">
+            ${xlFilterButton('rplAge', 'อายุ', ageOptions(beforeAge, u => u.age), rplFilter.ages, 'rplSetAges')}
             <select onchange="rplSetFilter('region', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
               <option value="">ทุก Region</option>${regions.map(r => `<option value="${esc(r)}" ${rplFilter.region === r ? 'selected' : ''}>${esc(regionLabel(r))}</option>`).join('')}</select>
             <select onchange="rplSetFilter('only', this.value)" class="border rounded-lg px-2 py-1.5 text-sm">
