@@ -12893,9 +12893,12 @@ const CLEANING_CHECKLIST_ITEMS = [
       await navigator.clipboard.writeText(input.value);
       showToast('คัดลอกลิงก์แล้ว — วางในไลน์ส่งให้ช่างได้เลย');
     } catch (e) {
-      // บางเบราว์เซอร์ไม่ให้เขียนคลิปบอร์ด (เช่นเปิดผ่าน http ที่ไม่ใช่ localhost) — เลือกข้อความให้กดคัดลอกเอง
+      // เปิดผ่าน http ที่ไม่ใช่ localhost (เช่น IP ในออฟฟิศ) เบราว์เซอร์ไม่ให้ใช้ navigator.clipboard
+      // ลองคัดลอกแบบเก่า (execCommand) ซึ่งยังใช้ได้ในหน้า http — ไม่ได้อีกค่อยเลือกข้อความให้กดคัดลอกเอง
       input.select();
-      showToast('กด Ctrl+C (หรือกดค้างแล้วเลือกคัดลอก) เพื่อคัดลอกลิงก์');
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      showToast(ok ? 'คัดลอกลิงก์แล้ว — วางในไลน์ส่งให้ช่างได้เลย' : 'กด Ctrl+C (หรือกดค้างแล้วเลือกคัดลอก) เพื่อคัดลอกลิงก์');
     }
   }
   window.copyRepairLink = copyRepairLink;
