@@ -1008,12 +1008,12 @@
                 <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
               </button>
               <!-- ปุ่มกรอกฟอร์มของแต่ละแท็บหน้าตาเดียวกัน: พื้นขาว ขอบสีประจำแท็บ (ผู้ใช้ขอ — เดิมฟอร์มล้างเป็นลิงก์ตัวหนังสือ) -->
-              <button id="docBtn_cleanForm" onclick="isContractor() ? openMyCleanJobPicker() : openCleaningFormModal()"
+              <button id="docBtn_cleanForm" onclick="isContractor() ? openMyJobPicker('clean') : openCleaningFormModal()"
                 class="bg-white border border-[#1153a1] text-[#1153a1] hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
                 title="กรอกผลตรวจเช็ค 21 ข้อในระบบ แล้วเปิดเอกสารที่กรอกครบเพื่อปริ้น">
                 <i class="ph ph-note-pencil"></i> กรอกฟอร์มล้าง
               </button>
-              <button id="docBtn_repairForm" onclick="openRepairFormPicker()"
+              <button id="docBtn_repairForm" onclick="isContractor() ? openMyJobPicker('repair') : openRepairFormPicker()"
                 class="bg-white border border-[#f47920] text-[#f47920] hover:bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
                 title="กรอกเอกสารบันทึกผลการซ่อม (ITEL-FM-NE-005) — ลงประวัติและปิดเคสให้เอง">
                 <i class="ph ph-wrench"></i> กรอกฟอร์มซ่อม
@@ -1023,7 +1023,7 @@
                 title="ปริ้นฟอร์มติดตั้งเปล่า (ITEL-FM-NE-006) หรือโหลดเป็น Excel ที่วางรูปได้">
                 <i class="ph ph-printer"></i> ปริ้นฟอร์มเปล่า
               </button>
-              <button id="docBtn_installForm" onclick="openInstallFormPicker()"
+              <button id="docBtn_installForm" onclick="isContractor() ? openMyJobPicker('install') : openInstallFormPicker()"
                 class="bg-white border border-teal-700 text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
                 title="กรอกเอกสารบันทึกผลการติดตั้ง (ITEL-FM-NE-006) — ลงเลขเอกสารในประวัติติดตั้งให้เอง">
                 <i class="ph ph-plus-circle"></i> กรอกฟอร์มติดตั้ง
@@ -5931,7 +5931,7 @@
     function jobDueBadge(date) {
       const d = planDueInfo(date, '');
       if (!d) return '';
-      return `<span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold align-middle ${d.late ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${esc(d.label.replace(/^ใกล้ถึงกำหนด ((.*))$/, '$1'))}</span>`;
+      return `<span class="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold align-middle ${d.late ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${esc(d.label.replace(/^ใกล้ถึงกำหนด \((.*)\)$/, '$1'))}</span>`;
     }
 
     /**
@@ -6095,35 +6095,41 @@
     function mjSetQuery(v) { mjQuery = v || ''; renderMyJobs(); }
 
     /**
-     * ผู้รับเหมากด "กรอกฟอร์มล้าง" ในหน้าแบบฟอร์มเอกสาร (ผู้ใช้ขอ 19/10/2569)
-     * เปิดรายการงานล้างที่มอบหมายและยังไม่ได้กรอก (ชุดเดียวกับตารางงาน) ให้เลือกก่อน แล้วค่อยเปิดฟอร์มของงานนั้น
-     * ใบที่กรอกจึงผูกกับรอบในแผนเสมอ — ไม่มีทางกรอกใบลอยๆ ที่เซิร์ฟเวอร์ปฏิเสธ
+     * ผู้รับเหมากด "กรอกฟอร์มล้าง / ซ่อม / ติดตั้ง" ในหน้าแบบฟอร์มเอกสาร (ผู้ใช้ขอ 19/10/2569)
+     * เปิดรายการงานที่มอบหมายและยังไม่ได้กรอก (ชุดเดียวกับตารางงาน) ให้เลือกก่อน แล้วค่อยเปิดฟอร์มของงานนั้น
+     * ใบล้างจึงผูกกับรอบในแผนเสมอ · ใบซ่อม/ติดตั้งเป็นงานที่มอบหมายให้จริง — ไม่มีใบที่เซิร์ฟเวอร์ปฏิเสธ
+     * @param {'clean'|'repair'|'install'} kind
      */
-    async function openMyCleanJobPicker() {
-      if (!mjJobs.length) await loadMyJobs();   // เข้าหน้านี้ก่อนเปิดตารางงาน — ยังไม่ได้ดึงงาน
-      const byDate = (a, b) => (!a.planDate) - (!b.planDate) || String(a.planDate).localeCompare(String(b.planDate)) ||
-        String(a.node).localeCompare(String(b.node), 'th') || a.round - b.round;
-      const todo = mjJobs.filter(j => j.pending).sort(byDate);
+    async function openMyJobPicker(kind) {
+      if (!mjJobs.length && !mjWork.length) await loadMyJobs();   // เข้าหน้านี้ก่อนเปิดตารางงาน — ยังไม่ได้ดึงงาน
+      const isClean = kind === 'clean';
+      const byDate = (da, db) => (!da) - (!db) || String(da).localeCompare(String(db));
+      const todo = isClean
+        ? mjJobs.filter(j => j.pending).sort((a, b) => byDate(a.planDate, b.planDate) ||
+            String(a.node).localeCompare(String(b.node), 'th') || a.round - b.round)
+        : mjWork.filter(w => w.state === 'open' && w.kind === kind).sort((a, b) => byDate(a.apptDate, b.apptDate) ||
+            String(a.unit.NodeName).localeCompare(String(b.unit.NodeName), 'th'));
+      const what = { clean: 'ล้าง', repair: 'ซ่อม', install: 'ติดตั้ง' }[kind] || 'ล้าง';
       document.getElementById('modalRoot').innerHTML = `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-3 transition-opacity">
           <div class="fixed inset-0 bg-black/40" onclick="closeModal()"></div>
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg relative z-10 max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-start gap-3">
               <div>
-                <h3 class="text-lg font-bold text-gray-800">กรอกฟอร์มล้าง</h3>
-                <p class="text-xs text-gray-500">เลือกงานที่ได้รับมอบหมาย แล้วกด "กรอกใบล้าง" ของเครื่องที่ล้าง</p>
+                <h3 class="text-lg font-bold text-gray-800">กรอกฟอร์ม${what}</h3>
+                <p class="text-xs text-gray-500">เลือกงานที่ได้รับมอบหมาย แล้วกด "กรอกใบ${what}" ของเครื่องนั้น</p>
               </div>
               <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 w-9 h-9 -mr-2 -mt-1 flex items-center justify-center"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="overflow-y-auto p-3">
               ${todo.length
-                ? `<div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">${todo.map(myJobRow).join('')}</div>`
-                : '<div class="px-3 py-8 text-center text-sm text-gray-400">ไม่มีงานล้างที่ต้องกรอก — งานที่ได้รับมอบหมายกรอกครบแล้ว</div>'}
+                ? `<div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">${todo.map(isClean ? myJobRow : myWorkRow).join('')}</div>`
+                : `<div class="px-3 py-8 text-center text-sm text-gray-400">ไม่มีงาน${what}ที่ต้องกรอก — งานที่ได้รับมอบหมายกรอกครบแล้ว</div>`}
             </div>
           </div>
         </div>`;
     }
-    window.openMyCleanJobPicker = openMyCleanJobPicker;
+    window.openMyJobPicker = openMyJobPicker;
 
     /** สลับแท็บในกล่องรายการงาน — งานล้าง | ซ่อมและติดตั้ง (แสดงทีละกล่อง) */
     let mjTabSel = 'clean';
@@ -9754,7 +9760,7 @@
       docBtn_printClean: on('cleaning'),
       // ผู้รับเหมาปิดงานล้างจากหน้าแผนเท่านั้น — ใบที่ไม่ผูกกับรอบไม่มีอะไรบอกว่าเป็นงานของใคร
       // เซิร์ฟเวอร์จึงไม่รับ ถ้าโชว์ปุ่มไว้ ผู้รับเหมาจะกรอกจนจบแล้วค่อยเจอข้อความปฏิเสธ
-      // ปุ่มกรอกฟอร์มล้างของผู้รับเหมาจึงเปิดรายการงานที่มอบหมายให้เลือกก่อน (openMyCleanJobPicker) ใบจะผูกกับรอบเสมอ
+      // ปุ่มกรอกฟอร์มล้างของผู้รับเหมาจึงเปิดรายการงานที่มอบหมายให้เลือกก่อน (openMyJobPicker — ใบซ่อม/ติดตั้งก็เลือกจากงานที่มอบหมายเหมือนกัน) ใบจะผูกกับรอบเสมอ
       // ปุ่ม "แนบเอกสาร" เอาออกแล้ว — ในกรอกฟอร์มล้างมีแนบไฟล์อยู่แล้ว (เจ้าของงานขอ)
       docBtn_cleanForm: canFill('cleaning'),
       docBtn_printRepair: on('repair'),
