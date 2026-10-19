@@ -109,14 +109,10 @@ const blank = (value, dots, cls) => {
   return t ? `<span class="fill ${cls}">${esc(t)}</span>` : dots;
 };
 
-// hand = เว้นเส้นลงชื่อไว้ให้เซ็นมือ แล้วพิมพ์ชื่อในวงเล็บใต้เส้นแทน (ช่อง Approve (Infra) ที่ปริ้นออกไปเซ็นจริง)
-const signCell = (company, signer, date, hand = false) => {
-  const name = plainText(signer).trim();
-  return (company ? `<div class="who">${val(company)}</div>` : '') +
-    '<div>ลงชื่อ ' + (hand ? '………………………………' : blank(signer, '………………………………', 'nm')) +
-    ' วันที่ ' + blank(date, '…../…../……..', 'dt') + '</div>' +
-    (hand && name ? `<div class="pn">(${esc(name)})</div>` : '');
-};
+const signCell = (company, signer, date) =>
+  (company ? `<div class="who">${val(company)}</div>` : '') +
+  '<div>ลงชื่อ ' + blank(signer, '………………………………', 'nm') +
+  ' วันที่ ' + blank(date, '…../…../……..', 'dt') + '</div>';
 
 /**
  * ส่วนการลงนาม — สองช่องต่อแถว สองแถว เหมือนกันทุกแบบฟอร์ม
@@ -162,7 +158,7 @@ export function sectionSign(form, operatorLabel,
       [[operatorLabel, form.CompanyName, signers.s1 || form.TechnicianName, date],
        ['ผู้ควบคุมงาน (Interlink)', '', ...at(signers.s2)]],
       [[checkerLabel, '', ...at(signers.s3)],
-       ['Approve (Infra)', '', ...at(signers.s4), true]]   // Infra เซ็นมือ — เว้นเส้นไว้ ชื่ออยู่ใต้เส้น
+       ['Approve (Infra)', '', ...at(signers.s4)]]
     ], split, bold);
   }
 
@@ -187,8 +183,8 @@ function signRows(rows, [l, r] = [5, 3], bold = false) {
     '<tr>' +
     `<th colspan="${l}" class="${hc} sh">${esc(left[0])}</th><th colspan="${r}" class="${hc} sh">${esc(right[0])}</th>` +
     '</tr><tr class="sign">' +
-    `<td colspan="${l}" class="ctr">${signCell(left[1], left[2], left[3], left[4])}</td>` +
-    `<td colspan="${r}" class="ctr">${signCell(right[1], right[2], right[3], right[4])}</td>` +
+    `<td colspan="${l}" class="ctr">${signCell(left[1], left[2], left[3])}</td>` +
+    `<td colspan="${r}" class="ctr">${signCell(right[1], right[2], right[3])}</td>` +
     '</tr>'
   ).join('');
 }
@@ -400,7 +396,6 @@ tr.note.lead td { height: calc(17.75pt * var(--k)); }
 table.main th.sh { height: calc(var(--sh) * var(--k)); }
 tr.sign td { height: calc(var(--sr) * var(--k)); vertical-align: bottom; padding-bottom: 1mm !important; }
 tr.sign .who { margin-bottom: 1mm; }
-tr.sign .pn { margin-top: 0.5mm; padding-right: calc(18mm * var(--k)); }   /* ชื่อในวงเล็บใต้เส้นลงชื่อ (ขยับไปทางซ้ายให้อยู่ใต้เส้น ไม่ใช่ใต้วันที่) */
 /* ค่าที่พิมพ์ลงในช่องว่าง — คงเส้นใต้ไว้ให้ดูเป็นช่องที่ถูกกรอกแล้ว ไม่ใช่ข้อความลอยๆ
    ความกว้างขั้นต่ำเท่ากับความยาวเส้นประเดิม ช่องจึงไม่ขยับตามความยาวของชื่อ */
 .fill { display: inline-block; text-align: center; border-bottom: 1px dotted #000;
