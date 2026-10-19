@@ -889,6 +889,7 @@
             <table id="historyTable" class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="pl-3 pr-0 py-3 w-6 sticky top-0 bg-slate-50 z-10"></th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">เลขอ้างอิง</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">วันที่</th>
                   <th class="px-4 py-3 sticky top-0 bg-slate-50 z-10">รหัสเครื่อง</th>
@@ -4105,7 +4106,7 @@
           <div class="text-xs text-gray-500 mt-1.5">${label}</div>
         </div>`;
 
-      const cols = canEdit ? 7 : 6;
+      const cols = canEdit ? 8 : 7;   // รวมคอลัมน์ลูกศรพับ/กางเคสซ้ายสุด
 
       /**
        * แบ่งประวัติเป็นช่วงตามตัวเครื่อง
@@ -4172,10 +4173,11 @@
             }
 
             return head + `
-            <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : child ? ' bg-slate-50/60' : ''}"${caseRowAttr(key, child)}>
-              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'} align-top" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : caseToggle(key, n)}${historyDocLink(h, child ? 'text-slate-400 hover:text-[#1153a1] underline decoration-dotted underline-offset-2' : DOC_LINK_CLS)}</td>
+            <tr class="hover:bg-blue-50/50 transition-colors${isSwap ? ' bg-amber-50/40' : child ? ' bg-slate-50/60' : ''}"${caseRowAttr(key, child, n)}>
+              ${caseChevCell(key, child, n)}
+              <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'} align-top"${child ? ` style="${CASE_TL_TD}"` : ''} title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseTimeline : ''}${historyDocLink(h, child ? 'text-slate-400 hover:text-[#1153a1] underline decoration-dotted underline-offset-2' : DOC_LINK_CLS)}</td>
               <td class="px-4 py-3 whitespace-nowrap text-gray-600 align-top">${esc(fmtDate(h.Date))}</td>
-              <td class="px-4 py-3 align-top">${eventTypeBadge(h.EventType)}</td>
+              <td class="px-4 py-3 align-top whitespace-nowrap">${eventTypeBadge(h.EventType)}${child ? '' : casePill(key, n)}</td>
               ${detailCell}
               <td class="px-4 py-3 text-gray-600 whitespace-nowrap text-right align-top">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
               <td class="px-4 py-3 text-gray-600 text-sm align-top">${esc(h.Technician) || '-'}</td>
@@ -4208,6 +4210,7 @@
             <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
               <thead>
                 <tr class="bg-slate-50 border-b border-gray-200 text-slate-700 font-semibold">
+                  <th class="pl-3 pr-0 py-3 w-6"></th>
                   <th class="px-4 py-3">เลขอ้างอิง</th>
                   <th class="px-4 py-3">วันที่</th>
                   <th class="px-4 py-3">เหตุการณ์</th>
@@ -7617,7 +7620,7 @@
               ? `${esc(regionLabel(region))} ยังไม่มีประวัติที่บันทึกไว้`
               : 'ไม่พบประวัติที่ตรงกับที่ค้นหา';
         const inYear = year ? `<div class="text-xs mt-1">แสดงเฉพาะปี ${esc(year)} — เลือก "ทุกปี" เพื่อดูปีอื่น</div>` : '';
-        tb.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">${why}${inYear}</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">${why}${inYear}</td></tr>`;
         renderTablePager('historyPaginationBar', 0, 1, 'goToHistoryPage');
         lockViewOnlySection('history');
         return;
@@ -7635,8 +7638,9 @@
       const pageRows = groups.slice((historyPage - 1) * TABLE_PAGE_SIZE, historyPage * TABLE_PAGE_SIZE)
         .flatMap(g => g.map((h, k) => ({ h, child: k > 0, key: String(g[0].CaseID || '').trim(), n: g.length - 1 })));
       tb.innerHTML = pageRows.map(({ h, child, key, n }) => `
-        <tr class="hover:bg-blue-50/50 transition-colors${child ? ' bg-slate-50/60' : ''}"${caseRowAttr(key, child)}>
-          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'}" title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseChildMark : caseToggle(key, n)}${
+        <tr class="hover:bg-blue-50/50 transition-colors${child ? ' bg-slate-50/60' : ''}"${caseRowAttr(key, child, n)}>
+          ${caseChevCell(key, child, n)}
+          <td class="px-4 py-3 whitespace-nowrap font-mono text-[13px] font-medium ${child ? 'text-slate-400' : 'text-slate-700'}"${child ? ` style="${CASE_TL_TD}"` : ''} title="${h.CaseID ? 'เลขอ้างอิงของงานซ่อมเรื่องนี้ — ทุกขั้นของเรื่องเดียวกันใช้เลขเดียวกัน' : 'เลขอ้างอิงของรายการนี้'}">${child ? caseTimeline : ''}${
             !displayDocId(h) ? '-'
             : canOpenDocs(h)
               ? `<button type="button" onclick="openDocOfHistory('${jsStr(h.CaseID || '')}', '${jsStr(h.ID || '')}', '${jsStr(h.Note || '')}', '${jsStr(h.AirCode || '')}', '${jsStr(h.Date || '')}', '${jsStr(h.EventType || '')}')"
@@ -7651,7 +7655,7 @@
           <td class="px-4 py-3 font-medium text-gray-900">
             ${airCodeBtn(h.AirCode)}
           </td>
-          <td class="px-4 py-3">${eventTypeBadge(h.EventType)}</td>
+          <td class="px-4 py-3 whitespace-nowrap">${eventTypeBadge(h.EventType)}${child ? '' : casePill(key, n)}</td>
           <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${esc(h.Detail)}">${esc(h.Detail) || '-'}</td>
           <td class="px-4 py-3 text-gray-600">${h.Cost ? Number(h.Cost).toLocaleString() : '-'}</td>
           <td class="px-4 py-3 text-gray-600 text-sm">${esc(h.Technician) || '-'}</td>
@@ -8463,34 +8467,42 @@
       return groups;
     }
 
-    /** ช่องเลขอ้างอิงของแถวที่ต่อจากแถวแรกของเคส — ลูกศรนำ ตัวเลขจาง (แบบหน้าแบบฟอร์มเอกสาร) */
-    const caseChildMark = '<span class="mr-1 text-slate-300">&#8627;</span>';
-
     /**
      * พับ/กางขั้นตอนของเคสเดียวกัน (ผู้ใช้ขอ 19/10/2569) — พับไว้เป็นค่าเริ่มต้น เห็นแค่แถวล่าสุดของเคส
-     * แถวแรกของเคสมีปุ่ม ▸ พร้อมจำนวนขั้นที่ซ่อนอยู่ · จำว่าเคสไหนกางไว้ตลอดที่เปิดหน้าเว็บ (วาดตารางใหม่ไม่พับกลับ)
-     * ใช้ทั้งหน้าประวัติและประวัติในหน้าของเครื่อง
+     * แถวแรกของเคส: ลูกศร ▸ ในคอลัมน์ซ้ายสุด (หมุนลงตอนกาง) · กดตรงไหนของแถวก็พับ/กาง (ยกเว้นลิงก์/ปุ่มในแถว)
+     *   ป้าย "+n ขั้น" ข้างเหตุการณ์ · แถวที่กางออกมามีเส้นไทม์ไลน์ในช่องเลขอ้างอิง
+     * จำว่าเคสไหนกางไว้ตลอดที่เปิดหน้าเว็บ (วาดตารางใหม่ไม่พับกลับ) · ใช้ทั้งหน้าประวัติและประวัติในหน้าของเครื่อง
      */
     const caseOpenKeys = new Set();
-    /** แอตทริบิวต์ของแถวลูกในเคส — ซ่อนถ้าเคสยังพับอยู่ */
-    const caseRowAttr = (key, child) =>
-      child && key ? ` data-case-child="${esc(key)}"${caseOpenKeys.has(key) ? '' : ' hidden'}` : '';
-    /** ปุ่มพับ/กางบนแถวแรกของเคส · n = จำนวนแถวที่ซ่อนอยู่ใต้แถวนี้ */
-    function caseToggle(key, n) {
-      if (!key || !n) return '';
-      const open = caseOpenKeys.has(key);
-      return `<button type="button" data-case-btn="${esc(key)}" onclick="toggleCaseRows(this.dataset.caseBtn)"
-        class="mr-1 inline-flex items-center gap-0.5 rounded border border-slate-200 bg-white px-1 text-xs font-sans text-slate-500 hover:text-[#1153a1] hover:border-[#1153a1] align-middle"
-        title="${open ? 'พับ' : 'ดู'}ขั้นตอนก่อนหน้าของเคสนี้ (${n} รายการ)"><i class="ph ${open ? 'ph-caret-down' : 'ph-caret-right'}"></i>${n}</button>`;
+    const hasCaseKids = (key, n) => !!key && n > 0;
+    /** แอตทริบิวต์ของแถว — แถวแรกของเคสกดพับ/กางได้ · แถวลูกซ่อนถ้าเคสยังพับอยู่ */
+    const caseRowAttr = (key, child, n) =>
+      child && key ? ` data-case-child="${esc(key)}"${caseOpenKeys.has(key) ? '' : ' hidden'}`
+      : hasCaseKids(key, n) ? ` data-case-head="${esc(key)}" onclick="caseRowClick(event, this.dataset.caseHead)" style="cursor:pointer"` +
+          ` title="กดเพื่อ${caseOpenKeys.has(key) ? 'พับ' : 'ดู'}ขั้นตอนก่อนหน้าของเคสนี้ (${n} ขั้น)"` : '';
+    /** ช่องลูกศรซ้ายสุด */
+    const caseChevCell = (key, child, n) =>
+      `<td class="pl-3 pr-0 py-3 w-6 text-center align-top">${!child && hasCaseKids(key, n)
+        ? `<i class="ph ph-caret-right text-slate-400" data-case-chev="${esc(key)}" style="display:inline-block;transition:transform .2s${caseOpenKeys.has(key) ? ';transform:rotate(90deg)' : ''}"></i>` : ''}</td>`;
+    /** ป้าย "+n ขั้น" บนแถวแรกของเคส */
+    const casePill = (key, n) => hasCaseKids(key, n)
+      ? `<span class="ml-1.5 inline-block rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-normal text-slate-500 align-middle whitespace-nowrap">+${n} ขั้น</span>` : '';
+    /** เส้นไทม์ไลน์ + จุด ในช่องเลขอ้างอิงของแถวลูก — td ต้องมี style CASE_TL_TD */
+    const CASE_TL_TD = 'position:relative;padding-left:1.75rem';
+    const caseTimeline = '<span style="position:absolute;left:0.8rem;top:0;bottom:0;width:2px;background:#cbd5e1"></span>' +
+      '<span style="position:absolute;left:calc(0.8rem - 3px);top:50%;margin-top:-4px;width:8px;height:8px;border-radius:50%;background:#94a3b8"></span>';
+    function caseRowClick(ev, key) {
+      if (ev.target.closest('button, a, input, select, label')) return;   // ลิงก์/ปุ่มในแถวทำงานของมันเอง
+      toggleCaseRows(key);
     }
+    window.caseRowClick = caseRowClick;
     function toggleCaseRows(key) {
       const open = !caseOpenKeys.has(key);
       if (open) caseOpenKeys.add(key); else caseOpenKeys.delete(key);
       document.querySelectorAll('tr[data-case-child]').forEach(tr => { if (tr.dataset.caseChild === key) tr.hidden = !open; });
-      document.querySelectorAll('button[data-case-btn]').forEach(b => {
-        if (b.dataset.caseBtn !== key) return;
-        b.querySelector('i').className = 'ph ' + (open ? 'ph-caret-down' : 'ph-caret-right');
-        b.title = b.title.replace(/^(พับ|ดู)/, open ? 'พับ' : 'ดู');
+      document.querySelectorAll('[data-case-chev]').forEach(i => { if (i.dataset.caseChev === key) i.style.transform = open ? 'rotate(90deg)' : ''; });
+      document.querySelectorAll('tr[data-case-head]').forEach(tr => {
+        if (tr.dataset.caseHead === key) tr.title = tr.title.replace(/^กดเพื่อ(พับ|ดู)/, 'กดเพื่อ' + (open ? 'พับ' : 'ดู'));
       });
     }
     window.toggleCaseRows = toggleCaseRows;
@@ -9811,7 +9823,7 @@ const CLEANING_CHECKLIST_ITEMS = [
       return `
       <tr class="hover:bg-slate-50 ${r.first ? '' : 'bg-slate-50/40'}" data-doc-row="${esc(r.kind)}-${Number(f._row)}">
         <td class="px-4 py-3 font-mono text-[12px] text-slate-600">
-          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${formDocLink(r.kind, f, r.docNo)}
+          ${r.first ? '' : '<span class="mr-1 text-slate-300">&#8627;</span>'}${esc(r.docNo || '-')}<!-- ไม่เป็นลิงก์แล้ว — เปิดเอกสารที่ปุ่มคอลัมน์ PDF (ผู้ใช้ขอ 19/10/2569) -->
         </td>
         <td class="px-4 py-3">${esc(fmtDate(f.Date))}</td>
         <td class="px-4 py-3 font-medium">

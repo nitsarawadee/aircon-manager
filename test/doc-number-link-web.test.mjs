@@ -40,7 +40,9 @@ test('ตัวเปิดเอกสารทั้งสามแบบร�
 
 test('เลขอ้างอิงในหน้าอื่นเป็นลิงก์เปิดเอกสาร', () => {
   const formLinks = html.match(/\$\{formDocLink\('(repair|cleaning|install)'|\$\{formDocLink\(r\.kind, f, r\.docNo\)/g) || [];
-  assert.equal(formLinks.length, 4, 'แบบฟอร์มเอกสาร 1 + เอกสารรออนุมัติ 3 (ซ่อม ล้าง ติดตั้ง)');
+  assert.equal(formLinks.length, 3, 'เอกสารรออนุมัติ 3 (ซ่อม ล้าง ติดตั้ง)');
+  // หน้าแบบฟอร์มเอกสาร: เลขอ้างอิงไม่เป็นลิงก์แล้ว เปิดเอกสารที่ปุ่มคอลัมน์ PDF (ผู้ใช้ขอ 19/10/2569)
+  assert.match(html, /\$\{esc\(r\.docNo \|\| '-'\)\}/);
   assert.equal((html.match(/\$\{historyDocLink\(h/g) || []).length, 2, 'ไทม์ไลน์หน้าเครื่อง + สรุปเคส');
   // เลขเคสในหน้างานซ่อม ใช้ตัวเดียวกับหน้าประวัติ (หาเอกสารของเคส ไม่มีค่อยสรุปเคส)
   assert.match(html, /caseId \? historyDocLink\(\{ CaseID: caseId, ID: caseId, AirCode: a\.AirCode \}\)/);
