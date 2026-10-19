@@ -10103,16 +10103,15 @@ const CLEANING_CHECKLIST_ITEMS = [
   const PHOTO_SLOTS = 9;
 
   /**
-   * ช่องที่ปุ่ม "เลือกรูปหลายใบ" ไล่ลงให้ — แค่ 6 ช่องแรกเท่านั้น
+   * ช่องที่ปุ่ม "เลือกรูปพร้อมกัน" ไล่ลงให้ — แค่ช่อง 2-5 (รูปดำเนินการ) ใช้ทั้งใบล้าง ใบซ่อม ใบติดตั้ง
    *
-   * 6 ช่องแรกเป็นรูปตามลำดับเวลาจริง (ก่อนล้าง → ระหว่างล้าง → หลังล้าง)
-   * เรียงตามชื่อไฟล์แล้วลงเรียงกันจึงตรงตามที่ควรเป็น
-   *
-   * แต่ช่อง 7-9 เป็นรูปเฉพาะเจาะจงว่าวัดอะไร ซึ่งดูจากลำดับไฟล์ไม่ออก
-   * ถ้าไล่ลงให้เองมีโอกาสสูงที่รูปวัดไฟจะไปอยู่ช่องวัดน้ำยา แล้วเอกสารผิด
-   * โดยไม่มีอะไรฟ้อง — สามช่องนี้จึงต้องเลือกเอง แม้จะบังคับให้มีครบก็ตาม
+   * ช่อง 2-5 เป็นรูปขั้นตอนเดียวกัน (ระหว่างดำเนินการ) เรียงตามชื่อไฟล์แล้วลงเรียงกันได้
+   * ช่อง 1 (ก่อน) กับช่อง 6 (หลัง) เป็นคนละขั้นตอน ถ้าให้เลือกพร้อมกัน ช่างจะใส่รูปสลับกันได้ (ผู้ใช้ขอ 19/10/2569)
+   * ช่อง 7-9 เป็นรูปเฉพาะเจาะจงว่าวัดอะไร ดูจากลำดับไฟล์ไม่ออก — ต้องเลือกเองทีละช่องเหมือนกัน
    */
-  const PHOTO_BULK = 6;
+  const PHOTO_BULK_SLOTS = [2, 3, 4, 5];
+  const PHOTO_BULK_LABEL = '2-5';
+  const PHOTO_BULK_HINT = 'ช่อง 1 (ก่อน) · ช่อง 6 (หลัง) และรูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่อง เพราะเป็นคนละขั้นตอน';
 
   /** ช่องที่ยังว่างอยู่ ของทุกเครื่องในฟอร์มนี้ — คืนเป็นคีย์ "<เครื่อง>-<ช่อง>" */
   function cfMissingRequired() {
@@ -10175,9 +10174,9 @@ const CLEANING_CHECKLIST_ITEMS = [
           </div>
           <button type="button" onclick="cfPickManyPhotos(${u.slot})"
             class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
-            <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-${PHOTO_BULK} พร้อมกัน
+            <i class="ph ph-images text-base"></i> เลือกรูปดำเนินการ ช่อง ${PHOTO_BULK_LABEL} พร้อมกัน
           </button>
-          <p class="text-xs text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
+          <p class="text-xs text-gray-400 mb-2 leading-tight">${PHOTO_BULK_HINT}</p>
           <div class="grid grid-cols-3 gap-2">${cells}</div>
         </div>`;
     }).join('');
@@ -10246,11 +10245,11 @@ const CLEANING_CHECKLIST_ITEMS = [
       files.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
 
       const empty = [];
-      for (let i = 1; i <= PHOTO_BULK; i++) if (!cfPhotos[slot + '-' + i]) empty.push(i);
+      for (const i of PHOTO_BULK_SLOTS) if (!cfPhotos[slot + '-' + i]) empty.push(i);
 
       if (!empty.length) {
-        showToast('เครื่องที่ ' + slot + ' แนบรูปช่อง 1-' + PHOTO_BULK + ' ครบแล้ว — ' +
-                  'รูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่องเอง และถ้าจะเปลี่ยนรูปเดิมก็กดที่ช่องนั้นโดยตรง');
+        showToast('เครื่องที่ ' + slot + ' แนบรูปช่อง ' + PHOTO_BULK_LABEL + ' ครบแล้ว — ' + PHOTO_BULK_HINT +
+                  ' และถ้าจะเปลี่ยนรูปเดิมก็กดที่ช่องนั้นโดยตรง');
         return;
       }
 
@@ -10271,10 +10270,10 @@ const CLEANING_CHECKLIST_ITEMS = [
       updateCfProgress();
 
       const over = files.length - empty.length;
-      showToast('ใส่รูปช่อง 1-' + PHOTO_BULK + ' ของเครื่องที่ ' + slot + ' แล้ว ' + ok + ' ใบ' +
+      showToast('ใส่รูปช่อง ' + PHOTO_BULK_LABEL + ' ของเครื่องที่ ' + slot + ' แล้ว ' + ok + ' ใบ' +
         (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
         (over > 0 ? ' · เลือกมาเกิน ' + over + ' ใบ ไม่ได้ใส่ให้' : '') +
-        ' — รูปวัดค่าช่อง 7-9 กดเลือกทีละช่องเอง และถ้าลำดับไม่ตรงก็กดที่ช่องนั้นเปลี่ยนได้',
+        ' — ' + PHOTO_BULK_HINT + ' และถ้าลำดับไม่ตรงก็กดที่ช่องนั้นเปลี่ยนได้',
         bad ? 'error' : 'success');
     };
     input.click();
@@ -11774,9 +11773,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       </div>
       <button type="button" onclick="rfPickManyPhotos()"
         class="w-full mb-2 px-3 py-2.5 text-xs font-medium text-[#1153a1] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center justify-center gap-1.5">
-        <i class="ph ph-images text-base"></i> เลือกรูปช่อง 1-6 พร้อมกัน
+        <i class="ph ph-images text-base"></i> เลือกรูปดำเนินการ ช่อง ${PHOTO_BULK_LABEL} พร้อมกัน
       </button>
-      <p class="text-xs text-gray-400 mb-2 leading-tight">รูปวัดค่า (ช่อง 7-9) ต้องกดเลือกทีละช่อง เพราะเรียงตามชื่อไฟล์แล้วอาจลงผิดช่อง</p>
+      <p class="text-xs text-gray-400 mb-2 leading-tight">${PHOTO_BULK_HINT}</p>
       <div class="grid grid-cols-3 gap-2">${cells}</div>`;
   }
 
@@ -11798,7 +11797,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   }
   window.rfPickPhoto = rfPickPhoto;
 
-  /** เลือกหลายรูปพร้อมกัน ลงให้แค่ช่อง 1-6 ด้วยเหตุผลเดียวกับใบล้าง */
+  /** เลือกหลายรูปพร้อมกัน ลงให้แค่ช่อง 2-5 ด้วยเหตุผลเดียวกับใบล้าง (PHOTO_BULK_SLOTS) */
   function rfPickManyPhotos() {
     const input = document.getElementById('rf_photoFile');
     if (!input) return;
@@ -11812,9 +11811,9 @@ const CLEANING_CHECKLIST_ITEMS = [
       files.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
 
       const empty = [];
-      for (let i = 1; i <= PHOTO_BULK; i++) if (!rfPhotos['1-' + i]) empty.push(i);
+      for (const i of PHOTO_BULK_SLOTS) if (!rfPhotos['1-' + i]) empty.push(i);
       if (!empty.length) {
-        showToast('ช่อง 1-' + PHOTO_BULK + ' ครบแล้ว — รูปวัดค่าช่อง 7-9 ต้องกดเลือกทีละช่องเอง');
+        showToast('ช่อง ' + PHOTO_BULK_LABEL + ' ครบแล้ว — ' + PHOTO_BULK_HINT);
         return;
       }
 
@@ -11825,8 +11824,8 @@ const CLEANING_CHECKLIST_ITEMS = [
       }
 
       renderRfPhotos();
-      showToast('ใส่รูปช่อง 1-' + PHOTO_BULK + ' แล้ว ' + ok + ' ใบ' + (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
-        ' — รูปวัดค่าช่อง 7-9 กดเลือกทีละช่องเอง', bad ? 'error' : 'success');
+      showToast('ใส่รูปช่อง ' + PHOTO_BULK_LABEL + ' แล้ว ' + ok + ' ใบ' + (bad ? ' · อ่านไม่ออก ' + bad + ' ใบ' : '') +
+        ' — ' + PHOTO_BULK_HINT, bad ? 'error' : 'success');
     };
     input.click();
   }
@@ -13221,7 +13220,7 @@ const CLEANING_CHECKLIST_ITEMS = [
               <span class="text-xs ${done === 9 ? 'text-teal-700' : 'text-red-600'}">${done}/9</span>
               <button type="button" onclick="ifPickManyPhotos(${slot})"
                 class="text-xs text-teal-700 border border-teal-300 rounded px-2 py-1 hover:bg-teal-50">
-                <i class="ph ph-images"></i> เลือกหลายรูป
+                <i class="ph ph-images"></i> เลือกรูปดำเนินการ ช่อง ${PHOTO_BULK_LABEL}
               </button>
             </div>
           </div>
@@ -13252,7 +13251,7 @@ const CLEANING_CHECKLIST_ITEMS = [
   /**
    * เลือกหลายรูปพร้อมกัน — เติมลงช่องที่ยังว่างเรียงตามลำดับ
    *
-   * เติมได้แค่ 6 ช่องแรก เพราะ 3 ช่องท้ายเป็นรูปวัดค่าเฉพาะเรื่อง
+   * เติมได้แค่ช่อง 2-5 (รูปดำเนินการ — PHOTO_BULK_SLOTS) ช่อง 1 ก่อน / 6 หลัง เป็นคนละขั้นตอน · 3 ช่องท้ายเป็นรูปวัดค่าเฉพาะเรื่อง
    * (กระแส · แรงดันไฟ · แรงดันน้ำยา) ซึ่งต้องเลือกให้ตรงช่องเอง
    * กติกาเดียวกับฟอร์มล้าง
    */
@@ -13268,7 +13267,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
       let filled = 0;
       for (const file of files) {
-        const free = [1, 2, 3, 4, 5, 6].find(i => !ifPhotos[slot + '-' + i]);
+        const free = PHOTO_BULK_SLOTS.find(i => !ifPhotos[slot + '-' + i]);
         if (!free) break;
         try {
           ifPhotos[slot + '-' + free] = await shrinkImage(file);
@@ -13278,8 +13277,8 @@ const CLEANING_CHECKLIST_ITEMS = [
 
       renderIfPhotos();
       showToast(filled
-        ? 'ใส่รูปให้ ' + filled + ' ช่องแล้ว — อีก 3 ช่องเป็นรูปวัดค่า ต้องเลือกเอง'
-        : 'ช่อง 1–6 เต็มแล้ว เหลือ 3 ช่องรูปวัดค่าที่ต้องเลือกเอง');
+        ? 'ใส่รูปช่อง ' + PHOTO_BULK_LABEL + ' ให้ ' + filled + ' ช่องแล้ว — ' + PHOTO_BULK_HINT
+        : 'ช่อง ' + PHOTO_BULK_LABEL + ' เต็มแล้ว — ' + PHOTO_BULK_HINT);
     };
     input.click();
   }

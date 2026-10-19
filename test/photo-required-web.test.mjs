@@ -41,8 +41,8 @@ function sourceOf(name) {
 }
 
 const slotsSrc = js.match(/const PHOTO_SLOTS = \d+;/);
-const bulkSrc = js.match(/const PHOTO_BULK = \d+;/);
-assert.ok(slotsSrc && bulkSrc, 'หา PHOTO_SLOTS หรือ PHOTO_BULK ในหน้าเว็บไม่เจอ');
+const bulkSrc = js.match(/const PHOTO_BULK_SLOTS = \[[\d, ]+\];/);
+assert.ok(slotsSrc && bulkSrc, 'หา PHOTO_SLOTS หรือ PHOTO_BULK_SLOTS ในหน้าเว็บไม่เจอ');
 
 /**
  * ดึงตัวเช็คของจริงจากหน้าเว็บมาใช้ โดยป้อนรูปกับรายชื่อเครื่องเข้าไปเอง
@@ -51,7 +51,7 @@ assert.ok(slotsSrc && bulkSrc, 'หา PHOTO_SLOTS หรือ PHOTO_BULK ใ�
 function checker(photos, units) {
   return new Function('cfPhotos', 'cfPhotoUnits',
     slotsSrc[0] + '\n' + bulkSrc[0] + '\n' + sourceOf('cfMissingRequired') +
-    '\nreturn { cfMissingRequired, PHOTO_SLOTS, PHOTO_BULK };'
+    '\nreturn { cfMissingRequired, PHOTO_SLOTS, PHOTO_BULK_SLOTS };'
   )(photos, () => units);
 }
 
@@ -127,16 +127,17 @@ test('ยังไม่ได้เลือก Node (ไม่มีเคร�
 
 /* ==================== ปุ่มเลือกหลายรูป ต้องไม่แตะช่องวัดค่า ==================== */
 
-test('ปุ่มเลือกหลายรูปพร้อมกัน ลงให้แค่ 6 ช่องแรก', () => {
-  assert.equal(checker({}, oneUnit).PHOTO_BULK, 6);
+test('ปุ่มเลือกหลายรูปพร้อมกัน ลงให้แค่ช่อง 2-5 (รูปดำเนินการ) — ช่อง 1 ก่อน / 6 หลัง เป็นคนละขั้นตอน', () => {
+  // ผู้ใช้ขอ 19/10/2569: ถ้าให้ช่อง 1 กับ 6 เลือกพร้อมกัน ช่างจะใส่รูปก่อน/หลังสลับกัน
+  assert.deepEqual(checker({}, oneUnit).PHOTO_BULK_SLOTS, [2, 3, 4, 5]);
 });
 
-test('ปุ่มเลือกหลายรูป ต้องวนหาช่องว่างแค่ถึง PHOTO_BULK', () => {
+test('ปุ่มเลือกหลายรูป ต้องวนหาช่องว่างเฉพาะ PHOTO_BULK_SLOTS', () => {
   // ถ้าเผลอเปลี่ยนเป็น PHOTO_SLOTS รูปวัดไฟจะไปอยู่ช่องวัดน้ำยาโดยไม่มีอะไรฟ้อง
   const src = sourceOf('cfPickManyPhotos');
 
-  assert.ok(/for \(let i = 1; i <= PHOTO_BULK; i\+\+\) if \(!cfPhotos/.test(src),
-    'ต้องวนถึง PHOTO_BULK เท่านั้น');
+  assert.ok(/for \(const i of PHOTO_BULK_SLOTS\) if \(!cfPhotos/.test(src),
+    'ต้องวนเฉพาะช่องใน PHOTO_BULK_SLOTS');
   assert.ok(!/PHOTO_SLOTS/.test(src), 'ปุ่มนี้ต้องไม่อ้างถึงจำนวนช่องทั้งหมด');
 });
 
