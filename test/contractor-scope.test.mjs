@@ -248,7 +248,7 @@ test('รายชื่อ Node ในฟอร์ม — เห็นเฉพ
 test('รายการใบล้าง — เห็นเฉพาะใบของรอบที่เป็นของตัวเอง แม้เป็นเครื่องเดียวกัน', async () => {
   const db = freshDb();
   await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1'));                                   // รอบ 2 = A
-  await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3, Date: '2026-12-01' })); // รอบ 3 = B
+  await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3, Date: '2026-10-01' })); // รอบ 3 = B
 
   const a = await getCleaningForms(as(db, 'ctA'));
   assert.deepEqual(a.map(f => String(f.PlanRound)), ['2']);
@@ -260,7 +260,7 @@ test('เปิดใบล้างของเจ้าอื่นด้ว�
   const db = freshDb();
   // ล้างต้องทำทีละรอบ — ปิดรอบ 2 (งานของ A) ก่อน แล้วค่อยรอบ 3 (งานของ B)
   await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 2 }));
-  await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3, Date: '2026-12-01' }));
+  await saveCleaningForm(as(db, 'boss'), cleaning('ATG-PMK-AIR-1', { PlanRound: 3, Date: '2026-10-01' }));
   const row = (await getCleaningForms(as(db, 'boss'))).find(f => String(f.PlanRound) === '3')._row;
 
   await assert.rejects(() => getCleaningDocHtml(as(db, 'ctA'), row), /ไม่มีสิทธิ์/);
@@ -355,7 +355,7 @@ test('แนบเอกสารเขียนมือ — เฉพาะง
   await up({ date: '2026-09-15', year: 2026, round: 2, units: [{ airCode: 'ATG-PMK-AIR-1', price: 99999 }] });
   assert.equal(Number(planRow(db, 'ATG-PMK-AIR-1').R2_Price), 480);
 
-  await assert.rejects(() => up({ date: '2026-12-01', year: 2026, round: 3, units: [{ airCode: 'ATG-PMK-AIR-1' }] }),
+  await assert.rejects(() => up({ date: '2026-10-01', year: 2026, round: 3, units: [{ airCode: 'ATG-PMK-AIR-1' }] }),
     /ไม่ได้มอบหมายให้คุณ/);
   await assert.rejects(() => up(null), /หน้าแผนล้างแอร์/);
   await assert.rejects(() => up(null, 'วังน้อย'), /ไม่พบ Node/);
@@ -503,6 +503,7 @@ test('นัดหมาย 30 วันของผู้รับเหมา 
   assert.deepEqual(codes(await getUpcomingCleanings(as(db, 'ctB'))), ['ATG-PMK-AIR-1/3', 'AYA-WNI-AIR-1/2']);
 
   // ปิดงานไปแล้ว ต้องหายจากรายการนัด
-  await saveCleaningForm(as(db, 'ctA'), cleaning('ATG-PMK-AIR-1', { Date: soon }));
+  // ปิดงานด้วยวันนี้ — วันนัด (soon) เป็นวันล่วงหน้า ใช้เป็นวันปิดงานไม่ได้แล้ว (assertNotFuture)
+  await saveCleaningForm(as(db, 'ctA'), cleaning('ATG-PMK-AIR-1', { Date: ymd(new Date()) }));
   assert.deepEqual(codes(await getUpcomingCleanings(as(db, 'ctA'))), ['ATG-PMK-AIR-2/2']);
 });

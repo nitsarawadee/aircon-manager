@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind, INSTALL_PENDING_NOTE } from '../schema.js';
-import { AWAITING_INSTALL_STATUS, assertMoney, cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
+import { AWAITING_INSTALL_STATUS, assertMoney, assertNotFuture, cleanFormValue, normalizeCode, normalizeSiteCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, historyPrefix, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { scheduleDocPdf, cancelDocPdf, settleDocPdfQueue } from './doc-pdf-queue.js';
@@ -167,6 +167,7 @@ export async function prepareInstall(ctx, record, lookup = code => unitOf(ctx, c
     throw new Error('เครื่องที่ 1 กับเครื่องที่ 2 ซ้ำกัน');
   }
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ติดตั้ง');
+  assertNotFuture('วันที่ติดตั้ง', record.Date);
 
   // ดึงข้อมูลทะเบียนของทุกเครื่องก่อน เพื่อให้สิทธิ์ภูมิภาคถูกตรวจครบทุกตัว
   // ก่อนที่จะเริ่มเขียนอะไรลงไป ไม่ใช่เขียนตัวแรกเสร็จแล้วค่อยพบว่าตัวที่สองไม่มีสิทธิ์

@@ -9,7 +9,7 @@
  */
 
 import { strict as assert } from 'node:assert';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { createTableStatements } from '../src/db/schema.js';
@@ -17,6 +17,10 @@ import { Ctx } from '../src/context.js';
 import { approveDoc } from '../src/modules/approval.js';
 import { saveAirUnit, deleteAirUnit } from '../src/modules/airlist.js';
 import { saveInstallForm, attachInstallDocument, deleteInstallForm, getInstallForms } from '../src/modules/installform.js';
+
+// ข้อมูลทดสอบไฟล์นี้ใช้ปี 2030 — ตั้งนาฬิกาให้เป็นปลายปี 2030
+// เพราะวันที่ปิดงานห้ามเป็นวันล่วงหน้า (assertNotFuture · ผู้ใช้ขอ 20/10/2569)
+mock.timers.enable({ apis: ['Date'], now: new Date('2030-12-31T05:00:00Z') });
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');

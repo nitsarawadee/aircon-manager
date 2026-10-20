@@ -1,5 +1,5 @@
 import { SHEETS, cleanFormColKind } from '../schema.js';
-import { assertMoney, cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
+import { assertMoney, assertNotFuture, cleanFormValue, normalizeCode, plainText, ymdhms } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { NEW_CASE, ensureCaseId } from './repair-case.js';
@@ -117,6 +117,7 @@ export async function saveRepairForm(ctx, record) {
 
   if (!plainText(record.AirCode).trim()) throw new Error('กรุณาเลือกเครื่องปรับอากาศ');
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ดำเนินการ');
+  assertNotFuture('วันที่ดำเนินการ', record.Date);
 
   const unit = await unitOf(ctx, record.AirCode);
   const info = await ctx.userInfo();
@@ -156,6 +157,7 @@ export async function attachRepairDocument(ctx, payload) {
 
   if (!plainText(record.AirCode).trim()) throw new Error('กรุณาเลือกเครื่องปรับอากาศ');
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ซ่อมเสร็จ');
+  assertNotFuture('วันที่ซ่อมเสร็จ', record.Date);
 
   const unit = await unitOf(ctx, record.AirCode);
   const info = await ctx.userInfo();

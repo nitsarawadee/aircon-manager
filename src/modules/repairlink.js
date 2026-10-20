@@ -1,5 +1,5 @@
 import { SHEETS } from '../schema.js';
-import { normalizeCode, plainText, ymdhms } from '../values.js';
+import { assertNotFuture, normalizeCode, plainText, ymdhms } from '../values.js';
 import { unitsInScope } from './airlist.js';
 import { writeRepairForm, storeRepairPdf, renderRepairPdf, REPAIR_KIND } from './repairform.js';
 import {
@@ -220,6 +220,7 @@ export async function getRepairLink(ctx, token) {
 export async function submitRepairLink(ctx, token, record) {
   record = record || {};
   if (!plainText(record.Date).trim()) throw new Error('กรุณาระบุวันที่ซ่อมเสร็จ');
+  assertNotFuture('วันที่ซ่อมเสร็จ', record.Date);
   if (!plainText(record.Symptom).trim()) throw new Error('กรุณากรอกอาการเสีย');
   if (!plainText(record.Fix).trim()) throw new Error('กรุณากรอกการแก้ไข');
 

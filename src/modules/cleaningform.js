@@ -8,7 +8,7 @@ import { SHEETS, cleanFormColKind } from '../schema.js';
  * ไปเก็บมักหยิบทีละประเภท ไม่ได้หยิบทั้งกอง
  */
 const KIND = 'cleaning';
-import { assertMoney, cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
+import { assertMoney, assertNotFuture, cleanFormValue, isAwaitingInstall, isRetiredStatus, normalizeCode, normalizeSiteCode, plainText, ymdhms, ymd } from '../values.js';
 import { addHistoryRaw, deleteHistoryWhereRaw, getHistory, makeHistoryId, newestFirst, usedDocNumbers } from './history.js';
 import { unitsInScope, unitNotInScopeMessage } from './airlist.js';
 import { jobKey } from '../context.js';
@@ -772,6 +772,7 @@ export async function saveCleaningForm(ctx, record) {
   // จึงเช็คว่ามีเครื่องอย่างน้อย 1 ใน 2 ช่อง ไม่ใช่บังคับช่องแรกเสมอ
   if (!record.AirCode1 && !record.AirCode2) throw new Error('กรุณาเลือกเครื่องปรับอากาศอย่างน้อย 1 เครื่อง');
   if (!record.Date) throw new Error('กรุณาระบุวันที่ดำเนินการ');
+  assertNotFuture('วันที่ดำเนินการ', record.Date);
   assertMoney('ค่าล้างเครื่องที่ 1', record.Price1);
   assertMoney('ค่าล้างเครื่องที่ 2', record.Price2);
   assertMoney('ค่าล้าง', record.Price);
@@ -1419,6 +1420,7 @@ export async function uploadNodeDocuments(ctx, payload) {
 
     if (closeout) {
       if (!closeout.date) throw new Error('กรุณาระบุวันที่ล้างจริง');
+      assertNotFuture('วันที่ล้างจริง', closeout.date);
 
       const wanted = Array.isArray(closeout.units) ? closeout.units : [];
       if (!wanted.length) throw new Error('กรุณาเลือกเครื่องที่ล้างอย่างน้อย 1 เครื่อง');

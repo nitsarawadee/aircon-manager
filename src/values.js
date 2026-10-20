@@ -136,6 +136,23 @@ export function assertMoney(label, v) {
   if (!Number.isFinite(n) || n < 0) throw new Error(label + 'ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป');
 }
 
+/**
+ * ตรวจวันที่ปิดงาน (วันที่ล้าง/ซ่อมเสร็จ/ติดตั้ง) — ต้องไม่เกินวันนี้ตามเวลาไทย (ผู้ใช้ขอ 20/10/2569)
+ *
+ * ปิดงานด้วยวันล่วงหน้าแล้วประวัติขึ้นว่าทำเสร็จวันที่ยังมาไม่ถึง และค่าใช้จ่ายไปลงงบเดือนนั้น
+ * หน้าเว็บกันไว้แล้ว แต่ด่านจริงต้องอยู่ที่เซิร์ฟเวอร์ (ลิงก์ซ่อมเรียกตรงได้)
+ * วันนัดในแผน/มอบหมายงานไม่ใช้ตัวนี้ — นัดล่วงหน้าได้ตามปกติ
+ */
+export function assertNotFuture(label, v) {
+  const d = safeParseDate(v);
+  if (!d) return;   // ว่างหรืออ่านไม่ออก ให้ด่าน "กรุณาระบุวันที่" ของแต่ละฟอร์มตัดสิน
+  const today = ymd(new Date());
+  if (ymd(d) > today) {
+    const [y, m, dd] = today.split('-');
+    throw new Error(label + 'เป็นวันล่วงหน้าไม่ได้ (วันนี้ ' + dd + '/' + m + '/' + y + ')');
+  }
+}
+
 export function plainText(v) {
   if (v === null || v === undefined) return '';
   if (typeof v === 'number') {

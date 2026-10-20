@@ -1825,10 +1825,14 @@
       return y + '-' + p(mo) + '-' + p(d);
     }
 
-    /** สร้าง HTML ของช่องกรอกวันที่ ใช้แทน <input type="date"> */
-    function dateField(id, iso, extraClass) {
+    /**
+     * สร้าง HTML ของช่องกรอกวันที่ ใช้แทน <input type="date">
+     * noFuture = ห้ามเลือกวันหลังวันนี้ — ใช้กับวันที่ปิดงาน (ล้าง/ซ่อมเสร็จ/ติดตั้ง) (ผู้ใช้ขอ 20/10/2569)
+     * เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น (assertNotFuture)
+     */
+    function dateField(id, iso, extraClass, noFuture) {
       const cls = extraClass || 'w-full rounded-lg border-gray-300 border focus:ring-2 focus:ring-[#1153a1] text-sm px-3 py-2 outline-none';
-      return `<div class="relative datefield">
+      return `<div class="relative datefield"${noFuture ? ' data-nofuture="1"' : ''}>
         <input type="hidden" id="${esc(id)}" value="${esc(iso || '')}">
         <input type="text" inputmode="numeric" autocomplete="off" placeholder="วว/ดด/ปปปป"
                value="${esc(isoToThai(iso))}" class="${cls} pr-9"
@@ -1867,7 +1871,12 @@
       }
 
       const iso = thaiToIso(text);
-      if (iso) {
+      if (iso && wrap.dataset.nofuture && iso > dfTodayIso()) {
+        // วันที่ปิดงานล่วงหน้าไม่ได้ — ไม่รับค่า ขอบแดง แล้วบอกเหตุผล
+        hidden.value = '';
+        el.classList.add('border-rose-400');
+        showToast('วันที่ปิดงานเป็นวันล่วงหน้าไม่ได้ (วันนี้ ' + isoToThai(dfTodayIso()) + ')', 'error');
+      } else if (iso) {
         hidden.value = iso;
         el.value = isoToThai(iso);        // จัดรูปแบบให้เรียบร้อย เช่น 3/9/2026 เป็น 03/09/2026
         el.classList.remove('border-rose-400');
@@ -1877,6 +1886,12 @@
         hidden.value = '';
         el.classList.add('border-rose-400');
       }
+    }
+
+    /** วันนี้ (ปปปป-ดด-วว) ตามเวลาเครื่อง — ใช้กับช่องที่ห้ามวันล่วงหน้า */
+    function dfTodayIso() {
+      const t = new Date(), p = n => String(n).padStart(2, '0');
+      return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate());
     }
 
     /** ปฏิทินเล็กสำหรับเลือกวัน แทนปฏิทินของเบราว์เซอร์ที่เราคุมรูปแบบไม่ได้ */
@@ -2026,6 +2041,11 @@
         const iso = y + '-' + p(m) + '-' + p(d);
         const sel = iso === cur;
         const isToday = today.getFullYear() === y && today.getMonth() + 1 === m && today.getDate() === d;
+        // ช่องห้ามวันล่วงหน้า: วันหลังวันนี้กดไม่ได้
+        if (wrap.dataset.nofuture && iso > dfTodayIso()) {
+          cells.push(`<button type="button" disabled class="h-7 rounded text-xs text-gray-300 cursor-not-allowed">${d}</button>`);
+          continue;
+        }
         cells.push(`<button type="button" onclick="dfPick(this,${d})"
           class="h-7 rounded text-xs ${sel ? 'bg-[#1153a1] text-white font-semibold'
             : isToday ? 'border border-[#1153a1] text-[#1153a1] font-semibold' : 'hover:bg-gray-100 text-gray-700'}">${d}</button>`);
@@ -11458,7 +11478,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             ${card(`
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ <span class="text-red-500">*</span></label>
-                  ${dateField('cf_date', new Date().toISOString().slice(0,10), field)}</div>
+                  ${dateField('cf_date', new Date().toISOString().slice(0,10), field, true)}</div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่ม</label>
                   <input type="time" id="cf_timeStart" class="${field}"></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">เวลาสิ้นสุด</label>
@@ -11912,7 +11932,7 @@ const CLEANING_CHECKLIST_ITEMS = [
 
             ${card(`
               <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อมเสร็จ <span class="text-red-500">*</span></label>
-              ${dateField('rf_date', new Date().toISOString().slice(0,10), field)}`)}
+              ${dateField('rf_date', new Date().toISOString().slice(0,10), field, true)}`)}
 
             ${card(`
               <h3 class="text-sm font-bold text-gray-800 mb-2">ส่วนที่ 2 · สาเหตุและการแก้ไข</h3>
@@ -12383,7 +12403,7 @@ const CLEANING_CHECKLIST_ITEMS = [
           </div>
           <div class="px-5 py-4 space-y-3 overflow-y-auto">
             <div><label class="block text-sm font-medium text-gray-700 mb-1">${isRepair ? 'วันที่ซ่อมเสร็จ' : 'วันที่ติดตั้ง'} <span class="text-red-500">*</span></label>
-              ${dateField('fa_date', date, field)}</div>
+              ${dateField('fa_date', date, field, true)}</div>
             <div><label class="block text-sm font-medium text-gray-700 mb-1">บ./หจก. ผู้ดำเนินการ</label>
               ${companyInput('fa_company', field)}</div>
             <div><label class="block text-sm font-medium text-gray-700 mb-1">ช่างผู้ปฏิบัติงาน</label>
@@ -13391,7 +13411,7 @@ const CLEANING_CHECKLIST_ITEMS = [
             ${card(`
               <div class="space-y-3">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง <span class="text-red-500">*</span></label>
-                  ${dateField('if_date', new Date().toISOString().slice(0, 10), field)}</div>
+                  ${dateField('if_date', new Date().toISOString().slice(0, 10), field, true)}</div>
                 <div class="grid grid-cols-3 gap-2">
                   <div><label class="block text-xs text-gray-500 mb-1">เวลาเริ่ม</label>
                     <input type="time" id="if_start" oninput="updateIfTotal()" class="${small}"></div>
@@ -15316,7 +15336,7 @@ const CLEANING_CHECKLIST_ITEMS = [
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">วันที่ล้างจริง <span class="text-rose-500">*</span></label>
-          ${dateField('ad_date', new Date().toISOString().slice(0, 10), 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]')}
+          ${dateField('ad_date', new Date().toISOString().slice(0, 10), 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#1153a1]', true)}
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อช่างผู้ล้าง</label>
