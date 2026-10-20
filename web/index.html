@@ -9288,7 +9288,7 @@
           ${card('aqua', 'ph-hourglass-medium', 'คงเหลือ', s.remaining, 'เครื่อง', 'ประมาณ ' + rplMoney(s.remainingTotal) + ' บาท')}
           ${card('lilac', 'ph-coins', 'รวมตามแผน', rplMoney(s.total), 'บาท', 'ซื้อ ' + rplMoney(s.purchase) + ' · ติดตั้ง ' + rplMoney(s.install) + '<br>' + budgetLine, true)}
         </div>
-        ${edit && !match ? rplMismatchBanner(p, s, budgetTotal) : ''}
+        ${edit ? rplBudgetBanner(p, s, budgetTotal) : ''}
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <div class="bg-white rounded-xl border border-gray-200 p-4">
@@ -9391,37 +9391,63 @@
     window.saveReplacementPricesUI = saveReplacementPricesUI;
 
     /**
-     * แถบ "ยอดที่เลือกไม่ตรงกับงบ" — บอกว่าต่างเท่าไร เพราะอะไร ต้องทำอะไร (ผู้ใช้งงแล้วเผลอกดตั้งงบทับ)
-     * ส่วนอธิบายพับเก็บได้ ไม่ให้เกะกะสายตา
+     * แถบ "อยู่ในงบ / เกินงบ" — เทียบงบจัดซื้อ+ติดตั้งที่ตั้งไว้ กับเงินที่ใช้/จะใช้ทั้งปี (ผู้ใช้ขอ 20/10/2569)
+     *   ใช้/จะใช้ = ตามแผน (ราคาตามขนาดของเครื่องที่ติ๊ก) + เปลี่ยนนอกแผน (จ่ายจริง) + ติดตั้งเพิ่ม (จ่ายจริง)
+     *   นอกแผน/ติดตั้งเพิ่มใช้งบก้อนเดียวกัน จึงต้องนับด้วย ไม่งั้นดูเหมือนเหลือทั้งที่ใช้ไปแล้ว
+     * ปุ่มตั้งงบยังตั้งตามยอดตามแผนอย่างเดียว — ใช้ตั้งงบล่วงหน้า ซึ่งตอนนั้นยังไม่มีนอกแผน
+     * รายละเอียดพับเก็บได้ ไม่ให้เกะกะสายตา · ใช้ตรงกับงบพอดีไม่ขึ้นแถบ
      */
-    function rplMismatchBanner(p, s, budgetTotal) {
-      const btn = `<button onclick="applyReplacementBudget()" class="bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium whitespace-nowrap">ตั้งงบตามยอดที่เลือก</button>`;
+    function rplBudgetBanner(p, s, budgetTotal) {
+      const btn = `<button onclick="applyReplacementBudget()" class="bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium whitespace-nowrap">ตั้งงบตามยอดตามแผน</button>`;
       if (!p.budget.exists) return `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
-          <i class="ph ph-info"></i><span>ยังไม่ได้ตั้งงบจัดซื้อ/ติดตั้งปี ${p.year} — ตั้งตามเครื่องที่เลือก (${rplMoney(s.total)} บาท) ได้เลย</span><span class="ml-auto">${btn}</span></div>`;
-      const diff = s.total - budgetTotal;
-      const stale = (p.staleUnits || []);
+          <i class="ph ph-info"></i><span>ยังไม่ได้ตั้งงบจัดซื้อ/ติดตั้งปี ${p.year} — ตั้งตามเครื่องที่ติ๊กไว้ (${rplMoney(s.total)} บาท) ได้เลย</span><span class="ml-auto">${btn}</span></div>`;
+
+      const used = s.total + s.unplannedActual + s.addedActual;
+      const left = budgetTotal - used;
+      if (Math.round(left) === 0) return '';
+      const over = left < 0;
+      const tone = over ? { box: 'bg-rose-50 border-rose-200 text-rose-800', chip: 'bg-rose-600', line: 'border-rose-200', text: 'text-rose-900' }
+                        : { box: 'bg-emerald-50 border-emerald-200 text-emerald-800', chip: 'bg-emerald-600', line: 'border-emerald-200', text: 'text-emerald-900' };
+
+      // เครื่องที่ติ๊กไว้แต่ไม่ต้องเปลี่ยนแล้ว — บอกชื่อตรงๆ ไม่ต้องไปหาเองว่าแถวแดงคือเครื่องไหน
+      const stale = p.staleUnits || [];
       const staleSum = stale.reduce((n, u) => n + u.total, 0);
       const reasons = [];
-      if (stale.length && Math.round(staleSum) === Math.round(-diff)) {
-        reasons.push(`ส่วนต่างเท่ากับเครื่องแถวแดง "ไม่ต้องเปลี่ยน" ${stale.length} เครื่อง (${rplMoney(staleSum)} บาท) พอดี — เครื่องพวกนี้อยู่ในงบตอนตั้ง แต่เปลี่ยนไปแล้ว/ไม่ครบเกณฑ์แล้ว ระบบจึงไม่นับในยอดที่เลือก`);
-      } else {
-        if (stale.length) reasons.push(`มีเครื่องแถวแดง "ไม่ต้องเปลี่ยน" ${stale.length} เครื่อง (${rplMoney(staleSum)} บาท) ที่ไม่นับในยอดที่เลือก`);
-        reasons.push('ติ๊กเลือก / เอาติ๊กออก หรือแก้ราคาต่อเครื่อง หลังจากตั้งงบไปแล้ว');
-        reasons.push('งบที่ตั้งไว้กรอกมาจากที่อื่น (เช่นไฟล์ Data_AIR) ไม่ได้คิดจากเครื่องที่เลือกในหน้านี้');
+      if (stale.length) {
+        const names = stale.slice(0, 5).map(u => esc(u.airCode)).join(', ') + (stale.length > 5 ? ` และอีก ${stale.length - 5} เครื่อง` : '');
+        const when = [...new Set(stale.map(u => u.replacedOn).filter(Boolean))].map(fmtDate);
+        reasons.push(`${names} (แถวแดง) ติ๊กไว้แต่<b>ไม่ต้องเปลี่ยนแล้ว</b>${when.length ? ' — เปลี่ยนไปแล้วเมื่อ ' + esc(when.join(', ')) : ''} · ไม่นับในยอด (${stale.length} × ${rplMoney(stale[0].total)}${stale.length > 1 && stale.some(u => u.total !== stale[0].total) ? '…' : ''} = ${rplMoney(staleSum)} บาท)`);
       }
-      return `<div class="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+      if (s.unplanned) reasons.push(`เปลี่ยนนอกแผน ${s.unplanned} เครื่อง จ่ายจริง ${rplMoney(s.unplannedActual)} บาท — ใช้งบก้อนเดียวกัน (ดูแท็บ "เปลี่ยนนอกแผน")`);
+      if (s.added) reasons.push(`ติดตั้งเพิ่ม ${s.added} เครื่อง จ่ายจริง ${rplMoney(s.addedActual)} บาท — ใช้งบก้อนเดียวกัน (ดูแท็บ "ติดตั้งเพิ่ม")`);
+      if (!reasons.length) reasons.push('งบที่ตั้งไว้ไม่ได้คิดจากเครื่องที่ติ๊กในหน้านี้ (เช่นกรอกตามไฟล์ Data_AIR) หรือติ๊ก/แก้ราคาหลังตั้งงบ');
+
+      const todo = over
+        ? [`หางบเพิ่มอีก ${rplMoney(-left)} บาท หรือเอาติ๊กออกบางเครื่อง`,
+           'ถ้าจะตั้งงบใหม่ตามเครื่องที่ติ๊กไว้ กด "ตั้งงบตามยอดตามแผน" (ยอดนอกแผน/ติดตั้งเพิ่มไม่รวมในปุ่มนี้)']
+        : ['<b>ไม่ต้องทำอะไร</b> ถ้าจะใช้งบเดิมต่อ — แถบนี้แค่บอกให้รู้',
+           `ถ้าอยากตั้งงบใหม่ให้เท่ากับยอดตามแผน (${rplMoney(s.total)}) ค่อยกด "ตั้งงบตามยอดตามแผน"`];
+
+      const row = (label, n, amt, cls = '') => `<tr class="${cls}"><td class="py-0.5 pr-4">${label}</td><td class="text-right pr-4">${n === '' ? '' : n + ' เครื่อง'}</td><td class="text-right">${rplMoney(amt)}</td></tr>`;
+      return `<div class="mb-4 border rounded-lg px-4 py-2 text-sm ${tone.box}">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <i class="ph ph-info"></i>
-            <span>ยอดที่เลือก (${rplMoney(s.total)}) <b>${diff < 0 ? 'น้อยกว่า' : 'มากกว่า'}</b>งบที่ตั้งไว้ปี ${p.year} (${rplMoney(budgetTotal)}) อยู่ <b>${rplMoney(Math.abs(diff))} บาท</b></span>
-            <button onclick="rplToggleWhy()" class="text-[#1153a1] hover:underline font-medium inline-flex items-center gap-1">${rplWhyOpen ? 'ซ่อนคำอธิบาย' : 'ทำไม / ต้องทำอะไร'} <i class="ph ${rplWhyOpen ? 'ph-caret-up' : 'ph-caret-down'}"></i></button>
+            <span class="${tone.chip} text-white rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap">${over ? 'เกินงบ' : 'อยู่ในงบ'}</span>
+            <span>งบปี ${p.year} ตั้งไว้ <b>${rplMoney(budgetTotal)}</b> · ใช้/จะใช้รวม <b>${rplMoney(used)}</b> · ${over ? 'เกิน' : 'เหลือ'} <b>${rplMoney(Math.abs(left))} บาท</b></span>
+            <button onclick="rplToggleWhy()" class="underline-offset-2 hover:underline font-medium inline-flex items-center gap-1">${rplWhyOpen ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'} <i class="ph ${rplWhyOpen ? 'ph-caret-up' : 'ph-caret-down'}"></i></button>
             <span class="ml-auto">${btn}</span>
           </div>
-          ${rplWhyOpen ? `<div class="mt-2 pt-2 border-t border-blue-200 text-blue-900 space-y-2">
-            <div><div class="font-semibold">ทำไมไม่ตรง</div><ul class="list-disc pl-5">${reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>
-            <div><div class="font-semibold">ต้องทำอะไร</div><ul class="list-disc pl-5">
-              <li>ถ้างบที่ตั้งไว้ถูกแล้ว <b>ไม่ต้องทำอะไร</b> — แถบนี้แค่บอกให้รู้ ไม่ได้แปลว่ามีอะไรผิด</li>
-              <li>ถ้าจะให้งบเท่ากับเครื่องที่เลือกตอนนี้ กด "ตั้งงบตามยอดที่เลือก" — งบจัดซื้อ/ติดตั้งเดิมจะถูกแทน (งบล้าง/ซ่อมไม่เปลี่ยน)</li>
-            </ul></div></div>` : ''}
+          ${rplWhyOpen ? `<div class="mt-2 pt-2 border-t ${tone.line} ${tone.text} space-y-2">
+            <table class="text-sm"><tbody>
+              ${row('ตามแผน (ที่ติ๊กไว้)', s.selected, s.total)}
+              ${row('เปลี่ยนนอกแผน (จ่ายจริง)', s.unplanned, s.unplannedActual)}
+              ${row('ติดตั้งเพิ่ม (จ่ายจริง)', s.added, s.addedActual)}
+              ${row('<b>รวมใช้/จะใช้</b>', '', used, 'border-t ' + tone.line)}
+              ${row('งบที่ตั้งไว้ (จัดซื้อ + ติดตั้ง)', '', budgetTotal)}
+              ${row(`<b>${over ? 'เกินงบ' : 'เหลือ'}</b>`, '', Math.abs(left), 'font-semibold')}
+            </tbody></table>
+            <div><div class="font-semibold">ทำไม${over ? 'เกิน' : 'เหลือ'}</div><ul class="list-disc pl-5">${reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>
+            <div><div class="font-semibold">ต้องทำอะไร</div><ul class="list-disc pl-5">${todo.map(t => `<li>${t}</li>`).join('')}</ul></div>
+          </div>` : ''}
         </div>`;
     }
 
