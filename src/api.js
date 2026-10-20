@@ -10,7 +10,7 @@ import {
   reportRepair, markCannotRepair, getRepairWorkCount
 } from './modules/history.js';
 import { getDashboardSummary } from './modules/dashboard.js';
-import { getBudgetSummary, saveBudgetRecord } from './modules/budget.js';
+import { getBudgetSummary, saveBudgetRecord, getBudgetRows, previewBudgetImport, applyBudgetImport } from './modules/budget.js';
 import { getReplacementPlan, setReplacementPicks, saveReplacementPrices, applyReplacementToBudget } from './modules/replacement.js';
 import {
   getSystemStatus, setupFirstAdmin, login, logout, changeOwnPassword,
@@ -111,6 +111,10 @@ const API_FUNCTIONS = {
   getDashboardSummary,
   getBudgetSummary,
   saveBudgetRecord,
+  // ส่งออก/นำเข้างบที่ตั้งไว้รายปี (ดูผลก่อน แล้วค่อยยืนยัน)
+  getBudgetRows,
+  previewBudgetImport,
+  applyBudgetImport,
   getReplacementPlan,
   setReplacementPicks,
   saveReplacementPrices,

@@ -215,3 +215,97 @@ export async function saveBudgetRecord(ctx, year, budgetCleaning, budgetRepair, 
     return getBudgetSummary(ctx, year);
   });
 }
+
+/* ============== ส่งออก / นำเข้างบที่ตั้งไว้รายปี (Excel/CSV) ============== */
+
+/** หัวคอลัมน์ของไฟล์ — ใช้ทั้งตอนส่งออกและนำเข้า */
+export const BUDGET_IMPORT_COLUMNS = ['Year', ...BUDGET_CATEGORIES.map(c => c.column), 'Note'];
+
+/** งบที่ตั้งไว้ทุกปี เรียงปีใหม่ก่อน — ใช้ทำไฟล์ส่งออก (ไฟล์เดียวกับที่แก้แล้วนำเข้ากลับได้) */
+export async function getBudgetRows(ctx) {
+  await ctx.requireAccess();
+  if (!(await ctx.canView('budget'))) throw new Error('คุณไม่มีสิทธิ์ดูข้อมูลส่วนงบประมาณ');
+  await ctx.ensureBase();
+  await ensureBudgetSheet(ctx);
+  return ctx.ss.objects(SHEETS.BUDGET)
+    .filter(r => Number(r.Year))
+    .sort((a, b) => Number(b.Year) - Number(a.Year))
+    .map(r => Object.fromEntries(BUDGET_IMPORT_COLUMNS.map(k => [k, k === 'Note' ? r.Note || '' : Number(r[k]) || 0])));
+}
+
+/**
+ * อ่านแถวจากไฟล์ — ผิดแม้แถวเดียวไม่รับทั้งไฟล์ (ไม่บันทึกครึ่งๆ)
+ * ช่องว่าง = ไม่แก้ค่าเดิม · ตัวเลขมีจุลภาคได้ · ปีซ้ำในไฟล์ไม่รับ
+ */
+export function parseBudgetImport(rows) {
+  if (!Array.isArray(rows) || !rows.length) throw new Error('ไม่พบข้อมูลในไฟล์');
+  if (!Object.keys(rows[0]).includes('Year')) throw new Error('ไฟล์ไม่ถูกต้อง (ต้องมีคอลัมน์ Year) — ใช้ไฟล์จากปุ่ม Template');
+  const out = [], seen = new Set(), errors = [];
+  rows.forEach((r, i) => {
+    const line = i + 2;   // แถว 1 คือหัวตาราง
+    const blank = v => v === undefined || v === null || String(v).trim() === '';
+    if (BUDGET_IMPORT_COLUMNS.every(k => blank(r[k]))) return;   // แถวว่างทั้งแถว ข้ามไป
+    const year = Number(String(r.Year).trim());
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) { errors.push(`แถว ${line}: ปี "${r.Year}" ไม่ถูกต้อง`); return; }
+    if (seen.has(year)) { errors.push(`แถว ${line}: ปี ${year} ซ้ำในไฟล์`); return; }
+    seen.add(year);
+    const values = {};
+    for (const c of BUDGET_CATEGORIES) {
+      if (blank(r[c.column])) continue;
+      const n = Number(String(r[c.column]).replace(/,/g, '').trim());
+      if (!Number.isFinite(n) || n < 0) { errors.push(`แถว ${line} (ปี ${year}): ${c.label} "${r[c.column]}" ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป`); continue; }
+      values[c.column] = n;
+    }
+    if (!blank(r.Note)) values.Note = String(r.Note).trim();
+    out.push({ year, values });
+  });
+  if (errors.length) throw new Error('นำเข้าไม่ได้ ยังไม่ได้บันทึกอะไร:\n' + errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\nและอีก ${errors.length - 10} รายการ` : ''));
+  if (!out.length) throw new Error('ไม่พบข้อมูลในไฟล์');
+  return out;
+}
+
+/** เทียบไฟล์กับงบในระบบ — คืนเฉพาะช่องที่จะเปลี่ยน */
+function diffBudgetImport(ctx, parsed) {
+  const existing = ctx.ss.objects(SHEETS.BUDGET);
+  const labels = Object.fromEntries([...BUDGET_CATEGORIES.map(c => [c.column, c.label]), ['Note', 'หมายเหตุ']]);
+  return parsed.map(p => {
+    const row = existing.find(r => Number(r.Year) === p.year);
+    const fields = Object.entries(p.values)
+      .map(([k, to]) => ({ column: k, label: labels[k], from: row ? (k === 'Note' ? row.Note || '' : Number(row[k]) || 0) : (k === 'Note' ? '' : 0), to }))
+      .filter(f => f.from !== f.to);
+    return { year: p.year, isNew: !row, row, fields };
+  }).filter(c => c.fields.length);
+}
+
+/** ดูผลก่อนนำเข้า — ยังไม่บันทึก */
+export async function previewBudgetImport(ctx, rows) {
+  await ctx.assertModuleEdit('budget');
+  const parsed = parseBudgetImport(rows);
+  await ctx.ensureBase();
+  await ensureBudgetSheet(ctx);
+  const changes = diffBudgetImport(ctx, parsed).map(({ row, ...c }) => c);
+  return { changes, unchangedYears: parsed.length - changes.length };
+}
+
+/** นำเข้าจริง — คิดผลใหม่ใน lock (ข้อมูลอาจเปลี่ยนระหว่างดูผล) แล้วเขียนเฉพาะช่องที่เปลี่ยน */
+export async function applyBudgetImport(ctx, rows) {
+  return ctx.withLock(async () => {
+    await ctx.assertModuleEdit('budget');
+    const parsed = parseBudgetImport(rows);
+    await ctx.ensureBase();
+    await ensureBudgetSheet(ctx);
+    const changes = diffBudgetImport(ctx, parsed);
+    const me = await ctx.currentUser(), now = ymdhms(new Date());
+    const headers = ctx.ss.headers(SHEETS.BUDGET);
+    for (const c of changes) {
+      const payload = { ...Object.fromEntries(c.fields.map(f => [f.column, f.to])), UpdatedAt: now, UpdatedBy: me };
+      if (c.row) ctx.ss.writeByHeaders(SHEETS.BUDGET, c.row._row, payload);
+      else {
+        const full = { Year: c.year, ...payload };
+        ctx.ss.appendRow(SHEETS.BUDGET, headers.map(h => (full[h] !== undefined ? full[h] : (BUDGET_CATEGORIES.some(x => x.column === h) ? 0 : ''))));
+      }
+    }
+    await ctx.ss.flush();
+    return { changedYears: changes.map(c => c.year) };
+  });
+}

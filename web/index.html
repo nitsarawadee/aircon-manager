@@ -1112,7 +1112,22 @@
                    ตัวเลือกมาจากเซิร์ฟเวอร์ = ปีที่ตั้งงบ/มีประวัติ/มีแผน บวกปีนี้กับปีหน้า -->
               <select id="budgetYearSelect" onchange="loadBudget()" class="bg-transparent border-none text-sm focus:ring-0 outline-none font-medium text-gray-700 cursor-pointer pr-6"></select>
             </div>
-            <button onclick="openBudgetModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+            <!-- ส่งออก/นำเข้างบที่ตั้งไว้รายปี — เมนู "เพิ่มเติม" แบบหน้าแผนล้างแอร์ (ผู้ใช้ขอ) -->
+            <input type="file" id="fileImportBudget" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+            <span class="row-menu-wrap inline-block">
+              <button onclick="toggleRowMenu(this)" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap">
+                <i class="ph ph-dots-three-outline"></i> เพิ่มเติม <i class="ph ph-caret-down text-xs text-gray-400"></i>
+              </button>
+              <div class="row-menu hidden fixed w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5 text-sm text-left">
+                <button onclick="closeRowMenus(); openBudgetImport()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700" title="นำเข้างบที่แก้จาก Excel — ดูผลก่อนยืนยันเสมอ">
+                  <i class="ph ph-upload-simple text-lg text-emerald-600"></i> นำเข้า (Excel/CSV)
+                </button>
+                <button onclick="closeRowMenus(); exportBudgetTemplate()" class="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-gray-700" title="โหลดงบที่ตั้งไว้ทุกปีเป็น Excel — แก้แล้วนำเข้ากลับได้">
+                  <i class="ph ph-download-simple text-lg text-gray-500"></i> Template / ส่งออกงบ
+                </button>
+              </div>
+            </span>
+            <button onclick="openBudgetModal()" class="bg-[#f47920] hover:bg-[#d96615] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap">
               <i class="ph ph-coins"></i> ตั้งค่างบประมาณ
             </button>
           </div>
@@ -2805,7 +2820,7 @@
       submitInstallForm: 'installform', deleteInstallFormRow: 'installform',
       openInstallAttach: 'installform', submitInstallAttach: 'installform',
       // งบประมาณ
-      openBudgetModal: 'budget', saveBudget: 'budget',
+      openBudgetModal: 'budget', saveBudget: 'budget', openBudgetImport: 'budget',
       // จัดการผู้ใช้
       openUserModal: 'admin', saveUserForm: 'admin', deleteUserRow: 'admin', deleteContractorRow: 'admin',
       fileImportUsers: 'admin', downloadUserTemplate: 'admin', confirmUserImport: 'admin'
@@ -9715,6 +9730,61 @@
     }
 
     /* ============== UTILITIES ============== */
+    /* ---------- ส่งออก / นำเข้างบที่ตั้งไว้รายปี ---------- */
+
+    // ชื่อคอลัมน์ต้องตรงกับ BUDGET_IMPORT_COLUMNS ฝั่งเซิร์ฟเวอร์ — ไฟล์ที่ส่งออกแก้แล้วนำเข้ากลับได้ทันที
+    async function exportBudgetTemplate() {
+      try {
+        let rows = await call('getBudgetRows');
+        // ยังไม่เคยตั้งงบ — ให้แถวว่างของปีที่เลือกไว้กรอก
+        if (!rows.length) rows = [{ Year: Number(document.getElementById('budgetYearSelect').value) || new Date().getFullYear(),
+          CleaningBudget: '', RepairBudget: '', PurchaseBudget: '', InstallBudget: '', Note: '' }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'งบประมาณ');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+          ['วิธีใช้'], ['แก้ตัวเลขในชีต "งบประมาณ" แถวละ 1 ปี (ห้ามแก้ชื่อหัวคอลัมน์) แล้วกด เพิ่มเติม → นำเข้า ในหน้างบประมาณ'],
+          ['ช่องที่เว้นว่าง = ไม่แก้ค่าเดิม · เพิ่มแถวปีใหม่ได้ · ระบบจะโชว์ค่าเดิม → ค่าใหม่ ให้ดูก่อนกดยืนยัน'],
+          ['CleaningBudget = งบล้างแอร์ · RepairBudget = งบซ่อมบำรุง · PurchaseBudget = งบจัดซื้อเครื่องใหม่ · InstallBudget = งบติดตั้ง · Note = หมายเหตุ']
+        ]), 'วิธีใช้');
+        XLSX.writeFile(wb, 'Budget_Template_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+        showToast('ดาวน์โหลดงบประมาณแล้ว — แก้แล้วนำเข้ากลับได้');
+      } catch (e) { /* แจ้งแล้วใน call */ }
+    }
+    window.exportBudgetTemplate = exportBudgetTemplate;
+
+    function openBudgetImport() { document.getElementById('fileImportBudget').click(); }
+    window.openBudgetImport = openBudgetImport;
+
+    document.getElementById('fileImportBudget').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async function (evt) {
+        let rows;
+        try {
+          const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+          rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { raw: false, defval: '' });
+        } catch (err) { showToast('อ่านไฟล์ไม่ได้: ' + err.message, 'error'); return; }
+        let preview;
+        try { preview = await call('previewBudgetImport', rows); } catch (err) { return; /* แจ้งแล้วใน call */ }
+        if (!preview.changes.length) { showToast('ตัวเลขในไฟล์ตรงกับที่ตั้งไว้แล้ว ไม่มีอะไรต้องเปลี่ยน'); return; }
+        // ดูผลก่อนเสมอ — ปีไหน หมวดไหน จากเท่าไรเป็นเท่าไร (กันกดผิดแล้วงบถูกแทนโดยไม่รู้ตัว)
+        const val = v => (typeof v === 'number' ? v.toLocaleString() : (v ? `"${v}"` : '(ว่าง)'));
+        const lines = preview.changes.map(c => `ปี ${c.year}${c.isNew ? ' (ปีใหม่)' : ''}\n` +
+          c.fields.map(f => `   ${f.label}: ${val(f.from)} → ${val(f.to)}`).join('\n'));
+        const ok = await showConfirm(`จะแก้งบ ${preview.changes.length} ปี:\n\n${lines.join('\n\n')}` +
+          (preview.unchangedYears ? `\n\nอีก ${preview.unchangedYears} ปีตรงกับที่ตั้งไว้แล้ว ไม่เปลี่ยน` : '') + '\n\nยืนยันนำเข้า?', 'นำเข้างบประมาณ');
+        if (!ok) return;
+        try {
+          const res = await call('applyBudgetImport', rows);
+          showToast(`นำเข้างบแล้ว ${res.changedYears.length} ปี (${res.changedYears.join(', ')})`);
+          loadBudget();
+        } catch (err) { /* แจ้งแล้วใน call */ }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
     function exportCSV(list, name) {
       if (!list || list.length === 0) { showToast('ไม่มีข้อมูลให้ดาวน์โหลด', 'error'); return; }
       const headers = Object.keys(list[0]).filter(k => k !== '_row');
