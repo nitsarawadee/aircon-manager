@@ -9208,6 +9208,7 @@
 
     /* ============== แผนเปลี่ยนเครื่อง ============== */
     let rplPlan = null;
+    let rplWhyOpen = false;   // คำอธิบายใต้แถบ "ยอดไม่ตรงกับงบ" — พับไว้ก่อน
     let rplTab = 'due';   // แท็บตารางล่าง: due ครบเกณฑ์ · unplanned เปลี่ยนนอกแผน · added ติดตั้งเพิ่ม
     const rplFilter = { region: '', q: '', only: '', ages: null };   // ages: Set ของอายุที่เลือก (ดรอปดาวฟิลเตอร์) · null = ทุกอายุ
     function rplSetAges(sel) { rplFilter.ages = sel; renderReplacement(); }
@@ -9272,9 +9273,7 @@
           ${card('aqua', 'ph-hourglass-medium', 'คงเหลือ', s.remaining, 'เครื่อง', 'ประมาณ ' + rplMoney(s.remainingTotal) + ' บาท')}
           ${card('lilac', 'ph-coins', 'รวมตามแผน', rplMoney(s.total), 'บาท', 'ซื้อ ' + rplMoney(s.purchase) + ' · ติดตั้ง ' + rplMoney(s.install) + '<br>' + budgetLine, true)}
         </div>
-        ${edit && !match ? `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
-          <i class="ph ph-info"></i><span>ยอดที่เลือกยังไม่ตรงกับงบปี ${p.year}</span>
-          <button onclick="applyReplacementBudget()" class="ml-auto bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium">ใช้ยอดนี้เป็นงบจัดซื้อ/ติดตั้ง</button></div>` : ''}
+        ${edit && !match ? rplMismatchBanner(p, s, budgetTotal) : ''}
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <div class="bg-white rounded-xl border border-gray-200 p-4">
@@ -9376,9 +9375,48 @@
     }
     window.saveReplacementPricesUI = saveReplacementPricesUI;
 
+    /**
+     * แถบ "ยอดที่เลือกไม่ตรงกับงบ" — บอกว่าต่างเท่าไร เพราะอะไร ต้องทำอะไร (ผู้ใช้งงแล้วเผลอกดตั้งงบทับ)
+     * ส่วนอธิบายพับเก็บได้ ไม่ให้เกะกะสายตา
+     */
+    function rplMismatchBanner(p, s, budgetTotal) {
+      const btn = `<button onclick="applyReplacementBudget()" class="bg-[#1153a1] hover:bg-[#0d4282] text-white rounded-lg px-3 py-1.5 font-medium whitespace-nowrap">ตั้งงบตามยอดที่เลือก</button>`;
+      if (!p.budget.exists) return `<div class="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+          <i class="ph ph-info"></i><span>ยังไม่ได้ตั้งงบจัดซื้อ/ติดตั้งปี ${p.year} — ตั้งตามเครื่องที่เลือก (${rplMoney(s.total)} บาท) ได้เลย</span><span class="ml-auto">${btn}</span></div>`;
+      const diff = s.total - budgetTotal;
+      const stale = (p.staleUnits || []);
+      const staleSum = stale.reduce((n, u) => n + u.total, 0);
+      const reasons = [];
+      if (stale.length && Math.round(staleSum) === Math.round(-diff)) {
+        reasons.push(`ส่วนต่างเท่ากับเครื่องแถวแดง "ไม่ต้องเปลี่ยน" ${stale.length} เครื่อง (${rplMoney(staleSum)} บาท) พอดี — เครื่องพวกนี้อยู่ในงบตอนตั้ง แต่เปลี่ยนไปแล้ว/ไม่ครบเกณฑ์แล้ว ระบบจึงไม่นับในยอดที่เลือก`);
+      } else {
+        if (stale.length) reasons.push(`มีเครื่องแถวแดง "ไม่ต้องเปลี่ยน" ${stale.length} เครื่อง (${rplMoney(staleSum)} บาท) ที่ไม่นับในยอดที่เลือก`);
+        reasons.push('ติ๊กเลือก / เอาติ๊กออก หรือแก้ราคาต่อเครื่อง หลังจากตั้งงบไปแล้ว');
+        reasons.push('งบที่ตั้งไว้กรอกมาจากที่อื่น (เช่นไฟล์ Data_AIR) ไม่ได้คิดจากเครื่องที่เลือกในหน้านี้');
+      }
+      return `<div class="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <i class="ph ph-info"></i>
+            <span>ยอดที่เลือก (${rplMoney(s.total)}) <b>${diff < 0 ? 'น้อยกว่า' : 'มากกว่า'}</b>งบที่ตั้งไว้ปี ${p.year} (${rplMoney(budgetTotal)}) อยู่ <b>${rplMoney(Math.abs(diff))} บาท</b></span>
+            <button onclick="rplToggleWhy()" class="text-[#1153a1] hover:underline font-medium inline-flex items-center gap-1">${rplWhyOpen ? 'ซ่อนคำอธิบาย' : 'ทำไม / ต้องทำอะไร'} <i class="ph ${rplWhyOpen ? 'ph-caret-up' : 'ph-caret-down'}"></i></button>
+            <span class="ml-auto">${btn}</span>
+          </div>
+          ${rplWhyOpen ? `<div class="mt-2 pt-2 border-t border-blue-200 text-blue-900 space-y-2">
+            <div><div class="font-semibold">ทำไมไม่ตรง</div><ul class="list-disc pl-5">${reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>
+            <div><div class="font-semibold">ต้องทำอะไร</div><ul class="list-disc pl-5">
+              <li>ถ้างบที่ตั้งไว้ถูกแล้ว <b>ไม่ต้องทำอะไร</b> — แถบนี้แค่บอกให้รู้ ไม่ได้แปลว่ามีอะไรผิด</li>
+              <li>ถ้าจะให้งบเท่ากับเครื่องที่เลือกตอนนี้ กด "ตั้งงบตามยอดที่เลือก" — งบจัดซื้อ/ติดตั้งเดิมจะถูกแทน (งบล้าง/ซ่อมไม่เปลี่ยน)</li>
+            </ul></div></div>` : ''}
+        </div>`;
+    }
+
+    function rplToggleWhy() { rplWhyOpen = !rplWhyOpen; renderReplacement(); }
+    window.rplToggleWhy = rplToggleWhy;
+
     async function applyReplacementBudget() {
-      const s = rplPlan.summary;
-      const ok = await showConfirm(`ตั้งงบปี ${rplPlan.year}: จัดซื้อเครื่อง ${rplMoney(s.purchase)} บาท · ติดตั้ง ${rplMoney(s.install)} บาท ตามเครื่องที่เลือก ${s.selected} เครื่อง?\nงบล้างและงบซ่อมไม่เปลี่ยน`);
+      const s = rplPlan.summary, b = rplPlan.budget;
+      const was = b.exists ? `\nงบเดิม: จัดซื้อ ${rplMoney(b.purchase)} · ติดตั้ง ${rplMoney(b.install)} บาท (รวม ${rplMoney(b.purchase + b.install)}) จะถูกแทน` : '';
+      const ok = await showConfirm(`ตั้งงบปี ${rplPlan.year} ใหม่: จัดซื้อเครื่อง ${rplMoney(s.purchase)} บาท · ติดตั้ง ${rplMoney(s.install)} บาท (รวม ${rplMoney(s.total)}) ตามเครื่องที่เลือก ${s.selected} เครื่อง?${was}\nงบล้างและงบซ่อมไม่เปลี่ยน`);
       if (!ok) return;
       try { rplPlan = await call('applyReplacementToBudget', rplPlan.year); showToast('ตั้งงบจัดซื้อ/ติดตั้งแล้ว'); renderReplacement(); }
       catch (e) { /* แจ้งแล้วใน call */ }
