@@ -224,6 +224,17 @@
     .toast-bar { height: 3px; border-radius: 9999px; transform-origin: left; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* หน้าต่างลอยที่สูงกว่าจอ (มือถือจอเล็ก) ต้องเลื่อนดูได้ (ผู้ใช้ขอ 20/10/2569)
+       เดิมกล่องอยู่กลางจอแบบ items-center ถ้าสูงกว่าจอ หัวกับปุ่มบันทึกโดนตัดและเลื่อนไม่ได้
+       ตอนนี้ชั้นหน้าต่างเลื่อนได้เอง กล่องยังอยู่กลางจอเมื่อพอดี (margin auto) และเริ่มจากบนสุดเมื่อสูงเกิน
+       ฉากมืดด้านหลังเป็น fixed อยู่แล้ว จึงไม่เลื่อนตาม · ตัวหมุนโหลด (#loading) ไม่เกี่ยว */
+    .fixed.inset-0.flex.items-center.justify-center:not(#loading) {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      align-items: flex-start;
+    }
+    .fixed.inset-0.flex.items-center.justify-center:not(#loading) > :not(.fixed) { margin-block: auto; flex-shrink: 0; }
   </style>
 </head>
 <body class="antialiased h-screen w-full bg-slate-50 overflow-hidden">
