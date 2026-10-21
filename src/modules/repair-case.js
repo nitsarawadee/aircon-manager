@@ -1,4 +1,4 @@
-import { normalizeCode, partsOf } from '../values.js';
+import { normalizeCode } from '../values.js';
 
 /**
  * เคสงานซ่อม — ร้อยทุกเหตุการณ์ของการซ่อมครั้งหนึ่งเข้าด้วยกัน
@@ -27,33 +27,6 @@ import { normalizeCode, partsOf } from '../values.js';
 
 /** ใบที่ทำให้เคสจบ ไม่มีอะไรต้องทำต่อแล้ว */
 const CLOSING_EVENTS = new Set(['ซ่อมแล้ว', 'เปลี่ยนเครื่อง']);
-
-/**
- * ออกเลขเคสใหม่ — IC + ปี 2 หลัก + เดือน 2 หลัก + ลำดับในเดือนนั้น
- *
- * เดิมขึ้นต้นด้วย RC เจ้าของงานให้เปลี่ยนเป็น IC (เคสเก่าที่เป็น RC อยู่แล้วคงไว้ตามเดิม)
- *
- * รูปแบบเดียวกับเลขที่เอกสารในประวัติ (PM/CM) เพื่อให้คนอ่านคุ้นตา
- * แต่ใช้อักษรนำต่างกันเพื่อไม่ให้สับสนว่าอันไหนเลขใบ อันไหนเลขเคส
- *
- * ใช้เวลาไทยเสมอ ไม่งั้นเคสที่เปิดวันที่ 1 จะได้เลขเดือนก่อนหน้า
- * เวลารันบนเครื่องที่ตั้งเวลาเป็น UTC
- */
-export function makeCaseId(existingIds, now = new Date()) {
-  const { y, m } = partsOf(now);
-  const stem = 'IC' + String(y).slice(-2) + String(m).padStart(2, '0') + '-';
-
-  let max = 0;
-  for (const id of existingIds || []) {
-    const s = String(id == null ? '' : id).trim();
-    if (!s.startsWith(stem)) continue;
-    const tail = s.slice(stem.length);
-    if (!/^\d+$/.test(tail)) continue;
-    const n = Number(tail);
-    if (n > max) max = n;
-  }
-  return stem + String(max + 1).padStart(2, '0');
-}
 
 /**
  * รวมใบประวัติเป็นเคส

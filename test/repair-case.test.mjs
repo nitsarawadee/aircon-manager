@@ -19,7 +19,7 @@ import { getAirList, replaceAirUnit, saveAirUnit } from '../src/modules/airlist.
 import {
   getHistory, reportRepair, markCannotRepair, completeRepairRecord
 } from '../src/modules/history.js';
-import { buildCases, openCaseOf, makeCaseId } from '../src/modules/repair-case.js';
+import { buildCases, openCaseOf } from '../src/modules/repair-case.js';
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -47,20 +47,6 @@ const setStatus = async (db, status) => {
   const u = await unit(db);
   return saveAirUnit(ctxOf(db), { ...u, Status: status });
 };
-
-/* ==================== การออกเลขเคส ==================== */
-
-test('เลขเคสรันต่อกันในเดือนเดียวกัน และขึ้นต้นด้วย IC', () => {
-  const at = new Date('2026-09-15T03:00:00Z');
-  assert.equal(makeCaseId([], at), 'IC2609-01');
-  assert.equal(makeCaseId(['IC2609-01'], at), 'IC2609-02');
-  assert.equal(makeCaseId(['IC2609-01', 'IC2609-09'], at), 'IC2609-10');
-});
-
-test('เลขเคสของเดือนอื่นไม่กวนกัน', () => {
-  const sep = new Date('2026-09-15T03:00:00Z');
-  assert.equal(makeCaseId(['IC2608-07'], sep), 'IC2609-01', 'ของเดือนสิงหาไม่ควรดันเลขเดือนกันยา');
-});
 
 /* ==================== เส้นทางปกติ: เปิด -> เริ่มซ่อม -> ปิด ==================== */
 

@@ -1436,7 +1436,6 @@
     // เพราะการคลิกแท็บจะไปสั่งโหลดข้อมูลใหม่จากเซิร์ฟเวอร์แบบ async เสมอ (loadAirList/loadHistory)
     // ถ้าตั้งค่าช่องค้นหาและกรองตารางไว้ก่อน พอโหลดเสร็จมันจะรีเซ็ตทับกลับเป็นว่างเปล่า
     // จึงต้องฝากค่าไว้ตรงนี้ ให้ loadAirList/loadHistory ไปหยิบไปใช้เองหลังโหลดเสร็จ
-    let pendingAirSearch = null;
     let pendingAirAgeFilter = false;
     let pendingHistorySearch = null;
     // ปีที่ถูกขอมาจากการ์ดคืบหน้าบนแดชบอร์ด ต้องชนะค่าเริ่มต้นของหน้าแผน (ปีล่าสุด)
@@ -4569,19 +4568,11 @@
     async function loadAirList() {
       currentAirList = (await call('getAirList')) || [];
 
-      // คำสั่งกรองที่ฝากมาจากหน้าอื่น ต้องอ่านหลังโหลดข้อมูลเสร็จ ด้วยเหตุผลเดียวกับ pendingAirSearch
+      // คำสั่งกรองที่ฝากมาจากหน้าอื่น ต้องอ่านหลังโหลดข้อมูลเสร็จ (ดูเหตุผลที่ตัวแปร pending… ด้านบน)
       airAgeFilter = pendingAirAgeFilter;
       pendingAirAgeFilter = false;
 
-      if (pendingAirSearch !== null) {
-        const code = pendingAirSearch;
-        pendingAirSearch = null;
-        const searchInput = document.getElementById('airSearch');
-        if (searchInput) searchInput.value = code;
-        renderAirTable(currentAirList.filter(a => searchText(a).includes(code.toLowerCase())));
-      } else {
-        renderAirTable(currentAirList);
-      }
+      renderAirTable(currentAirList);
       lockViewOnlySection('airlist');
     }
 
