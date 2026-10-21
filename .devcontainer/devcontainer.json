@@ -1,0 +1,17 @@
+{
+  // เปิดเว็บแอร์ "สำหรับทดลอง" ใน GitHub Codespaces (ผู้ใช้ขอ 21/10/2569)
+  // เปิด Codespace แล้วเว็บรันเอง ใช้ฐานข้อมูลทดลองว่างใน data/demo (ไม่ใช่ข้อมูลจริง)
+  // พอร์ต 8787 เป็น Private ตามค่าเริ่มต้น ถ้าจะให้คนนอกเปิด ตั้ง Public เองที่แท็บ Ports — ดู start.sh
+  // ไม่ใช่ที่ใช้งานจริง: Codespace ดับเองเมื่อไม่มีคนใช้ ใช้งานจริงให้ IT ติดตั้งตาม docs/DEPLOY.md
+  "name": "Aircon Manager (ทดลอง)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": { "label": "เว็บแอร์ (ทดลอง)", "onAutoForward": "notify" }
+  },
+  "postAttachCommand": "bash .devcontainer/start.sh"
+}
