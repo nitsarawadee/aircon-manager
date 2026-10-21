@@ -1,5 +1,4 @@
-import { SHEETS } from '../schema.js';
-import { normalizeCode, partsOf, safeParseDate } from '../values.js';
+import { normalizeCode, partsOf } from '../values.js';
 
 /**
  * เคสงานซ่อม — ร้อยทุกเหตุการณ์ของการซ่อมครั้งหนึ่งเข้าด้วยกัน
@@ -28,9 +27,6 @@ import { normalizeCode, partsOf, safeParseDate } from '../values.js';
 
 /** ใบที่ทำให้เคสจบ ไม่มีอะไรต้องทำต่อแล้ว */
 const CLOSING_EVENTS = new Set(['ซ่อมแล้ว', 'เปลี่ยนเครื่อง']);
-
-/** ใบที่เปิดเคสใหม่ */
-export const CASE_OPEN_EVENT = 'แจ้งซ่อม';
 
 /**
  * ออกเลขเคสใหม่ — IC + ปี 2 หลัก + เดือน 2 หลัก + ลำดับในเดือนนั้น
@@ -122,13 +118,6 @@ export function openCaseOf(historyRows, airCode) {
     .find(c => !c.closed && normalizeCode(c.airCode) === target) || null;
 }
 
-/**
- * อ่านเคสทั้งหมดจาก ctx — ตัวช่วยสำหรับโมดูลที่ต้องใช้บ่อย
- */
-export function casesFromCtx(ctx) {
-  return buildCases(ctx.ss.objects(SHEETS.HISTORY));
-}
-
 /** สถานะที่แปลว่าเครื่องอยู่ระหว่างเคสงานซ่อม */
 const IN_CASE_STATUS = new Set(['ชำรุด', 'รอซ่อม', 'รื้อถอน/ปลดระวาง']);
 
@@ -157,11 +146,4 @@ export const NEW_CASE = '__NEW_CASE__';
 export function ensureCaseId(historyRows, airCode) {
   const open = openCaseOf(historyRows, airCode);
   return open ? open.caseId : NEW_CASE;
-}
-
-/** วันที่ล่าสุดของเคส ใช้เรียงลำดับในหน้าเว็บ */
-export function caseLastDate(c) {
-  const last = c.events[c.events.length - 1];
-  const d = safeParseDate(last && last.Date);
-  return d ? d.getTime() : 0;
 }

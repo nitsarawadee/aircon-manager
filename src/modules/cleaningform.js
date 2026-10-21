@@ -1056,7 +1056,7 @@ async function formForPhotos(ctx, row) {
   return { form, docNo };
 }
 
-/** ที่เก็บรูปพร้อมใช้งานหรือไม่ — ฝั่งที่ไม่มีดิสก์ (Cloudflare) จะไม่มี */
+/** ที่เก็บรูปพร้อมใช้งานหรือไม่ — ถ้า platform ไม่ได้ส่งที่เก็บรูปเข้ามา (ดู platform/node.js) จะไม่มี */
 function requirePhotoStore(ctx) {
   if (!ctx.photos) {
     throw new Error('ระบบที่รันอยู่ตอนนี้ไม่รองรับการเก็บรูป (ไม่มีที่เก็บไฟล์)');

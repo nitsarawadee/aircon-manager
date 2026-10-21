@@ -1,5 +1,5 @@
 /**
- * โครงสร้างฐานข้อมูล SQLite — ตัวแทนของ Google Sheets
+ * โครงสร้างฐานข้อมูล SQLite (มาแทน Google Sheets เดิม)
  *
  * ============================================================================
  * หลักการออกแบบ: ให้เหมือนของเดิมมากที่สุด
@@ -333,12 +333,6 @@ export const TABLES = {
 export function columnKind(table, column) {
   const t = TABLES[table];
   return (t && t.columns[column]) || S;
-}
-
-/** คอลัมน์ที่เก็บวันที่/เวลาของตารางนั้น (ใช้ตอนแปลงค่าไป-กลับ) */
-export function temporalColumns(table) {
-  const cols = (TABLES[table] || {}).columns || {};
-  return Object.keys(cols).filter(c => cols[c] === D || cols[c] === DT || cols[c] === T);
 }
 
 /** แปลงชนิดของเราเป็นชนิดของ SQLite */

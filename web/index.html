@@ -1467,7 +1467,7 @@
      * เดิมใช้ google.script.run ของ Apps Script ซึ่งต้องรอ Google เปิดสคริปต์ใหม่
      * ทุกครั้งที่เรียก (เสียเวลา 1-3 วินาทีต่อคลิกก่อนโค้ดจะเริ่มทำงานด้วยซ้ำ)
      *
-     * ตอนนี้เปลี่ยนมาเป็น fetch() ธรรมดายิงไปที่ Cloudflare Worker แทน
+     * ตอนนี้เป็น fetch() ธรรมดายิงไปที่เซิร์ฟเวอร์ของระบบเอง (POST /api/call ที่ platform/node.js)
      * ซึ่งไม่มีการเปิดสคริปต์ใหม่ จึงตอบกลับภายในเวลาไม่กี่ร้อยมิลลิวินาที
      *
      * ส่วนอื่นของหน้าเว็บไม่ต้องแก้เลย เพราะยังเรียก call(ชื่อฟังก์ชัน, ...) แบบเดิม
@@ -2609,7 +2609,7 @@
         }
         showAuthScreen('login');
       } catch (e) {
-        // ติดต่อเซิร์ฟเวอร์ไม่ได้เลย (เช่นเน็ตหลุด หรือ Worker ยังตั้งค่าไม่เสร็จ)
+        // ติดต่อเซิร์ฟเวอร์ไม่ได้เลย (เช่นเน็ตหลุด หรือเซิร์ฟเวอร์ปิดอยู่)
         // แจ้งให้เห็นชัดเจนพร้อมสาเหตุจริง แทนการปล่อยหน้าจอว่างเปล่าแบบไม่มีคำอธิบาย
         document.body.innerHTML = `
           <div class="w-full h-screen flex flex-col items-center justify-center text-center p-6 bg-slate-50">
@@ -8774,12 +8774,6 @@
       document.querySelector('[data-tab="repair"]').click();
     }
     window.viewAirRepair = viewAirRepair;
-
-    // ทางกลับของ viewAirHistory: จากรหัสเครื่อง ให้กระโดดไปหน้ารายการเครื่องพร้อมค้นหาให้อัตโนมัติ
-    function goToAirDevice(code) {
-      pendingAirSearch = code;
-      document.querySelector('[data-tab="airlist"]').click();
-    }
 
     /* ============== 4. REPAIR VIEW ============== */
     /**

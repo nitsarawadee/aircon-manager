@@ -33,7 +33,7 @@ import { readFormTemplate, missingFormTemplates } from './forms.js';
 import { webcrypto } from 'node:crypto';
 
 // Node รุ่นเก่ากว่า 20 ยังไม่มี crypto เป็นตัวแปรกลาง แต่โค้ดส่วนกลางใช้ crypto.subtle
-// กับ crypto.randomUUID อยู่ (เหมือนที่ใช้บนเบราว์เซอร์และ Cloudflare)
+// กับ crypto.randomUUID อยู่ (เหมือนที่ใช้บนเบราว์เซอร์)
 // เติมให้ตรงนี้ทีเดียว โค้ดส่วนอื่นจะได้ไม่ต้องรู้ว่ากำลังรันอยู่บนอะไร
 if (!globalThis.crypto || !globalThis.crypto.subtle) {
   globalThis.crypto = webcrypto;
@@ -321,8 +321,7 @@ try {
  * src/ ห้ามแตะระบบไฟล์เอง จึงได้รับเป็นชุดฟังก์ชันแบบนี้แทน
  * เหมือนที่ฐานข้อมูลถูกเปิดที่นี่แล้วส่งเข้าไป
  *
- * ฝั่ง Cloudflare ไม่ส่งตัวนี้เข้าไป ระบบจึงยังทำงานได้ครบ แค่แนบรูปไม่ได้
- * ซึ่งถูกต้อง เพราะที่นั่นไม่มีดิสก์ให้เขียน
+ * ถ้าไม่ส่งตัวนี้เข้าไป ระบบยังทำงานได้ครบ แค่แนบรูปไม่ได้
  */
 const photoRoot = resolve(ROOT, PATHS.photos);
 const photos = {
@@ -341,7 +340,7 @@ const photos = {
  */
 const browserPath = findBrowser(env);
 const pdf = browserPath ? {
-  // คืนเป็น base64 เลย เพราะ src/ ใช้ Buffer ของ Node ไม่ได้ (ต้องรันบน Cloudflare ได้ด้วย)
+  // คืนเป็น base64 เลย เพราะ src/ ใช้ Buffer ของ Node ไม่ได้ (กติกา: src/ ห้ามรู้จักแพลตฟอร์ม)
   render: async html => (await renderPdf(html, env)).toString('base64'),
   // เบราว์เซอร์เปิดหน้าเอกสารจากไฟล์ชั่วคราว ที่อยู่แบบ /vendor/... จึงหาไฟล์ไม่เจอ
   // ต้องบอกที่อยู่เต็มของเซิร์ฟเวอร์ตัวเองให้ไปดึงฟอนต์และโลโก้
@@ -356,7 +355,7 @@ console.log(browserPath
  * ที่เก็บไฟล์ PDF ของเอกสาร ที่ส่งเข้าไปให้ src/ ใช้
  *
  * เหตุผลเดียวกับที่เก็บรูป — src/ ห้ามแตะระบบไฟล์เอง
- * ฝั่ง Cloudflare ไม่ส่งตัวนี้เข้าไป ระบบยังใช้ได้ครบ แค่ไม่มีสำเนาเก็บบนเซิร์ฟเวอร์
+ * ถ้าไม่ส่งตัวนี้เข้าไป ระบบยังใช้ได้ครบ แค่ไม่มีสำเนาเก็บบนเซิร์ฟเวอร์
  */
 const docRoot = resolve(ROOT, PATHS.docs);
 const docs = {
